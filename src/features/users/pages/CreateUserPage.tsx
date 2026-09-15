@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/Button';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { TextField } from '../components/TextField';
+import { ErrorMessage } from '../../../components/common/ErrorMessage';
+import { Button } from '../../../components/ui/Button';
+import { TextField } from '../../../components/ui/TextField';
 import { createUser } from '../services/userService';
 
 export function CreateUserPage() {

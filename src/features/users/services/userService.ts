@@ -1,8 +1,8 @@
 // Every API call related to "users" lives in this one file. A page or
 // component never calls axios/apiClient directly — it always goes through
 // a function here.
-import { apiClient } from './apiClient';
-import type { ApiResponse } from '../types/apiResponse';
+import { apiClient } from '../../../services/api';
+import type { ApiResponse } from '../../../services/apiResponse';
 import type { CreateUserPayload, User, UserListResult } from '../types/user';
 
 export async function getUsers(page: number, pageSize: number): Promise<UserListResult> {

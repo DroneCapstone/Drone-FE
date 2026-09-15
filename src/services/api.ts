@@ -1,5 +1,5 @@
 import axios, { type AxiosError } from 'axios';
-import type { ApiResponse } from '../types/apiResponse';
+import type { ApiResponse } from './apiResponse';
 
 // Single axios instance for the whole app — every service file imports this,
 // nothing should ever create a second one.

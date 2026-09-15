@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ErrorMessage } from '../components/ErrorMessage';
-import { Loading } from '../components/Loading';
+import { ErrorMessage } from '../../../components/common/ErrorMessage';
+import { Loading } from '../../../components/common/Loading';
 import { getUserById } from '../services/userService';
 import type { User } from '../types/user';
 
