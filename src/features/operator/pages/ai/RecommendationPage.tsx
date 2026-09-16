@@ -1,0 +1,8 @@
+import { ActionButton } from '../../../../components/ui/ActionButton';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { OperatorPanel } from '../../components/OperatorPanel';
+import { AiPageShell } from './AiPageShell';
+
+export function RecommendationPage() {
+  return <AiPageShell active="/operator/ai/recommendation"><div className="recommendation-layout"><OperatorPanel title="Route ranking" eyebrow="MSN-2841 · 3 CANDIDATES"><div className="route-ranking">{[['01','R-04 Coastal','Best overall','28 min','28.6%','Low'],['02','R-17 Express','Fastest','24 min','36.4%','Moderate'],['03','R-02 River','Lowest exposure','34 min','31.1%','Low']].map((route,index)=><button className={index===0?'best':''} key={route[1]}><b>{route[0]}</b><span><strong>{route[1]}</strong><small>{route[2]}</small></span><span><small>Duration</small><strong>{route[3]}</strong></span><span><small>Energy</small><strong>{route[4]}</strong></span><StatusBadge tone={route[5]==='Low'?'success':'warning'}>{route[5]} risk</StatusBadge></button>)}</div></OperatorPanel><OperatorPanel title="Best route"><div className="best-score"><div><strong>94</strong><small>/100</small></div><span>R-04 Coastal<br/><StatusBadge tone="success">Recommended</StatusBadge></span></div><div className="recommendation-map mini-map"><div className="map-grid"/><div className="route-line route-detail"/><span className="map-point origin">A</span><span className="map-point destination">B</span></div><div className="recommendation-copy"><p>Choose <strong>R-04 Coastal</strong>. It balances flight time, energy reserve, airspace density, and current wind conditions.</p></div><ActionButton>Apply recommended route</ActionButton></OperatorPanel></div></AiPageShell>;
+}
