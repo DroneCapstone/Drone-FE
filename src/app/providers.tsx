@@ -1,6 +1,16 @@
-import { BrowserRouter } from 'react-router-dom';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren } from "react";
+import { BrowserRouter } from "react-router-dom";
 
-export function AppProviders({ children }: PropsWithChildren) {
-  return <BrowserRouter>{children}</BrowserRouter>;
+import { AuthProvider } from "../features/auth/context/AuthContext";
+
+export function AppProviders({
+  children,
+}: PropsWithChildren) {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        {children}
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
