@@ -1,14 +1,25 @@
-import type { ReactNode } from 'react';
-import { Icon, type IconName } from './Icon';
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { Button } from "./Button";
+import { Icon, type IconName } from "./Icon";
 
-interface ActionButtonProps {
+interface ActionButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   children: ReactNode;
   icon?: IconName;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  onClick?: () => void;
-  type?: 'button' | 'submit';
+  variant?: "primary" | "secondary" | "ghost" | "danger";
 }
 
-export function ActionButton({ children, icon, variant = 'primary', onClick, type = 'button' }: ActionButtonProps) {
-  return <button type={type} className={`button button-${variant}`} onClick={onClick}>{icon && <Icon name={icon} size={17} />}{children}</button>;
+export function ActionButton({
+  children,
+  icon,
+  variant = "primary",
+  type = "button",
+  ...props
+}: ActionButtonProps) {
+  return (
+    <Button type={type} variant={variant} {...props}>
+      {icon && <Icon name={icon} size={17} />}
+      {children}
+    </Button>
+  );
 }

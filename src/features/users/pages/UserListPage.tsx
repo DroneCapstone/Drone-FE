@@ -9,24 +9,23 @@ const PAGE_SIZE = 10;
 
 export function UserListPage() {
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<UserListResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    page: number;
+    data?: UserListResult;
+    error?: string;
+  } | null>(null);
+  const loading = result?.page !== page;
+  const data = result?.page === page ? result.data ?? null : null;
+  const error = result?.page === page ? result.error ?? null : null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-
     getUsers(page, PAGE_SIZE)
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (!cancelled) setResult({ page, data: result });
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load users');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setResult({ page, error: err instanceof Error ? err.message : 'Failed to load users' });
       });
 
     return () => {

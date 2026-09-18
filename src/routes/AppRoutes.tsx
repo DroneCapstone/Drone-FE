@@ -1,17 +1,21 @@
+import { lazy } from "react";
 import {
   Navigate,
   useRoutes,
 } from "react-router-dom";
 
-import { AuthPage } from "../features/auth/pages/AuthPage";
-
 import { useAuth } from "../features/auth/hooks/useAuth";
-
-import { OperatorLayout } from "../layouts/OperatorLayout";
 
 import { operatorRoutes } from "./operatorRoutes";
 
 import { ProtectedRoute } from "./ProtectedRoute";
+
+const AuthPage = lazy(() =>
+  import("../features/auth/pages/AuthPage").then((module) => ({ default: module.AuthPage })),
+);
+const OperatorLayout = lazy(() =>
+  import("../layouts/OperatorLayout").then((module) => ({ default: module.OperatorLayout })),
+);
 
 export function AppRoutes() {
   const {
