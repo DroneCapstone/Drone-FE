@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 
 import { useAuth } from "../hooks/useAuth";
+import { Input } from "../../../components/ui/Input";
 
 import type {
   AuthUser,
@@ -174,7 +175,7 @@ export function LoginForm({
           <label className="auth-field">
             <span>Email address</span>
 
-            <input
+            <Input
               autoComplete="email"
               inputMode="email"
               type="email"
@@ -191,7 +192,7 @@ export function LoginForm({
             <span>Password</span>
 
             <span className="auth-password-wrap">
-              <input
+              <Input
                 autoComplete="current-password"
                 type={
                   showPassword
