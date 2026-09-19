@@ -6,6 +6,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../hooks/useAuth";
+import { Input } from "../../../components/ui/Input";
 
 export function RegisterForm({
   onSwitchMode,
@@ -109,7 +110,7 @@ export function RegisterForm({
           <label className="auth-field">
             <span>Full name</span>
 
-            <input
+            <Input
               autoComplete="name"
               value={name}
               onChange={(event) =>
@@ -125,7 +126,7 @@ export function RegisterForm({
           <label className="auth-field">
             <span>Email address</span>
 
-            <input
+            <Input
               type="email"
               autoComplete="email"
               value={email}
@@ -142,7 +143,7 @@ export function RegisterForm({
           <label className="auth-field">
             <span>Password</span>
 
-            <input
+            <Input
               type="password"
               autoComplete="new-password"
               value={password}
@@ -161,7 +162,7 @@ export function RegisterForm({
               Confirm password
             </span>
 
-            <input
+            <Input
               type="password"
               autoComplete="new-password"
               value={confirmPassword}

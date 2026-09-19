@@ -1,5 +1,4 @@
 import {
-  createContext,
   useCallback,
   useMemo,
   useState,
@@ -9,38 +8,12 @@ import {
 import { authService } from "../services/authService";
 
 import type {
-  AuthUser,
   LoginPayload,
   RegisterPayload,
   UserRole,
 } from "../types/auth";
-
-interface AuthContextValue {
-  user: AuthUser | null;
-
-  isAuthenticated: boolean;
-
-  login: (
-    payload: LoginPayload,
-  ) => Promise<AuthUser>;
-
-  register: (
-    payload: RegisterPayload,
-  ) => Promise<AuthUser>;
-
-  loginAsRole: (
-    role: UserRole,
-  ) => AuthUser;
-
-  loginWithGoogle: () => AuthUser;
-
-  logout: () => void;
-}
-
-export const AuthContext =
-  createContext<AuthContextValue | undefined>(
-    undefined,
-  );
+import type { AuthUser } from "../types/auth";
+import { AuthContext, type AuthContextValue } from "./authContextValue";
 
 export function AuthProvider({
   children,

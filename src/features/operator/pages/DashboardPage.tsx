@@ -31,19 +31,8 @@ export function DashboardPage() {
     <>
       <PageHeader
         section="dashboard"
-        // action={
-        //   <>
-        //     <ActionButton variant="secondary">Export snapshot</ActionButton>
-        //     <NavLink
-        //       to="/operator/missions/create"
-        //       className="button button-primary"
-        //     >
-        //       New mission
-        //     </NavLink>
-        //   </>
-        // }
         action={
-          <div style={{ display: "flex", gap: "9px" }}>
+          <>
             <ActionButton variant="secondary">Export snapshot</ActionButton>
             <NavLink
               to="/operator/missions/create"
@@ -51,7 +40,7 @@ export function DashboardPage() {
             >
               New mission
             </NavLink>
-          </div>
+          </>
         }
       />
       <OperationalStateBar />

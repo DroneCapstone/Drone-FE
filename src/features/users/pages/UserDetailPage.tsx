@@ -9,24 +9,23 @@ export function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const userId = Number(id);
 
-  const [data, setData] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    userId: number;
+    data?: User;
+    error?: string;
+  } | null>(null);
+  const loading = result?.userId !== userId;
+  const data = result?.userId === userId ? result.data ?? null : null;
+  const error = result?.userId === userId ? result.error ?? null : null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-
     getUserById(userId)
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (!cancelled) setResult({ userId, data: result });
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load user');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setResult({ userId, error: err instanceof Error ? err.message : 'Failed to load user' });
       });
 
     return () => {

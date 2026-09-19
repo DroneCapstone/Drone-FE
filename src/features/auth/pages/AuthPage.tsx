@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import {
   useLocation,
   useNavigate,
@@ -17,6 +18,7 @@ export function AuthPage() {
 
   const isRegister =
     location.pathname === "/register";
+  const reduceMotion = useReducedMotion();
 
   return (
     <main
@@ -30,7 +32,12 @@ export function AuthPage() {
       <div className="auth-ambient auth-ambient-two" />
       <div className="auth-grid" />
 
-      <section className="auth-card">
+      <motion.section
+        className="auth-card"
+        initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.992 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
+      >
         {/* ==================================
             VISUAL
         =================================== */}
@@ -126,7 +133,7 @@ export function AuthPage() {
             </div>
           </div>
         </section>
-      </section>
+      </motion.section>
     </main>
   );
 }

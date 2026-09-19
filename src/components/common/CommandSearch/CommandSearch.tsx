@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
-import { operatorNavigation } from "../../../constants/operatorNavigation";
+
 import { Icon } from "../../ui/Icon";
 
 export function CommandSearch({
@@ -12,74 +11,79 @@ export function CommandSearch({
   onClose: () => void;
   onOpen: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const quickItems = operatorNavigation
-    .filter((item) =>
-      item.label.toLowerCase().includes(query.trim().toLowerCase()),
-    )
-    .slice(0, 5);
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
+
         onOpen();
+
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+        });
+
+        return;
       }
-      if (event.key === "Escape") onClose();
+
+      if (event.key === "Escape" && open) {
+        onClose();
+        inputRef.current?.blur();
+      }
     };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, onOpen]);
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, onOpen, open]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-  if (!open) return null;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [onClose]);
 
   return (
     <div
-      className="command-layer"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Quick navigation"
-      onMouseDown={onClose}
+      ref={rootRef}
+      className={`header-search ${open ? "is-open" : ""}`}
     >
-      <div
-        className="command-panel"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="command-input">
-          <Icon name="search" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Quick search…"
-          />
-          <kbd>ESC</kbd>
-        </div>
-        <div className="command-results">
-          <small>QUICK NAVIGATION</small>
-          {quickItems.length ? (
-            quickItems.map((item) => (
-              <NavLink
-                to={item.path}
-                key={item.path}
-                onClick={() => {
-                  setQuery("");
-                  onClose();
-                }}
-              >
-                <Icon name={item.icon} />
-                <span>{item.label}</span>
-                <Icon name="arrow" />
-              </NavLink>
-            ))
-          ) : (
-            <p className="command-empty">No matching page</p>
-          )}
-        </div>
+      <div className="header-search-control">
+        <Icon name="search" size={18} />
+
+        <input
+          ref={inputRef}
+          type="search"
+          value={query}
+          onFocus={onOpen}
+          onChange={(event) => {
+            setQuery(event.target.value);
+
+            if (!open) {
+              onOpen();
+            }
+          }}
+          placeholder="Search missions, flights, routes..."
+          aria-label="Search operator navigation"
+          aria-expanded={open}
+        />
       </div>
     </div>
   );

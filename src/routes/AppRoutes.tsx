@@ -1,32 +1,35 @@
-import {
-  Navigate,
-  useRoutes,
-} from "react-router-dom";
-
-import { AuthPage } from "../features/auth/pages/AuthPage";
+import { lazy } from "react";
+import { Navigate, useRoutes } from "react-router-dom";
 
 import { useAuth } from "../features/auth/hooks/useAuth";
-
-import { OperatorLayout } from "../layouts/OperatorLayout";
-
-import { TechnicianLayout } from "../layouts/TechnicianLayout";
-
-import { operatorRoutes } from "./operatorRoutes";
-
 import { technicianRoutes } from "../features/technician/technicianRoutes";
 
+import { operatorRoutes } from "./operatorRoutes";
 import { ProtectedRoute } from "./ProtectedRoute";
 
+const AuthPage = lazy(() =>
+  import("../features/auth/pages/AuthPage").then((module) => ({
+    default: module.AuthPage,
+  })),
+);
+
+const OperatorLayout = lazy(() =>
+  import("../layouts/OperatorLayout").then((module) => ({
+    default: module.OperatorLayout,
+  })),
+);
+
+const TechnicianLayout = lazy(() =>
+  import("../layouts/TechnicianLayout").then((module) => ({
+    default: module.TechnicianLayout,
+  })),
+);
+
 export function AppRoutes() {
-  const {
-    user,
-    isAuthenticated,
-  } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   function getCurrentHome() {
-    if (
-      user?.role === "technician"
-    ) {
+    if (user?.role === "technician") {
       return "/technician/dashboard";
     }
 
@@ -37,17 +40,11 @@ export function AppRoutes() {
     /* =========================
        ROOT
     ========================= */
-
     {
       path: "/",
-
       element: (
         <Navigate
-          to={
-            isAuthenticated
-              ? getCurrentHome()
-              : "/login"
-          }
+          to={isAuthenticated ? getCurrentHome() : "/login"}
           replace
         />
       ),
@@ -56,15 +53,10 @@ export function AppRoutes() {
     /* =========================
        LOGIN
     ========================= */
-
     {
       path: "/login",
-
       element: isAuthenticated ? (
-        <Navigate
-          to={getCurrentHome()}
-          replace
-        />
+        <Navigate to={getCurrentHome()} replace />
       ) : (
         <AuthPage />
       ),
@@ -73,15 +65,10 @@ export function AppRoutes() {
     /* =========================
        REGISTER
     ========================= */
-
     {
       path: "/register",
-
       element: isAuthenticated ? (
-        <Navigate
-          to={getCurrentHome()}
-          replace
-        />
+        <Navigate to={getCurrentHome()} replace />
       ) : (
         <AuthPage />
       ),
@@ -90,24 +77,12 @@ export function AppRoutes() {
     /* =========================
        OPERATOR
     ========================= */
-
     {
-      element: (
-        <ProtectedRoute
-          allowedRoles={[
-            "operator",
-          ]}
-        />
-      ),
-
+      element: <ProtectedRoute allowedRoles={["operator"]} />,
       children: [
         {
-          element: (
-            <OperatorLayout />
-          ),
-
-          children:
-            operatorRoutes,
+          element: <OperatorLayout />,
+          children: operatorRoutes,
         },
       ],
     },
@@ -115,26 +90,13 @@ export function AppRoutes() {
     /* =========================
        TECHNICIAN
     ========================= */
-
     {
-      element: (
-        <ProtectedRoute
-          allowedRoles={[
-            "technician",
-          ]}
-        />
-      ),
-
+      element: <ProtectedRoute allowedRoles={["technician"]} />,
       children: [
         {
           path: "/technician",
-
-          element: (
-            <TechnicianLayout />
-          ),
-
-          children:
-            technicianRoutes,
+          element: <TechnicianLayout />,
+          children: technicianRoutes,
         },
       ],
     },
@@ -142,17 +104,11 @@ export function AppRoutes() {
     /* =========================
        FALLBACK
     ========================= */
-
     {
       path: "*",
-
       element: (
         <Navigate
-          to={
-            isAuthenticated
-              ? getCurrentHome()
-              : "/login"
-          }
+          to={isAuthenticated ? getCurrentHome() : "/login"}
           replace
         />
       ),

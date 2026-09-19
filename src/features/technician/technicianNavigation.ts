@@ -1,6 +1,6 @@
 import {
   Bell,
-  FileBarChart,
+  FileText,
   LayoutDashboard,
   Plane,
   TriangleAlert,
@@ -39,7 +39,7 @@ export const technicianNavigation: TechnicianNavigationItem[] = [
   {
     label: "Reports",
     path: "/technician/reports",
-    icon: FileBarChart,
+    icon: FileText,
   },
   {
     label: "Notifications",

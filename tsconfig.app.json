@@ -11,19 +11,16 @@
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 
+    "moduleResolution": "bundler",
     "paths": {
       "@/*": ["./src/*"]
     },
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
