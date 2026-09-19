@@ -6,22 +6,33 @@ import {
   useLocation,
 } from "react-router-dom";
 
-interface ProtectedRouteProps {
-  isAllowed: boolean;
+import { useAuth } from "../features/auth/hooks/useAuth";
 
+import type {
+  UserRole,
+} from "../features/auth/types/auth";
+
+interface ProtectedRouteProps {
   children?: ReactNode;
+
+  allowedRoles?: UserRole[];
 
   redirectTo?: string;
 }
 
 export function ProtectedRoute({
-  isAllowed,
   children,
+  allowedRoles,
   redirectTo = "/login",
 }: ProtectedRouteProps) {
   const location = useLocation();
 
-  if (!isAllowed) {
+  const {
+    user,
+    isAuthenticated,
+  } = useAuth();
+
+  if (!isAuthenticated) {
     return (
       <Navigate
         to={redirectTo}
@@ -29,6 +40,23 @@ export function ProtectedRoute({
         state={{
           from: location,
         }}
+      />
+    );
+  }
+
+  if (
+    allowedRoles &&
+    user &&
+    !allowedRoles.includes(user.role)
+  ) {
+    return (
+      <Navigate
+        to={
+          user.role === "technician"
+            ? "/technician/dashboard"
+            : "/operator/dashboard"
+        }
+        replace
       />
     );
   }
