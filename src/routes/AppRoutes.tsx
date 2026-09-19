@@ -9,35 +9,77 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 
 import { OperatorLayout } from "../layouts/OperatorLayout";
 
+import { TechnicianLayout } from "../layouts/TechnicianLayout";
+
 import { operatorRoutes } from "./operatorRoutes";
+
+import { technicianRoutes } from "../features/technician/technicianRoutes";
 
 import { ProtectedRoute } from "./ProtectedRoute";
 
 export function AppRoutes() {
   const {
+    user,
     isAuthenticated,
   } = useAuth();
 
+  function getCurrentHome() {
+    if (
+      user?.role === "technician"
+    ) {
+      return "/technician/dashboard";
+    }
+
+    return "/operator/dashboard";
+  }
+
   return useRoutes([
+    /* =========================
+       ROOT
+    ========================= */
+
+    {
+      path: "/",
+
+      element: (
+        <Navigate
+          to={
+            isAuthenticated
+              ? getCurrentHome()
+              : "/login"
+          }
+          replace
+        />
+      ),
+    },
+
+    /* =========================
+       LOGIN
+    ========================= */
+
     {
       path: "/login",
 
       element: isAuthenticated ? (
         <Navigate
-          to="/operator/dashboard"
+          to={getCurrentHome()}
           replace
         />
       ) : (
         <AuthPage />
       ),
     },
+
+    /* =========================
+       REGISTER
+    ========================= */
 
     {
       path: "/register",
 
       element: isAuthenticated ? (
         <Navigate
-          to="/operator/dashboard"
+          to={getCurrentHome()}
           replace
         />
       ) : (
@@ -45,21 +87,61 @@ export function AppRoutes() {
       ),
     },
 
+    /* =========================
+       OPERATOR
+    ========================= */
+
     {
       element: (
         <ProtectedRoute
-          isAllowed={isAuthenticated}
+          allowedRoles={[
+            "operator",
+          ]}
         />
       ),
 
       children: [
         {
-          element: <OperatorLayout />,
+          element: (
+            <OperatorLayout />
+          ),
 
-          children: operatorRoutes,
+          children:
+            operatorRoutes,
         },
       ],
     },
+
+    /* =========================
+       TECHNICIAN
+    ========================= */
+
+    {
+      element: (
+        <ProtectedRoute
+          allowedRoles={[
+            "technician",
+          ]}
+        />
+      ),
+
+      children: [
+        {
+          path: "/technician",
+
+          element: (
+            <TechnicianLayout />
+          ),
+
+          children:
+            technicianRoutes,
+        },
+      ],
+    },
+
+    /* =========================
+       FALLBACK
+    ========================= */
 
     {
       path: "*",
@@ -68,7 +150,7 @@ export function AppRoutes() {
         <Navigate
           to={
             isAuthenticated
-              ? "/operator/dashboard"
+              ? getCurrentHome()
               : "/login"
           }
           replace

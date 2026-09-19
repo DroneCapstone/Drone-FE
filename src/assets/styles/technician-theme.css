@@ -1,0 +1,210 @@
+/* =========================================================
+   TECHNICIAN THEME
+   ========================================================= */
+
+.technician-app {
+  --tech-bg: #0f1115;
+  --tech-sidebar: #0b0c0e;
+  --tech-header: #0d0f12;
+  --tech-surface: #121419;
+  --tech-surface-2: #111318;
+
+  --tech-border: #272a30;
+
+  --tech-text: #f4f4f5;
+  --tech-text-secondary: #d4d4d8;
+  --tech-muted: #a1a1aa;
+  --tech-subtle: #626772;
+}
+
+
+/* =========================
+   DARK
+   ========================= */
+
+.technician-app[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+
+/* =========================
+   LIGHT
+   ========================= */
+
+.technician-app[data-theme="light"] {
+  color-scheme: light;
+
+  --tech-bg: #f5f6f8;
+  --tech-sidebar: #ffffff;
+  --tech-header: #ffffff;
+
+  --tech-surface: #ffffff;
+  --tech-surface-2: #f8f9fa;
+
+  --tech-border: #e2e5e9;
+
+  --tech-text: #202124;
+  --tech-text-secondary: #3c4043;
+  --tech-muted: #5f6368;
+  --tech-subtle: #8a9099;
+}
+
+
+/* =========================================================
+   TEMP OVERRIDES
+   Cho các page Technician hiện tại đang dùng zinc/dark hard-code.
+   Giúp không phải sửa từng file ngay lúc này.
+   ========================================================= */
+
+.technician-app[data-theme="light"] {
+  background: var(--tech-bg) !important;
+  color: var(--tech-text) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#0f1115\] {
+  background: var(--tech-bg) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#0b0c0e\] {
+  background: var(--tech-sidebar) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#0d0f12\] {
+  background: var(--tech-header) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#121419\] {
+  background: var(--tech-surface) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#111318\] {
+  background: var(--tech-surface-2) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#101216\] {
+  background: #ffffff !important;
+}
+
+
+/* borders */
+
+.technician-app[data-theme="light"] .border-zinc-800,
+.technician-app[data-theme="light"] .border-zinc-800\/80,
+.technician-app[data-theme="light"] .border-zinc-800\/70 {
+  border-color: var(--tech-border) !important;
+}
+
+.technician-app[data-theme="light"] .border-zinc-700 {
+  border-color: #d6d9de !important;
+}
+
+
+/* main text */
+
+.technician-app[data-theme="light"] .text-zinc-100,
+.technician-app[data-theme="light"] .text-zinc-200 {
+  color: var(--tech-text) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-300,
+.technician-app[data-theme="light"] .text-zinc-400 {
+  color: var(--tech-text-secondary) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-500 {
+  color: var(--tech-muted) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-600,
+.technician-app[data-theme="light"] .text-zinc-700 {
+  color: var(--tech-subtle) !important;
+}
+
+
+/* neutral backgrounds */
+
+.technician-app[data-theme="light"] .bg-zinc-800 {
+  background: #e8eaed !important;
+}
+
+.technician-app[data-theme="light"] .bg-zinc-900 {
+  background: #f1f3f4 !important;
+}
+
+.technician-app[data-theme="light"] .hover\:bg-zinc-900\/40:hover {
+  background: rgba(0, 0, 0, 0.025) !important;
+}
+
+
+/* sidebar */
+
+.technician-app[data-theme="light"] aside {
+  box-shadow: none;
+}
+
+
+/* smooth switch */
+
+.technician-app,
+.technician-app header,
+.technician-app aside,
+.technician-app main {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+/* =========================================================
+   FORM CONTROLS
+   ========================================================= */
+
+.technician-app input,
+.technician-app textarea,
+.technician-app select {
+  background-color: var(--tech-surface-2) !important;
+  color: var(--tech-text) !important;
+  border-color: var(--tech-border) !important;
+}
+
+
+/* placeholder */
+
+.technician-app input::placeholder,
+.technician-app textarea::placeholder {
+  color: var(--tech-subtle) !important;
+}
+
+
+/* =========================================================
+   LIGHT MODE FORM
+   ========================================================= */
+
+.technician-app[data-theme="light"] input,
+.technician-app[data-theme="light"] textarea,
+.technician-app[data-theme="light"] select {
+  background-color: #ffffff !important;
+  color: #202124 !important;
+  border-color: #d9dde3 !important;
+}
+
+
+/* disabled field */
+
+.technician-app[data-theme="light"] input:disabled,
+.technician-app[data-theme="light"] textarea:disabled,
+.technician-app[data-theme="light"] select:disabled {
+  background-color: #f1f3f4 !important;
+  color: #80868b !important;
+
+  opacity: 1 !important;
+}
+
+
+/* focus */
+
+.technician-app input:focus,
+.technician-app textarea:focus,
+.technician-app select:focus {
+  border-color: rgba(255, 107, 0, 0.65) !important;
+  outline: none;
+}
