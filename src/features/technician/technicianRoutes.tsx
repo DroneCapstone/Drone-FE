@@ -23,16 +23,17 @@ import {
 } from "./pages/MaintenancePage";
 
 import {
+  MaintenanceAlertsPage,
+} from "./pages/MaintenanceAlertsPage";
+
+import {
+  WorkOrdersPage,
+} from "./pages/WorkOrdersPage";
+
+import {
   WorkOrderDetailPage,
 } from "./pages/WorkOrderDetailPage";
 
-import {
-  IncidentsPage,
-} from "./pages/IncidentsPage";
-
-import {
-  TechnicianReportsPage,
-} from "./pages/TechnicianReportsPage";
 
 import {
   TechnicianNotificationsPage,
@@ -45,7 +46,6 @@ import {
 export const technicianRoutes: RouteObject[] = [
   {
     index: true,
-
     element: (
       <Navigate
         to="dashboard"
@@ -71,31 +71,41 @@ export const technicianRoutes: RouteObject[] = [
     element: <DroneDetailPage />,
   },
 
+  // =========================
+  // MAINTENANCE
+  // =========================
+
   {
     path: "maintenance",
     element: <MaintenancePage />,
   },
 
   {
+    path: "maintenance/alerts",
+    element: (
+      <MaintenanceAlertsPage />
+    ),
+  },
+
+  {
+    path: "maintenance/work-orders",
+    element: (
+      <WorkOrdersPage />
+    ),
+  },
+
+  {
     path:
       "maintenance/work-orders/:workOrderId",
-
     element: (
       <WorkOrderDetailPage />
     ),
   },
 
-  {
-    path: "incidents",
-    element: <IncidentsPage />,
-  },
+  // =========================
+  // OTHER
+  // =========================
 
-  {
-    path: "reports",
-    element: (
-      <TechnicianReportsPage />
-    ),
-  },
 
   {
     path: "notifications",

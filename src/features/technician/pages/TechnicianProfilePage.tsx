@@ -299,7 +299,7 @@ export function TechnicianProfilePage() {
   return (
     <TechnicianPageShell
       title="Profile"
-      description="Technician account and operational information."
+      description=""
       action={
         editing ? (
           <div className="flex items-center gap-2">
@@ -307,37 +307,42 @@ export function TechnicianProfilePage() {
             {/* CANCEL */}
 
             <Button
-              type="button"
-              variant="outline"
-              onClick={
-                handleCancel
-              }
-              className="
-                h-9
-                rounded-md
+  type="button"
+  variant="outline"
+  onClick={handleCancel}
+  className="
+    h-9
+    rounded-md
 
-                border-[var(--tech-border)]
+    border
+    border-[var(--tech-border)]
 
-                bg-transparent
+    !bg-transparent
+    px-4
 
-                px-4
+    text-[13px]
+    font-medium
+    text-[var(--tech-muted)]
 
-                text-[11px]
-                font-medium
+    transition-colors
+    duration-150
 
-                text-[var(--tech-muted)]
+    hover:!bg-transparent
+    hover:!border-orange-500/50
+    hover:!text-orange-500
 
-                hover:bg-[var(--tech-surface-2)]
-                hover:text-[var(--tech-text)]
-              "
-            >
-              <X
-                size={14}
-                strokeWidth={1.6}
-              />
+    focus-visible:!border-orange-500
+    focus-visible:outline-none
+    focus-visible:ring-0
+  "
+>
+  <X
+    size={15}
+    strokeWidth={1.6}
+  />
 
-              Cancel
-            </Button>
+  Cancel
+</Button>
 
 
             {/* SAVE */}
@@ -355,15 +360,18 @@ export function TechnicianProfilePage() {
 
                 px-4
 
-                text-[11px]
+                text-[13px]
                 font-medium
                 text-black
 
                 hover:bg-orange-600
+                focus-visible:outline-none
+                focus-visible:ring-0
+                focus-visible:border-orange-500
               "
             >
               <Save
-                size={14}
+                size={15}
                 strokeWidth={1.6}
               />
 
@@ -378,29 +386,30 @@ export function TechnicianProfilePage() {
   className="
     h-9
     rounded-md
-
     border
     border-[var(--tech-border)]
 
-    bg-[var(--tech-surface)]
-
+    !bg-transparent
     px-4
 
-    text-[11px]
+    text-[13px]
     font-medium
-
     text-[var(--tech-text)]
 
     transition-colors
     duration-150
 
-    hover:!bg-[var(--tech-surface)]
-    hover:border-orange-500/40
-    hover:text-orange-500
+    hover:!bg-transparent
+    hover:!border-orange-500/50
+    hover:!text-orange-500
+
+    focus-visible:!border-orange-500
+    focus-visible:outline-none
+    focus-visible:ring-0
   "
 >
   <Pencil
-    size={14}
+    size={15}
     strokeWidth={1.6}
   />
 
@@ -559,13 +568,15 @@ export function TechnicianProfilePage() {
 
                         text-black
 
-                        transition
+                        transition-colors duration-150
 
                         hover:bg-orange-600
+                        focus-visible:outline-none
+                        focus-visible:ring-0
                       "
                     >
                       <Camera
-                        size={14}
+                        size={15}
                         strokeWidth={1.8}
                       />
                     </button>
@@ -594,7 +605,7 @@ export function TechnicianProfilePage() {
                 className="
                   mt-5
 
-                  text-[19px]
+                  text-[22px]
                   font-semibold
 
                   tracking-[-0.02em]
@@ -614,7 +625,7 @@ export function TechnicianProfilePage() {
                 className="
                   mt-1
 
-                  text-[12px]
+                  text-[14px]
 
                   text-[var(--tech-muted)]
                 "
@@ -678,7 +689,7 @@ export function TechnicianProfilePage() {
 
               <h2
                 className="
-                  text-[15px]
+                  text-[18px]
                   font-semibold
 
                   text-[var(--tech-text)]
@@ -691,7 +702,7 @@ export function TechnicianProfilePage() {
                 className="
                   mt-1
 
-                  text-[10px]
+                  text-[12px]
 
                   text-[var(--tech-muted)]
                 "
@@ -798,11 +809,11 @@ export function TechnicianProfilePage() {
 
                       bg-[var(--tech-surface-2)]
 
-                      text-[12px]
+                      text-[14px]
 
                       text-[var(--tech-text)]
 
-                      focus-visible:ring-orange-500/30
+                      focus-visible:border-orange-500 focus-visible:ring-0 focus-visible:outline-none
                     "
                   />
                 </ProfileField>
@@ -844,11 +855,11 @@ export function TechnicianProfilePage() {
 
                       bg-[var(--tech-surface-2)]
 
-                      text-[12px]
+                      text-[14px]
 
                       text-[var(--tech-text)]
 
-                      focus-visible:ring-orange-500/30
+                      focus-visible:border-orange-500 focus-visible:ring-0 focus-visible:outline-none
                     "
                   />
                 </ProfileField>
@@ -874,7 +885,7 @@ export function TechnicianProfilePage() {
 
                       bg-[var(--tech-surface-2)]
 
-                      text-[12px]
+                      text-[14px]
 
                       text-[var(--tech-muted)]
 
@@ -920,11 +931,11 @@ export function TechnicianProfilePage() {
 
                       bg-[var(--tech-surface-2)]
 
-                      text-[12px]
+                      text-[14px]
 
                       text-[var(--tech-text)]
 
-                      focus-visible:ring-orange-500/30
+                      focus-visible:border-orange-500 focus-visible:ring-0 focus-visible:outline-none
                     "
                   />
                 </ProfileField>
@@ -948,7 +959,7 @@ export function TechnicianProfilePage() {
               >
                 <p
                   className="
-                    text-[10px]
+                    text-[12px]
 
                     leading-5
 
@@ -996,7 +1007,7 @@ function InfoRow({
     >
       <span
         className="
-          text-[10px]
+          text-[12px]
 
           text-[var(--tech-muted)]
         "
@@ -1006,7 +1017,7 @@ function InfoRow({
 
       <strong
         className="
-          text-[11px]
+          text-[13px]
           font-medium
 
           text-[var(--tech-text)]
@@ -1081,7 +1092,7 @@ function InfoCard({
 
         <p
           className="
-            text-[9px]
+            text-[11px]
 
             uppercase
 
@@ -1099,7 +1110,7 @@ function InfoCard({
 
             truncate
 
-            text-[12px]
+            text-[14px]
             font-medium
 
             text-[var(--tech-text)]
@@ -1140,14 +1151,14 @@ function ProfileField({
         "
       >
         <Icon
-          size={13}
+          size={14}
           strokeWidth={1.5}
           className="text-[var(--tech-muted)]"
         />
 
         <span
           className="
-            text-[10px]
+            text-[12px]
             font-medium
 
             text-[var(--tech-muted)]
