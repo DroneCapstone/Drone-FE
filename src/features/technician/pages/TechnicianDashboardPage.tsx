@@ -1,20 +1,22 @@
 import {
   BatteryMedium,
-  CircleAlert,
   Plane,
   Wrench,
 } from "lucide-react";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/shadcn/ui/card";
+  useMemo,
+  useState,
+} from "react";
 
 import {
-  Progress,
-} from "@/components/shadcn/ui/progress";
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  Card,
+  CardContent,
+} from "@/components/shadcn/ui/card";
 
 import {
   TechnicianPageShell,
@@ -25,200 +27,718 @@ import {
 } from "../components/TechnicianStatCard";
 
 import {
-  TechnicianStatusBadge,
-} from "../components/TechnicianStatusBadge";
+  loadFleet,
+  TECHNICIAN_HUB,
+  type FleetDrone,
+} from "../utils/fleetStorage";
 
-import {
-  maintenanceAlerts,
-  technicianDrones,
-  workOrders,
-} from "../data/technicianMockData";
+type AlertSource =
+  | "Schedule"
+  | "Flight event"
+  | "Incident";
+
+type DashboardAlert = {
+  id: string;
+  drone: string;
+  title: string;
+  source: AlertSource;
+  createdAt: string;
+};
+
+type WorkOrderStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Completed";
+
+type DashboardWorkOrder = {
+  id: string;
+  drone: string;
+  title: string;
+  status: WorkOrderStatus;
+  assignedTo: string;
+};
+
+type AlertLog = {
+  alertId: string;
+  status: "Handled";
+};
+
+const WORK_ORDERS_STORAGE_KEY =
+  "droneoptai.technician.work-orders.v2";
+
+const ALERT_LOG_STORAGE_KEY =
+  "droneoptai.technician.maintenance-alert-log.v1";
+
+/*
+ * Dashboard preview only.
+ * Later replace these mocks with backend/API data or shared state.
+ */
+const defaultAlerts: DashboardAlert[] = [
+  {
+    id: "ALT-201",
+    drone: "CX-09",
+    title: "Scheduled inspection is due",
+    source: "Schedule",
+    createdAt: "20 Sep · 08:20",
+  },
+  {
+    id: "ALT-202",
+    drone: "AX-08",
+    title:
+      "Abnormal landing detected — inspection required",
+    source: "Flight event",
+    createdAt: "20 Sep · 07:45",
+  },
+  {
+    id: "ALT-203",
+    drone: "CX-12",
+    title:
+      "Inspection required after reported incident",
+    source: "Incident",
+    createdAt: "19 Sep · 16:10",
+  },
+];
+
+const defaultWorkOrders: DashboardWorkOrder[] = [
+  {
+    id: "WO-1054",
+    drone: "CX-09",
+    title: "Scheduled drone inspection",
+    status: "In Progress",
+    assignedTo: "Technician Demo",
+  },
+  {
+    id: "WO-1055",
+    drone: "AX-08",
+    title: "Inspect after abnormal landing",
+    status: "Not Started",
+    assignedTo: "Technician Demo",
+  },
+  {
+    id: "WO-1056",
+    drone: "CX-12",
+    title:
+      "Technical inspection after incident",
+    status: "Completed",
+    assignedTo: "Technician Demo",
+  },
+];
+
+function loadAlertLogs(): AlertLog[] {
+  try {
+    const stored = localStorage.getItem(
+      ALERT_LOG_STORAGE_KEY,
+    );
+
+    if (!stored) {
+      return [];
+    }
+
+    const parsed = JSON.parse(
+      stored,
+    ) as AlertLog[];
+
+    return Array.isArray(parsed)
+      ? parsed
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadWorkOrders(): DashboardWorkOrder[] {
+  try {
+    const stored = localStorage.getItem(
+      WORK_ORDERS_STORAGE_KEY,
+    );
+
+    if (!stored) {
+      return defaultWorkOrders;
+    }
+
+    const parsed = JSON.parse(
+      stored,
+    ) as DashboardWorkOrder[];
+
+    if (!Array.isArray(parsed)) {
+      return defaultWorkOrders;
+    }
+
+    /*
+     * Compatibility with old mock data:
+     * Open -> Not Started
+     */
+    return parsed.map((order) => ({
+      ...order,
+      status:
+        String(order.status) === "Open"
+          ? "Not Started"
+          : order.status,
+    })) as DashboardWorkOrder[];
+  } catch {
+    return defaultWorkOrders;
+  }
+}
+
+function isIncomingToMyHub(
+  drone: FleetDrone,
+) {
+  const location =
+    drone.location.toLowerCase();
+
+  const hub =
+    TECHNICIAN_HUB.toLowerCase();
+
+  return (
+    location.includes(hub) &&
+    (location.startsWith(
+      "heading to",
+    ) ||
+      location.startsWith(
+        "en route",
+      ) ||
+      location.startsWith(
+        "in transit",
+      ))
+  );
+}
+
+function isAtMyHub(
+  drone: FleetDrone,
+) {
+  return (
+    drone.location === TECHNICIAN_HUB
+  );
+}
 
 export function TechnicianDashboardPage() {
+  const navigate = useNavigate();
+
+  /*
+   * IMPORTANT:
+   * Dashboard uses the same fleetStorage as FleetPage,
+   * so status/battery changes stay consistent.
+   */
+  const [fleet] =
+    useState<FleetDrone[]>(loadFleet);
+
+  const alertLogs = useMemo(
+    () => loadAlertLogs(),
+    [],
+  );
+
+  const workOrders = useMemo(
+    () => loadWorkOrders(),
+    [],
+  );
+
+  /*
+   * Same scope as FleetPage:
+   * - drones already at technician hub
+   * - drones currently heading to technician hub
+   */
+  const hubDrones = useMemo(
+    () =>
+      fleet.filter(
+        (drone) =>
+          isAtMyHub(drone) ||
+          isIncomingToMyHub(drone),
+      ),
+    [fleet],
+  );
+
+  /*
+   * Available means EXACTLY status === "Available".
+   * Do not count Operational / In Flight / other statuses.
+   */
+  const availableDrones = useMemo(
+    () =>
+      hubDrones.filter(
+        (drone) =>
+          drone.status ===
+          "Available",
+      ),
+    [hubDrones],
+  );
+
+  /*
+   * Fleet attention contains only statuses
+   * that require technician action.
+   *
+   * No "In Flight" status is used here.
+   */
+  const attentionDrones = useMemo(
+    () =>
+      hubDrones.filter(
+        (drone) =>
+          drone.status ===
+            "Maintenance" ||
+          drone.status ===
+            "Battery Replacement",
+      ),
+    [hubDrones],
+  );
+
+  const lowBatteryDrones = useMemo(
+    () =>
+      hubDrones.filter(
+        (drone) =>
+          drone.battery < 40,
+      ),
+    [hubDrones],
+  );
+
+  const activeAlerts = useMemo(
+    () =>
+      defaultAlerts.filter(
+        (alert) =>
+          !alertLogs.some(
+            (log) =>
+              log.alertId ===
+                alert.id &&
+              log.status ===
+                "Handled",
+          ),
+      ),
+    [alertLogs],
+  );
+
+  const activeWorkOrders = useMemo(
+    () =>
+      workOrders.filter(
+        (order) =>
+          order.status !==
+          "Completed",
+      ),
+    [workOrders],
+  );
+
+  const inProgressCount =
+    activeWorkOrders.filter(
+      (order) =>
+        order.status ===
+        "In Progress",
+    ).length;
+
+  const availablePercent =
+    hubDrones.length > 0
+      ? Math.round(
+          (availableDrones.length /
+            hubDrones.length) *
+            100,
+        )
+      : 0;
+
   return (
     <TechnicianPageShell
       title="Technician dashboard"
-      description="Fleet readiness, battery condition and maintenance workload."
+      description=""
     >
+      {/* SUMMARY */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <TechnicianStatCard
-          label="Fleet status"
-          value="12"
-          description="10 operational · 2 attention"
+          label="Fleet"
+          value={String(
+            hubDrones.length,
+          )}
+          description={`Drones assigned to ${TECHNICIAN_HUB}`}
           icon={Plane}
         />
 
         <TechnicianStatCard
           label="Available drones"
-          value="8"
-          description="66% of fleet available"
+          value={String(
+            availableDrones.length,
+          )}
+          description={`${availablePercent}% of fleet available`}
           icon={Plane}
         />
 
         <TechnicianStatCard
           label="Battery attention"
-          value="3"
-          description="1 replacement required"
+          value={String(
+            lowBatteryDrones.length,
+          )}
+          description="Drones below 40% battery"
           icon={BatteryMedium}
         />
 
         <TechnicianStatCard
-          label="Open maintenance"
-          value="5"
-          description="2 high priority"
+          label="Active work orders"
+          value={String(
+            activeWorkOrders.length,
+          )}
+          description={`${inProgressCount} currently in progress`}
           icon={Wrench}
         />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-        <Card className="rounded-lg border-zinc-800 bg-[#121419] shadow-none">
-          <CardHeader>
-            <CardTitle className="text-[14px] font-medium text-zinc-200">
-              Fleet readiness
-            </CardTitle>
-          </CardHeader>
+      {/* FLEET ATTENTION + ALERTS */}
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
+        {/* FLEET ATTENTION */}
+        <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+          <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-5">
+            <div>
+              <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
+                Fleet attention
+              </h2>
 
-          <CardContent className="space-y-5">
-            {technicianDrones.map(
-              (drone) => (
-                <div
-                  key={drone.id}
-                  className="grid grid-cols-[1fr_120px_80px] items-center gap-4"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <strong className="text-[12px] font-medium text-zinc-200">
+             
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  "/technician/fleet",
+                )
+              }
+              className="text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500"
+            >
+              View fleet
+            </button>
+          </div>
+
+          <CardContent className="p-0">
+            {attentionDrones
+              .slice(0, 5)
+              .map((drone) => {
+                const lowBattery =
+                  drone.battery < 40;
+
+                return (
+                  <button
+                    key={drone.id}
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/technician/fleet/${drone.id}`,
+                      )
+                    }
+                    className="
+                      grid w-full
+                      grid-cols-[1fr_180px_170px]
+                      items-center gap-5
+                      border-b
+                      border-[var(--tech-border)]
+                      px-5 py-4
+                      text-left
+                      transition-colors
+                      last:border-b-0
+                      hover:bg-[var(--tech-surface-2)]
+                    "
+                  >
+                    <div>
+                      <p className="text-[15px] font-medium text-[var(--tech-text)]">
                         {drone.name}
-                      </strong>
+                      </p>
 
-                      <TechnicianStatusBadge
+                      <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
+                        {drone.model}
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between text-[12px]">
+                        <span className="text-[var(--tech-muted)]">
+                          Battery
+                        </span>
+
+                        <span
+                          className={
+                            lowBattery
+                              ? "font-semibold text-red-500"
+                              : "font-medium text-orange-500"
+                          }
+                        >
+                          {drone.battery}%
+                        </span>
+                      </div>
+
+                      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--tech-border)]">
+                        <div
+                          className={`h-full rounded-full ${
+                            lowBattery
+                              ? "bg-red-500"
+                              : "bg-orange-500"
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                drone.battery,
+                              ),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <DroneStatusText
                         status={
-                          drone.status as any
+                          drone.status
                         }
                       />
                     </div>
+                  </button>
+                );
+              })}
 
-                    <p className="mt-1 text-[10px] text-zinc-600">
-                      {drone.model}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div className="mb-1 flex justify-between text-[9px] text-zinc-600">
-                      <span>Battery</span>
-                      <span>
-                        {drone.battery}%
-                      </span>
-                    </div>
-
-                    <Progress
-                      value={
-                        drone.battery
-                      }
-                      className="h-1 bg-zinc-800"
-                    />
-                  </div>
-
-                  <span className="text-right text-[10px] text-zinc-500">
-                    {drone.lastFlight}
-                  </span>
-                </div>
-              ),
+            {attentionDrones.length ===
+              0 && (
+              <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
+                No drones currently require technician attention.
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-zinc-800 bg-[#121419] shadow-none">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[14px] font-medium text-zinc-200">
-              <CircleAlert
-                size={15}
-                className="text-orange-500"
-              />
+        {/* MAINTENANCE ALERTS */}
+        <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+          <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-5">
+            <div className="flex items-center gap-2">
+             
 
-              Maintenance alerts
-            </CardTitle>
-          </CardHeader>
+              <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
+                Maintenance alerts
+              </h2>
+            </div>
 
-          <CardContent className="space-y-3">
-            {maintenanceAlerts.map(
-              (alert) => (
-                <div
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  "/technician/maintenance/alerts",
+                )
+              }
+              className="text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500"
+            >
+              View all
+            </button>
+          </div>
+
+          <CardContent className="p-0">
+            {activeAlerts
+              .slice(0, 4)
+              .map((alert) => (
+                <button
                   key={alert.id}
-                  className="border-b border-zinc-800/80 pb-3 last:border-0"
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      "/technician/maintenance/alerts",
+                    )
+                  }
+                  className="
+                    w-full
+                    border-b
+                    border-[var(--tech-border)]
+                    px-5 py-4
+                    text-left
+                    transition-colors
+                    last:border-b-0
+                    hover:bg-[var(--tech-surface-2)]
+                  "
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-[10px] text-zinc-600">
-                        {alert.drone}
-                      </span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium text-[var(--tech-text)]">
+                          {alert.drone}
+                        </span>
 
-                      <p className="mt-1 text-[11px] leading-5 text-zinc-300">
+                        <SourceText
+                          source={
+                            alert.source
+                          }
+                        />
+                      </div>
+
+                      <p className="mt-1.5 text-[14px] leading-5 text-[var(--tech-text-secondary)]">
                         {alert.title}
                       </p>
                     </div>
 
-                    <TechnicianStatusBadge
-                      status={
-                        alert.severity as any
-                      }
-                    />
+                    <span className="shrink-0 text-[12px] font-semibold text-orange-500">
+                      Pending
+                    </span>
                   </div>
 
-                  <p className="mt-2 text-[9px] text-zinc-700">
-                    {alert.time}
+                  <p className="mt-2 text-[12px] text-[var(--tech-subtle)]">
+                    {alert.createdAt}
                   </p>
-                </div>
-              ),
+                </button>
+              ))}
+
+            {activeAlerts.length ===
+              0 && (
+              <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
+                No active maintenance alerts.
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="mt-5 rounded-lg border-zinc-800 bg-[#121419] shadow-none">
-        <CardHeader>
-          <CardTitle className="text-[14px] font-medium text-zinc-200">
+      {/* ACTIVE WORK ORDERS */}
+      <Card className="mt-5 overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+        <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-5">
+          <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
             Active work orders
-          </CardTitle>
-        </CardHeader>
+          </h2>
 
-        <CardContent>
-          <div className="grid gap-2">
-            {workOrders.map((order) => (
-              <div
-                key={order.id}
-                className="
-                  grid
-                  grid-cols-[100px_90px_1fr_100px]
-                  items-center
-                  rounded-md
-                  border border-zinc-800
-                  px-3 py-3
-                  text-[11px]
-                "
-              >
-                <span className="text-zinc-500">
-                  {order.id}
-                </span>
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/technician/maintenance/work-orders",
+              )
+            }
+            className="text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500"
+          >
+            View all
+          </button>
+        </div>
 
-                <span className="text-zinc-300">
-                  {order.drone}
-                </span>
-
-                <span className="text-zinc-300">
-                  {order.title}
-                </span>
-
-                <TechnicianStatusBadge
-                  status={
-                    order.status as any
-                  }
-                />
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <div className="min-w-[820px]">
+              <div className="grid grid-cols-[130px_120px_1fr_160px_180px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+                <span>Order</span>
+                <span>Drone</span>
+                <span>Task</span>
+                <span>Status</span>
+                <span>Assigned to</span>
               </div>
-            ))}
+
+              {activeWorkOrders
+                .slice(0, 5)
+                .map((order) => (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/technician/maintenance/work-orders/${order.id}`,
+                      )
+                    }
+                    className="
+                      grid w-full
+                      grid-cols-[130px_120px_1fr_160px_180px]
+                      items-center
+                      border-b
+                      border-[var(--tech-border)]
+                      px-5 py-4
+                      text-left
+                      transition-colors
+                      last:border-b-0
+                      hover:bg-[var(--tech-surface-2)]
+                    "
+                  >
+                    <span className="text-center text-[14px] text-[var(--tech-muted)]">
+                      {order.id}
+                    </span>
+
+                    <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
+                      {order.drone}
+                    </span>
+
+                    <span className="px-4 text-[14px] text-[var(--tech-text-secondary)]">
+                      {order.title}
+                    </span>
+
+                    <div className="flex justify-center">
+                      <WorkOrderStatusText
+                        status={
+                          order.status
+                        }
+                      />
+                    </div>
+
+                    <span className="text-center text-[13px] text-[var(--tech-muted)]">
+                      {order.assignedTo}
+                    </span>
+                  </button>
+                ))}
+
+              {activeWorkOrders.length ===
+                0 && (
+                <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
+                  No active work orders.
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
     </TechnicianPageShell>
+  );
+}
+
+function SourceText({
+  source,
+}: {
+  source: AlertSource;
+}) {
+  const style =
+    source === "Schedule"
+      ? "text-blue-500"
+      : source ===
+          "Flight event"
+        ? "text-orange-500"
+        : "text-violet-500";
+
+  return (
+    <span
+      className={`text-[12px] font-semibold ${style}`}
+    >
+      {source}
+    </span>
+  );
+}
+
+function DroneStatusText({
+  status,
+}: {
+  status: string;
+}) {
+  const style =
+    status === "Maintenance"
+      ? "text-orange-500"
+      : status ===
+          "Battery Replacement"
+        ? "text-red-500"
+        : "text-[var(--tech-muted)]";
+
+  return (
+    <span
+      className={`text-[13px] font-semibold ${style}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function WorkOrderStatusText({
+  status,
+}: {
+  status: WorkOrderStatus;
+}) {
+  const style =
+    status === "Completed"
+      ? "text-emerald-500"
+      : status ===
+          "In Progress"
+        ? "text-blue-500"
+        : "text-orange-500";
+
+  return (
+    <span
+      className={`text-[13px] font-semibold ${style}`}
+    >
+      {status}
+    </span>
   );
 }
