@@ -1,23 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
-import { operatorNavigation } from "../../../constants/operatorNavigation";
-// import { Icon } from "../../ui/Icon";
-import { Icon, type IconName } from "../../ui/Icon";
-
-// type SearchItem = {
-//   label: string;
-//   path: string;
-//   icon: string;
-//   parent?: string;
-// };
-
-type SearchItem = {
-  label: string;
-  path: string;
-  icon: IconName;
-  parent?: string;
-};
+import { Icon } from "../../ui/Icon";
 export function CommandSearch({
   open,
   onClose,
@@ -30,35 +13,6 @@ export function CommandSearch({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const searchableItems = useMemo<SearchItem[]>(() => {
-    return operatorNavigation.flatMap((item) => [
-      {
-        label: item.label,
-        path: item.path,
-        icon: item.icon,
-      },
-      ...(item.children ?? []).map((child) => ({
-        label: child.label,
-        path: child.path,
-        icon: item.icon,
-        parent: item.label,
-      })),
-    ]);
-  }, []);
-
-  const normalizedQuery = query.trim().toLowerCase();
-
-  const results = useMemo(() => {
-    if (!normalizedQuery) return searchableItems.slice(0, 7);
-
-    return searchableItems
-      .filter((item) => {
-        const searchableText = `${item.parent ?? ""} ${item.label}`.toLowerCase();
-        return searchableText.includes(normalizedQuery);
-      })
-      .slice(0, 7);
-  }, [normalizedQuery, searchableItems]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -89,11 +43,6 @@ export function CommandSearch({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [onClose]);
-
-  const closeAfterNavigate = () => {
-    setQuery("");
-    onClose();
-  };
 
   return (
     <div ref={rootRef} className={`header-search ${open ? "is-open" : ""}`}>

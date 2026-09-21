@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 
-import { useAuth } from "../../../features/auth/hooks/useAuth";
+import { useAuth } from "../features/auth/hooks/useAuth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,9 +8,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../ui/DropdownMenu";
-import { Icon } from "../../ui/Icon";
-import { CommandSearch } from "../CommandSearch/CommandSearch";
+} from "../components/ui/DropdownMenu";
+import { Icon } from "../components/ui/Icon";
+import { CommandSearch } from "../components/common/CommandSearch/CommandSearch";
 
 interface OperatorHeaderProps {
   isDark: boolean;

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { ActionButton } from "../../../components/ui/ActionButton";
 import { DropdownSelect } from "../../../components/ui/DropdownSelect";
 import { Icon } from "../../../components/ui/Icon";
-import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { Switch } from "../../../components/ui/Switch";
 import { OperatorPanel } from "../components/OperatorPanel";
 import { PageHeader } from "../components/PageHeader";
@@ -25,7 +24,7 @@ export function ProfilePage() {
           <div className="profile-avatar">AK</div>
           <h2>Alex Kim</h2>
           <p>Lead Flight Operator</p>
-          <StatusBadge tone="success">On duty</StatusBadge>
+          {/* <StatusBadge tone="success">On duty</StatusBadge> */}
           <div className="profile-meta">
             <span><small>Operator ID</small><strong>OP-0174</strong></span>
             <span><small>Control center</small><strong>SGN Central</strong></span>
