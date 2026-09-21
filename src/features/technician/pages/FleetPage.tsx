@@ -6,20 +6,26 @@ import {
   useState,
 } from "react";
 
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+} from "framer-motion";
 
 import {
   ArrowUpRight,
   Pencil,
-  Plus,
   Search,
   Trash2,
   X,
 } from "lucide-react";
 
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+} from "react-router-dom";
 
-import { Button } from "@/components/shadcn/ui/button";
+import {
+  Button,
+} from "@/components/shadcn/ui/button";
 
 import {
   Card,
@@ -35,7 +41,13 @@ import {
   TableRow,
 } from "@/components/shadcn/ui/table";
 
-import { TechnicianPageShell } from "../components/TechnicianPageShell";
+import {
+  DropdownSelect,
+} from "@/components/ui/DropdownSelect";
+
+import {
+  TechnicianPageShell,
+} from "../components/TechnicianPageShell";
 
 import {
   loadFleet,
@@ -46,79 +58,140 @@ import {
 } from "../utils/fleetStorage";
 
 type DroneForm = {
-  id: string;
-  name: string;
   model: string;
   status: DroneStatus;
   battery: string;
 };
 
 type BatteryFilter =
-  | "all"
-  | "normal"
-  | "low";
+  | "All battery"
+  | "Normal ≥ 40%"
+  | "Low < 40%";
 
 type LocationFilter =
-  | "all"
-  | "at-hub"
-  | "incoming";
+  | "All location"
+  | "At my hub"
+  | "Incoming";
+
+type StatusFilter =
+  | "All status"
+  | DroneStatus;
 
 const initialForm: DroneForm = {
-  id: "",
-  name: "",
   model: "",
   status: "Available",
   battery: "100",
 };
 
+/*
+ * Display rule:
+ * DR-002 + type/name prefix CX -> CX-02
+ * DR-014 + type/name prefix AX -> AX-14
+ */
+function getDroneDisplayCode(
+  drone: FleetDrone,
+) {
+  const prefixMatch =
+    drone.name.match(/[A-Za-z]+/);
+
+  const prefix =
+    prefixMatch?.[0]?.toUpperCase() ??
+    "DR";
+
+  const idNumberMatch =
+    drone.id.match(/(\d+)$/);
+
+  if (!idNumberMatch) {
+    return drone.name;
+  }
+
+  const numericId = Number(
+    idNumberMatch[1],
+  );
+
+  if (Number.isNaN(numericId)) {
+    return drone.name;
+  }
+
+  return `${prefix}-${String(
+    numericId,
+  ).padStart(2, "0")}`;
+}
+
 export function FleetPage() {
   const navigate = useNavigate();
 
-  const [drones, setDrones] =
-    useState<FleetDrone[]>(loadFleet);
+  const [
+    drones,
+    setDrones,
+  ] = useState<FleetDrone[]>(
+    loadFleet,
+  );
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
 
-  const [statusFilter, setStatusFilter] =
-    useState<"all" | DroneStatus>("all");
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<StatusFilter>(
+    "All status",
+  );
 
   const [
     locationFilter,
     setLocationFilter,
-  ] = useState<LocationFilter>("all");
+  ] =
+    useState<LocationFilter>(
+      "All location",
+    );
 
   const [
     batteryFilter,
     setBatteryFilter,
-  ] = useState<BatteryFilter>("all");
+  ] =
+    useState<BatteryFilter>(
+      "All battery",
+    );
 
-  const [modalOpen, setModalOpen] =
-    useState(false);
+  const [
+    modalOpen,
+    setModalOpen,
+  ] = useState(false);
 
   const [
     editingDroneId,
     setEditingDroneId,
-  ] = useState<string | null>(null);
+  ] = useState<
+    string | null
+  >(null);
 
-  const [form, setForm] =
-    useState<DroneForm>(initialForm);
+  const [
+    form,
+    setForm,
+  ] =
+    useState<DroneForm>(
+      initialForm,
+    );
 
-  const [formError, setFormError] =
-    useState("");
+  const [
+    formError,
+    setFormError,
+  ] = useState("");
 
   const [
     deleteConfirmTarget,
     setDeleteConfirmTarget,
-  ] = useState<FleetDrone | null>(null);
+  ] =
+    useState<FleetDrone | null>(
+      null,
+    );
 
   useEffect(() => {
     saveFleet(drones);
   }, [drones]);
-
-  /* =========================
-     HUB LOGIC
-  ========================= */
 
   const isIncomingToMyHub = (
     drone: FleetDrone,
@@ -146,110 +219,118 @@ export function FleetPage() {
   const isAtMyHub = (
     drone: FleetDrone,
   ) =>
-    drone.location === TECHNICIAN_HUB;
+    drone.location ===
+    TECHNICIAN_HUB;
 
-  /*
-   * Technician chỉ thấy:
-   * - Drone hiện có tại Hub của mình
-   * - Drone đang bay tới Hub của mình
-   */
   const hubDrones = useMemo(
     () =>
       drones.filter(
         (drone) =>
           isAtMyHub(drone) ||
-          isIncomingToMyHub(drone),
+          isIncomingToMyHub(
+            drone,
+          ),
       ),
     [drones],
   );
 
-  /* =========================
-     SEARCH / FILTER
-  ========================= */
+  const filteredDrones =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
 
-  const filteredDrones = useMemo(() => {
-    const query = searchQuery
-      .trim()
-      .toLowerCase();
+      return hubDrones.filter(
+        (drone) => {
+          const incoming =
+            isIncomingToMyHub(
+              drone,
+            );
 
-    return hubDrones.filter((drone) => {
-      const incoming =
-        isIncomingToMyHub(drone);
+          const displayCode =
+            getDroneDisplayCode(
+              drone,
+            ).toLowerCase();
 
-      const matchesSearch =
-        !query ||
-        drone.name
-          .toLowerCase()
-          .includes(query) ||
-        drone.id
-          .toLowerCase()
-          .includes(query) ||
-        drone.model
-          .toLowerCase()
-          .includes(query);
+          const matchesSearch =
+            !query ||
+            displayCode.includes(
+              query,
+            ) ||
+            drone.id
+              .toLowerCase()
+              .includes(query) ||
+            drone.model
+              .toLowerCase()
+              .includes(query);
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        drone.status === statusFilter;
+          const matchesStatus =
+            statusFilter ===
+              "All status" ||
+            drone.status ===
+              statusFilter;
 
-      const matchesLocation =
-        locationFilter === "all" ||
-        (locationFilter ===
-          "at-hub" &&
-          !incoming) ||
-        (locationFilter ===
-          "incoming" &&
-          incoming);
+          const matchesLocation =
+            locationFilter ===
+              "All location" ||
+            (locationFilter ===
+              "At my hub" &&
+              !incoming) ||
+            (locationFilter ===
+              "Incoming" &&
+              incoming);
 
-      const matchesBattery =
-        batteryFilter === "all" ||
-        (batteryFilter === "low" &&
-          drone.battery < 40) ||
-        (batteryFilter ===
-          "normal" &&
-          drone.battery >= 40);
+          const matchesBattery =
+            batteryFilter ===
+              "All battery" ||
+            (batteryFilter ===
+              "Low < 40%" &&
+              drone.battery <
+                40) ||
+            (batteryFilter ===
+              "Normal ≥ 40%" &&
+              drone.battery >=
+                40);
 
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesLocation &&
-        matchesBattery
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesLocation &&
+            matchesBattery
+          );
+        },
       );
-    });
-  }, [
-    hubDrones,
-    searchQuery,
-    statusFilter,
-    locationFilter,
-    batteryFilter,
-  ]);
+    }, [
+      hubDrones,
+      searchQuery,
+      statusFilter,
+      locationFilter,
+      batteryFilter,
+    ]);
 
-  /* =========================
-     REGISTER
-  ========================= */
-
-  const openRegisterModal = () => {
-    setEditingDroneId(null);
-    setForm(initialForm);
-    setFormError("");
-    setModalOpen(true);
-  };
-
-  /* =========================
-     EDIT
-  ========================= */
+  const editingDrone =
+    editingDroneId
+      ? drones.find(
+          (drone) =>
+            drone.id ===
+            editingDroneId,
+        )
+      : undefined;
 
   const openEditModal = (
     drone: FleetDrone,
   ) => {
-    setEditingDroneId(drone.id);
+    setEditingDroneId(
+      drone.id,
+    );
 
     setForm({
-      id: drone.id,
-      name: drone.name,
       model: drone.model,
       status: drone.status,
-      battery: String(drone.battery),
+      battery: String(
+        drone.battery,
+      ),
     });
 
     setFormError("");
@@ -263,26 +344,22 @@ export function FleetPage() {
     setFormError("");
   };
 
-  /* =========================
-     SAVE
-  ========================= */
-
   const handleSubmit = (
     event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
+    if (!editingDroneId) {
+      return;
+    }
+
     const battery = Number(
       form.battery,
     );
 
-    if (
-      !form.id.trim() ||
-      !form.name.trim() ||
-      !form.model.trim()
-    ) {
+    if (!form.model.trim()) {
       setFormError(
-        "Please complete all required fields.",
+        "Please enter the drone model.",
       );
 
       return;
@@ -300,82 +377,24 @@ export function FleetPage() {
       return;
     }
 
-    const duplicatedId = drones.some(
-      (drone) =>
-        drone.id.toLowerCase() ===
-          form.id
-            .trim()
-            .toLowerCase() &&
-        drone.id !== editingDroneId,
+    setDrones((current) =>
+      current.map((drone) =>
+        drone.id ===
+        editingDroneId
+          ? {
+              ...drone,
+              model:
+                form.model.trim(),
+              status:
+                form.status,
+              battery,
+            }
+          : drone,
+      ),
     );
-
-    if (duplicatedId) {
-      setFormError(
-        "Drone ID already exists.",
-      );
-
-      return;
-    }
-
-    if (editingDroneId) {
-      setDrones((current) =>
-        current.map((drone) =>
-          drone.id === editingDroneId
-            ? {
-                ...drone,
-
-                id: form.id.trim(),
-
-                name:
-                  form.name.trim(),
-
-                model:
-                  form.model.trim(),
-
-                status:
-                  form.status,
-
-                battery,
-              }
-            : drone,
-        ),
-      );
-    } else {
-      /*
-       * Register chỉ dùng cho drone mới
-       * được đưa trực tiếp vào Hub HCM-02.
-       */
-      const newDrone: FleetDrone = {
-        id: form.id.trim(),
-
-        name: form.name.trim(),
-
-        model: form.model.trim(),
-
-        status: form.status,
-
-        battery,
-
-        utilization: 0,
-
-        lastFlight: "Not flown",
-
-        location:
-          TECHNICIAN_HUB,
-      };
-
-      setDrones((current) => [
-        ...current,
-        newDrone,
-      ]);
-    }
 
     closeModal();
   };
-
-  /* =========================
-     STATUS
-  ========================= */
 
   const handleStatusChange = (
     droneId: string,
@@ -393,14 +412,12 @@ export function FleetPage() {
     );
   };
 
-  /* =========================
-     DELETE
-  ========================= */
-
   const handleDelete = (
     drone: FleetDrone,
   ) => {
-    setDeleteConfirmTarget(drone);
+    setDeleteConfirmTarget(
+      drone,
+    );
   };
 
   const confirmDelete = () => {
@@ -416,7 +433,9 @@ export function FleetPage() {
       ),
     );
 
-    setDeleteConfirmTarget(null);
+    setDeleteConfirmTarget(
+      null,
+    );
   };
 
   const actionButtonClass =
@@ -431,22 +450,9 @@ export function FleetPage() {
     <TechnicianPageShell
       title="Fleet"
       description={`Manage drones at ${TECHNICIAN_HUB} and monitor incoming drones.`}
-      action={
-        <Button
-          type="button"
-          onClick={
-            openRegisterModal
-          }
-          className="h-9 rounded-md bg-orange-500 px-4 font-sans text-[13px] font-medium text-black hover:bg-orange-600"
-        >
-          <Plus size={15} />
-
-          Register drone
-        </Button>
-      }
     >
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-        {/* Search + filters */}
+        {/* SEARCH + FILTERS */}
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] px-4 py-4">
           <div className="relative min-w-[260px] flex-1">
             <Search
@@ -459,103 +465,79 @@ export function FleetPage() {
               value={searchQuery}
               onChange={(event) =>
                 setSearchQuery(
-                  event.target.value,
+                  event.target
+                    .value,
                 )
               }
-              placeholder="Search drone ID, name or model..."
+              placeholder="Search drone code, ID or model..."
               className="tech-control h-9 w-full pl-9 pr-3 !text-[13px]"
             />
           </div>
 
-          {/* Status filter */}
-          <select
+          <DropdownSelect
             value={statusFilter}
-            onChange={(event) =>
+            onChange={(value) =>
               setStatusFilter(
-                event.target
-                  .value as
-                  | "all"
-                  | DroneStatus,
+                value as StatusFilter,
               )
             }
-            className="tech-control h-9 min-w-[150px] px-3 !text-[13px]"
-          >
-            <option value="all">
-              All status
-            </option>
+            options={[
+              "All status",
+              "Available",
+              "Maintenance",
+              "Battery Replacement",
+            ]}
+            ariaLabel="Drone status"
+            className="min-w-[160px]"
+          />
 
-            <option value="Available">
-              Available
-            </option>
-
-            <option value="Maintenance">
-              Maintenance
-            </option>
-
-            <option value="Battery Replacement">
-              Battery replacement
-            </option>
-          </select>
-
-          {/* Location filter */}
-          <select
-            value={locationFilter}
-            onChange={(event) =>
+          <DropdownSelect
+            value={
+              locationFilter
+            }
+            onChange={(value) =>
               setLocationFilter(
-                event.target
-                  .value as LocationFilter,
+                value as LocationFilter,
               )
             }
-            className="tech-control h-9 min-w-[150px] px-3 !text-[13px]"
-          >
-            <option value="all">
-              All location
-            </option>
+            options={[
+              "All location",
+              "At my hub",
+              "Incoming",
+            ]}
+            ariaLabel="Drone location"
+            className="min-w-[160px]"
+          />
 
-            <option value="at-hub">
-              At my hub
-            </option>
-
-            <option value="incoming">
-              Incoming
-            </option>
-          </select>
-
-          {/* Battery filter */}
-          <select
-            value={batteryFilter}
-            onChange={(event) =>
+          <DropdownSelect
+            value={
+              batteryFilter
+            }
+            onChange={(value) =>
               setBatteryFilter(
-                event.target
-                  .value as BatteryFilter,
+                value as BatteryFilter,
               )
             }
-            className="tech-control h-9 min-w-[145px] px-3 !text-[13px]"
-          >
-            <option value="all">
-              All battery
-            </option>
-
-            <option value="normal">
-              Normal ≥ 40%
-            </option>
-
-            <option value="low">
-              Low &lt; 40%
-            </option>
-          </select>
+            options={[
+              "All battery",
+              "Normal ≥ 40%",
+              "Low < 40%",
+            ]}
+            ariaLabel="Battery level"
+            className="min-w-[155px]"
+          />
         </div>
 
+        {/* TABLE */}
         <CardContent className="p-0">
           <Table className="fleet-table table-fixed">
             <colgroup>
-              <col className="w-[14%]" />
               <col className="w-[15%]" />
-              <col className="w-[16%]" />
-              <col className="w-[15%]" />
+              <col className="w-[17%]" />
               <col className="w-[18%]" />
-              <col className="w-[11%]" />
-              <col className="w-[11%]" />
+              <col className="w-[17%]" />
+              <col className="w-[21%]" />
+              <col className="w-[12%]" />
             </colgroup>
 
             <TableHeader>
@@ -581,10 +563,6 @@ export function FleetPage() {
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
-                  Utilization
-                </TableHead>
-
-                <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
                   Actions
                 </TableHead>
               </TableRow>
@@ -604,6 +582,11 @@ export function FleetPage() {
                         drone,
                       );
 
+                    const displayCode =
+                      getDroneDisplayCode(
+                        drone,
+                      );
+
                     return (
                       <TableRow
                         key={
@@ -611,64 +594,45 @@ export function FleetPage() {
                         }
                         className="fleet-data-row hover:bg-[var(--tech-surface-2)]"
                       >
-                        {/* Drone */}
                         <TableCell className="h-[72px] text-center">
-                          <strong className="block text-[14px] font-medium text-[var(--tech-text)]">
+                          <strong className="text-[15px] font-semibold text-[var(--tech-text)]">
                             {
-                              drone.name
+                              displayCode
                             }
                           </strong>
-
-                          <p className="mt-0.5 text-[11px] text-[var(--tech-subtle)]">
-                            {
-                              drone.id
-                            }
-                          </p>
                         </TableCell>
 
-                        {/* Model */}
                         <TableCell className="text-center text-[13px] text-[var(--tech-muted)]">
                           {
                             drone.model
                           }
                         </TableCell>
 
-                        {/* Status */}
                         <TableCell className="text-center">
                           <div className="flex justify-center">
-                            <select
+                            <DropdownSelect
                               value={
                                 drone.status
                               }
                               onChange={(
-                                event,
+                                value,
                               ) =>
                                 handleStatusChange(
                                   drone.id,
-                                  event
-                                    .target
-                                    .value as DroneStatus,
+                                  value as DroneStatus,
                                 )
                               }
-                              className="h-8 w-[145px] rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-2.5 text-[12px] font-medium outline-none focus:border-orange-500"
-                            >
-                              <option value="Available">
-                                Available
-                              </option>
-
-                              <option value="Maintenance">
-                                Maintenance
-                              </option>
-
-                              <option value="Battery Replacement">
-                                Battery
-                                replacement
-                              </option>
-                            </select>
+                              options={[
+                                "Available",
+                                "Maintenance",
+                                "Battery Replacement",
+                              ]}
+                              ariaLabel={`Status for ${displayCode}`}
+                              className="w-[165px] min-w-0"
+                            />
                           </div>
                         </TableCell>
 
-                        {/* Battery */}
                         <TableCell className="text-center">
                           <div className="mx-auto w-[135px]">
                             <div className="mb-1.5 flex justify-between">
@@ -707,7 +671,6 @@ export function FleetPage() {
                           </div>
                         </TableCell>
 
-                        {/* Location */}
                         <TableCell className="text-center">
                           {incoming ? (
                             <div className="flex flex-col items-center">
@@ -732,18 +695,8 @@ export function FleetPage() {
                           )}
                         </TableCell>
 
-                        {/* Utilization */}
-                        <TableCell className="text-center text-[13px] text-[var(--tech-muted)]">
-                          {
-                            drone.utilization
-                          }
-                          %
-                        </TableCell>
-
-                        {/* Actions */}
                         <TableCell>
                           <div className="flex justify-center gap-2">
-                            {/* Drone đã ở Hub */}
                             {!incoming && (
                               <>
                                 <button
@@ -786,7 +739,6 @@ export function FleetPage() {
                               </>
                             )}
 
-                            {/* Cả incoming và at hub đều xem detail */}
                             <button
                               type="button"
                               title="View drone details"
@@ -814,7 +766,7 @@ export function FleetPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={6}
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
                     No drones
@@ -833,124 +785,58 @@ export function FleetPage() {
         </CardContent>
       </Card>
 
-      {/* =========================
-          REGISTER / EDIT MODAL
-      ========================= */}
+      {/* EDIT DRONE */}
+      {modalOpen &&
+        editingDrone && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4">
+            <div className="w-full max-w-[520px] overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+              <div className="flex justify-between border-b border-[var(--tech-border)] px-6 py-5">
+                <div>
+                  <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
+                    Edit drone
+                  </h2>
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4">
-          <div className="w-full max-w-[520px] overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-            <div className="flex justify-between border-b border-[var(--tech-border)] px-6 py-5">
-              <div>
-                <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                  {editingDroneId
-                    ? "Edit drone"
-                    : "Register drone"}
-                </h2>
-
-                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                  {editingDroneId
-                    ? "Update drone information."
-                    : `Register a new drone at ${TECHNICIAN_HUB}.`}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form
-              onSubmit={
-                handleSubmit
-              }
-            >
-              <div className="space-y-4 px-6 py-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Drone ID">
-                    <input
-                      required
-                      value={form.id}
-                      onChange={(
-                        event,
-                      ) =>
-                        setForm(
-                          (
-                            current,
-                          ) => ({
-                            ...current,
-                            id: event
-                              .target
-                              .value,
-                          }),
-                        )
-                      }
-                      className="tech-control h-10 w-full px-3 !text-[13px]"
-                      placeholder="DR-005"
-                    />
-                  </Field>
-
-                  <Field label="Drone name">
-                    <input
-                      required
-                      value={
-                        form.name
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setForm(
-                          (
-                            current,
-                          ) => ({
-                            ...current,
-                            name: event
-                              .target
-                              .value,
-                          }),
-                        )
-                      }
-                      className="tech-control h-10 w-full px-3 !text-[13px]"
-                      placeholder="CX-15"
-                    />
-                  </Field>
+                  <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
+                    Update the current drone information.
+                  </p>
                 </div>
 
-                <Field label="Model">
-                  <input
-                    required
-                    value={
-                      form.model
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setForm(
-                        (
-                          current,
-                        ) => ({
-                          ...current,
-                          model:
-                            event
-                              .target
-                              .value,
-                        }),
-                      )
-                    }
-                    className="tech-control h-10 w-full px-3 !text-[13px]"
-                    placeholder="DJI Matrice 350"
+                <button
+                  type="button"
+                  onClick={
+                    closeModal
+                  }
+                  className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
+                >
+                  <X
+                    size={18}
                   />
-                </Field>
+                </button>
+              </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Status">
-                    <select
+              <form
+                onSubmit={
+                  handleSubmit
+                }
+              >
+                <div className="space-y-4 px-6 py-5">
+                  <Field label="Drone">
+                    <input
+                      disabled
                       value={
-                        form.status
+                        getDroneDisplayCode(
+                          editingDrone,
+                        )
+                      }
+                      className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
+                    />
+                  </Field>
+
+                  <Field label="Model">
+                    <input
+                      required
+                      value={
+                        form.model
                       }
                       onChange={(
                         event,
@@ -960,113 +846,134 @@ export function FleetPage() {
                             current,
                           ) => ({
                             ...current,
-                            status:
+                            model:
                               event
                                 .target
-                                .value as DroneStatus,
+                                .value,
                           }),
                         )
                       }
                       className="tech-control h-10 w-full px-3 !text-[13px]"
-                    >
-                      <option value="Available">
-                        Available
-                      </option>
-
-                      <option value="Maintenance">
-                        Maintenance
-                      </option>
-
-                      <option value="Battery Replacement">
-                        Battery
-                        replacement
-                      </option>
-                    </select>
+                      placeholder="DJI Matrice 350"
+                    />
                   </Field>
 
-                  <Field label="Battery level">
-                    <div className="relative">
-                      <input
-                        required
-                        type="number"
-                        min={0}
-                        max={100}
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Status">
+                      <DropdownSelect
                         value={
-                          form.battery
+                          form.status
                         }
                         onChange={(
-                          event,
+                          value,
                         ) =>
                           setForm(
                             (
                               current,
                             ) => ({
                               ...current,
-                              battery:
-                                event
-                                  .target
-                                  .value,
+                              status:
+                                value as DroneStatus,
                             }),
                           )
                         }
-                        className="tech-control h-10 w-full px-3 pr-9 !text-[13px]"
+                        options={[
+                          "Available",
+                          "Maintenance",
+                          "Battery Replacement",
+                        ]}
+                        ariaLabel="Drone status"
+                        className="w-full min-w-0"
                       />
+                    </Field>
 
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--tech-muted)]">
-                        %
-                      </span>
-                    </div>
+                    <Field label="Battery level">
+                      <div className="relative">
+                        <input
+                          required
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={
+                            form.battery
+                          }
+                          onChange={(
+                            event,
+                          ) =>
+                            setForm(
+                              (
+                                current,
+                              ) => ({
+                                ...current,
+                                battery:
+                                  event
+                                    .target
+                                    .value,
+                              }),
+                            )
+                          }
+                          className="tech-control h-10 w-full px-3 pr-9 !text-[13px]"
+                        />
+
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--tech-muted)]">
+                          %
+                        </span>
+                      </div>
+                    </Field>
+                  </div>
+
+                  <Field label="Assigned hub">
+                    <input
+                      disabled
+                      value={
+                        TECHNICIAN_HUB
+                      }
+                      className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
+                    />
                   </Field>
+
+                  {formError && (
+                    <p className="text-[12px] text-red-500">
+                      {
+                        formError
+                      }
+                    </p>
+                  )}
                 </div>
 
-                <Field label="Assigned hub">
-                  <input
-                    disabled
-                    value={
-                      TECHNICIAN_HUB
+                <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
+                  <Button
+                    type="button"
+                    onClick={
+                      closeModal
                     }
-                    className="tech-control h-10 w-full px-3 !text-[13px]"
-                  />
-                </Field>
+                    className="
+                      h-9 rounded-md
+                      border border-[var(--tech-border)]
+                      !bg-transparent px-4
+                      text-[13px]
+                      text-[var(--tech-text-secondary)]
+                      hover:!border-orange-500/50
+                      hover:!bg-transparent
+                      hover:!text-orange-500
+                    "
+                  >
+                    Cancel
+                  </Button>
 
-                {formError && (
-                  <p className="text-[12px] text-red-500">
-                    {
-                      formError
-                    }
-                  </p>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
-                <Button
-                  type="button"
-                  onClick={
-                    closeModal
-                  }
-                  className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[13px] text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
-                >
-                  Cancel
-                </Button>
-
-                <Button
-                  type="submit"
-                  className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
-                >
-                  {editingDroneId
-                    ? "Save changes"
-                    : "Register drone"}
-                </Button>
-              </div>
-            </form>
+                  <Button
+                    type="submit"
+                    className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
+                  >
+                    Save changes
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* =========================
-          DELETE CONFIRMATION
-      ========================= */}
-
+      {/* DELETE CONFIRMATION */}
       <AnimatePresence>
         {deleteConfirmTarget && (
           <motion.div
@@ -1097,7 +1004,6 @@ export function FleetPage() {
               shadow-2xl
             "
           >
-            {/* Animated orange gradient border */}
             <svg
               className="pointer-events-none absolute inset-0 z-20 h-full w-full"
               viewBox="0 0 100 100"
@@ -1179,9 +1085,12 @@ export function FleetPage() {
                     0.82,
                     1,
                   ],
-                  ease: "easeInOut",
-                  repeat: Infinity,
-                  repeatType: "loop",
+                  ease:
+                    "easeInOut",
+                  repeat:
+                    Infinity,
+                  repeatType:
+                    "loop",
                 }}
               />
             </svg>
@@ -1200,7 +1109,9 @@ export function FleetPage() {
                   text-orange-500
                 "
               >
-                <Trash2 size={15} />
+                <Trash2
+                  size={15}
+                />
               </div>
 
               <div className="min-w-0 flex-1">
@@ -1210,14 +1121,14 @@ export function FleetPage() {
 
                 <p className="mt-1 text-[12px] leading-4 text-[var(--tech-muted)]">
                   Delete{" "}
-                  {deleteConfirmTarget.name} (
-                  {deleteConfirmTarget.id})
+                  {getDroneDisplayCode(
+                    deleteConfirmTarget,
+                  )}{" "}
                   from the fleet?
                 </p>
 
                 <p className="mt-1 text-[11px] text-[var(--tech-subtle)]">
-                  This action removes the drone
-                  from your current fleet list.
+                  This action removes the drone from your current fleet list.
                 </p>
 
                 <div className="mt-4 flex justify-end gap-2">
@@ -1231,11 +1142,13 @@ export function FleetPage() {
                     className="
                       h-8 rounded-md
                       border border-[var(--tech-border)]
-                      bg-transparent
+                      !bg-transparent
                       px-3
                       text-[12px]
                       text-[var(--tech-text-secondary)]
-                      hover:bg-[var(--tech-surface-2)]
+                      hover:!border-orange-500/50
+                      hover:!bg-transparent
+                      hover:!text-orange-500
                     "
                   >
                     Cancel
@@ -1243,7 +1156,9 @@ export function FleetPage() {
 
                   <Button
                     type="button"
-                    onClick={confirmDelete}
+                    onClick={
+                      confirmDelete
+                    }
                     className="
                       h-8 rounded-md
                       bg-orange-500
