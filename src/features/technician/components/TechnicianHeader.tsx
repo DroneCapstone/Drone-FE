@@ -7,7 +7,6 @@ import {
   Bell,
   Menu,
   Moon,
-  Search,
   Sun,
 } from "lucide-react";
 
@@ -266,32 +265,6 @@ export function TechnicianHeader({
           <Menu size={20} />
         </button>
 
-        <button
-          type="button"
-          className="
-            flex h-10
-            w-[320px]
-            items-center
-            gap-2
-            rounded-md
-            border
-            border-[var(--tech-border)]
-            bg-[var(--tech-surface-2)]
-            px-3
-            text-left
-            text-[12px]
-            text-[var(--tech-muted)]
-            transition
-            hover:border-orange-500/30
-          "
-        >
-          <Search
-            size={15}
-            strokeWidth={1.5}
-          />
-
-          Search drone, work order
-        </button>
       </div>
 
       <div className="flex items-center gap-3">
