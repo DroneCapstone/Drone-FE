@@ -1,0 +1,496 @@
+/* =========================================================
+   TECHNICIAN THEME
+========================================================= */
+
+.technician-app {
+  --tech-bg: #0f1115;
+  --tech-sidebar: #0b0c0e;
+  --tech-header: #0d0f12;
+
+  --tech-surface: #121419;
+  --tech-surface-2: #111318;
+
+  --tech-border: #272a30;
+
+  --tech-text: #f4f4f5;
+  --tech-text-secondary: #d4d4d8;
+  --tech-muted: #a1a1aa;
+  --tech-subtle: #626772;
+
+  font-family:
+    "IBM Plex Sans",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+/* =========================================================
+   DARK
+========================================================= */
+
+.technician-app[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* =========================================================
+   LIGHT
+========================================================= */
+
+.technician-app[data-theme="light"] {
+  color-scheme: light;
+
+  --tech-bg: #f5f6f8;
+  --tech-sidebar: #ffffff;
+  --tech-header: #ffffff;
+
+  --tech-surface: #ffffff;
+  --tech-surface-2: #f8f9fa;
+
+  --tech-border: #e2e5e9;
+
+  --tech-text: #202124;
+  --tech-text-secondary: #3c4043;
+  --tech-muted: #5f6368;
+  --tech-subtle: #8a9099;
+
+  background: var(--tech-bg) !important;
+  color: var(--tech-text) !important;
+}
+
+/* =========================================================
+   LIGHT MODE TEMP OVERRIDES
+========================================================= */
+
+.technician-app[data-theme="light"] .bg-\[\#0f1115\] {
+  background: var(--tech-bg) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#0b0c0e\] {
+  background: var(--tech-sidebar) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#0d0f12\] {
+  background: var(--tech-header) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#121419\] {
+  background: var(--tech-surface) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#111318\] {
+  background: var(--tech-surface-2) !important;
+}
+
+.technician-app[data-theme="light"] .bg-\[\#101216\] {
+  background: #ffffff !important;
+}
+
+/* Borders */
+
+.technician-app[data-theme="light"] .border-zinc-800,
+.technician-app[data-theme="light"] .border-zinc-800\/80,
+.technician-app[data-theme="light"] .border-zinc-800\/70 {
+  border-color: var(--tech-border) !important;
+}
+
+.technician-app[data-theme="light"] .border-zinc-700 {
+  border-color: #d6d9de !important;
+}
+
+/* Text */
+
+.technician-app[data-theme="light"] .text-zinc-100,
+.technician-app[data-theme="light"] .text-zinc-200 {
+  color: var(--tech-text) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-300,
+.technician-app[data-theme="light"] .text-zinc-400 {
+  color: var(--tech-text-secondary) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-500 {
+  color: var(--tech-muted) !important;
+}
+
+.technician-app[data-theme="light"] .text-zinc-600,
+.technician-app[data-theme="light"] .text-zinc-700 {
+  color: var(--tech-subtle) !important;
+}
+
+/* Neutral backgrounds */
+
+.technician-app[data-theme="light"] .bg-zinc-800 {
+  background: #e8eaed !important;
+}
+
+.technician-app[data-theme="light"] .bg-zinc-900 {
+  background: #f1f3f4 !important;
+}
+
+.technician-app[data-theme="light"] .hover\:bg-zinc-900\/40:hover {
+  background: rgba(0, 0, 0, 0.025) !important;
+}
+
+/* Sidebar */
+
+.technician-app[data-theme="light"] aside {
+  box-shadow: none;
+}
+
+/* =========================================================
+   SMOOTH THEME SWITCH
+========================================================= */
+
+.technician-app,
+.technician-app header,
+.technician-app aside,
+.technician-app main {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+/* =========================================================
+   TYPOGRAPHY NORMALIZATION
+========================================================= */
+
+.technician-app h1,
+.technician-app h2,
+.technician-app h3,
+.technician-app h4,
+.technician-app h5,
+.technician-app h6,
+.technician-app p,
+.technician-app span,
+.technician-app label,
+.technician-app button,
+.technician-app input,
+.technician-app textarea,
+.technician-app select,
+.technician-app table,
+.technician-app th,
+.technician-app td {
+  font-family: inherit !important;
+}
+
+/* =========================================================
+   FORM CONTROLS
+========================================================= */
+
+.technician-app input,
+.technician-app textarea,
+.technician-app select {
+  background-color: var(--tech-surface-2) !important;
+  color: var(--tech-text) !important;
+  border-color: var(--tech-border) !important;
+}
+
+.technician-app input::placeholder,
+.technician-app textarea::placeholder {
+  color: var(--tech-subtle) !important;
+}
+
+.technician-app input:focus,
+.technician-app textarea:focus,
+.technician-app select:focus {
+  border-color: #ff6b00 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Light form */
+
+.technician-app[data-theme="light"] input,
+.technician-app[data-theme="light"] textarea,
+.technician-app[data-theme="light"] select {
+  background-color: #ffffff !important;
+  color: #202124 !important;
+  border-color: #d9dde3 !important;
+}
+
+/* Disabled */
+
+.technician-app[data-theme="light"] input:disabled,
+.technician-app[data-theme="light"] textarea:disabled,
+.technician-app[data-theme="light"] select:disabled {
+  background-color: #f1f3f4 !important;
+  color: #80868b !important;
+  opacity: 1 !important;
+}
+
+/* =========================================================
+   TECH INPUT
+========================================================= */
+
+.tech-input {
+  width: 100%;
+  height: 38px;
+
+  border: 1px solid var(--tech-border);
+  border-radius: 6px;
+
+  background: var(--tech-surface-2);
+
+  padding: 0 12px;
+
+  color: var(--tech-text);
+
+  font-size: 12px;
+
+  outline: none;
+
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.tech-input::placeholder {
+  color: var(--tech-subtle);
+}
+
+.tech-input:focus {
+  border-color: #ff6b00 !important;
+  box-shadow: none;
+}
+
+/* =========================================================
+   TECH CONTROL
+========================================================= */
+
+.technician-app .tech-control {
+  border: 1px solid var(--tech-border) !important;
+  border-radius: 6px;
+
+  background-color: var(--tech-surface-2) !important;
+  color: var(--tech-text) !important;
+
+  font-size: 11px;
+
+  outline: none;
+  box-shadow: none;
+
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.technician-app .tech-control::placeholder {
+  color: var(--tech-subtle);
+}
+
+.technician-app .tech-control:hover {
+  border-color: #3f434b !important;
+}
+
+.technician-app .tech-control:focus,
+.technician-app .tech-control:focus-visible {
+  border-color: #ff6b00 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Select */
+
+.technician-app select.tech-control {
+  cursor: pointer;
+}
+
+.technician-app select.tech-control option {
+  background: var(--tech-surface);
+  color: var(--tech-text);
+}
+
+/* =========================================================
+   TABLE BASE
+========================================================= */
+
+.technician-app table {
+  width: 100%;
+}
+
+.technician-app th {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.technician-app td {
+  vertical-align: middle;
+}
+
+/* =========================================================
+   FLEET TABLE
+========================================================= */
+
+.technician-app .fleet-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Header text */
+
+.technician-app .fleet-table th {
+  color: var(--tech-text-secondary) !important;
+
+  font-family: inherit !important;
+  font-size: 11px;
+  font-weight: 600;
+
+  letter-spacing: 0.08em;
+
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Cell */
+
+.technician-app .fleet-table td {
+  vertical-align: middle;
+}
+
+/* =========================================================
+   REMOVE ALL DEFAULT SHADCN ROW BORDERS
+========================================================= */
+
+.technician-app .fleet-table tr,
+.technician-app .fleet-table [data-slot="table-row"],
+.technician-app .fleet-header-row,
+.technician-app .fleet-data-row {
+  border: 0 !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  border-left: 0 !important;
+
+  box-shadow: none !important;
+}
+
+/* =========================================================
+   HEADER SEPARATOR
+   Same color as outer card border
+========================================================= */
+
+.technician-app .fleet-table thead th {
+  border: 0 !important;
+  border-bottom: 1px solid var(--tech-border) !important;
+}
+
+/* =========================================================
+   ROW SEPARATOR
+   Same color as outer card border
+========================================================= */
+
+.technician-app .fleet-table tbody tr:not(:last-child) td {
+  border: 0 !important;
+  border-bottom: 1px solid var(--tech-border) !important;
+}
+
+/* Last row has no separator */
+
+.technician-app .fleet-table tbody tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+/* =========================================================
+   FLEET ACTION BUTTONS
+========================================================= */
+
+.technician-app .fleet-action-button {
+  position: relative;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
+
+  border-radius: 6px;
+
+  color: var(--tech-muted);
+
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.technician-app .fleet-action-button::after {
+  content: "";
+
+  position: absolute;
+
+  left: 50%;
+  bottom: 2px;
+
+  width: 16px;
+  height: 1px;
+
+  background: #ff6b00;
+
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+
+  transition: transform 150ms ease;
+}
+
+.technician-app .fleet-action-button:hover {
+  color: #ff6b00;
+}
+
+.technician-app .fleet-action-button:hover::after {
+  transform: translateX(-50%) scaleX(1);
+}
+/* =========================================================
+   TECHNICIAN TYPOGRAPHY SCALE
+========================================================= */
+
+.technician-app .tech-page-title {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.technician-app .tech-section-title {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.technician-app .tech-body {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.technician-app .tech-body-strong {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.technician-app .tech-secondary {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tech-muted);
+}
+
+.technician-app .tech-label {
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.technician-app .tech-meta {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--tech-subtle);
+}
+
+.technician-app .tech-badge-text {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+}
