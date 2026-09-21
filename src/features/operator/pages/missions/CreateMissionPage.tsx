@@ -4,6 +4,7 @@ import { ActionButton } from '../../../../components/ui/ActionButton';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { DepartureDateTimePicker } from '../../../../components/common/DateTimePicker/DateTimePicker';
 
 import { OperatorPanel } from '../../components/OperatorPanel';
 
@@ -25,6 +26,10 @@ export function CreateMissionPage() {
       setToast('');
     }, 2400);
   };
+
+  const [departure, setDeparture] = useState<Date | undefined>(
+    new Date(2026, 8, 15, 14, 30),
+  );
 
   return (
     <MissionPageShell active="/operator/missions/create">
@@ -135,14 +140,24 @@ export function CreateMissionPage() {
               <input defaultValue="Harbor Station 04" />
             </label>
 
-            <label>
+            {/* <label>
               <span>Departure</span>
 
               <input
                 type="datetime-local"
                 defaultValue="2026-09-15T14:30"
               />
-            </label>
+            </label> */}
+
+            <div className="select-field">
+              <span>Departure</span>
+
+              <DepartureDateTimePicker
+                value={departure}
+                onChange={setDeparture}
+                placeholder="Select departure date & time"
+              />
+            </div>
 
             <label>
               <span>Priority</span>
