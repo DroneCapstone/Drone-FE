@@ -7,15 +7,9 @@ import {
 } from "react";
 
 import {
-  AnimatePresence,
-  motion,
-} from "framer-motion";
-
-import {
   ArrowUpRight,
   Pencil,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
 
@@ -57,25 +51,25 @@ import {
   type FleetDrone,
 } from "../utils/fleetStorage";
 
+import {
+  loadTransitMissions,
+  type TransitMission,
+} from "../utils/transitMissionStorage";
+
 type DroneForm = {
   model: string;
   status: DroneStatus;
   battery: string;
 };
 
+type StatusFilter =
+  | "All status"
+  | DroneStatus;
+
 type BatteryFilter =
   | "All battery"
   | "Normal ≥ 40%"
   | "Low < 40%";
-
-type LocationFilter =
-  | "All location"
-  | "At my hub"
-  | "Incoming";
-
-type StatusFilter =
-  | "All status"
-  | DroneStatus;
 
 const initialForm: DroneForm = {
   model: "",
@@ -83,38 +77,32 @@ const initialForm: DroneForm = {
   battery: "100",
 };
 
-/*
- * Display rule:
- * DR-002 + type/name prefix CX -> CX-02
- * DR-014 + type/name prefix AX -> AX-14
- */
 function getDroneDisplayCode(
   drone: FleetDrone,
 ) {
-  const prefixMatch =
-    drone.name.match(/[A-Za-z]+/);
-
   const prefix =
-    prefixMatch?.[0]?.toUpperCase() ??
+    drone.name
+      .match(/[A-Za-z]+/)?.[0]
+      ?.toUpperCase() ??
     "DR";
 
-  const idNumberMatch =
+  const idMatch =
     drone.id.match(/(\d+)$/);
 
-  if (!idNumberMatch) {
+  if (!idMatch) {
     return drone.name;
   }
 
-  const numericId = Number(
-    idNumberMatch[1],
+  const number = Number(
+    idMatch[1],
   );
 
-  if (Number.isNaN(numericId)) {
+  if (Number.isNaN(number)) {
     return drone.name;
   }
 
   return `${prefix}-${String(
-    numericId,
+    number,
   ).padStart(2, "0")}`;
 }
 
@@ -129,6 +117,13 @@ export function FleetPage() {
   );
 
   const [
+    transitMissions,
+    setTransitMissions,
+  ] = useState<
+    TransitMission[]
+  >(loadTransitMissions);
+
+  const [
     searchQuery,
     setSearchQuery,
   ] = useState("");
@@ -141,20 +136,11 @@ export function FleetPage() {
   );
 
   const [
-    locationFilter,
-    setLocationFilter,
-  ] =
-    useState<LocationFilter>(
-      "All location",
-    );
-
-  const [
     batteryFilter,
     setBatteryFilter,
-  ] =
-    useState<BatteryFilter>(
-      "All battery",
-    );
+  ] = useState<BatteryFilter>(
+    "All battery",
+  );
 
   const [
     modalOpen,
@@ -164,72 +150,60 @@ export function FleetPage() {
   const [
     editingDroneId,
     setEditingDroneId,
-  ] = useState<
-    string | null
-  >(null);
+  ] = useState<string | null>(
+    null,
+  );
 
   const [
     form,
     setForm,
-  ] =
-    useState<DroneForm>(
-      initialForm,
-    );
+  ] = useState<DroneForm>(
+    initialForm,
+  );
 
   const [
     formError,
     setFormError,
   ] = useState("");
 
-  const [
-    deleteConfirmTarget,
-    setDeleteConfirmTarget,
-  ] =
-    useState<FleetDrone | null>(
-      null,
-    );
-
   useEffect(() => {
     saveFleet(drones);
   }, [drones]);
 
-  const isIncomingToMyHub = (
-    drone: FleetDrone,
-  ) => {
-    const location =
-      drone.location.toLowerCase();
+  useEffect(() => {
+    const syncTransitMissions =
+      () => {
+        setTransitMissions(
+          loadTransitMissions(),
+        );
+      };
 
-    const hub =
-      TECHNICIAN_HUB.toLowerCase();
-
-    return (
-      location.includes(hub) &&
-      (location.startsWith(
-        "heading to",
-      ) ||
-        location.startsWith(
-          "en route",
-        ) ||
-        location.startsWith(
-          "in transit",
-        ))
+    window.addEventListener(
+      "technician-transit-missions-updated",
+      syncTransitMissions,
     );
-  };
 
-  const isAtMyHub = (
-    drone: FleetDrone,
-  ) =>
-    drone.location ===
-    TECHNICIAN_HUB;
+    return () => {
+      window.removeEventListener(
+        "technician-transit-missions-updated",
+        syncTransitMissions,
+      );
+    };
+  }, []);
 
+  /*
+   * Hub Fleet only contains drones physically
+   * confirmed at this technician's hub.
+   *
+   * Incoming / continuing missions are handled
+   * in Transit missions.
+   */
   const hubDrones = useMemo(
     () =>
       drones.filter(
         (drone) =>
-          isAtMyHub(drone) ||
-          isIncomingToMyHub(
-            drone,
-          ),
+          drone.location ===
+          TECHNICIAN_HUB,
       ),
     [drones],
   );
@@ -243,19 +217,14 @@ export function FleetPage() {
 
       return hubDrones.filter(
         (drone) => {
-          const incoming =
-            isIncomingToMyHub(
-              drone,
-            );
-
-          const displayCode =
+          const code =
             getDroneDisplayCode(
               drone,
             ).toLowerCase();
 
           const matchesSearch =
             !query ||
-            displayCode.includes(
+            code.includes(
               query,
             ) ||
             drone.id
@@ -270,16 +239,6 @@ export function FleetPage() {
               "All status" ||
             drone.status ===
               statusFilter;
-
-          const matchesLocation =
-            locationFilter ===
-              "All location" ||
-            (locationFilter ===
-              "At my hub" &&
-              !incoming) ||
-            (locationFilter ===
-              "Incoming" &&
-              incoming);
 
           const matchesBattery =
             batteryFilter ===
@@ -296,7 +255,6 @@ export function FleetPage() {
           return (
             matchesSearch &&
             matchesStatus &&
-            matchesLocation &&
             matchesBattery
           );
         },
@@ -305,7 +263,6 @@ export function FleetPage() {
       hubDrones,
       searchQuery,
       statusFilter,
-      locationFilter,
       batteryFilter,
     ]);
 
@@ -412,31 +369,20 @@ export function FleetPage() {
     );
   };
 
-  const handleDelete = (
+  const getBatteryServiceMission = (
     drone: FleetDrone,
-  ) => {
-    setDeleteConfirmTarget(
-      drone,
+  ) =>
+    transitMissions.find(
+      (mission) =>
+        mission.currentDroneId ===
+          drone.id &&
+        mission.hub ===
+          TECHNICIAN_HUB &&
+        mission.status ===
+          "At Hub" &&
+        drone.battery <
+          mission.requiredDepartureBatteryPct,
     );
-  };
-
-  const confirmDelete = () => {
-    if (!deleteConfirmTarget) {
-      return;
-    }
-
-    setDrones((current) =>
-      current.filter(
-        (item) =>
-          item.id !==
-          deleteConfirmTarget.id,
-      ),
-    );
-
-    setDeleteConfirmTarget(
-      null,
-    );
-  };
 
   const actionButtonClass =
     "relative inline-flex h-8 w-8 items-center justify-center rounded-md " +
@@ -448,13 +394,13 @@ export function FleetPage() {
 
   return (
     <TechnicianPageShell
-      title="Fleet"
-      description={`Manage drones at ${TECHNICIAN_HUB} and monitor incoming drones.`}
+      title="Hub fleet"
+      description={`Monitor drone readiness, technical status and battery level at ${TECHNICIAN_HUB}.`}
     >
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-        {/* SEARCH + FILTERS */}
+        {/* FILTERS */}
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] px-4 py-4">
-          <div className="relative min-w-[260px] flex-1">
+          <div className="relative min-w-[280px] flex-1">
             <Search
               size={15}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tech-subtle)]"
@@ -470,7 +416,7 @@ export function FleetPage() {
                 )
               }
               placeholder="Search drone code, ID or model..."
-              className="tech-control h-9 w-full pl-9 pr-3 !text-[13px]"
+              className="tech-control h-10 w-full pl-9 pr-3 !text-[13px]"
             />
           </div>
 
@@ -485,28 +431,9 @@ export function FleetPage() {
               "All status",
               "Available",
               "Maintenance",
-              "Battery Replacement",
             ]}
             ariaLabel="Drone status"
-            className="min-w-[160px]"
-          />
-
-          <DropdownSelect
-            value={
-              locationFilter
-            }
-            onChange={(value) =>
-              setLocationFilter(
-                value as LocationFilter,
-              )
-            }
-            options={[
-              "All location",
-              "At my hub",
-              "Incoming",
-            ]}
-            ariaLabel="Drone location"
-            className="min-w-[160px]"
+            className="min-w-[190px]"
           />
 
           <DropdownSelect
@@ -524,7 +451,7 @@ export function FleetPage() {
               "Low < 40%",
             ]}
             ariaLabel="Battery level"
-            className="min-w-[155px]"
+            className="min-w-[170px]"
           />
         </div>
 
@@ -532,12 +459,13 @@ export function FleetPage() {
         <CardContent className="p-0">
           <Table className="fleet-table table-fixed">
             <colgroup>
-              <col className="w-[15%]" />
+              <col className="w-[13%]" />
               <col className="w-[17%]" />
               <col className="w-[18%]" />
+              <col className="w-[15%]" />
               <col className="w-[17%]" />
-              <col className="w-[21%]" />
-              <col className="w-[12%]" />
+              <col className="w-[11%]" />
+              <col className="w-[9%]" />
             </colgroup>
 
             <TableHeader>
@@ -559,7 +487,11 @@ export function FleetPage() {
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
-                  Hub / Location
+                  Service
+                </TableHead>
+
+                <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
+                  Hub
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
@@ -577,13 +509,13 @@ export function FleetPage() {
                       drone.battery <
                       40;
 
-                    const incoming =
-                      isIncomingToMyHub(
+                    const code =
+                      getDroneDisplayCode(
                         drone,
                       );
 
-                    const displayCode =
-                      getDroneDisplayCode(
+                    const batteryServiceMission =
+                      getBatteryServiceMission(
                         drone,
                       );
 
@@ -596,9 +528,7 @@ export function FleetPage() {
                       >
                         <TableCell className="h-[72px] text-center">
                           <strong className="text-[15px] font-semibold text-[var(--tech-text)]">
-                            {
-                              displayCode
-                            }
+                            {code}
                           </strong>
                         </TableCell>
 
@@ -625,16 +555,15 @@ export function FleetPage() {
                               options={[
                                 "Available",
                                 "Maintenance",
-                                "Battery Replacement",
                               ]}
-                              ariaLabel={`Status for ${displayCode}`}
-                              className="w-[165px] min-w-0"
+                              ariaLabel={`Status for ${code}`}
+                              className="w-[205px] min-w-[205px]"
                             />
                           </div>
                         </TableCell>
 
                         <TableCell className="text-center">
-                          <div className="mx-auto w-[135px]">
+                          <div className="mx-auto w-[145px]">
                             <div className="mb-1.5 flex justify-between">
                               <span
                                 className={
@@ -672,72 +601,48 @@ export function FleetPage() {
                         </TableCell>
 
                         <TableCell className="text-center">
-                          {incoming ? (
-                            <div className="flex flex-col items-center">
-                              <span className="text-[12px] font-medium text-orange-500">
-                                Heading
-                                to{" "}
-                                {
-                                  TECHNICIAN_HUB
-                                }
-                              </span>
+                          {batteryServiceMission ? (
+                            <div className="mx-auto max-w-[180px]">
+                              <p className="text-[12px] font-semibold text-orange-500">
+                                Battery service
+                              </p>
 
-                              <span className="mt-1 rounded border border-orange-900/60 bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-orange-500">
-                                Incoming
-                              </span>
+                              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                                {drone.battery}% → required{" "}
+                                {batteryServiceMission.requiredDepartureBatteryPct}%
+                              </p>
                             </div>
                           ) : (
-                            <span className="text-[12px] text-[var(--tech-muted)]">
-                              {
-                                TECHNICIAN_HUB
-                              }
+                            <span className="text-[12px] text-[var(--tech-subtle)]">
+                              —
                             </span>
                           )}
                         </TableCell>
 
+                        <TableCell className="text-center text-[12px] text-[var(--tech-muted)]">
+                          {
+                            TECHNICIAN_HUB
+                          }
+                        </TableCell>
+
                         <TableCell>
                           <div className="flex justify-center gap-2">
-                            {!incoming && (
-                              <>
-                                <button
-                                  type="button"
-                                  title="Edit drone"
-                                  onClick={() =>
-                                    openEditModal(
-                                      drone,
-                                    )
-                                  }
-                                  className={
-                                    actionButtonClass
-                                  }
-                                >
-                                  <Pencil
-                                    size={
-                                      14
-                                    }
-                                  />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  title="Delete drone"
-                                  onClick={() =>
-                                    handleDelete(
-                                      drone,
-                                    )
-                                  }
-                                  className={
-                                    actionButtonClass
-                                  }
-                                >
-                                  <Trash2
-                                    size={
-                                      14
-                                    }
-                                  />
-                                </button>
-                              </>
-                            )}
+                            <button
+                              type="button"
+                              title="Edit drone"
+                              onClick={() =>
+                                openEditModal(
+                                  drone,
+                                )
+                              }
+                              className={
+                                actionButtonClass
+                              }
+                            >
+                              <Pencil
+                                size={14}
+                              />
+                            </button>
 
                             <button
                               type="button"
@@ -752,9 +657,7 @@ export function FleetPage() {
                               }
                             >
                               <ArrowUpRight
-                                size={
-                                  15
-                                }
+                                size={15}
                               />
                             </button>
                           </div>
@@ -766,13 +669,10 @@ export function FleetPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
-                    No drones
-                    currently
-                    assigned or
-                    heading to{" "}
+                    No drones are currently assigned to{" "}
                     {
                       TECHNICIAN_HUB
                     }
@@ -783,6 +683,8 @@ export function FleetPage() {
             </TableBody>
           </Table>
         </CardContent>
+
+    
       </Card>
 
       {/* EDIT DRONE */}
@@ -797,7 +699,7 @@ export function FleetPage() {
                   </h2>
 
                   <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                    Update the current drone information.
+                    Update the current technical state of this drone.
                   </p>
                 </div>
 
@@ -808,9 +710,7 @@ export function FleetPage() {
                   }
                   className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
                 >
-                  <X
-                    size={18}
-                  />
+                  <X size={18} />
                 </button>
               </div>
 
@@ -854,7 +754,6 @@ export function FleetPage() {
                         )
                       }
                       className="tech-control h-10 w-full px-3 !text-[13px]"
-                      placeholder="DJI Matrice 350"
                     />
                   </Field>
 
@@ -880,7 +779,6 @@ export function FleetPage() {
                         options={[
                           "Available",
                           "Maintenance",
-                          "Battery Replacement",
                         ]}
                         ariaLabel="Drone status"
                         className="w-full min-w-0"
@@ -972,211 +870,6 @@ export function FleetPage() {
             </div>
           </div>
         )}
-
-      {/* DELETE CONFIRMATION */}
-      <AnimatePresence>
-        {deleteConfirmTarget && (
-          <motion.div
-            initial={{
-              x: 420,
-              opacity: 0,
-            }}
-            animate={{
-              x: 0,
-              opacity: 1,
-            }}
-            exit={{
-              x: 420,
-              opacity: 0,
-            }}
-            transition={{
-              duration: 0.22,
-              ease: "easeOut",
-            }}
-            className="
-              fixed bottom-6 right-6 z-[9999]
-              w-[360px]
-              overflow-hidden
-              rounded-lg
-              border border-[var(--tech-border)]
-              bg-[var(--tech-surface)]
-              p-4
-              shadow-2xl
-            "
-          >
-            <svg
-              className="pointer-events-none absolute inset-0 z-20 h-full w-full"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient
-                  id="delete-confirm-border-gradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="0%"
-                >
-                  <stop
-                    offset="0%"
-                    stopColor="rgba(255,123,0,0)"
-                  />
-
-                  <stop
-                    offset="18%"
-                    stopColor="rgba(255,123,0,0.35)"
-                  />
-
-                  <stop
-                    offset="55%"
-                    stopColor="rgba(255,123,0,1)"
-                  />
-
-                  <stop
-                    offset="100%"
-                    stopColor="rgba(255,123,0,0)"
-                  />
-                </linearGradient>
-              </defs>
-
-              <motion.rect
-                x="0.8"
-                y="0.8"
-                width="98.4"
-                height="98.4"
-                rx="2.6"
-                ry="2.6"
-                fill="none"
-                stroke="url(#delete-confirm-border-gradient)"
-                strokeWidth="1.5"
-                vectorEffect="non-scaling-stroke"
-                strokeLinecap="round"
-                initial={{
-                  pathLength: 0,
-                  pathOffset: 0,
-                  opacity: 0,
-                }}
-                animate={{
-                  pathLength: [
-                    0,
-                    0.18,
-                    0.18,
-                    0,
-                  ],
-                  pathOffset: [
-                    0,
-                    0,
-                    0.82,
-                    1,
-                  ],
-                  opacity: [
-                    0,
-                    1,
-                    1,
-                    0,
-                  ],
-                }}
-                transition={{
-                  duration: 3,
-                  times: [
-                    0,
-                    0.14,
-                    0.82,
-                    1,
-                  ],
-                  ease:
-                    "easeInOut",
-                  repeat:
-                    Infinity,
-                  repeatType:
-                    "loop",
-                }}
-              />
-            </svg>
-
-            <div className="relative z-10 flex items-start gap-3">
-              <div
-                className="
-                  mt-0.5
-                  flex h-8 w-8
-                  shrink-0
-                  items-center
-                  justify-center
-                  rounded-md
-                  border border-orange-500/30
-                  bg-orange-500/10
-                  text-orange-500
-                "
-              >
-                <Trash2
-                  size={15}
-                />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                  Confirm drone deletion
-                </p>
-
-                <p className="mt-1 text-[12px] leading-4 text-[var(--tech-muted)]">
-                  Delete{" "}
-                  {getDroneDisplayCode(
-                    deleteConfirmTarget,
-                  )}{" "}
-                  from the fleet?
-                </p>
-
-                <p className="mt-1 text-[11px] text-[var(--tech-subtle)]">
-                  This action removes the drone from your current fleet list.
-                </p>
-
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      setDeleteConfirmTarget(
-                        null,
-                      )
-                    }
-                    className="
-                      h-8 rounded-md
-                      border border-[var(--tech-border)]
-                      !bg-transparent
-                      px-3
-                      text-[12px]
-                      text-[var(--tech-text-secondary)]
-                      hover:!border-orange-500/50
-                      hover:!bg-transparent
-                      hover:!text-orange-500
-                    "
-                  >
-                    Cancel
-                  </Button>
-
-                  <Button
-                    type="button"
-                    onClick={
-                      confirmDelete
-                    }
-                    className="
-                      h-8 rounded-md
-                      bg-orange-500
-                      px-4
-                      text-[12px]
-                      font-medium
-                      text-black
-                      hover:bg-orange-600
-                    "
-                  >
-                    OK
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </TechnicianPageShell>
   );
 }

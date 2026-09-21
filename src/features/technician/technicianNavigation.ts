@@ -30,6 +30,16 @@ export const technicianNavigation: TechnicianNavigationItem[] = [
     label: "Fleet",
     path: "/technician/fleet",
     icon: Plane,
+    children: [
+      {
+        label: "Hub fleet",
+        path: "/technician/fleet",
+      },
+      {
+        label: "Transit missions",
+        path: "/technician/fleet/transit",
+      },
+    ],
   },
   {
     label: "Maintenance",
