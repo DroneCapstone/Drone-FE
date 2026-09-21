@@ -168,12 +168,48 @@ export function TechnicianSidebar({
                 const children =
                   item.children ?? [];
 
+                const isChildActive = (
+                  childPath: string,
+                ) => {
+                  /*
+                   * Fleet has a child whose path is the same
+                   * as its parent (/technician/fleet).
+                   *
+                   * Without this special case, Hub fleet would
+                   * also appear active on /technician/fleet/transit.
+                   */
+                  if (
+                    item.path ===
+                      "/technician/fleet" &&
+                    childPath ===
+                      "/technician/fleet"
+                  ) {
+                    return (
+                      pathname ===
+                        "/technician/fleet" ||
+                      (pathname.startsWith(
+                        "/technician/fleet/",
+                      ) &&
+                        !pathname.startsWith(
+                          "/technician/fleet/transit",
+                        ))
+                    );
+                  }
+
+                  return (
+                    pathname ===
+                      childPath ||
+                    pathname.startsWith(
+                      `${childPath}/`,
+                    )
+                  );
+                };
+
                 const activeChildIndex =
                   children.findIndex(
                     (child) =>
-                      pathname === child.path ||
-                      pathname.startsWith(
-                        `${child.path}/`,
+                      isChildActive(
+                        child.path,
                       ),
                   );
 
@@ -348,10 +384,8 @@ export function TechnicianSidebar({
                               {children.map(
                                 (child) => {
                                   const childActive =
-                                    pathname ===
-                                      child.path ||
-                                    pathname.startsWith(
-                                      `${child.path}/`,
+                                    isChildActive(
+                                      child.path,
                                     );
 
                                   return (

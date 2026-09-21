@@ -1,9 +1,10 @@
-import { technicianDrones } from "../data/technicianMockData";
+import {
+  technicianDrones,
+} from "../data/technicianMockData";
 
 export type DroneStatus =
   | "Available"
-  | "Maintenance"
-  | "Battery Replacement";
+  | "Maintenance";
 
 export type FleetDrone = {
   id: string;
@@ -15,13 +16,6 @@ export type FleetDrone = {
   lastFlight: string;
   location: string;
 };
-
-/*
- * Đổi sang v2 để không bị dữ liệu localStorage cũ
- * từ phiên bản trước ghi đè location mới.
- */
-export const FLEET_STORAGE_KEY =
-  "droneoptai.technician.fleet.v2";
 
 export const TECHNICIAN_HUB =
   "Hub HCM-02";
@@ -42,12 +36,11 @@ export const LOCATION_OPTIONS = [
 ];
 
 /*
- * Mock dữ liệu dành cho Technician Hub HCM-02
- *
- * CX-09: đang ở Hub HCM-02
- * CX-12: đang từ Hub khác bay tới Hub HCM-02
- * AX-04: đang ở Hub HCM-02
- * AX-08: đang ở Hub HCM-02
+ * DEMO INITIAL LOCATION
+ * ---------------------------------------------------------
+ * DR-002 is the drone used by the Incoming transit mission.
+ * Therefore it must NOT appear in Hub HCM-02 before
+ * Technician confirms its arrival.
  */
 const defaultLocationById: Record<
   string,
@@ -66,12 +59,11 @@ export function normalizeDroneStatus(
     return "Maintenance";
   }
 
-  if (
-    status === "Battery Replacement"
-  ) {
-    return "Battery Replacement";
-  }
-
+  /*
+   * Legacy "Battery Replacement" is no longer an
+   * operational status. Battery service is handled
+   * separately by Transit missions.
+   */
   return "Available";
 }
 
@@ -81,93 +73,87 @@ function createDefaultFleet(): FleetDrone[] {
       id: drone.id,
       name: drone.name,
       model: drone.model,
-
       status: normalizeDroneStatus(
         String(drone.status),
       ),
-
-      battery: Number(drone.battery),
-
-      utilization: Number(
-        drone.utilization,
+      battery: Number(
+        drone.battery,
       ),
-
+      utilization: Number(
+        drone.utilization ?? 0,
+      ),
       lastFlight:
-        drone.lastFlight ?? "Not flown",
-
+        drone.lastFlight ??
+        "Not flown",
       location:
-        defaultLocationById[drone.id] ??
+        defaultLocationById[
+          drone.id
+        ] ??
         HUB_OPTIONS[
-          index % HUB_OPTIONS.length
+          index %
+            HUB_OPTIONS.length
         ],
     }),
   );
 }
 
+/*
+ * DEMO RUNTIME STORE
+ * ---------------------------------------------------------
+ * Keep changes while navigating inside the SPA.
+ *
+ * Full browser refresh:
+ * -> module reloads
+ * -> fleet resets to createDefaultFleet()
+ *
+ * This keeps demo data consistent with Transit missions:
+ * - Incoming DR-002 starts outside Hub HCM-02
+ * - Confirm arrival moves DR-002 into Hub HCM-02
+ * - Refresh restores the initial demo state
+ *
+ * Later, replace this runtime store with backend APIs.
+ */
+let demoFleet: FleetDrone[] =
+  createDefaultFleet();
+
 export function loadFleet(): FleetDrone[] {
-  if (typeof window === "undefined") {
-    return createDefaultFleet();
-  }
-
-  try {
-    const stored =
-      localStorage.getItem(
-        FLEET_STORAGE_KEY,
-      );
-
-    if (!stored) {
-      return createDefaultFleet();
-    }
-
-    const parsed = JSON.parse(
-      stored,
-    ) as FleetDrone[];
-
-    if (!Array.isArray(parsed)) {
-      return createDefaultFleet();
-    }
-
-    return parsed.map(
-      (drone, index) => ({
-        ...drone,
-
-        status: normalizeDroneStatus(
-          String(drone.status),
-        ),
-
-        battery: Number(
-          drone.battery,
-        ),
-
-        utilization: Number(
-          drone.utilization ?? 0,
-        ),
-
-        lastFlight:
-          drone.lastFlight ??
-          "Not flown",
-
-        location:
-          drone.location ||
-          defaultLocationById[
-            drone.id
-          ] ||
-          HUB_OPTIONS[
-            index %
-              HUB_OPTIONS.length
-          ],
-      }),
-    );
-  } catch {
-    return createDefaultFleet();
-  }
+  return demoFleet.map(
+    (drone) => ({
+      ...drone,
+    }),
+  );
 }
 
 export function saveFleet(
   drones: FleetDrone[],
 ) {
-  localStorage.setItem(
-    FLEET_STORAGE_KEY,
-    JSON.stringify(drones),
+  demoFleet =
+    drones.map(
+      (drone) => ({
+        ...drone,
+        status:
+          normalizeDroneStatus(
+            String(
+              drone.status,
+            ),
+          ),
+      }),
+    );
+
+  window.dispatchEvent(
+    new Event(
+      "technician-fleet-updated",
+    ),
+  );
+}
+
+export function resetDemoFleet() {
+  demoFleet =
+    createDefaultFleet();
+
+  window.dispatchEvent(
+    new Event(
+      "technician-fleet-updated",
+    ),
   );
 }

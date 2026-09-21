@@ -15,6 +15,10 @@ import {
 } from "./pages/FleetPage";
 
 import {
+  TransitMissionsPage,
+} from "./pages/TransitMissionsPage";
+
+import {
   DroneDetailPage,
 } from "./pages/DroneDetailPage";
 
@@ -34,7 +38,6 @@ import {
   WorkOrderDetailPage,
 } from "./pages/WorkOrderDetailPage";
 
-
 import {
   TechnicianNotificationsPage,
 } from "./pages/TechnicianNotificationsPage";
@@ -43,81 +46,99 @@ import {
   TechnicianProfilePage,
 } from "./pages/TechnicianProfilePage";
 
-export const technicianRoutes: RouteObject[] = [
-  {
-    index: true,
-    element: (
-      <Navigate
-        to="dashboard"
-        replace
-      />
-    ),
-  },
+export const technicianRoutes:
+  RouteObject[] = [
+    {
+      index: true,
+      element: (
+        <Navigate
+          to="dashboard"
+          replace
+        />
+      ),
+    },
 
-  {
-    path: "dashboard",
-    element: (
-      <TechnicianDashboardPage />
-    ),
-  },
+    {
+      path: "dashboard",
+      element: (
+        <TechnicianDashboardPage />
+      ),
+    },
 
-  {
-    path: "fleet",
-    element: <FleetPage />,
-  },
+    /*
+     * Fleet
+     */
+    {
+      path: "fleet",
+      element: <FleetPage />,
+    },
+    {
+      path: "fleet/transit",
+      element: (
+        <TransitMissionsPage />
+      ),
+    },
+    {
+      path: "fleet/:droneId",
+      element: (
+        <DroneDetailPage />
+      ),
+    },
 
-  {
-    path: "fleet/:droneId",
-    element: <DroneDetailPage />,
-  },
+    /*
+     * Maintenance
+     */
+    {
+      path: "maintenance",
+      element: (
+        <MaintenancePage />
+      ),
+    },
+    {
+      path:
+        "maintenance/alerts",
+      element: (
+        <MaintenanceAlertsPage />
+      ),
+    },
+    {
+      path:
+        "maintenance/work-orders",
+      element: (
+        <WorkOrdersPage />
+      ),
+    },
+    {
+      path:
+        "maintenance/work-orders/:workOrderId",
+      element: (
+        <WorkOrderDetailPage />
+      ),
+    },
 
-  // =========================
-  // MAINTENANCE
-  // =========================
+    /*
+     * Notifications / Profile
+     */
+    {
+      path: "notifications",
+      element: (
+        <TechnicianNotificationsPage />
+      ),
+    },
+    {
+      path: "profile",
+      element: (
+        <TechnicianProfilePage />
+      ),
+    },
 
-  {
-    path: "maintenance",
-    element: <MaintenancePage />,
-  },
-
-  {
-    path: "maintenance/alerts",
-    element: (
-      <MaintenanceAlertsPage />
-    ),
-  },
-
-  {
-    path: "maintenance/work-orders",
-    element: (
-      <WorkOrdersPage />
-    ),
-  },
-
-  {
-    path:
-      "maintenance/work-orders/:workOrderId",
-    element: (
-      <WorkOrderDetailPage />
-    ),
-  },
-
-  // =========================
-  // OTHER
-  // =========================
-
-
-  {
-    path: "notifications",
-    element: (
-      <TechnicianNotificationsPage />
-    ),
-  },
-
-  {
-    path: "profile",
-    element: (
-      <TechnicianProfilePage />
-    ),
-  },
-];
+    {
+      path: "*",
+      element: (
+        <Navigate
+          to="/technician/dashboard"
+          replace
+        />
+      ),
+    },
+  ];

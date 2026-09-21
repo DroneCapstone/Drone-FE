@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -23,23 +24,12 @@ import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
 
-type AlertSource =
-  | "Schedule"
-  | "Flight event"
-  | "Incident";
-
-type AlertStatus =
-  | "Pending"
-  | "Handled";
-
-type MaintenanceAlert = {
-  id: string;
-  drone: string;
-  droneId: string;
-  title: string;
-  source: AlertSource;
-  createdAt: string;
-};
+import {
+  loadMaintenanceAlerts,
+  type AlertSource,
+  type AlertStatus,
+  type MaintenanceAlert,
+} from "../utils/maintenanceAlertStorage";
 
 type AlertLog = {
   id: string;
@@ -47,7 +37,7 @@ type AlertLog = {
   drone: string;
   title: string;
   source: AlertSource;
-  status: AlertStatus;
+  status: "Pending" | "Handled";
   workOrderId: string;
   handledAt: string;
 };
@@ -56,48 +46,10 @@ const ALERT_LOG_STORAGE_KEY =
   "droneoptai.technician.maintenance-alert-log.v1";
 
 /*
- * Frontend mock only.
- *
- * Later these alerts should come from the backend:
- * - Schedule:
- *   next_inspection_at <= current time
- *
- * - Flight event:
- *   telemetry/rule engine detects a supported abnormal event
- *   such as an abnormal landing that requires inspection
- *
- * - Incident:
- *   an incident is reported and marked as requiring
- *   technical inspection
+ * Active alerts come from the shared maintenance alert store.
+ * Transit Missions creates a "Hub inspection" alert automatically
+ * when a drone fails the hub readiness check.
  */
-const maintenanceAlerts: MaintenanceAlert[] = [
-  {
-    id: "ALT-201",
-    drone: "CX-09",
-    droneId: "DR-001",
-    title: "Scheduled inspection is due",
-    source: "Schedule",
-    createdAt: "20 Sep · 08:20",
-  },
-  {
-    id: "ALT-202",
-    drone: "AX-08",
-    droneId: "DR-004",
-    title:
-      "Abnormal landing detected — inspection required",
-    source: "Flight event",
-    createdAt: "20 Sep · 07:45",
-  },
-  {
-    id: "ALT-203",
-    drone: "CX-12",
-    droneId: "DR-002",
-    title:
-      "Inspection required after reported incident",
-    source: "Incident",
-    createdAt: "19 Sep · 16:10",
-  },
-];
 
 function loadAlertLogs(): AlertLog[] {
   try {
@@ -124,6 +76,13 @@ function loadAlertLogs(): AlertLog[] {
 export function MaintenanceAlertsPage() {
   const navigate = useNavigate();
 
+  const [
+    maintenanceAlerts,
+    setMaintenanceAlerts,
+  ] = useState<
+    MaintenanceAlert[]
+  >(loadMaintenanceAlerts);
+
   const [query, setQuery] =
     useState("");
 
@@ -143,6 +102,26 @@ export function MaintenanceAlertsPage() {
     useState<AlertLog[]>(
       loadAlertLogs,
     );
+
+  useEffect(() => {
+    const syncAlerts = () => {
+      setMaintenanceAlerts(
+        loadMaintenanceAlerts(),
+      );
+    };
+
+    window.addEventListener(
+      "technician-maintenance-alerts-updated",
+      syncAlerts,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "technician-maintenance-alerts-updated",
+        syncAlerts,
+      );
+    };
+  }, []);
 
   const normalizedQuery = query
     .trim()
@@ -220,6 +199,20 @@ export function MaintenanceAlertsPage() {
         source: alert.source,
       });
 
+    if (alert.missionId) {
+      params.set(
+        "missionId",
+        alert.missionId,
+      );
+    }
+
+    if (alert.legId) {
+      params.set(
+        "legId",
+        alert.legId,
+      );
+    }
+
     navigate(
       `/technician/maintenance/work-orders?${params.toString()}`,
     );
@@ -276,6 +269,9 @@ export function MaintenanceAlertsPage() {
             </option>
             <option value="Incident">
               Incident
+            </option>
+            <option value="Hub inspection">
+              Hub inspection
             </option>
           </select>
         </CardContent>
@@ -337,9 +333,23 @@ export function MaintenanceAlertsPage() {
                       {alert.drone}
                     </span>
 
-                    <span className="px-4 text-[14px] text-[var(--tech-text-secondary)]">
-                      {alert.title}
-                    </span>
+                    <div className="px-4">
+                      <p className="text-[14px] text-[var(--tech-text-secondary)]">
+                        {alert.title}
+                      </p>
+
+                      {alert.missionId && (
+                        <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
+                          Mission{" "}
+                          <span className="font-medium text-orange-500">
+                            {alert.missionId}
+                          </span>
+                          {alert.legId
+                            ? ` · ${alert.legId}`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
 
                     <div className="flex justify-center">
                       <SourceText
@@ -508,12 +518,13 @@ function SourceText({
   source: AlertSource;
 }) {
   const style =
-    source === "Schedule"
-      ? "text-blue-500"
-      : source ===
-          "Flight event"
-        ? "text-orange-500"
-        : "text-violet-500";
+    source === "Hub inspection"
+      ? "text-orange-500"
+      : source === "Schedule"
+        ? "text-[var(--tech-text-secondary)]"
+        : source === "Flight event"
+          ? "text-[var(--tech-text-secondary)]"
+          : "text-[var(--tech-muted)]";
 
   return (
     <span
