@@ -1,6 +1,5 @@
 export type AlertSource =
   | "Schedule"
-  | "Flight event"
   | "Incident"
   | "Hub inspection";
 
@@ -10,8 +9,10 @@ export type AlertStatus =
 
 export type MaintenanceAlert = {
   id: string;
+
   drone: string;
   droneId: string;
+
   title: string;
   source: AlertSource;
   createdAt: string;
@@ -19,45 +20,63 @@ export type MaintenanceAlert = {
   missionId?: string;
   legId?: string;
   reason?: string;
+
+  /*
+   * Ai đã report / phát hiện alert này ở mức nghiệp vụ.
+   * Với Incident demo hiện tại: Operator.
+   */
+  reportedBy?: string;
+
+  /*
+   * Có thể dùng sau này để trace về incidents.id.
+   */
+  incidentId?: string;
 };
 
-const defaultMaintenanceAlerts: MaintenanceAlert[] = [
+const defaultMaintenanceAlerts:
+  MaintenanceAlert[] = [
   {
     id: "ALT-201",
     drone: "CX-09",
     droneId: "DR-001",
-    title: "Scheduled inspection is due",
+    title:
+      "Scheduled inspection is due",
     source: "Schedule",
     createdAt: "20 Sep · 08:20",
   },
+
+  /*
+   * Demo cho INCIDENT_RETURN.
+   *
+   * Alert này giả lập việc Operator/System đã phát hiện Incident
+   * trong lúc drone đang bay và gửi yêu cầu kiểm tra kỹ thuật
+   * cho Technician trước khi drone tới Hub.
+   */
   {
-    id: "ALT-202",
-    drone: "AX-08",
-    droneId: "DR-004",
+    id: "ALT-301",
+    drone: "CX-06",
+    droneId: "DR-006",
     title:
-      "Abnormal landing detected — inspection required",
-    source: "Flight event",
-    createdAt: "20 Sep · 07:45",
-  },
-  {
-    id: "ALT-203",
-    drone: "CX-12",
-    droneId: "DR-002",
-    title:
-      "Inspection required after reported incident",
+      "Operator reported in-flight incident — inspection required",
     source: "Incident",
-    createdAt: "19 Sep · 16:10",
+    createdAt: "22 Sep · 14:20",
+
+    missionId: "MS-1040",
+    legId: "LEG-1040-INCIDENT",
+    incidentId: "INC-1040",
+    reportedBy: "Operator",
+
+    reason:
+      "Operator reported an in-flight technical incident. Drone must return to Hub HCM-02 for technical inspection.",
   },
 ];
 
 /*
  * DEMO RUNTIME STORE
- * ---------------------------------------------------------
- * Alerts created from Transit Missions remain available while
- * navigating inside the SPA.
  *
- * Full browser refresh resets the demo data.
- * Later this module should be replaced by backend APIs.
+ * - Giữ state khi điều hướng trong SPA.
+ * - Refresh browser sẽ reset demo.
+ * - Sau này thay bằng backend API.
  */
 let demoMaintenanceAlerts:
   MaintenanceAlert[] =
@@ -113,16 +132,18 @@ function getNextAlertId() {
   return `ALT-${maxId + 1}`;
 }
 
+/*
+ * Dùng khi Technician phát hiện lỗi trong Hub Readiness Check.
+ *
+ * INCIDENT_RETURN không gọi hàm này.
+ * Incident alert do Operator/System tạo trước.
+ */
 export function createMaintenanceAlert(
   input: Omit<
     MaintenanceAlert,
     "id" | "createdAt"
   >,
 ): MaintenanceAlert {
-  /*
-   * Prevent duplicate pending hub-inspection alerts for the
-   * same drone + mission.
-   */
   const existing =
     demoMaintenanceAlerts.find(
       (alert) =>

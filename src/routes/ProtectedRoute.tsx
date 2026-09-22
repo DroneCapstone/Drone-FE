@@ -8,16 +8,31 @@ import {
 
 import { useAuth } from "../features/auth/hooks/useAuth";
 
-import type {
-  UserRole,
-} from "../features/auth/types/auth";
+import type { UserRole } from "../features/auth/types/auth";
 
 interface ProtectedRouteProps {
   children?: ReactNode;
-
   allowedRoles?: UserRole[];
-
   redirectTo?: string;
+}
+
+function getRoleHome(role?: UserRole) {
+  switch (role) {
+    case "operator":
+      return "/operator/dashboard";
+
+    case "technician":
+      return "/technician/dashboard";
+
+    case "customer":
+      return "/customer/dashboard";
+
+    case "admin":
+      return "/admin/dashboard";
+
+    default:
+      return "/";
+  }
 }
 
 export function ProtectedRoute({
@@ -32,6 +47,10 @@ export function ProtectedRoute({
     isAuthenticated,
   } = useAuth();
 
+  /* =========================
+     NOT LOGGED IN
+  ========================= */
+
   if (!isAuthenticated) {
     return (
       <Navigate
@@ -44,6 +63,10 @@ export function ProtectedRoute({
     );
   }
 
+  /* =========================
+     WRONG ROLE
+  ========================= */
+
   if (
     allowedRoles &&
     user &&
@@ -51,11 +74,7 @@ export function ProtectedRoute({
   ) {
     return (
       <Navigate
-        to={
-          user.role === "technician"
-            ? "/technician/dashboard"
-            : "/operator/dashboard"
-        }
+        to={getRoleHome(user.role)}
         replace
       />
     );
