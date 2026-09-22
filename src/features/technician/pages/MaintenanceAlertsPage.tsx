@@ -47,8 +47,13 @@ const ALERT_LOG_STORAGE_KEY =
 
 /*
  * Active alerts come from the shared maintenance alert store.
- * Transit Missions creates a "Hub inspection" alert automatically
- * when a drone fails the hub readiness check.
+ *
+ * - Incident:
+ *   Operator/System detects an in-flight incident and creates the alert.
+ *
+ * - Hub inspection:
+ *   Technician discovers a technical issue during a battery-stop
+ *   readiness check and the system creates the alert.
  */
 
 function loadAlertLogs(): AlertLog[] {
@@ -221,7 +226,7 @@ export function MaintenanceAlertsPage() {
   return (
     <TechnicianPageShell
       title="Maintenance alerts"
-      description=""
+      description="Technical alerts from schedules, incidents reported by Operator, and hub inspections."
     >
       {/* ACTIVE ALERTS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
@@ -263,9 +268,6 @@ export function MaintenanceAlertsPage() {
             </option>
             <option value="Schedule">
               Schedule
-            </option>
-            <option value="Flight event">
-              Flight event
             </option>
             <option value="Incident">
               Incident
@@ -347,6 +349,15 @@ export function MaintenanceAlertsPage() {
                           {alert.legId
                             ? ` · ${alert.legId}`
                             : ""}
+                        </p>
+                      )}
+
+                      {alert.reportedBy && (
+                        <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
+                          Reported by{" "}
+                          <span className="font-medium text-[var(--tech-text-secondary)]">
+                            {alert.reportedBy}
+                          </span>
                         </p>
                       )}
                     </div>
@@ -520,11 +531,9 @@ function SourceText({
   const style =
     source === "Hub inspection"
       ? "text-orange-500"
-      : source === "Schedule"
+      : source === "Incident"
         ? "text-[var(--tech-text-secondary)]"
-        : source === "Flight event"
-          ? "text-[var(--tech-text-secondary)]"
-          : "text-[var(--tech-muted)]";
+        : "text-[var(--tech-muted)]";
 
   return (
     <span

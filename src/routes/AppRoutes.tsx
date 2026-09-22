@@ -2,10 +2,17 @@ import { lazy } from "react";
 import { Navigate, useRoutes } from "react-router-dom";
 
 import { useAuth } from "../features/auth/hooks/useAuth";
-import { technicianRoutes } from "../features/technician/technicianRoutes";
 
+import { technicianRoutes } from "../features/technician/technicianRoutes";
 import { operatorRoutes } from "./operatorRoutes";
+
 import { ProtectedRoute } from "./ProtectedRoute";
+
+import { HomePage } from "../features/home/pages/HomePage";
+
+/* =========================================================
+   LAZY PAGES / LAYOUTS
+========================================================= */
 
 const AuthPage = lazy(() =>
   import("../features/auth/pages/AuthPage").then((module) => ({
@@ -25,73 +32,108 @@ const TechnicianLayout = lazy(() =>
   })),
 );
 
+/* =========================================================
+   APP ROUTES
+========================================================= */
+
 export function AppRoutes() {
   const { user, isAuthenticated } = useAuth();
 
-  function getCurrentHome() {
-    if (user?.role === "technician") {
-      return "/technician/dashboard";
-    }
+  /* =========================================================
+     HOME THEO ROLE
+  ========================================================= */
 
-    return "/operator/dashboard";
+  function getCurrentHome() {
+    switch (user?.role) {
+      case "operator":
+        return "/operator/dashboard";
+
+      case "technician":
+        return "/technician/dashboard";
+
+      case "customer":
+        return "/customer/dashboard";
+
+      case "admin":
+        return "/admin/dashboard";
+
+      default:
+        return "/";
+    }
   }
 
   return useRoutes([
-    /* =========================
-       ROOT
-    ========================= */
+    /* =========================================================
+       PUBLIC HOME PAGE
+    ========================================================= */
+
     {
       path: "/",
-      element: (
-        <Navigate
-          to={isAuthenticated ? getCurrentHome() : "/login"}
-          replace
-        />
-      ),
+      element: <HomePage />,
     },
 
-    /* =========================
+    /* =========================================================
        LOGIN
-    ========================= */
+    ========================================================= */
+
     {
       path: "/login",
       element: isAuthenticated ? (
-        <Navigate to={getCurrentHome()} replace />
+        <Navigate
+          to={getCurrentHome()}
+          replace
+        />
       ) : (
         <AuthPage />
       ),
     },
 
-    /* =========================
+    /* =========================================================
        REGISTER
-    ========================= */
+    ========================================================= */
+
     {
       path: "/register",
       element: isAuthenticated ? (
-        <Navigate to={getCurrentHome()} replace />
+        <Navigate
+          to={getCurrentHome()}
+          replace
+        />
       ) : (
         <AuthPage />
       ),
     },
 
-    /* =========================
-       OPERATOR
-    ========================= */
-    {
-      element: <ProtectedRoute allowedRoles={["operator"]} />,
-      children: [
-        {
-          element: <OperatorLayout />,
-          children: operatorRoutes,
-        },
-      ],
-    },
+    /* =========================================================
+   OPERATOR
+========================================================= */
 
-    /* =========================
-       TECHNICIAN
-    ========================= */
+{
+  element: (
+    <ProtectedRoute
+      allowedRoles={["operator"]}
+    />
+  ),
+  children: [
     {
-      element: <ProtectedRoute allowedRoles={["technician"]} />,
+      path: "/operator",
+      element: <OperatorLayout />,
+      children: operatorRoutes,
+    },
+  ],
+},
+
+    /* =========================================================
+       TECHNICIAN
+    ========================================================= */
+
+    {
+      element: (
+        <ProtectedRoute
+          allowedRoles={["technician"]}
+        />
+      ),
+
       children: [
         {
           path: "/technician",
@@ -101,14 +143,38 @@ export function AppRoutes() {
       ],
     },
 
-    /* =========================
+    /* =========================================================
+       CUSTOMER
+       Thêm sau khi CustomerLayout + customerRoutes được tạo
+    ========================================================= */
+
+    /*
+    {
+      element: (
+        <ProtectedRoute
+          allowedRoles={["customer"]}
+        />
+      ),
+
+      children: [
+        {
+          path: "/customer",
+          element: <CustomerLayout />,
+          children: customerRoutes,
+        },
+      ],
+    },
+    */
+
+    /* =========================================================
        FALLBACK
-    ========================= */
+    ========================================================= */
+
     {
       path: "*",
       element: (
         <Navigate
-          to={isAuthenticated ? getCurrentHome() : "/login"}
+          to="/"
           replace
         />
       ),

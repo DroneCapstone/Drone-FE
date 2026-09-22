@@ -1,4 +1,5 @@
 import {
+  type ReactNode,
   useMemo,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import {
   CircleAlert,
   Clock3,
   Eye,
+  History,
   PlaneTakeoff,
   Search,
   Send,
@@ -43,14 +45,19 @@ import {
 
 import {
   formatTransitTime,
+  loadTransitMissionHistory,
   loadTransitMissions,
+  saveTransitMissionHistory,
   saveTransitMissions,
   type TransitMission,
+  type TransitMissionHistory,
+  type TransitMissionPurpose,
   type TransitMissionStatus,
 } from "../utils/transitMissionStorage";
 
 import {
   createMaintenanceAlert,
+  loadMaintenanceAlerts,
 } from "../utils/maintenanceAlertStorage";
 
 type TransitFilter =
@@ -90,6 +97,77 @@ function getMissionDroneCode(
   );
 }
 
+function getPurposeLabel(
+  purpose: TransitMissionPurpose,
+) {
+  if (purpose === "BATTERY_STOP") {
+    return "Battery stop";
+  }
+
+  if (
+    purpose === "RETURN_TO_HUB"
+  ) {
+    return "Return to hub";
+  }
+
+  return "Incident return";
+}
+
+function getMissionStateLabel(
+  purpose: TransitMissionPurpose,
+) {
+  if (purpose === "BATTERY_STOP") {
+    return "Active mission";
+  }
+
+  if (
+    purpose === "RETURN_TO_HUB"
+  ) {
+    return "Mission completed";
+  }
+
+  return "Incident return";
+}
+
+function getMissionStateHint(
+  purpose: TransitMissionPurpose,
+) {
+  if (purpose === "BATTERY_STOP") {
+    return "";
+  }
+
+  if (
+    purpose === "RETURN_TO_HUB"
+  ) {
+    return "";
+  }
+
+  return "";
+}
+
+function getPurposeDescription(
+  purpose: TransitMissionPurpose,
+) {
+  if (purpose === "BATTERY_STOP") {
+    return "Active delivery mission. The drone is stopping at this hub for battery service before continuing.";
+  }
+
+  if (
+    purpose === "RETURN_TO_HUB"
+  ) {
+    return "Delivery mission is already complete. The drone is returning to the nearest hub and will join Hub Fleet after arrival confirmation.";
+  }
+
+  return "Operator/System reported an in-flight incident. The drone is returning for technical inspection and will enter Maintenance after arrival confirmation.";
+}
+
+function getHistoryResultLabel(
+  outcome:
+    TransitMissionHistory["outcome"],
+) {
+  return outcome;
+}
+
 export function TransitMissionsPage() {
   const [
     missions,
@@ -104,6 +182,13 @@ export function TransitMissionsPage() {
   ] = useState<
     FleetDrone[]
   >(loadFleet);
+
+  const [
+    missionHistory,
+    setMissionHistory,
+  ] = useState<
+    TransitMissionHistory[]
+  >(loadTransitMissionHistory);
 
   const [
     searchQuery,
@@ -150,6 +235,11 @@ export function TransitMissionsPage() {
     null,
   );
 
+  const [
+    historyOpen,
+    setHistoryOpen,
+  ] = useState(false);
+
   const selectedMission =
     selectedMissionId
       ? missions.find(
@@ -173,6 +263,16 @@ export function TransitMissionsPage() {
     saveFleet(next);
   };
 
+  const persistHistory = (
+    next:
+      TransitMissionHistory[],
+  ) => {
+    setMissionHistory(next);
+    saveTransitMissionHistory(
+      next,
+    );
+  };
+
   const visibleMissions =
     useMemo(() => {
       const query =
@@ -192,12 +292,6 @@ export function TransitMissionsPage() {
             mission.missionId
               .toLowerCase()
               .includes(query) ||
-            mission.legId
-              .toLowerCase()
-              .includes(query) ||
-            mission.destination
-              .toLowerCase()
-              .includes(query) ||
             code.includes(query);
 
           const matchesStatus =
@@ -206,7 +300,12 @@ export function TransitMissionsPage() {
             mission.status ===
               statusFilter;
 
+          const belongsToThisHub =
+            mission.hub ===
+            TECHNICIAN_HUB;
+
           return (
+            belongsToThisHub &&
             matchesSearch &&
             matchesStatus
           );
@@ -218,30 +317,11 @@ export function TransitMissionsPage() {
       statusFilter,
     ]);
 
-  const confirmArrival = (
+  const upsertDroneAtHub = (
     mission: TransitMission,
+    status:
+      FleetDrone["status"],
   ) => {
-    const now =
-      formatTransitTime();
-
-    const nextMissions =
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                status:
-                  "At Hub" as const,
-                batteryServiceRequired:
-                  item.batteryLevelPct <
-                  item.requiredDepartureBatteryPct,
-                arrivalConfirmedAt:
-                  now,
-              }
-            : item,
-      );
-
     const existing =
       fleet.find(
         (drone) =>
@@ -249,63 +329,297 @@ export function TransitMissionsPage() {
           mission.currentDroneId,
       );
 
-    const nextFleet:
-      FleetDrone[] =
-      existing
-        ? fleet.map(
-            (drone) =>
-              drone.id ===
-              mission.currentDroneId
-                ? {
-                    ...drone,
-                    location:
-                      TECHNICIAN_HUB,
-                    battery:
-                      mission.batteryLevelPct,
-                  }
-                : drone,
-          )
-        : [
-            ...fleet,
-            {
-              id:
-                mission.currentDroneId,
-              name:
-                getMissionDroneCode(
-                  mission,
-                ),
-              model:
-                mission.droneModel,
-              status:
-                "Available",
-              battery:
-                mission.batteryLevelPct,
-              utilization: 0,
-              lastFlight:
-                mission.missionId,
-              location:
-                TECHNICIAN_HUB,
-            },
-          ];
+    if (existing) {
+      return fleet.map(
+        (drone) =>
+          drone.id ===
+          mission.currentDroneId
+            ? {
+                ...drone,
+                location:
+                  TECHNICIAN_HUB,
+                battery:
+                  mission.batteryLevelPct,
+                status,
+                lastFlight:
+                  mission.missionId,
+              }
+            : drone,
+      );
+    }
 
-    persistMissions(
-      nextMissions,
+    const newDrone:
+      FleetDrone = {
+      id:
+        mission.currentDroneId,
+      name:
+        getMissionDroneCode(
+          mission,
+        ),
+      model:
+        mission.droneModel,
+      status,
+      battery:
+        mission.batteryLevelPct,
+      utilization: 0,
+      lastFlight:
+        mission.missionId,
+      location:
+        TECHNICIAN_HUB,
+    };
+
+    return [
+      ...fleet,
+      newDrone,
+    ];
+  };
+
+  const addHistory = (
+    mission: TransitMission,
+    outcome:
+      TransitMissionHistory["outcome"],
+    handledAt: string,
+    batteryLevelPct:
+      number = mission.batteryLevelPct,
+  ) => {
+    const historyItem:
+      TransitMissionHistory = {
+      id: `HIST-${mission.id}-${Date.now()}`,
+      missionId:
+        mission.missionId,
+      legId:
+        mission.legId,
+
+      purpose:
+        mission.purpose,
+
+      droneId:
+        mission.currentDroneId,
+      droneType:
+        mission.droneType,
+      droneModel:
+        mission.droneModel,
+
+      origin:
+        mission.origin,
+      hub:
+        mission.hub,
+      destination:
+        mission.destination,
+
+      batteryLevelPct,
+
+      handledAt,
+      outcome,
+    };
+
+    persistHistory([
+      historyItem,
+      ...missionHistory,
+    ]);
+  };
+
+  const confirmArrival = (
+    mission: TransitMission,
+  ) => {
+    const now =
+      formatTransitTime();
+
+    /*
+     * CASE 1:
+     * Active mission stops at this hub for battery service.
+     *
+     * Keep the row in Transit Missions.
+     */
+    if (
+      mission.purpose ===
+      "BATTERY_STOP"
+    ) {
+      const nextMissions =
+        missions.map(
+          (item) =>
+            item.id ===
+            mission.id
+              ? {
+                  ...item,
+                  status:
+                    "At Hub" as const,
+                  batteryServiceRequired:
+                    item.batteryLevelPct <
+                    item.requiredDepartureBatteryPct,
+                  arrivalConfirmedAt:
+                    now,
+                }
+              : item,
+        );
+
+      persistFleet(
+        upsertDroneAtHub(
+          mission,
+          "Available",
+        ),
+      );
+
+      persistMissions(
+        nextMissions,
+      );
+
+      pushActionMessage(
+        `${getMissionDroneCode(
+          mission,
+        )} arrival confirmed. Battery service will be checked before the mission continues.`,
+      );
+
+      return;
+    }
+
+    /*
+     * CASE 2:
+     * Delivery already completed.
+     * Drone returns to this hub.
+     *
+     * Confirm -> add to Hub Fleet -> remove from active Transit Missions.
+     */
+    if (
+      mission.purpose ===
+      "RETURN_TO_HUB"
+    ) {
+      persistFleet(
+        upsertDroneAtHub(
+          mission,
+          "Available",
+        ),
+      );
+
+      persistMissions(
+        missions.filter(
+          (item) =>
+            item.id !==
+            mission.id,
+        ),
+      );
+
+      addHistory(
+        mission,
+        "Returned to hub",
+        now,
+      );
+
+      setSelectedMissionId(null);
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "operator-mission-updated",
+          {
+            detail: {
+              eventType:
+                "DRONE_RETURNED_TO_HUB",
+              missionId:
+                mission.missionId,
+              droneId:
+                mission.currentDroneId,
+              hub:
+                mission.hub,
+              arrivedAt:
+                now,
+            },
+          },
+        ),
+      );
+
+      pushActionMessage(
+        `${getMissionDroneCode(
+          mission,
+        )} return confirmed. Drone was added to Hub Fleet.`,
+      );
+
+      return;
+    }
+
+    /*
+     * CASE 3:
+     * Operator/System already detected an Incident.
+     *
+     * The Incident must already exist in Maintenance Alerts.
+     * Technician only confirms physical arrival here.
+     */
+    persistFleet(
+      upsertDroneAtHub(
+        mission,
+        "Maintenance",
+      ),
     );
 
-    persistFleet(
-      nextFleet,
+    persistMissions(
+      missions.filter(
+        (item) =>
+          item.id !==
+          mission.id,
+      ),
+    );
+
+    addHistory(
+      mission,
+      "Sent to maintenance",
+      now,
+    );
+
+    setSelectedMissionId(null);
+
+    const existingIncidentAlert =
+      loadMaintenanceAlerts().find(
+        (alert) =>
+          alert.id ===
+            mission.incidentAlertId ||
+          (alert.source ===
+            "Incident" &&
+            alert.droneId ===
+              mission.currentDroneId &&
+            alert.missionId ===
+              mission.missionId),
+      );
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "operator-mission-updated",
+        {
+          detail: {
+            eventType:
+              "INCIDENT_DRONE_ARRIVED",
+            missionId:
+              mission.missionId,
+            droneId:
+              mission.currentDroneId,
+            hub:
+              mission.hub,
+            arrivedAt:
+              now,
+          },
+        },
+      ),
     );
 
     pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} arrival confirmed at ${TECHNICIAN_HUB}.`,
+      existingIncidentAlert
+        ? `${getMissionDroneCode(
+            mission,
+          )} arrival confirmed and moved to Maintenance. Open ${existingIncidentAlert.id} in Maintenance Alerts.`
+        : `${getMissionDroneCode(
+            mission,
+          )} arrival confirmed and moved to Maintenance. Review the related Incident in Maintenance Alerts.`,
     );
   };
 
   const replaceBattery = (
     mission: TransitMission,
   ) => {
+    if (
+      mission.purpose !==
+      "BATTERY_STOP"
+    ) {
+      return;
+    }
+
     const nextFleet =
       fleet.map(
         (drone) =>
@@ -355,6 +669,13 @@ export function TransitMissionsPage() {
   const markReady = (
     mission: TransitMission,
   ) => {
+    if (
+      mission.purpose !==
+      "BATTERY_STOP"
+    ) {
+      return;
+    }
+
     const fleetDrone =
       fleet.find(
         (drone) =>
@@ -379,7 +700,7 @@ export function TransitMissionsPage() {
       mission.requiredDepartureBatteryPct
     ) {
       pushActionMessage(
-        `Battery must be at least ${mission.requiredDepartureBatteryPct}% for the next mission leg. Replace the battery before departure.`,
+        `Battery must be at least ${mission.requiredDepartureBatteryPct}% before the mission can continue.`,
       );
 
       return;
@@ -404,13 +725,20 @@ export function TransitMissionsPage() {
     pushActionMessage(
       `${getMissionDroneCode(
         mission,
-      )} passed the technician readiness check.`,
+      )} passed the hub readiness check.`,
     );
   };
 
   const markCannotContinue = (
     mission: TransitMission,
   ) => {
+    if (
+      mission.purpose !==
+      "BATTERY_STOP"
+    ) {
+      return;
+    }
+
     const nextFleet =
       fleet.map(
         (drone) =>
@@ -434,7 +762,7 @@ export function TransitMissionsPage() {
                 status:
                   "Cannot Continue" as const,
                 cannotContinueReason:
-                  "Technical condition prevents the current drone from safely continuing the mission.",
+                  "Drone failed the technician hub readiness check and cannot safely continue this active mission.",
               }
             : item,
       );
@@ -447,6 +775,11 @@ export function TransitMissionsPage() {
       nextMissions,
     );
 
+    /*
+     * Đây KHÔNG phải Incident do Operator phát hiện.
+     * Đây là lỗi Technician phát hiện tại Hub,
+     * nên system tạo HUB_INSPECTION alert.
+     */
     const maintenanceAlert =
       createMaintenanceAlert({
         drone:
@@ -501,13 +834,6 @@ export function TransitMissionsPage() {
       nextMissions,
     );
 
-    /*
-     * Frontend mock only.
-     * Later replace this with:
-     * POST /technician/mission-legs/:legId/replacement-request
-     *
-     * Operator receives this request and chooses the replacement drone.
-     */
     window.dispatchEvent(
       new CustomEvent(
         "operator-replacement-requested",
@@ -520,7 +846,7 @@ export function TransitMissionsPage() {
             hub:
               mission.hub,
             failedDroneId:
-              mission.originalDroneId,
+              mission.currentDroneId,
             reason:
               "TECHNICAL_FAILURE",
             requestedAt:
@@ -548,12 +874,91 @@ export function TransitMissionsPage() {
       return;
     }
 
-    markReady(mission);
+    const replacementDrone =
+      fleet.find(
+        (drone) =>
+          drone.id ===
+          mission.replacementDroneId,
+      );
+
+    if (!replacementDrone) {
+      pushActionMessage(
+        "Assigned replacement drone was not found in this Hub Fleet.",
+      );
+
+      return;
+    }
+
+    if (
+      replacementDrone.status !==
+      "Available"
+    ) {
+      pushActionMessage(
+        "Assigned replacement drone must be Available.",
+      );
+
+      return;
+    }
+
+    if (
+      replacementDrone.battery <
+      mission.requiredDepartureBatteryPct
+    ) {
+      pushActionMessage(
+        `Replacement drone battery must be at least ${mission.requiredDepartureBatteryPct}%.`,
+      );
+
+      return;
+    }
+
+    const replacementType =
+      replacementDrone.name
+        .match(/[A-Za-z]+/)?.[0]
+        ?.toUpperCase() ??
+      mission.droneType;
+
+    persistMissions(
+      missions.map(
+        (item) =>
+          item.id ===
+          mission.id
+            ? {
+                ...item,
+                currentDroneId:
+                  replacementDrone.id,
+                droneType:
+                  replacementType,
+                droneModel:
+                  replacementDrone.model,
+                batteryLevelPct:
+                  replacementDrone.battery,
+                batteryServiceRequired:
+                  false,
+                status:
+                  "Ready" as const,
+              }
+            : item,
+      ),
+    );
+
+    pushActionMessage(
+      `${getDroneCode(
+        replacementType,
+        replacementDrone.id,
+      )} confirmed ready for ${mission.missionId}.`,
+    );
   };
 
   const dispatchMission = (
     mission: TransitMission,
   ) => {
+    if (
+      mission.purpose !==
+      "BATTERY_STOP"
+    ) {
+      return;
+    }
+
     const currentDrone =
       fleet.find(
         (drone) =>
@@ -563,7 +968,7 @@ export function TransitMissionsPage() {
 
     if (!currentDrone) {
       pushActionMessage(
-        "Current mission drone was not found in the hub fleet.",
+        "Current mission drone was not found in the Hub Fleet.",
       );
 
       return;
@@ -574,7 +979,7 @@ export function TransitMissionsPage() {
       "Available"
     ) {
       pushActionMessage(
-        "Only an Available drone can be dispatched.",
+        "Only an Available drone can continue the mission.",
       );
 
       return;
@@ -585,7 +990,7 @@ export function TransitMissionsPage() {
       mission.requiredDepartureBatteryPct
     ) {
       pushActionMessage(
-        `Battery must be at least ${mission.requiredDepartureBatteryPct}% before dispatch.`,
+        `Battery must be at least ${mission.requiredDepartureBatteryPct}% before continuing the mission.`,
       );
 
       return;
@@ -607,20 +1012,10 @@ export function TransitMissionsPage() {
       );
 
     const nextMissions =
-      missions.map(
+      missions.filter(
         (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                status:
-                  "In Transit" as const,
-                batteryLevelPct:
-                  currentDrone.battery,
-                departedAt:
-                  now,
-              }
-            : item,
+          item.id !==
+          mission.id,
       );
 
     persistFleet(
@@ -631,40 +1026,57 @@ export function TransitMissionsPage() {
       nextMissions,
     );
 
+    addHistory(
+      mission,
+      "Continued",
+      now,
+      currentDrone.battery,
+    );
+
+    setSelectedMissionId(null);
+
     /*
-     * Later backend/WebSocket sends this update to Operator.
+     * Technician Continue:
+     * active row biến mất.
+     * Operator nhận event để biết chuyến bay đã tiếp tục.
      */
     window.dispatchEvent(
       new CustomEvent(
         "operator-mission-updated",
         {
           detail: {
+            eventType:
+              "MISSION_CONTINUED",
             missionId:
               mission.missionId,
             legId:
               mission.legId,
             droneId:
               mission.currentDroneId,
+            hub:
+              mission.hub,
+            destination:
+              mission.destination,
             status:
               "IN_TRANSIT",
             departedAt:
               now,
+            message:
+              `${mission.missionId} continued from ${mission.hub}.`,
           },
         },
       ),
     );
 
     pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} dispatched and removed from the Hub fleet view.`,
+      `${mission.missionId} continued from ${TECHNICIAN_HUB}. Operator has been notified.`,
     );
   };
 
   return (
     <TechnicianPageShell
       title="Transit missions"
-      description=""
+      description={`Incoming drones assigned to ${TECHNICIAN_HUB}.`}
     >
       {/* FEEDBACK */}
       {actionMessage && (
@@ -723,7 +1135,7 @@ export function TransitMissionsPage() {
                   event.target.value,
                 )
               }
-              placeholder="Search mission, drone or destination..."
+              placeholder="Search mission or drone..."
               className="tech-control h-11 w-full pl-10 pr-3 !text-[14px]"
             />
           </div>
@@ -742,23 +1154,32 @@ export function TransitMissionsPage() {
               "Ready",
               "Cannot Continue",
               "Replacement Requested",
-              "Replacement Assigned",
-              "In Transit",
             ]}
             ariaLabel="Transit mission status"
             className="min-w-[230px]"
           />
+
+          <button
+            type="button"
+            onClick={() =>
+              setHistoryOpen(true)
+            }
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--tech-border)] px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500"
+          >
+            <History size={15} />
+            View history
+          </button>
         </CardContent>
       </Card>
 
-      {/* COMPACT MISSION LIST */}
+      {/* ACTIVE MISSIONS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <div className="
           hidden
           border-b border-[var(--tech-border)]
           px-5 py-3
           lg:grid
-          lg:grid-cols-[minmax(120px,1fr)_minmax(150px,1.15fr)_minmax(90px,0.7fr)_minmax(170px,1.2fr)_minmax(230px,1.55fr)]
+          lg:grid-cols-[minmax(115px,0.9fr)_minmax(145px,1.05fr)_minmax(155px,1.15fr)_minmax(90px,0.65fr)_minmax(155px,1.05fr)_minmax(220px,1.45fr)]
           lg:items-center
           lg:gap-4
         ">
@@ -771,11 +1192,15 @@ export function TransitMissionsPage() {
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
+            Mission state
+          </span>
+
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
             Battery
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
-            Status
+            Handling status
           </span>
 
           <span className="text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
@@ -792,8 +1217,10 @@ export function TransitMissionsPage() {
                 );
 
               const batteryNeedsService =
+                mission.purpose ===
+                  "BATTERY_STOP" &&
                 mission.batteryLevelPct <
-                mission.requiredDepartureBatteryPct;
+                  mission.requiredDepartureBatteryPct;
 
               return (
                 <div
@@ -803,7 +1230,7 @@ export function TransitMissionsPage() {
                   <div className="
                     grid
                     gap-3
-                    lg:grid-cols-[minmax(120px,1fr)_minmax(150px,1.15fr)_minmax(90px,0.7fr)_minmax(170px,1.2fr)_minmax(230px,1.55fr)]
+                    lg:grid-cols-[minmax(115px,0.9fr)_minmax(145px,1.05fr)_minmax(155px,1.15fr)_minmax(90px,0.65fr)_minmax(155px,1.05fr)_minmax(220px,1.45fr)]
                     lg:items-center
                     lg:gap-4
                   ">
@@ -822,6 +1249,31 @@ export function TransitMissionsPage() {
 
                       <p className="mt-1 truncate text-[12px] text-[var(--tech-muted)]">
                         {mission.droneModel}
+                      </p>
+                    </div>
+
+                    {/* MISSION STATE */}
+                    <div className="min-w-0">
+                      <p
+                        className={
+                          mission.purpose ===
+                          "INCIDENT_RETURN"
+                            ? "text-[13px] font-semibold text-red-500"
+                            : mission.purpose ===
+                                "BATTERY_STOP"
+                              ? "text-[13px] font-medium text-orange-500"
+                              : "text-[13px] font-medium text-[var(--tech-text-secondary)]"
+                        }
+                      >
+                        {getMissionStateLabel(
+                          mission.purpose,
+                        )}
+                      </p>
+
+                      <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]">
+                        {getMissionStateHint(
+                          mission.purpose,
+                        )}
                       </p>
                     </div>
 
@@ -880,8 +1332,10 @@ export function TransitMissionsPage() {
                         </Button>
                       )}
 
-                      {mission.status ===
-                        "At Hub" &&
+                      {mission.purpose ===
+                        "BATTERY_STOP" &&
+                        mission.status ===
+                          "At Hub" &&
                         mission.batteryServiceRequired && (
                           <Button
                             type="button"
@@ -899,8 +1353,10 @@ export function TransitMissionsPage() {
                           </Button>
                         )}
 
-                      {mission.status ===
-                        "At Hub" &&
+                      {mission.purpose ===
+                        "BATTERY_STOP" &&
+                        mission.status ===
+                          "At Hub" &&
                         !mission.batteryServiceRequired && (
                           <Button
                             type="button"
@@ -937,29 +1393,31 @@ export function TransitMissionsPage() {
                       )}
 
                       {mission.status ===
-                        "Replacement Requested" && (
-                        <span className="text-[13px] font-medium text-[var(--tech-muted)]">
-                          Waiting for Operator
-                        </span>
-                      )}
+                        "Replacement Requested" &&
+                        !mission.replacementDroneId && (
+                          <span className="text-[13px] font-medium text-[var(--tech-muted)]">
+                            Waiting for Operator
+                          </span>
+                        )}
 
                       {mission.status ===
-                        "Replacement Assigned" && (
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            confirmReplacementReady(
-                              mission,
-                            )
-                          }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                        >
-                          <ShieldCheck
-                            size={14}
-                          />
-                          Confirm ready
-                        </Button>
-                      )}
+                        "Replacement Requested" &&
+                        mission.replacementDroneId && (
+                          <Button
+                            type="button"
+                            onClick={() =>
+                              confirmReplacementReady(
+                                mission,
+                              )
+                            }
+                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
+                          >
+                            <ShieldCheck
+                              size={14}
+                            />
+                            Confirm ready
+                          </Button>
+                        )}
 
                       {mission.status ===
                         "Ready" && (
@@ -977,13 +1435,6 @@ export function TransitMissionsPage() {
                           />
                           Continue
                         </Button>
-                      )}
-
-                      {mission.status ===
-                        "In Transit" && (
-                        <span className="text-[13px] font-medium text-[var(--tech-muted)]">
-                          Departed
-                        </span>
                       )}
 
                       <button
@@ -1011,18 +1462,163 @@ export function TransitMissionsPage() {
             0 && (
             <div className="px-5 py-14 text-center">
               <p className="text-[15px] font-medium text-[var(--tech-text-secondary)]">
-                No transit missions found
+                No incoming missions found
               </p>
 
               <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                Try changing the search or status filter.
+                No drones currently require handling at this hub.
               </p>
             </div>
           )}
         </div>
       </Card>
 
-      {/* DETAILS MODAL */}
+      {/* HISTORY */}
+      {historyOpen && (
+        <div
+          className="fixed inset-0 z-[135] flex items-center justify-center bg-black/60 px-4 py-6"
+          onMouseDown={(
+            event,
+          ) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setHistoryOpen(false);
+            }
+          }}
+        >
+          <div className="flex max-h-[82vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
+              <div>
+                <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
+                  Mission history
+                </h2>
+
+                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
+                  Inbound missions already handled at{" "}
+                  {TECHNICIAN_HUB}.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setHistoryOpen(false)
+                }
+                className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
+                aria-label="Close mission history"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              <div className="min-w-[940px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[130px_145px_160px_100px_190px_1fr] items-center gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
+                  <HistoryHeader>
+                    Mission
+                  </HistoryHeader>
+
+                  <HistoryHeader>
+                    Drone
+                  </HistoryHeader>
+
+                  <HistoryHeader>
+                    Reason
+                  </HistoryHeader>
+
+                  <HistoryHeader>
+                    Battery
+                  </HistoryHeader>
+
+                  <HistoryHeader>
+                    Handled at
+                  </HistoryHeader>
+
+                  <HistoryHeader>
+                    Result
+                  </HistoryHeader>
+                </div>
+
+                {missionHistory.length >
+                0 ? (
+                  <div className="divide-y divide-[var(--tech-border)]">
+                    {missionHistory.map(
+                      (item) => (
+                        <div
+                          key={
+                            item.id
+                          }
+                          className="grid grid-cols-[130px_145px_160px_100px_190px_1fr] items-center gap-4 px-6 py-4"
+                        >
+                          <span className="text-[14px] font-semibold text-[var(--tech-text)]">
+                            {
+                              item.missionId
+                            }
+                          </span>
+
+                          <div>
+                            <p className="text-[14px] font-semibold text-[var(--tech-text)]">
+                              {getDroneCode(
+                                item.droneType,
+                                item.droneId,
+                              )}
+                            </p>
+
+                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                              {
+                                item.droneModel
+                              }
+                            </p>
+                          </div>
+
+                          <span className="text-[12px] text-[var(--tech-text-secondary)]">
+                            {getPurposeLabel(
+                              item.purpose,
+                            )}
+                          </span>
+
+                          <span className="text-[13px] text-[var(--tech-text-secondary)]">
+                            {
+                              item.batteryLevelPct
+                            }
+                            %
+                          </span>
+
+                          <span className="text-[12px] text-[var(--tech-muted)]">
+                            {
+                              item.handledAt
+                            }
+                          </span>
+
+                          <span className="text-[12px] font-medium text-[var(--tech-text-secondary)]">
+                            {getHistoryResultLabel(
+                              item.outcome,
+                            )}
+                          </span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                ) : (
+                  <div className="px-6 py-14 text-center">
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
+                      No mission history yet
+                    </p>
+
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
+                      Confirmed returns and continued missions will appear here.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DETAILS */}
       {selectedMission && (
         <div
           className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-6"
@@ -1040,7 +1636,6 @@ export function TransitMissionsPage() {
           }}
         >
           <div className="max-h-[90vh] w-full max-w-[900px] overflow-y-auto rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-            {/* HEADER */}
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -1058,10 +1653,9 @@ export function TransitMissionsPage() {
                 </div>
 
                 <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                  Mission leg{" "}
-                  {
-                    selectedMission.legId
-                  }
+                  {getPurposeLabel(
+                    selectedMission.purpose,
+                  )}
                 </p>
               </div>
 
@@ -1075,29 +1669,16 @@ export function TransitMissionsPage() {
                 className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
                 aria-label="Close mission details"
               >
-                <X
-                  size={19}
-                />
+                <X size={19} />
               </button>
             </div>
 
             <div className="space-y-6 px-6 py-5">
-              {/* MISSION OVERVIEW */}
+              {/* OVERVIEW */}
               <section>
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                    Mission overview
-                  </h3>
-
-                  <span className="text-[12px] text-[var(--tech-muted)]">
-                    Current hub:{" "}
-                    <strong className="font-medium text-[var(--tech-text-secondary)]">
-                      {
-                        selectedMission.hub
-                      }
-                    </strong>
-                  </span>
-                </div>
+                <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                  Mission overview
+                </h3>
 
                 <div className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <DetailField
@@ -1115,7 +1696,14 @@ export function TransitMissionsPage() {
                   />
 
                   <DetailField
-                    label="Current status"
+                    label="Mission state"
+                    value={getMissionStateLabel(
+                      selectedMission.purpose,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Handling status"
                     value={
                       selectedMission.status
                     }
@@ -1125,103 +1713,58 @@ export function TransitMissionsPage() {
                     label="Battery"
                     value={`${selectedMission.batteryLevelPct}%`}
                     danger={
+                      selectedMission.purpose ===
+                        "BATTERY_STOP" &&
                       selectedMission.batteryLevelPct <
-                      selectedMission.requiredDepartureBatteryPct
+                        selectedMission.requiredDepartureBatteryPct
                     }
                   />
                 </div>
+
+                <p className="mt-4 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3 text-[13px] leading-5 text-[var(--tech-muted)]">
+                  {getPurposeDescription(
+                    selectedMission.purpose,
+                  )}
+                </p>
               </section>
 
               {/* DRONE */}
               <section className="border-t border-[var(--tech-border)] pt-5">
                 <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                  Drone assignment
+                  Drone
                 </h3>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-                      Current mission drone
-                    </p>
-
-                    <p className="mt-2 text-[18px] font-semibold text-[var(--tech-text)]">
-                      {
+                <div className="mt-4 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <DetailField
+                      label="Drone"
+                      value={
                         getMissionDroneCode(
                           selectedMission,
                         )
                       }
-                    </p>
+                    />
 
-                    <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                      {
+                    <DetailField
+                      label="Model"
+                      value={
                         selectedMission.droneModel
                       }
-                    </p>
+                    />
 
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <DetailField
-                        label="Battery"
-                        value={`${selectedMission.batteryLevelPct}%`}
-                        danger={
-                          selectedMission.batteryLevelPct <
-                          selectedMission.requiredDepartureBatteryPct
-                        }
-                      />
-
-                      <DetailField
-                        label="Required for next leg"
-                        value={`${selectedMission.requiredDepartureBatteryPct}%`}
-                      />
-
-                      <DetailField
-                        label="Battery service"
-                        value={
-                          selectedMission.batteryServiceRequired
-                            ? "Required"
-                            : "Not required"
-                        }
-                        danger={
-                          selectedMission.batteryServiceRequired
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-[var(--tech-border)] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-                      Original drone
-                    </p>
-
-                    <p className="mt-2 text-[18px] font-semibold text-[var(--tech-text)]">
-                      {
-                        getDroneCode(
-                          selectedMission.originalDroneType ??
-                            selectedMission.droneType,
-                          selectedMission.originalDroneId,
-                        )
+                    <DetailField
+                      label="Status"
+                      value={
+                        selectedMission.status
                       }
-                    </p>
+                    />
 
-                    <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                      {
-                        selectedMission.originalDroneModel ??
-                        selectedMission.droneModel
+                    <DetailField
+                      label="Target hub"
+                      value={
+                        selectedMission.hub
                       }
-                    </p>
-
-                    <div className="mt-4">
-                      <DetailField
-                        label="Replacement"
-                        value={
-                          selectedMission.replacementDroneId
-                            ? "Assigned by Operator"
-                            : selectedMission.status ===
-                                "Replacement Requested"
-                              ? "Requested — awaiting Operator"
-                              : "Not required"
-                        }
-                      />
-                    </div>
+                    />
                   </div>
                 </div>
               </section>
@@ -1229,103 +1772,186 @@ export function TransitMissionsPage() {
               {/* ROUTE */}
               <section className="border-t border-[var(--tech-border)] pt-5">
                 <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                  Full route
+                  Route
                 </h3>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
-                  <RoutePoint
-                    label="Origin"
-                    value={
-                      selectedMission.origin
-                    }
-                  />
-
-                  <ArrowRight
-                    size={18}
-                    className="hidden text-[var(--tech-subtle)] md:block"
-                  />
-
-                  <RoutePoint
-                    label="Transit hub"
-                    value={
-                      selectedMission.hub
-                    }
-                    active
-                  />
-
-                  <ArrowRight
-                    size={18}
-                    className="hidden text-[var(--tech-subtle)] md:block"
-                  />
-
-                  <RoutePoint
-                    label="Destination"
-                    value={
-                      selectedMission.destination
-                    }
-                  />
-                </div>
-              </section>
-
-              {/* TECHNICAL HANDLING */}
-              <section className="border-t border-[var(--tech-border)] pt-5">
-                <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                  Technical handling
-                </h3>
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <DetailField
-                    label="Battery service required"
-                    value={
-                      selectedMission.batteryServiceRequired
-                        ? `Yes — next leg requires ${selectedMission.requiredDepartureBatteryPct}%`
-                        : "No"
-                    }
-                    danger={
-                      selectedMission.batteryServiceRequired
-                    }
-                  />
-
-                  <DetailField
-                    label="Can current drone continue"
-                    value={
-                      selectedMission.status ===
-                        "Cannot Continue" ||
-                      selectedMission.status ===
-                        "Replacement Requested"
-                        ? "No"
-                        : "Yes"
-                    }
-                    danger={
-                      selectedMission.status ===
-                        "Cannot Continue" ||
-                      selectedMission.status ===
-                        "Replacement Requested"
-                    }
-                  />
-                </div>
-
-                {selectedMission.cannotContinueReason && (
-                  <div className="mt-4 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-red-500">
-                      Cannot continue reason
-                    </p>
-
-                    <p className="mt-1 text-[13px] leading-5 text-[var(--tech-text-secondary)]">
-                      {
-                        selectedMission.cannotContinueReason
+                {selectedMission.purpose ===
+                "BATTERY_STOP" ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center">
+                    <RoutePoint
+                      label="Origin"
+                      value={
+                        selectedMission.origin
                       }
-                    </p>
+                    />
+
+                    <ArrowRight
+                      size={18}
+                      className="hidden text-[var(--tech-subtle)] md:block"
+                    />
+
+                    <RoutePoint
+                      label="Transit hub"
+                      value={
+                        selectedMission.hub
+                      }
+                      active
+                    />
+
+                    <ArrowRight
+                      size={18}
+                      className="hidden text-[var(--tech-subtle)] md:block"
+                    />
+
+                    <RoutePoint
+                      label="Destination"
+                      value={
+                        selectedMission.destination
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                    <RoutePoint
+                      label={
+                        selectedMission.purpose ===
+                        "RETURN_TO_HUB"
+                          ? "Last delivery point"
+                          : "Incident location / previous point"
+                      }
+                      value={
+                        selectedMission.origin
+                      }
+                    />
+
+                    <ArrowRight
+                      size={18}
+                      className="hidden text-[var(--tech-subtle)] md:block"
+                    />
+
+                    <RoutePoint
+                      label="Return hub"
+                      value={
+                        selectedMission.hub
+                      }
+                      active
+                    />
                   </div>
                 )}
               </section>
 
-              {/* OPERATOR REPLACEMENT */}
-              {(selectedMission.status ===
-                "Replacement Requested" ||
-                selectedMission.replacementDroneId ||
-                selectedMission.replacementRequestedAt ||
-                selectedMission.replacementAssignedAt) && (
+              {/* BATTERY STOP HANDLING */}
+              {selectedMission.purpose ===
+                "BATTERY_STOP" && (
+                <section className="border-t border-[var(--tech-border)] pt-5">
+                  <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                    Mission handling
+                  </h3>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <DetailField
+                      label="Required battery"
+                      value={`${selectedMission.requiredDepartureBatteryPct}%`}
+                    />
+
+                    <DetailField
+                      label="Battery service"
+                      value={
+                        selectedMission.batteryServiceRequired
+                          ? "Required"
+                          : "Not required"
+                      }
+                      danger={
+                        selectedMission.batteryServiceRequired
+                      }
+                    />
+
+                    <DetailField
+                      label="Can continue"
+                      value={
+                        selectedMission.status ===
+                          "Cannot Continue" ||
+                        selectedMission.status ===
+                          "Replacement Requested"
+                          ? "No"
+                          : "Yes"
+                      }
+                      danger={
+                        selectedMission.status ===
+                          "Cannot Continue" ||
+                        selectedMission.status ===
+                          "Replacement Requested"
+                      }
+                    />
+                  </div>
+
+                  {selectedMission.cannotContinueReason && (
+                    <div className="mt-4 rounded-md border border-red-500/20 bg-red-500/5 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-red-500">
+                        Cannot continue reason
+                      </p>
+
+                      <p className="mt-1 text-[13px] leading-5 text-[var(--tech-text-secondary)]">
+                        {
+                          selectedMission.cannotContinueReason
+                        }
+                      </p>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* INCIDENT */}
+              {selectedMission.purpose ===
+                "INCIDENT_RETURN" && (
+                <section className="border-t border-[var(--tech-border)] pt-5">
+                  <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                    Incident handling
+                  </h3>
+
+                  <div className="mt-4 rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
+                    <p className="text-[14px] font-semibold text-[var(--tech-text)]">
+                      Maintenance Alert already created by Operator/System
+                    </p>
+
+                    <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
+                      Confirm Arrival only confirms the drone is physically at this hub. The drone will enter Hub Fleet with Maintenance status and this row will be removed from Transit Missions.
+                    </p>
+
+                    {selectedMission.incidentAlertId && (
+                      <p className="mt-3 text-[13px] font-medium text-orange-500">
+                        Alert:{" "}
+                        {
+                          selectedMission.incidentAlertId
+                        }
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* RETURN TO HUB */}
+              {selectedMission.purpose ===
+                "RETURN_TO_HUB" && (
+                <section className="border-t border-[var(--tech-border)] pt-5">
+                  <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                    Return handling
+                  </h3>
+
+                  <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
+                    This delivery mission is already completed. After Confirm Arrival, the drone is added to Hub Fleet and this row is moved to Mission History. No Ready or Continue action is required.
+                  </p>
+                </section>
+              )}
+
+              {/* REPLACEMENT */}
+              {selectedMission.purpose ===
+                "BATTERY_STOP" &&
+                (selectedMission.status ===
+                  "Replacement Requested" ||
+                  selectedMission.replacementDroneId ||
+                  selectedMission.replacementRequestedAt ||
+                  selectedMission.replacementAssignedAt) && (
                   <section className="border-t border-[var(--tech-border)] pt-5">
                     <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
                       Replacement coordination
@@ -1347,8 +1973,7 @@ export function TransitMissionsPage() {
                               </p>
 
                               <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                                Technician has requested a replacement.
-                                Operator is responsible for selecting the next drone for this mission leg.
+                                Technician requested a replacement. Operator selects the next drone.
                               </p>
                             </div>
                           </div>
@@ -1357,11 +1982,9 @@ export function TransitMissionsPage() {
                       {selectedMission.replacementDroneId && (
                         <div className="grid gap-4 sm:grid-cols-3">
                           <DetailField
-                            label="Replacement drone"
+                            label="Replacement drone ID"
                             value={
-                              getMissionDroneCode(
-                                selectedMission,
-                              )
+                              selectedMission.replacementDroneId
                             }
                           />
 
@@ -1371,47 +1994,27 @@ export function TransitMissionsPage() {
                           />
 
                           <DetailField
-                            label="Assignment status"
+                            label="State"
                             value="Assigned"
                           />
                         </div>
                       )}
-
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        {selectedMission.replacementRequestedAt && (
-                          <DetailField
-                            label="Requested at"
-                            value={
-                              selectedMission.replacementRequestedAt
-                            }
-                          />
-                        )}
-
-                        {selectedMission.replacementAssignedAt && (
-                          <DetailField
-                            label="Assigned at"
-                            value={
-                              selectedMission.replacementAssignedAt
-                            }
-                          />
-                        )}
-                      </div>
                     </div>
                   </section>
                 )}
 
-              {/* ACTIVITY / AUDIT */}
+              {/* ACTIVITY */}
               <section className="border-t border-[var(--tech-border)] pt-5">
                 <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
                   Activity
                 </h3>
 
-                <div className="mt-4 space-y-0">
+                <div className="mt-4">
                   <ActivityRow
-                    label="Mission available at transit hub"
+                    label="Arrival"
                     value={
                       selectedMission.arrivalConfirmedAt
-                        ? "Arrival confirmed"
+                        ? selectedMission.arrivalConfirmedAt
                         : "Waiting for arrival confirmation"
                     }
                     muted={
@@ -1419,21 +2022,14 @@ export function TransitMissionsPage() {
                     }
                   />
 
-                  {selectedMission.arrivalConfirmedAt && (
-                    <ActivityRow
-                      label="Arrival confirmed"
-                      value={
-                        selectedMission.arrivalConfirmedAt
-                      }
-                    />
-                  )}
-
-                  {selectedMission.batteryServiceRequired && (
-                    <ActivityRow
-                      label="Battery check"
-                      value="Battery service required before next leg"
-                    />
-                  )}
+                  {selectedMission.purpose ===
+                    "BATTERY_STOP" &&
+                    selectedMission.batteryServiceRequired && (
+                      <ActivityRow
+                        label="Battery service"
+                        value="Required before continuation"
+                      />
+                    )}
 
                   {selectedMission.replacementRequestedAt && (
                     <ActivityRow
@@ -1444,39 +2040,23 @@ export function TransitMissionsPage() {
                     />
                   )}
 
-                  {selectedMission.replacementAssignedAt && (
-                    <ActivityRow
-                      label="Replacement assigned"
-                      value={
-                        selectedMission.replacementAssignedAt
-                      }
-                    />
-                  )}
-
                   {selectedMission.status ===
                     "Ready" && (
                     <ActivityRow
                       label="Readiness"
-                      value="Drone ready for next leg"
-                    />
-                  )}
-
-                  {selectedMission.departedAt && (
-                    <ActivityRow
-                      label="Departed"
-                      value={
-                        selectedMission.departedAt
-                      }
+                      value="Ready to continue"
                     />
                   )}
                 </div>
               </section>
 
-              {/* TECHNICIAN ACTION */}
-              {(selectedMission.status ===
-                "At Hub" ||
-                selectedMission.status ===
-                  "Ready") &&
+              {/* HUB READINESS EXCEPTION */}
+              {selectedMission.purpose ===
+                "BATTERY_STOP" &&
+                (selectedMission.status ===
+                  "At Hub" ||
+                  selectedMission.status ===
+                    "Ready") &&
                 !selectedMission.replacementDroneId && (
                   <section className="border-t border-[var(--tech-border)] pt-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
@@ -1485,8 +2065,8 @@ export function TransitMissionsPage() {
                           Hub readiness check
                         </h3>
 
-                        <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                          Perform a quick safety check before departure. If the drone fails, mark it Cannot continue; the system will create a Maintenance Alert automatically.
+                        <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
+                          Use Cannot continue only if Technician discovers a technical problem while this active mission is stopped at the hub. The system will create a Hub inspection Maintenance Alert.
                         </p>
                       </div>
 
@@ -1509,6 +2089,18 @@ export function TransitMissionsPage() {
         </div>
       )}
     </TechnicianPageShell>
+  );
+}
+
+function HistoryHeader({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
+      {children}
+    </span>
   );
 }
 
