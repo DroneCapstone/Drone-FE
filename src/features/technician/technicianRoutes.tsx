@@ -1,9 +1,6 @@
 import {
   Navigate,
-} from "react-router-dom";
-
-import type {
-  RouteObject,
+  type RouteObject,
 } from "react-router-dom";
 
 import {
@@ -19,8 +16,20 @@ import {
 } from "./pages/TransitMissionsPage";
 
 import {
+  BatteryManagementPage,
+} from "./pages/BatteryManagementPage";
+
+import {
   DroneDetailPage,
 } from "./pages/DroneDetailPage";
+
+import {
+  OutboundDeliveriesPage,
+} from "./pages/OutboundDeliveriesPage";
+
+import {
+  DeliveryConfirmationsPage,
+} from "./pages/DeliveryConfirmationsPage";
 
 import {
   MaintenancePage,
@@ -48,97 +57,108 @@ import {
 
 export const technicianRoutes:
   RouteObject[] = [
-    {
-      index: true,
-      element: (
-        <Navigate
-          to="dashboard"
-          replace
-        />
-      ),
-    },
+  {
+    index: true,
+    element: (
+      <Navigate
+        to="dashboard"
+        replace
+      />
+    ),
+  },
 
-    {
-      path: "dashboard",
-      element: (
-        <TechnicianDashboardPage />
-      ),
-    },
+  {
+    path: "dashboard",
+    element: (
+      <TechnicianDashboardPage />
+    ),
+  },
 
-    /*
-     * Fleet
-     */
-    {
-      path: "fleet",
-      element: <FleetPage />,
-    },
-    {
-      path: "fleet/transit",
-      element: (
-        <TransitMissionsPage />
-      ),
-    },
-    {
-      path: "fleet/:droneId",
-      element: (
-        <DroneDetailPage />
-      ),
-    },
+  /* Fleet */
+  {
+    path: "fleet",
+    element: <FleetPage />,
+  },
+  {
+    path: "fleet/transit",
+    element: (
+      <TransitMissionsPage />
+    ),
+  },
+  {
+    path: "fleet/batteries",
+    element: (
+      <BatteryManagementPage />
+    ),
+  },
+  {
+    path: "fleet/:droneId",
+    element: (
+      <DroneDetailPage />
+    ),
+  },
 
-    /*
-     * Maintenance
-     */
-    {
-      path: "maintenance",
-      element: (
-        <MaintenancePage />
-      ),
-    },
-    {
-      path:
-        "maintenance/alerts",
-      element: (
-        <MaintenanceAlertsPage />
-      ),
-    },
-    {
-      path:
-        "maintenance/work-orders",
-      element: (
-        <WorkOrdersPage />
-      ),
-    },
-    {
-      path:
-        "maintenance/work-orders/:workOrderId",
-      element: (
-        <WorkOrderDetailPage />
-      ),
-    },
+  /* Deliveries */
+  {
+    path: "deliveries/outbound",
+    element: (
+      <OutboundDeliveriesPage />
+    ),
+  },
+  {
+    path: "deliveries/confirmations",
+    element: (
+      <DeliveryConfirmationsPage />
+    ),
+  },
 
-    /*
-     * Notifications / Profile
-     */
-    {
-      path: "notifications",
-      element: (
-        <TechnicianNotificationsPage />
-      ),
-    },
-    {
-      path: "profile",
-      element: (
-        <TechnicianProfilePage />
-      ),
-    },
+  /* Maintenance */
+  {
+    path: "maintenance",
+    element: (
+      <MaintenancePage />
+    ),
+  },
+  {
+    path: "maintenance/alerts",
+    element: (
+      <MaintenanceAlertsPage />
+    ),
+  },
+  {
+    path: "maintenance/work-orders",
+    element: (
+      <WorkOrdersPage />
+    ),
+  },
+  {
+    path:
+      "maintenance/work-orders/:workOrderId",
+    element: (
+      <WorkOrderDetailPage />
+    ),
+  },
 
-    {
-      path: "*",
-      element: (
-        <Navigate
-          to="/technician/dashboard"
-          replace
-        />
-      ),
-    },
-  ];
+  {
+    path: "notifications",
+    element: (
+      <TechnicianNotificationsPage />
+    ),
+  },
+  {
+    path: "profile",
+    element: (
+      <TechnicianProfilePage />
+    ),
+  },
+
+  {
+    path: "*",
+    element: (
+      <Navigate
+        to="/technician/dashboard"
+        replace
+      />
+    ),
+  },
+];

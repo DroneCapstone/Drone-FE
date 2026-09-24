@@ -13,9 +13,6 @@ import {
   Clock3,
   MapPin,
   Plane,
-  RotateCcw,
-  Wrench,
-  X,
 } from "lucide-react";
 
 import {
@@ -34,9 +31,12 @@ import {
 
 import {
   loadFleet,
-  saveFleet,
   type FleetDrone,
 } from "../utils/fleetStorage";
+
+import {
+  getBatteryForDrone,
+} from "../utils/batteryStorage";
 
 import {
   loadMaintenanceRecords,
@@ -51,6 +51,34 @@ type DetailTab =
 type MaintenanceScheduleMock = {
   lastMaintenanceAt: string;
 };
+
+function getDroneDisplayCode(
+  drone: FleetDrone,
+) {
+  const prefix =
+    drone.name
+      .match(/[A-Za-z]+/)?.[0]
+      ?.toUpperCase() ??
+    "DR";
+
+  const idMatch =
+    drone.id.match(/(\d+)$/);
+
+  if (!idMatch) {
+    return drone.name;
+  }
+
+  const number =
+    Number(idMatch[1]);
+
+  if (Number.isNaN(number)) {
+    return drone.name;
+  }
+
+  return `${prefix}-${String(
+    number,
+  ).padStart(2, "0")}`;
+}
 
 /*
  * DEMO ONLY
@@ -255,7 +283,6 @@ export function DroneDetailPage() {
 
   const [
     fleet,
-    setFleet,
   ] = useState<
     FleetDrone[]
   >(loadFleet);
@@ -274,14 +301,10 @@ export function DroneDetailPage() {
   );
 
   const [
-    replaceBatteryOpen,
-    setReplaceBatteryOpen,
-  ] = useState(false);
+    batteryRefreshKey,
+    setBatteryRefreshKey,
+  ] = useState(0);
 
-  const [
-    newBattery,
-    setNewBattery,
-  ] = useState("100");
 
   const drone =
     fleet.find(
@@ -317,8 +340,35 @@ export function DroneDetailPage() {
     );
 
   useEffect(() => {
-    saveFleet(fleet);
-  }, [fleet]);
+    const syncBattery = () => {
+      setBatteryRefreshKey(
+        (current) =>
+          current + 1,
+      );
+    };
+
+    window.addEventListener(
+      "technician-batteries-updated",
+      syncBattery,
+    );
+
+    window.addEventListener(
+      "technician-outbound-deliveries-updated",
+      syncBattery,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "technician-batteries-updated",
+        syncBattery,
+      );
+
+      window.removeEventListener(
+        "technician-outbound-deliveries-updated",
+        syncBattery,
+      );
+    };
+  }, []);
 
   if (!drone) {
     return (
@@ -349,8 +399,24 @@ export function DroneDetailPage() {
     );
   }
 
+  const installedBattery =
+    useMemo(
+      () =>
+        getBatteryForDrone(
+          drone.id,
+        ),
+      [
+        drone.id,
+        batteryRefreshKey,
+      ],
+    );
+
   const lowBattery =
-    drone.battery < 40;
+    Boolean(
+      installedBattery &&
+        installedBattery.chargeLevelPct <
+          40,
+    );
 
   /*
    * Nếu đã có Maintenance Record thật của drone thì dùng lần hoàn thành
@@ -379,40 +445,6 @@ export function DroneDetailPage() {
       ? "Maintenance required"
       : scheduleState.label;
 
-  const handleReplaceBattery =
-    () => {
-      const battery =
-        Number(newBattery);
-
-      if (
-        Number.isNaN(battery) ||
-        battery < 0 ||
-        battery > 100
-      ) {
-        return;
-      }
-
-      setFleet(
-        (current) =>
-          current.map(
-            (item) =>
-              item.id ===
-              drone.id
-                ? {
-                    ...item,
-                    battery,
-                  }
-                : item,
-          ),
-      );
-
-      setReplaceBatteryOpen(
-        false,
-      );
-
-      setNewBattery("100");
-    };
-
   return (
     <div className="px-6 py-5 md:px-8">
       {/* BACK */}
@@ -433,7 +465,9 @@ export function DroneDetailPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-[32px] font-semibold tracking-tight text-[var(--tech-text)]">
-            {drone.name}
+            {getDroneDisplayCode(
+              drone,
+            )}
           </h1>
 
           <p className="mt-1 text-[14px] text-[var(--tech-muted)]">
@@ -452,20 +486,6 @@ export function DroneDetailPage() {
           </div>
         </div>
 
-        <Button
-          type="button"
-          onClick={() =>
-            setReplaceBatteryOpen(
-              true,
-            )
-          }
-          className="h-11 rounded-md bg-orange-500 px-5 text-[13px] font-semibold text-black hover:bg-orange-600"
-        >
-          <RotateCcw
-            size={16}
-          />
-          Replace battery
-        </Button>
       </div>
 
       {/* KEY SUMMARY */}
@@ -488,8 +508,12 @@ export function DroneDetailPage() {
               size={20}
             />
           }
-          label="Battery level"
-          value={`${drone.battery}%`}
+          label="Installed battery"
+          value={
+            installedBattery
+              ? `${installedBattery.id} · ${installedBattery.chargeLevelPct}%`
+              : "Not installed"
+          }
           danger={lowBattery}
         />
 
@@ -605,11 +629,6 @@ export function DroneDetailPage() {
                   />
 
                   <InfoItem
-                    label="Utilization"
-                    value={`${drone.utilization}%`}
-                  />
-
-                  <InfoItem
                     label="Current location"
                     value={
                       drone.location
@@ -634,71 +653,74 @@ export function DroneDetailPage() {
                     Battery status
                   </h2>
 
-                  {lowBattery && (
-                    <span className="rounded-md border border-red-500/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-red-500">
-                      Low battery
+                  {installedBattery ? (
+                    <span className="rounded-md border border-orange-500/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-orange-500">
+                      Installed
+                    </span>
+                  ) : (
+                    <span className="rounded-md border border-[var(--tech-border)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--tech-muted)]">
+                      Not installed
                     </span>
                   )}
                 </div>
 
-                <div className="mt-8 flex items-end justify-between gap-4">
-                  <span className="text-[14px] text-[var(--tech-muted)]">
-                    Remaining level
-                  </span>
+                {installedBattery ? (
+                  <>
+                    <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                      <InfoItem
+                        label="Battery ID"
+                        value={
+                          installedBattery.id
+                        }
+                      />
 
-                  <strong
-                    className={`text-[30px] font-semibold ${
-                      lowBattery
-                        ? "text-red-500"
-                        : "text-[var(--tech-text)]"
-                    }`}
-                  >
-                    {
-                      drone.battery
-                    }
-                    %
-                  </strong>
-                </div>
+                      <InfoItem
+                        label="Charge level"
+                        value={`${installedBattery.chargeLevelPct}%`}
+                        danger={
+                          lowBattery
+                        }
+                      />
+                    </div>
 
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--tech-border)]">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      lowBattery
-                        ? "bg-red-500"
-                        : "bg-orange-500"
-                    }`}
-                    style={{
-                      width: `${drone.battery}%`,
-                    }}
-                  />
-                </div>
+                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--tech-border)]">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          lowBattery
+                            ? "bg-red-500"
+                            : "bg-orange-500"
+                        }`}
+                        style={{
+                          width: `${installedBattery.chargeLevelPct}%`,
+                        }}
+                      />
+                    </div>
 
-                <div className="mt-8">
-                  <InfoItem
-                    label="Battery condition"
-                    value={
-                      lowBattery
-                        ? "Low"
-                        : "Normal"
-                    }
-                    danger={
-                      lowBattery
-                    }
-                  />
-                </div>
-
-                {lowBattery && (
-                  <div className="mt-6 rounded-md border border-red-500/20 bg-red-500/5 px-4 py-3">
-                    <p className="text-[13px] font-medium text-red-500">
-                      Battery is below 40%.
+                    <p className="mt-5 text-[12px] leading-5 text-[var(--tech-muted)]">
+                      This battery is temporarily assigned to the current prepared or active mission. Batteries do not permanently belong to a drone.
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-7 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-5">
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
+                      No battery installed
                     </p>
 
                     <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">
-                      Inspect the
-                      battery before the
-                      drone is assigned
-                      to another mission.
+                      Hub-stored drones normally have no battery installed. Use Battery Management when an Operator-assigned mission needs a ready battery.
                     </p>
+
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          "/technician/fleet/batteries",
+                        )
+                      }
+                      className="mt-4 h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:!border-orange-500/50 hover:!bg-transparent hover:!text-orange-500"
+                    >
+                      Open Battery Management
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -970,114 +992,6 @@ export function DroneDetailPage() {
         </div>
       )}
 
-      {/* REPLACE BATTERY MODAL */}
-      {replaceBatteryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4">
-          <div className="w-full max-w-[420px] rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[var(--tech-border)] px-6 py-5">
-              <div>
-                <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                  Replace battery
-                </h2>
-
-                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                  Update the battery
-                  level after replacement.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setReplaceBatteryOpen(
-                    false,
-                  )
-                }
-                className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-              >
-                <X
-                  size={18}
-                />
-              </button>
-            </div>
-
-            <div className="px-6 py-5">
-              <div className="mb-5 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-                  Current battery
-                </p>
-
-                <p
-                  className={`mt-1 text-[20px] font-semibold ${
-                    lowBattery
-                      ? "text-red-500"
-                      : "text-[var(--tech-text)]"
-                  }`}
-                >
-                  {
-                    drone.battery
-                  }
-                  %
-                </p>
-              </div>
-
-              <label className="block">
-                <span className="mb-2 block text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-muted)]">
-                  New battery level
-                </span>
-
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={
-                      newBattery
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setNewBattery(
-                        event.target
-                          .value,
-                      )
-                    }
-                    className="tech-control h-11 w-full px-3 pr-9 text-[14px]"
-                  />
-
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--tech-muted)]">
-                    %
-                  </span>
-                </div>
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
-              <Button
-                type="button"
-                onClick={() =>
-                  setReplaceBatteryOpen(
-                    false,
-                  )
-                }
-                className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[13px] text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                type="button"
-                onClick={
-                  handleReplaceBattery
-                }
-                className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
-              >
-                Confirm replacement
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

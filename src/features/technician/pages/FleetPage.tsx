@@ -52,29 +52,22 @@ import {
 } from "../utils/fleetStorage";
 
 import {
-  loadTransitMissions,
-  type TransitMission,
-} from "../utils/transitMissionStorage";
+  getBatteryForDrone,
+} from "../utils/batteryStorage";
 
 type DroneForm = {
   model: string;
   status: DroneStatus;
-  battery: string;
 };
 
 type StatusFilter =
   | "All status"
   | DroneStatus;
 
-type BatteryFilter =
-  | "All battery"
-  | "Normal ≥ 40%"
-  | "Low < 40%";
 
 const initialForm: DroneForm = {
   model: "",
   status: "Available",
-  battery: "100",
 };
 
 function getDroneDisplayCode(
@@ -116,12 +109,7 @@ export function FleetPage() {
     loadFleet,
   );
 
-  const [
-    transitMissions,
-    setTransitMissions,
-  ] = useState<
-    TransitMission[]
-  >(loadTransitMissions);
+
 
   const [
     searchQuery,
@@ -135,12 +123,6 @@ export function FleetPage() {
     "All status",
   );
 
-  const [
-    batteryFilter,
-    setBatteryFilter,
-  ] = useState<BatteryFilter>(
-    "All battery",
-  );
 
   const [
     modalOpen,
@@ -171,25 +153,26 @@ export function FleetPage() {
   }, [drones]);
 
   useEffect(() => {
-    const syncTransitMissions =
-      () => {
-        setTransitMissions(
-          loadTransitMissions(),
-        );
-      };
+    const syncFleet = () => {
+      setDrones(
+        loadFleet(),
+      );
+    };
 
     window.addEventListener(
-      "technician-transit-missions-updated",
-      syncTransitMissions,
+      "technician-fleet-updated",
+      syncFleet,
     );
 
     return () => {
       window.removeEventListener(
-        "technician-transit-missions-updated",
-        syncTransitMissions,
+        "technician-fleet-updated",
+        syncFleet,
       );
     };
   }, []);
+
+
 
   /*
    * Hub Fleet only contains drones physically
@@ -240,22 +223,10 @@ export function FleetPage() {
             drone.status ===
               statusFilter;
 
-          const matchesBattery =
-            batteryFilter ===
-              "All battery" ||
-            (batteryFilter ===
-              "Low < 40%" &&
-              drone.battery <
-                40) ||
-            (batteryFilter ===
-              "Normal ≥ 40%" &&
-              drone.battery >=
-                40);
 
           return (
             matchesSearch &&
-            matchesStatus &&
-            matchesBattery
+            matchesStatus
           );
         },
       );
@@ -263,7 +234,6 @@ export function FleetPage() {
       hubDrones,
       searchQuery,
       statusFilter,
-      batteryFilter,
     ]);
 
   const editingDrone =
@@ -285,9 +255,6 @@ export function FleetPage() {
     setForm({
       model: drone.model,
       status: drone.status,
-      battery: String(
-        drone.battery,
-      ),
     });
 
     setFormError("");
@@ -310,9 +277,6 @@ export function FleetPage() {
       return;
     }
 
-    const battery = Number(
-      form.battery,
-    );
 
     if (!form.model.trim()) {
       setFormError(
@@ -322,17 +286,6 @@ export function FleetPage() {
       return;
     }
 
-    if (
-      Number.isNaN(battery) ||
-      battery < 0 ||
-      battery > 100
-    ) {
-      setFormError(
-        "Battery level must be between 0 and 100.",
-      );
-
-      return;
-    }
 
     setDrones((current) =>
       current.map((drone) =>
@@ -344,7 +297,6 @@ export function FleetPage() {
                 form.model.trim(),
               status:
                 form.status,
-              battery,
             }
           : drone,
       ),
@@ -369,20 +321,6 @@ export function FleetPage() {
     );
   };
 
-  const getBatteryServiceMission = (
-    drone: FleetDrone,
-  ) =>
-    transitMissions.find(
-      (mission) =>
-        mission.currentDroneId ===
-          drone.id &&
-        mission.hub ===
-          TECHNICIAN_HUB &&
-        mission.status ===
-          "At Hub" &&
-        drone.battery <
-          mission.requiredDepartureBatteryPct,
-    );
 
   const actionButtonClass =
     "relative inline-flex h-8 w-8 items-center justify-center rounded-md " +
@@ -395,7 +333,7 @@ export function FleetPage() {
   return (
     <TechnicianPageShell
       title="Hub fleet"
-      description={`Monitor drone readiness, technical status and battery level at ${TECHNICIAN_HUB}.`}
+      description={`Drones physically stored at ${TECHNICIAN_HUB}. Batteries are installed only when a drone is prepared for departure.`}
     >
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         {/* FILTERS */}
@@ -435,37 +373,18 @@ export function FleetPage() {
             ariaLabel="Drone status"
             className="min-w-[190px]"
           />
-
-          <DropdownSelect
-            value={
-              batteryFilter
-            }
-            onChange={(value) =>
-              setBatteryFilter(
-                value as BatteryFilter,
-              )
-            }
-            options={[
-              "All battery",
-              "Normal ≥ 40%",
-              "Low < 40%",
-            ]}
-            ariaLabel="Battery level"
-            className="min-w-[170px]"
-          />
         </div>
 
         {/* TABLE */}
         <CardContent className="p-0">
           <Table className="fleet-table table-fixed">
             <colgroup>
-              <col className="w-[13%]" />
-              <col className="w-[17%]" />
-              <col className="w-[18%]" />
-              <col className="w-[15%]" />
-              <col className="w-[17%]" />
-              <col className="w-[11%]" />
-              <col className="w-[9%]" />
+              <col className="w-[16%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[16%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
             </colgroup>
 
             <TableHeader>
@@ -487,10 +406,6 @@ export function FleetPage() {
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
-                  Service
-                </TableHead>
-
-                <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
                   Hub
                 </TableHead>
 
@@ -504,20 +419,16 @@ export function FleetPage() {
               {filteredDrones.length >
               0 ? (
                 filteredDrones.map(
-                  (drone) => {
-                    const lowBattery =
-                      drone.battery <
-                      40;
+                  (drone) => {                    const installedBattery =
+                      getBatteryForDrone(
+                        drone.id,
+                      );
 
                     const code =
                       getDroneDisplayCode(
                         drone,
                       );
 
-                    const batteryServiceMission =
-                      getBatteryServiceMission(
-                        drone,
-                      );
 
                     return (
                       <TableRow
@@ -561,63 +472,24 @@ export function FleetPage() {
                             />
                           </div>
                         </TableCell>
-
                         <TableCell className="text-center">
-                          <div className="mx-auto w-[145px]">
-                            <div className="mb-1.5 flex justify-between">
-                              <span
-                                className={
-                                  lowBattery
-                                    ? "text-[12px] font-semibold text-red-500"
-                                    : "text-[12px] text-[var(--tech-muted)]"
-                                }
-                              >
-                                {
-                                  drone.battery
-                                }
-                                %
-                              </span>
-
-                              {lowBattery && (
-                                <span className="text-[10px] font-semibold uppercase text-red-500">
-                                  Low
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="h-1 overflow-hidden rounded-full bg-[var(--tech-border)]">
-                              <div
-                                className={
-                                  lowBattery
-                                    ? "h-full rounded-full bg-red-500"
-                                    : "h-full rounded-full bg-orange-500"
-                                }
-                                style={{
-                                  width: `${drone.battery}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="text-center">
-                          {batteryServiceMission ? (
-                            <div className="mx-auto max-w-[180px]">
-                              <p className="text-[12px] font-semibold text-orange-500">
-                                Battery service
+                          {installedBattery ? (
+                            <div>
+                              <p className="text-[13px] font-semibold text-[var(--tech-text-secondary)]">
+                                {installedBattery.id}
                               </p>
 
-                              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                                {drone.battery}% → required{" "}
-                                {batteryServiceMission.requiredDepartureBatteryPct}%
+                              <p className="mt-1 text-[11px] text-orange-500">
+                                {installedBattery.chargeLevelPct}% · Installed
                               </p>
                             </div>
                           ) : (
-                            <span className="text-[12px] text-[var(--tech-subtle)]">
-                              —
+                            <span className="text-[12px] font-medium text-[var(--tech-muted)]">
+                              Not installed
                             </span>
                           )}
                         </TableCell>
+
 
                         <TableCell className="text-center text-[12px] text-[var(--tech-muted)]">
                           {
@@ -669,7 +541,7 @@ export function FleetPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={6}
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
                     No drones are currently assigned to{" "}
@@ -785,40 +657,23 @@ export function FleetPage() {
                       />
                     </Field>
 
-                    <Field label="Battery level">
-                      <div className="relative">
-                        <input
-                          required
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={
-                            form.battery
-                          }
-                          onChange={(
-                            event,
-                          ) =>
-                            setForm(
-                              (
-                                current,
-                              ) => ({
-                                ...current,
-                                battery:
-                                  event
-                                    .target
-                                    .value,
-                              }),
-                            )
-                          }
-                          className="tech-control h-10 w-full px-3 pr-9 !text-[13px]"
-                        />
-
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[var(--tech-muted)]">
-                          %
-                        </span>
-                      </div>
+                    <Field label="Installed battery">
+                      <input
+                        disabled
+                        value={
+                          getBatteryForDrone(
+                            editingDrone.id,
+                          )?.id ??
+                          "Not installed"
+                        }
+                        className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
+                      />
                     </Field>
                   </div>
+
+                  <p className="-mt-1 text-[11px] leading-5 text-[var(--tech-muted)]">
+                    Hub-stored drones normally have no battery installed. Batteries are managed separately in Battery management.
+                  </p>
 
                   <Field label="Assigned hub">
                     <input

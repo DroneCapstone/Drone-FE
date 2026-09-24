@@ -1,5 +1,6 @@
 import {
   type ReactNode,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -59,6 +60,13 @@ import {
   createMaintenanceAlert,
   loadMaintenanceAlerts,
 } from "../utils/maintenanceAlertStorage";
+
+import {
+  detachBatteryFromDrone,
+  getBatteryForDrone,
+  installFullBatteryOnDrone,
+  replaceBatteryForTransitStop,
+} from "../utils/batteryStorage";
 
 type TransitFilter =
   | "All transit"
@@ -155,10 +163,10 @@ function getPurposeDescription(
   if (
     purpose === "RETURN_TO_HUB"
   ) {
-    return "Delivery mission is already complete. The drone is returning to the nearest hub and will join Hub Fleet after arrival confirmation.";
+    return "Delivery mission is already complete. After arrival confirmation, the current battery is removed for charging and the drone is stored in Hub Fleet without a battery installed.";
   }
 
-  return "Operator/System reported an in-flight incident. The drone is returning for technical inspection and will enter Maintenance after arrival confirmation.";
+  return "Operator/System reported an in-flight incident. After arrival confirmation, the current battery is removed and the drone enters Hub Fleet with Maintenance status and no battery installed.";
 }
 
 function getHistoryResultLabel(
@@ -321,6 +329,8 @@ export function TransitMissionsPage() {
     mission: TransitMission,
     status:
       FleetDrone["status"],
+    batteryLevelPct:
+      number = mission.batteryLevelPct,
   ) => {
     const existing =
       fleet.find(
@@ -339,7 +349,7 @@ export function TransitMissionsPage() {
                 location:
                   TECHNICIAN_HUB,
                 battery:
-                  mission.batteryLevelPct,
+                  batteryLevelPct,
                 status,
                 lastFlight:
                   mission.missionId,
@@ -360,7 +370,7 @@ export function TransitMissionsPage() {
         mission.droneModel,
       status,
       battery:
-        mission.batteryLevelPct,
+        batteryLevelPct,
       utilization: 0,
       lastFlight:
         mission.missionId,
@@ -407,6 +417,8 @@ export function TransitMissionsPage() {
       destination:
         mission.destination,
 
+      batteryId:
+        mission.batteryId,
       batteryLevelPct,
 
       handledAt,
@@ -445,8 +457,7 @@ export function TransitMissionsPage() {
                   status:
                     "At Hub" as const,
                   batteryServiceRequired:
-                    item.batteryLevelPct <
-                    item.requiredDepartureBatteryPct,
+                    true,
                   arrivalConfirmedAt:
                     now,
                 }
@@ -467,7 +478,7 @@ export function TransitMissionsPage() {
       pushActionMessage(
         `${getMissionDroneCode(
           mission,
-        )} arrival confirmed. Battery service will be checked before the mission continues.`,
+        )} arrival confirmed. Battery replacement is required before the mission continues.`,
       );
 
       return;
@@ -484,10 +495,24 @@ export function TransitMissionsPage() {
       mission.purpose ===
       "RETURN_TO_HUB"
     ) {
+      detachBatteryFromDrone({
+        batteryId:
+          mission.batteryId,
+        droneId:
+          mission.currentDroneId,
+        hub:
+          TECHNICIAN_HUB,
+        chargeLevelPct:
+          mission.batteryLevelPct,
+        missionId:
+          mission.missionId,
+      });
+
       persistFleet(
         upsertDroneAtHub(
           mission,
           "Available",
+          0,
         ),
       );
 
@@ -503,6 +528,7 @@ export function TransitMissionsPage() {
         mission,
         "Returned to hub",
         now,
+        mission.batteryLevelPct,
       );
 
       setSelectedMissionId(null);
@@ -530,7 +556,7 @@ export function TransitMissionsPage() {
       pushActionMessage(
         `${getMissionDroneCode(
           mission,
-        )} return confirmed. Drone was added to Hub Fleet.`,
+        )} return confirmed. Battery removed for charging and drone stored in Hub Fleet without a battery installed.`,
       );
 
       return;
@@ -543,10 +569,24 @@ export function TransitMissionsPage() {
      * The Incident must already exist in Maintenance Alerts.
      * Technician only confirms physical arrival here.
      */
+    detachBatteryFromDrone({
+      batteryId:
+        mission.batteryId,
+      droneId:
+        mission.currentDroneId,
+      hub:
+        TECHNICIAN_HUB,
+      chargeLevelPct:
+        mission.batteryLevelPct,
+      missionId:
+        mission.missionId,
+    });
+
     persistFleet(
       upsertDroneAtHub(
         mission,
         "Maintenance",
+        0,
       ),
     );
 
@@ -562,6 +602,7 @@ export function TransitMissionsPage() {
       mission,
       "Sent to maintenance",
       now,
+      mission.batteryLevelPct,
     );
 
     setSelectedMissionId(null);
@@ -590,6 +631,8 @@ export function TransitMissionsPage() {
               mission.missionId,
             droneId:
               mission.currentDroneId,
+            batteryId:
+              mission.batteryId,
             hub:
               mission.hub,
             arrivedAt:
@@ -620,6 +663,28 @@ export function TransitMissionsPage() {
       return;
     }
 
+    const batterySwap =
+      replaceBatteryForTransitStop({
+        incomingBatteryId:
+          mission.batteryId,
+        droneId:
+          mission.currentDroneId,
+        hub:
+          TECHNICIAN_HUB,
+        incomingChargeLevelPct:
+          mission.batteryLevelPct,
+        missionId:
+          mission.missionId,
+      });
+
+    if (!batterySwap) {
+      pushActionMessage(
+        "No fully charged battery is available at this hub.",
+      );
+
+      return;
+    }
+
     const nextFleet =
       fleet.map(
         (drone) =>
@@ -641,6 +706,8 @@ export function TransitMissionsPage() {
           mission.id
             ? {
                 ...item,
+                batteryId:
+                  batterySwap.installedBattery.id,
                 batteryLevelPct:
                   100,
                 batteryServiceRequired:
@@ -651,18 +718,13 @@ export function TransitMissionsPage() {
             : item,
       );
 
-    persistFleet(
-      nextFleet,
-    );
-
-    persistMissions(
-      nextMissions,
-    );
+    persistFleet(nextFleet);
+    persistMissions(nextMissions);
 
     pushActionMessage(
       `${getMissionDroneCode(
         mission,
-      )} battery replaced. Drone is ready to continue.`,
+      )} battery replaced with ${batterySwap.installedBattery.id} at 100%. Drone is ready to continue.`,
     );
   };
 
@@ -695,12 +757,18 @@ export function TransitMissionsPage() {
       return;
     }
 
+    const installedBattery =
+      getBatteryForDrone(
+        fleetDrone.id,
+      );
+
     if (
-      fleetDrone.battery <
-      mission.requiredDepartureBatteryPct
+      !installedBattery ||
+      installedBattery.chargeLevelPct !==
+        100
     ) {
       pushActionMessage(
-        `Battery must be at least ${mission.requiredDepartureBatteryPct}% before the mission can continue.`,
+        "A fully charged battery must be installed before the mission can continue.",
       );
 
       return;
@@ -713,8 +781,10 @@ export function TransitMissionsPage() {
           mission.id
             ? {
                 ...item,
+                batteryId:
+                  installedBattery.id,
                 batteryLevelPct:
-                  fleetDrone.battery,
+                  installedBattery.chargeLevelPct,
                 status:
                   "Ready" as const,
               }
@@ -900,12 +970,30 @@ export function TransitMissionsPage() {
       return;
     }
 
+    let installedBattery =
+      getBatteryForDrone(
+        replacementDrone.id,
+      );
+
+    if (!installedBattery) {
+      installedBattery =
+        installFullBatteryOnDrone({
+          droneId:
+            replacementDrone.id,
+          hub:
+            TECHNICIAN_HUB,
+          missionId:
+            mission.missionId,
+        }) ?? undefined;
+    }
+
     if (
-      replacementDrone.battery <
-      mission.requiredDepartureBatteryPct
+      !installedBattery ||
+      installedBattery.chargeLevelPct !==
+        100
     ) {
       pushActionMessage(
-        `Replacement drone battery must be at least ${mission.requiredDepartureBatteryPct}%.`,
+        "No fully charged battery is available for the replacement drone.",
       );
 
       return;
@@ -916,6 +1004,19 @@ export function TransitMissionsPage() {
         .match(/[A-Za-z]+/)?.[0]
         ?.toUpperCase() ??
       mission.droneType;
+
+    persistFleet(
+      fleet.map(
+        (drone) =>
+          drone.id ===
+          replacementDrone.id
+            ? {
+                ...drone,
+                battery: 100,
+              }
+            : drone,
+      ),
+    );
 
     persistMissions(
       missions.map(
@@ -930,8 +1031,10 @@ export function TransitMissionsPage() {
                   replacementType,
                 droneModel:
                   replacementDrone.model,
+                batteryId:
+                  installedBattery.id,
                 batteryLevelPct:
-                  replacementDrone.battery,
+                  100,
                 batteryServiceRequired:
                   false,
                 status:
@@ -945,7 +1048,7 @@ export function TransitMissionsPage() {
       `${getDroneCode(
         replacementType,
         replacementDrone.id,
-      )} confirmed ready for ${mission.missionId}.`,
+      )} confirmed ready with ${installedBattery.id} at 100%.`,
     );
   };
 
@@ -985,12 +1088,18 @@ export function TransitMissionsPage() {
       return;
     }
 
+    const installedBattery =
+      getBatteryForDrone(
+        currentDrone.id,
+      );
+
     if (
-      currentDrone.battery <
-      mission.requiredDepartureBatteryPct
+      !installedBattery ||
+      installedBattery.chargeLevelPct !==
+        100
     ) {
       pushActionMessage(
-        `Battery must be at least ${mission.requiredDepartureBatteryPct}% before continuing the mission.`,
+        "Drone must have a fully charged battery installed before continuing the mission.",
       );
 
       return;
@@ -1030,7 +1139,7 @@ export function TransitMissionsPage() {
       mission,
       "Continued",
       now,
-      currentDrone.battery,
+      installedBattery.chargeLevelPct,
     );
 
     setSelectedMissionId(null);
@@ -1053,6 +1162,8 @@ export function TransitMissionsPage() {
               mission.legId,
             droneId:
               mission.currentDroneId,
+            batteryId:
+              installedBattery.id,
             hub:
               mission.hub,
             destination:
@@ -1073,10 +1184,64 @@ export function TransitMissionsPage() {
     );
   };
 
+  useEffect(() => {
+    const onDroneTakeoff = (
+      event: Event,
+    ) => {
+      const detail = (
+        event as CustomEvent<{
+          missionId: string;
+          droneId: string;
+        }>
+      ).detail;
+
+      if (!detail) {
+        return;
+      }
+
+      const readyMission =
+        missions.find(
+          (mission) =>
+            mission.missionId ===
+              detail.missionId &&
+            mission.currentDroneId ===
+              detail.droneId &&
+            mission.status ===
+              "Ready" &&
+            mission.purpose ===
+              "BATTERY_STOP",
+        );
+
+      if (!readyMission) {
+        return;
+      }
+
+      dispatchMission(
+        readyMission,
+      );
+    };
+
+    window.addEventListener(
+      "drone-takeoff-detected",
+      onDroneTakeoff,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "drone-takeoff-detected",
+        onDroneTakeoff,
+      );
+    };
+  }, [
+    missions,
+    fleet,
+    missionHistory,
+  ]);
+
   return (
     <TechnicianPageShell
       title="Transit missions"
-      description={`Incoming drones assigned to ${TECHNICIAN_HUB}.`}
+      description={``}
     >
       {/* FEEDBACK */}
       {actionMessage && (
@@ -1118,9 +1283,9 @@ export function TransitMissionsPage() {
         </div>
       )}
 
-      {/* SEARCH + FILTER */}
-      <Card className="mb-4 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+      {/* SEARCH + FILTER + ACTIVE MISSIONS */}
+      <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+        <CardContent className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[320px] flex-1">
             <Search
               size={17}
@@ -1170,10 +1335,8 @@ export function TransitMissionsPage() {
             View history
           </button>
         </CardContent>
-      </Card>
 
-      {/* ACTIVE MISSIONS */}
-      <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+        {/* ACTIVE MISSIONS */}
         <div className="
           hidden
           border-b border-[var(--tech-border)]
@@ -1219,8 +1382,9 @@ export function TransitMissionsPage() {
               const batteryNeedsService =
                 mission.purpose ===
                   "BATTERY_STOP" &&
-                mission.batteryLevelPct <
-                  mission.requiredDepartureBatteryPct;
+                mission.status ===
+                  "At Hub" &&
+                mission.batteryServiceRequired;
 
               return (
                 <div
@@ -1279,13 +1443,20 @@ export function TransitMissionsPage() {
 
                     {/* BATTERY */}
                     <div>
+                      <p className="text-[13px] font-semibold text-[var(--tech-text-secondary)]">
+                        {
+                          mission.batteryId ??
+                          "—"
+                        }
+                      </p>
+
                       <span
                         className={
                           batteryNeedsService &&
                           mission.status ===
                             "At Hub"
-                            ? "text-[14px] font-semibold text-orange-500"
-                            : "text-[14px] font-medium text-[var(--tech-text-secondary)]"
+                            ? "mt-1 block text-[12px] font-semibold text-orange-500"
+                            : "mt-1 block text-[12px] text-[var(--tech-muted)]"
                         }
                       >
                         {
@@ -1298,7 +1469,7 @@ export function TransitMissionsPage() {
                         mission.status ===
                           "At Hub" && (
                           <p className="mt-1 text-[11px] font-medium text-orange-500">
-                            Service required
+                            Replacement required
                           </p>
                         )}
                     </div>
@@ -1421,20 +1592,12 @@ export function TransitMissionsPage() {
 
                       {mission.status ===
                         "Ready" && (
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            dispatchMission(
-                              mission,
-                            )
-                          }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                        >
+                        <span className="inline-flex h-9 shrink-0 items-center gap-2 px-2 text-[12px] font-medium text-orange-500">
                           <PlaneTakeoff
                             size={14}
                           />
-                          Continue
-                        </Button>
+                          Waiting for takeoff
+                        </span>
                       )}
 
                       <button
@@ -1579,12 +1742,21 @@ export function TransitMissionsPage() {
                             )}
                           </span>
 
-                          <span className="text-[13px] text-[var(--tech-text-secondary)]">
-                            {
-                              item.batteryLevelPct
-                            }
-                            %
-                          </span>
+                          <div>
+                            <p className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">
+                              {
+                                item.batteryId ??
+                                "—"
+                              }
+                            </p>
+
+                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                              {
+                                item.batteryLevelPct
+                              }
+                              %
+                            </p>
+                          </div>
 
                           <span className="text-[12px] text-[var(--tech-muted)]">
                             {
@@ -1710,7 +1882,15 @@ export function TransitMissionsPage() {
                   />
 
                   <DetailField
-                    label="Battery"
+                    label="Battery ID"
+                    value={
+                      selectedMission.batteryId ??
+                      "—"
+                    }
+                  />
+
+                  <DetailField
+                    label="Battery level"
                     value={`${selectedMission.batteryLevelPct}%`}
                     danger={
                       selectedMission.purpose ===
@@ -1850,8 +2030,8 @@ export function TransitMissionsPage() {
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailField
-                      label="Required battery"
-                      value={`${selectedMission.requiredDepartureBatteryPct}%`}
+                      label="Battery swap policy"
+                      value="Required on every hub arrival"
                     />
 
                     <DetailField
@@ -1859,7 +2039,7 @@ export function TransitMissionsPage() {
                       value={
                         selectedMission.batteryServiceRequired
                           ? "Required"
-                          : "Not required"
+                          : "Completed"
                       }
                       danger={
                         selectedMission.batteryServiceRequired
@@ -1915,7 +2095,7 @@ export function TransitMissionsPage() {
                     </p>
 
                     <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                      Confirm Arrival only confirms the drone is physically at this hub. The drone will enter Hub Fleet with Maintenance status and this row will be removed from Transit Missions.
+                      Confirm Arrival confirms the drone is physically at this hub. The battery ID carried by the mission is verified, the battery is removed and added to Battery Management as Charging. The drone enters Hub Fleet with Maintenance status and no battery installed.
                     </p>
 
                     {selectedMission.incidentAlertId && (
@@ -1939,7 +2119,7 @@ export function TransitMissionsPage() {
                   </h3>
 
                   <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
-                    This delivery mission is already completed. After Confirm Arrival, the drone is added to Hub Fleet and this row is moved to Mission History. No Ready or Continue action is required.
+                    This delivery mission is already completed. After Confirm Arrival, Technician verifies the mission battery ID, removes that battery into Battery Management as Charging, stores the drone in Hub Fleet without a battery, and moves this row to Mission History.
                   </p>
                 </section>
               )}
