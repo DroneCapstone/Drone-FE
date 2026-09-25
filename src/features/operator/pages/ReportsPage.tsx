@@ -1,3 +1,6 @@
+/* REPORT FEATURE DISABLED
+   The full Reports page is intentionally retained below for future re-enable.
+
 import { useState } from "react";
 import { ActionButton } from "../../../components/ui/ActionButton";
 import { DropdownSelect } from "../../../components/ui/DropdownSelect";
@@ -126,3 +129,5 @@ export function ReportsPage() {
     </>
   );
 }
+
+*/

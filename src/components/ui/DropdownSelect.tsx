@@ -3,10 +3,7 @@ import {
   useRef,
   useState,
 } from "react";
-
-import {
-  ChevronDown,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import {
   Select,
@@ -16,9 +13,7 @@ import {
   SelectValue,
 } from "./Select";
 
-import {
-  cn,
-} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export interface DropdownSelectOption {
   value: string;
@@ -27,13 +22,8 @@ export interface DropdownSelectOption {
 
 interface DropdownSelectProps {
   value: string;
-  options: readonly (
-    | string
-    | DropdownSelectOption
-  )[];
-  onChange: (
-    value: string,
-  ) => void;
+  options: readonly (string | DropdownSelectOption)[];
+  onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
   placeholder?: string;
@@ -62,11 +52,7 @@ function readCssVariable(
   variable: string,
   fallback: string,
 ) {
-  const value =
-    styles
-      .getPropertyValue(variable)
-      .trim();
-
+  const value = styles.getPropertyValue(variable).trim();
   return value || fallback;
 }
 
@@ -78,78 +64,56 @@ export function DropdownSelect({
   className,
   placeholder,
 }: DropdownSelectProps) {
-  const scopeRef =
-    useRef<HTMLSpanElement>(
-      null,
-    );
+  const scopeRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
 
-  const [open, setOpen] =
-    useState(false);
-
-  const [
-    palette,
-    setPalette,
-  ] =
-    useState<DropdownPalette>(
-      fallbackPalette,
-    );
+  const [palette, setPalette] =
+    useState<DropdownPalette>(fallbackPalette);
 
   const syncPalette = () => {
-    const scope =
-      scopeRef.current;
+    const scope = scopeRef.current;
 
     if (!scope) {
       return;
     }
 
-    const styles =
-      window.getComputedStyle(
-        scope,
-      );
+    const styles = window.getComputedStyle(scope);
 
     setPalette({
-      surface:
-        readCssVariable(
-          styles,
-          "--tech-surface",
-          fallbackPalette.surface,
-        ),
-      surface2:
-        readCssVariable(
-          styles,
-          "--tech-surface-2",
-          fallbackPalette.surface2,
-        ),
-      border:
-        readCssVariable(
-          styles,
-          "--tech-border",
-          fallbackPalette.border,
-        ),
-      text:
-        readCssVariable(
-          styles,
-          "--tech-text",
-          fallbackPalette.text,
-        ),
-      textSecondary:
-        readCssVariable(
-          styles,
-          "--tech-text-secondary",
-          fallbackPalette.textSecondary,
-        ),
-      muted:
-        readCssVariable(
-          styles,
-          "--tech-muted",
-          fallbackPalette.muted,
-        ),
+      surface: readCssVariable(
+        styles,
+        "--tech-surface",
+        fallbackPalette.surface,
+      ),
+      surface2: readCssVariable(
+        styles,
+        "--tech-surface-2",
+        fallbackPalette.surface2,
+      ),
+      border: readCssVariable(
+        styles,
+        "--tech-border",
+        fallbackPalette.border,
+      ),
+      text: readCssVariable(
+        styles,
+        "--tech-text",
+        fallbackPalette.text,
+      ),
+      textSecondary: readCssVariable(
+        styles,
+        "--tech-text-secondary",
+        fallbackPalette.textSecondary,
+      ),
+      muted: readCssVariable(
+        styles,
+        "--tech-muted",
+        fallbackPalette.muted,
+      ),
     });
   };
 
-  const handleOpenChange = (
-    nextOpen: boolean,
-  ) => {
+  const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) {
       syncPalette();
     }
@@ -158,79 +122,51 @@ export function DropdownSelect({
   };
 
   const portalStyle = {
-    "--dropdown-surface":
-      palette.surface,
-    "--dropdown-surface-2":
-      palette.surface2,
-    "--dropdown-border":
-      palette.border,
-    "--dropdown-text":
-      palette.text,
-    "--dropdown-text-secondary":
-      palette.textSecondary,
-    "--dropdown-muted":
-      palette.muted,
-    backgroundColor:
-      palette.surface,
+    "--dropdown-surface": palette.surface,
+    "--dropdown-surface-2": palette.surface2,
+    "--dropdown-border": palette.border,
+    "--dropdown-text": palette.text,
+    "--dropdown-text-secondary": palette.textSecondary,
+    "--dropdown-muted": palette.muted,
+    backgroundColor: palette.surface,
     color: palette.text,
-    borderColor:
-      palette.border,
+    borderColor: palette.border,
   } as CSSProperties;
 
   return (
-    <span
-      ref={scopeRef}
-      className="contents"
-    >
+    <span ref={scopeRef} className="contents">
       <Select
         value={value}
-        onValueChange={
-          onChange
-        }
+        onValueChange={onChange}
         open={open}
-        onOpenChange={
-          handleOpenChange
-        }
+        onOpenChange={handleOpenChange}
       >
         <SelectTrigger
-          aria-label={
-            ariaLabel
-          }
+          aria-label={ariaLabel}
           className={cn(
             `
               h-10
               w-auto
               shrink-0
               rounded-md
-
               !border-[var(--tech-border)]
               !bg-[var(--tech-surface-2)]
               !text-[var(--tech-text)]
-
               shadow-none
               outline-none
-
               transition-[border-color,background-color]
               duration-150
-
               hover:!border-orange-500/40
-
               focus:!border-orange-500
               focus:ring-0
-
               data-[state=open]:!border-orange-500
               data-[state=open]:!bg-[var(--tech-surface-2)]
-
               [&>svg]:hidden
             `,
             className,
           )}
         >
-          <SelectValue
-            placeholder={
-              placeholder
-            }
-          />
+          <SelectValue placeholder={placeholder} />
 
           <span
             className={cn(
@@ -260,74 +196,54 @@ export function DropdownSelect({
         <SelectContent
           sideOffset={7}
           align="start"
-          style={
-            portalStyle
-          }
+          style={portalStyle}
           className="
             z-[120]
-
             w-[var(--radix-select-trigger-width)]
             min-w-[var(--radix-select-trigger-width)]
-
             overflow-hidden
             rounded-md
-
             !border-[var(--dropdown-border)]
             !bg-[var(--dropdown-surface)]
             !text-[var(--dropdown-text)]
-
             shadow-xl
           "
         >
-          {options.map(
-            (option) => {
-              const optionValue =
-                typeof option ===
-                "string"
-                  ? option
-                  : option.value;
+          {options.map((option) => {
+            const optionValue =
+              typeof option === "string"
+                ? option
+                : option.value;
 
-              const optionLabel =
-                typeof option ===
-                "string"
-                  ? option
-                  : option.label;
+            const optionLabel =
+              typeof option === "string"
+                ? option
+                : option.label;
 
-              return (
-                <SelectItem
-                  key={
-                    optionValue
-                  }
-                  value={
-                    optionValue
-                  }
-                  className="
-                    cursor-pointer
-                    rounded-sm
-
-                    px-3 py-2
-
-                    text-[13px]
-                    !text-[var(--dropdown-text-secondary)]
-
-                    outline-none
-                    transition-colors
-                    duration-150
-
-                    focus:!bg-[var(--dropdown-surface-2)]
-                    focus:!text-orange-500
-
-                    data-[state=checked]:!bg-transparent
-                    data-[state=checked]:!text-orange-500
-                  "
-                >
-                  {
-                    optionLabel
-                  }
-                </SelectItem>
-              );
-            },
-          )}
+            return (
+              <SelectItem
+                key={optionValue}
+                value={optionValue}
+                className="
+                  cursor-pointer
+                  rounded-sm
+                  px-3
+                  py-2
+                  text-[13px]
+                  !text-[var(--dropdown-text-secondary)]
+                  outline-none
+                  transition-colors
+                  duration-150
+                  focus:!bg-[var(--dropdown-surface-2)]
+                  focus:!text-orange-500
+                  data-[state=checked]:!bg-transparent
+                  data-[state=checked]:!text-orange-500
+                "
+              >
+                {optionLabel}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
     </span>
