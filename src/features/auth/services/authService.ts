@@ -10,13 +10,11 @@ interface StoredUser extends AuthUser {
 }
 
 const USERS_KEY = "droneoptai.auth.users";
-const SESSION_KEY = "droneoptai.auth.session";
 
-/* =========================================================
-   MOCK USERS
-   Chỉ dùng cho development / demo
-========================================================= */
-
+/*
+ * Account đã register vẫn lưu localStorage
+ * để refresh/dev restart không mất account.
+ */
 const MOCK_USERS: Record<UserRole, AuthUser> = {
   operator: {
     id: "mock-operator",
@@ -47,6 +45,19 @@ const MOCK_USERS: Record<UserRole, AuthUser> = {
   },
 };
 
+/* =========================================================
+   CURRENT SESSION
+
+   Không persist bằng localStorage nữa.
+   Refresh / mở lại app => trở về Guest.
+========================================================= */
+
+let currentSession: AuthUser | null = null;
+
+/* =========================================================
+   USERS
+========================================================= */
+
 function readUsers(): StoredUser[] {
   try {
     return JSON.parse(
@@ -64,12 +75,9 @@ function writeUsers(users: StoredUser[]) {
   );
 }
 
-function writeSession(user: AuthUser) {
-  localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify(user),
-  );
-}
+/* =========================================================
+   PASSWORD
+========================================================= */
 
 async function hashPassword(password: string) {
   const data = new TextEncoder().encode(password);
@@ -86,6 +94,10 @@ async function hashPassword(password: string) {
     .join("");
 }
 
+/* =========================================================
+   USER ID
+========================================================= */
+
 function createId() {
   if (typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -96,16 +108,22 @@ function createId() {
     .slice(2)}`;
 }
 
+/* =========================================================
+   AUTH SERVICE
+========================================================= */
+
 export const authService = {
+  /* =========================
+     CURRENT USER
+  ========================= */
+
   getCurrentUser(): AuthUser | null {
-    try {
-      return JSON.parse(
-        localStorage.getItem(SESSION_KEY) ?? "null",
-      ) as AuthUser | null;
-    } catch {
-      return null;
-    }
+    return currentSession;
   },
+
+  /* =========================
+     LOGIN
+  ========================= */
 
   async login(
     payload: LoginPayload,
@@ -136,10 +154,14 @@ export const authService = {
       ...safeUser
     } = user;
 
-    writeSession(safeUser);
+    currentSession = safeUser;
 
     return safeUser;
   },
+
+  /* =========================
+     REGISTER
+  ========================= */
 
   async register(
     payload: RegisterPayload,
@@ -174,12 +196,14 @@ export const authService = {
 
     const user: StoredUser = {
       id: createId(),
+
       name,
+
       email,
 
       /*
-       * Tạm thời mặc định customer.
-       * Backend thật sẽ quyết định role.
+       * Người dùng đăng ký thông thường
+       * mặc định là Customer.
        */
       role: "customer",
 
@@ -193,23 +217,27 @@ export const authService = {
       ...safeUser
     } = user;
 
-    writeSession(safeUser);
+    currentSession = safeUser;
 
     return safeUser;
   },
 
+  /* =========================
+     MOCK ROLE LOGIN
+  ========================= */
+
   loginAsRole(role: UserRole): AuthUser {
     const user = MOCK_USERS[role];
 
-    writeSession(user);
+    currentSession = user;
 
     return user;
   },
 
-  /*
-   * Demo UI Google Login.
-   * Sau này thay bằng Google OAuth thật.
-   */
+  /* =========================
+     GOOGLE LOGIN MOCK
+  ========================= */
+
   loginWithGoogle(): AuthUser {
     const user: AuthUser = {
       id: "mock-google-user",
@@ -218,12 +246,16 @@ export const authService = {
       role: "customer",
     };
 
-    writeSession(user);
+    currentSession = user;
 
     return user;
   },
 
+  /* =========================
+     LOGOUT
+  ========================= */
+
   logout() {
-    localStorage.removeItem(SESSION_KEY);
+    currentSession = null;
   },
 };

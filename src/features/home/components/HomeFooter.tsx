@@ -1,45 +1,71 @@
 import { Link } from "react-router-dom";
 
-import { navigationItems } from "../constants/homeContent";
+import logo from "../../../assets/images/home/logo.png";
+
+const links = [
+  {
+    label: "How it works",
+    href: "#delivery",
+  },
+  {
+    label: "Aircraft",
+    href: "#aircraft",
+  },
+  {
+    label: "Hub network",
+    href: "#hub",
+  },
+  {
+    label: "Platform",
+    href: "#platform",
+  },
+];
 
 export function HomeFooter() {
   return (
-    <footer className="border-t border-white/[0.06] bg-black px-5 py-10 lg:px-10">
-      <div className="mx-auto flex max-w-[1500px] flex-col justify-between gap-8 md:flex-row md:items-center">
-        <Link
-          to="/"
-          className="flex items-center gap-3"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-black">
-            D
-          </div>
+    <footer className="bg-[#050505] px-6 py-12 lg:px-12">
+      <div className="mx-auto max-w-[1500px] border-t border-white/[0.08] pt-10">
+        <div className="grid gap-12 md:grid-cols-[1fr_auto_auto] md:items-start">
+          {/* BRAND */}
+          <Link
+            to="/"
+            className="flex items-center gap-3"
+          >
+            <img
+              src={logo}
+              alt="DroneOptAI"
+              className="h-10 w-auto object-contain"
+            />
 
-          <div>
-            <p className="text-sm font-semibold text-white">
-              DroneOptAI
-            </p>
+            <div className="flex items-baseline tracking-[-0.035em]">
+              <span className="bg-gradient-to-r from-[#F9B35B] via-[#F28A3C] to-[#ED742E] bg-clip-text text-[18px] font-semibold text-transparent">
+                Drone
+              </span>
 
-            <p className="text-[10px] uppercase tracking-[0.15em] text-white/30">
-              Smart Delivery Platform
-            </p>
-          </div>
-        </Link>
+              <span className="bg-gradient-to-r from-[#F1A14B] to-[#ED742E] bg-clip-text text-[18px] font-light text-transparent">
+                OptAI
+              </span>
+            </div>
+          </Link>
 
-        <nav className="flex flex-wrap gap-x-7 gap-y-3">
-          {navigationItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              className="text-xs text-white/35 transition hover:text-white"
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
+          {/* LINKS */}
+          <nav className="grid grid-cols-2 gap-x-10 gap-y-4">
+            {links.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="text-[13px] text-white/35 transition-colors hover:text-white"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
 
-        <p className="text-xs text-white/25">
-          © 2026 DroneOptAI.
-        </p>
+          {/* COPYRIGHT */}
+          <p className="text-[12px] text-white/25">
+            © 2026 DroneOptAI
+          </p>
+        </div>
       </div>
     </footer>
   );
