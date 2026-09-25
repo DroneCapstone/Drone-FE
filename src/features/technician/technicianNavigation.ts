@@ -1,8 +1,11 @@
-import type { LucideIcon } from "lucide-react";
+import type {
+  LucideIcon,
+} from "lucide-react";
 
 import {
   Bell,
   LayoutDashboard,
+  PackageCheck,
   Plane,
   UserRound,
   Wrench,
@@ -20,12 +23,14 @@ export type TechnicianNavigationItem = {
   children?: TechnicianNavigationChild[];
 };
 
-export const technicianNavigation: TechnicianNavigationItem[] = [
+export const technicianNavigation:
+  TechnicianNavigationItem[] = [
   {
     label: "Dashboard",
     path: "/technician/dashboard",
     icon: LayoutDashboard,
   },
+
   {
     label: "Fleet",
     path: "/technician/fleet",
@@ -39,8 +44,29 @@ export const technicianNavigation: TechnicianNavigationItem[] = [
         label: "Transit missions",
         path: "/technician/fleet/transit",
       },
+      {
+        label: "Battery management",
+        path: "/technician/fleet/batteries",
+      },
     ],
   },
+
+  {
+    label: "Deliveries",
+    path: "/technician/deliveries/outbound",
+    icon: PackageCheck,
+    children: [
+      {
+        label: "Outbound deliveries",
+        path: "/technician/deliveries/outbound",
+      },
+      {
+        label: "Delivery confirmations",
+        path: "/technician/deliveries/confirmations",
+      },
+    ],
+  },
+
   {
     label: "Maintenance",
     path: "/technician/maintenance",
@@ -56,11 +82,13 @@ export const technicianNavigation: TechnicianNavigationItem[] = [
       },
     ],
   },
+
   {
     label: "Notifications",
     path: "/technician/notifications",
     icon: Bell,
   },
+
   {
     label: "Profile",
     path: "/technician/profile",
