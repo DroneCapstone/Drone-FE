@@ -19,79 +19,49 @@ const lazyPage = <
 ========================================================= */
 
 const AnalyticsPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/AnalyticsPage"
-    ),
+  () => import("../features/operator/pages/AnalyticsPage"),
   "AnalyticsPage",
 );
 
 const DashboardPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/DashboardPage"
-    ),
+  () => import("../features/operator/pages/DashboardPage"),
   "DashboardPage",
 );
 
 const NotificationsPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/NotificationsPage"
-    ),
+  () => import("../features/operator/pages/NotificationsPage"),
   "NotificationsPage",
 );
 
 const ProfilePage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ProfilePage"
-    ),
+  () => import("../features/operator/pages/ProfilePage"),
   "ProfilePage",
 );
 
-const ReportsPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ReportsPage"
-    ),
-  "ReportsPage",
-);
+// REPORT FEATURE DISABLED — keep import code for future re-enable.
+// const ReportsPage = lazyPage(
+//   () => import("../features/operator/pages/ReportsPage"),
+//   "ReportsPage",
+// );
 
 /* =========================================================
-   AI
+   ORDERS
 ========================================================= */
 
-const ExplainabilityPage = lazyPage(
+const AllOrdersPage = lazyPage(
   () =>
     import(
-      "../features/operator/pages/ai/ExplainabilityPage"
+      "../features/operator/pages/orders/AllOrdersPage"
     ),
-  "ExplainabilityPage",
+  "AllOrdersPage",
 );
 
-const PredictionPage = lazyPage(
+const OrderDetailPage = lazyPage(
   () =>
     import(
-      "../features/operator/pages/ai/PredictionPage"
+      "../features/operator/pages/orders/OrderDetailPage"
     ),
-  "PredictionPage",
-);
-
-const RecommendationPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ai/RecommendationPage"
-    ),
-  "RecommendationPage",
-);
-
-const SimulationPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ai/SimulationPage"
-    ),
-  "SimulationPage",
+  "OrderDetailPage",
 );
 
 /* =========================================================
@@ -104,14 +74,6 @@ const AllMissionsPage = lazyPage(
       "../features/operator/pages/missions/AllMissionsPage"
     ),
   "AllMissionsPage",
-);
-
-const ApprovalQueuePage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/missions/ApprovalQueuePage"
-    ),
-  "ApprovalQueuePage",
 );
 
 const CreateMissionPage = lazyPage(
@@ -128,6 +90,26 @@ const MissionDetailPage = lazyPage(
       "../features/operator/pages/missions/MissionDetailPage"
     ),
   "MissionDetailPage",
+);
+
+/* =========================================================
+   FLEET & NETWORK
+========================================================= */
+
+const DroneAvailabilityPage = lazyPage(
+  () =>
+    import(
+      "../features/operator/pages/fleet/DroneAvailabilityPage"
+    ),
+  "DroneAvailabilityPage",
+);
+
+const HubNetworkPage = lazyPage(
+  () =>
+    import(
+      "../features/operator/pages/hubs/HubNetworkPage"
+    ),
+  "HubNetworkPage",
 );
 
 /* =========================================================
@@ -159,6 +141,34 @@ const TelemetryPage = lazyPage(
 );
 
 /* =========================================================
+   AI DECISION CENTER
+========================================================= */
+
+const MissionAnalysisPage = lazyPage(
+  () =>
+    import(
+      "../features/operator/pages/ai/MissionAnalysisPage"
+    ),
+  "MissionAnalysisPage",
+);
+
+const SimulationPage = lazyPage(
+  () =>
+    import(
+      "../features/operator/pages/ai/SimulationPage"
+    ),
+  "SimulationPage",
+);
+
+const ModelInsightsPage = lazyPage(
+  () =>
+    import(
+      "../features/operator/pages/ai/ModelInsightsPage"
+    ),
+  "ModelInsightsPage",
+);
+
+/* =========================================================
    ROUTES
 ========================================================= */
 
@@ -173,14 +183,57 @@ export const operatorRoutes: RouteObject[] = [
     ),
   },
 
+  /* =========================
+     DASHBOARD
+  ========================= */
+
   {
     path: "dashboard",
     element: <DashboardPage />,
   },
 
   /* =========================
-     MISSIONS
+     ORDERS
   ========================= */
+
+  {
+    path: "orders",
+    element: (
+      <Navigate
+        to="/operator/orders/all"
+        replace
+      />
+    ),
+  },
+
+  {
+    path: "orders/all",
+    element: <AllOrdersPage />,
+  },
+
+  {
+    path: "orders/ready",
+    element: <AllOrdersPage />,
+  },
+
+  {
+    path: "orders/:orderId",
+    element: <OrderDetailPage />,
+  },
+
+  /* =========================
+     FLIGHT MISSIONS
+  ========================= */
+
+  {
+    path: "missions",
+    element: (
+      <Navigate
+        to="/operator/missions/all"
+        replace
+      />
+    ),
+  },
 
   {
     path: "missions/all",
@@ -192,6 +245,7 @@ export const operatorRoutes: RouteObject[] = [
     element: <CreateMissionPage />,
   },
 
+  // Backward-compatible route.
   {
     path: "missions/detail",
     element: <MissionDetailPage />,
@@ -202,9 +256,28 @@ export const operatorRoutes: RouteObject[] = [
     element: <MissionDetailPage />,
   },
 
+  /* =========================
+     FLEET & NETWORK
+  ========================= */
+
   {
-    path: "missions/approvals",
-    element: <ApprovalQueuePage />,
+    path: "fleet-hubs",
+    element: (
+      <Navigate
+        to="/operator/fleet-hubs/drones"
+        replace
+      />
+    ),
+  },
+
+  {
+    path: "fleet-hubs/drones",
+    element: <DroneAvailabilityPage />,
+  },
+
+  {
+    path: "fleet-hubs/hubs",
+    element: <HubNetworkPage />,
   },
 
   /* =========================
@@ -227,27 +300,53 @@ export const operatorRoutes: RouteObject[] = [
   },
 
   /* =========================
-     AI
+     AI DECISION CENTER
   ========================= */
 
   {
-    path: "ai/prediction",
-    element: <PredictionPage />,
-  },
-
-  {
-    path: "ai/explainability",
-    element: <ExplainabilityPage />,
-  },
-
-  {
-    path: "ai/recommendation",
-    element: <RecommendationPage />,
+    path: "ai/mission-analysis",
+    element: <MissionAnalysisPage />,
   },
 
   {
     path: "ai/simulation",
     element: <SimulationPage />,
+  },
+
+  {
+    path: "ai/model-insights",
+    element: <ModelInsightsPage />,
+  },
+
+  // Backward-compatible redirects from old AI routes.
+  {
+    path: "ai/prediction",
+    element: (
+      <Navigate
+        to="/operator/ai/mission-analysis"
+        replace
+      />
+    ),
+  },
+
+  {
+    path: "ai/explainability",
+    element: (
+      <Navigate
+        to="/operator/ai/mission-analysis"
+        replace
+      />
+    ),
+  },
+
+  {
+    path: "ai/recommendation",
+    element: (
+      <Navigate
+        to="/operator/ai/mission-analysis"
+        replace
+      />
+    ),
   },
 
   /* =========================
@@ -259,10 +358,11 @@ export const operatorRoutes: RouteObject[] = [
     element: <AnalyticsPage />,
   },
 
-  {
-    path: "reports",
-    element: <ReportsPage />,
-  },
+  // REPORT FEATURE DISABLED — keep route code for future re-enable.
+  // {
+  //   path: "reports",
+  //   element: <ReportsPage />,
+  // },
 
   {
     path: "notifications",

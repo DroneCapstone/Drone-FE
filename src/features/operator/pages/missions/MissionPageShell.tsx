@@ -7,5 +7,14 @@ import { missionTabs } from '../../constants/operatorRoutes';
 
 export function MissionPageShell({ active, children }: { active: string; children: ReactNode }) {
   const navigate = useNavigate();
-  return <><PageHeader section="missions" action={<ActionButton icon="plus" onClick={() => navigate('/operator/missions/create')}>Create mission</ActionButton>}/><RouteTabs items={missionTabs} active={active}/>{children}</>;
+  return (
+    <>
+      <PageHeader
+        section="missions"
+        action={<ActionButton variant="secondary" onClick={() => navigate('/operator/orders/ready')}>Ready orders</ActionButton>}
+      />
+      <RouteTabs items={missionTabs} active={active} />
+      {children}
+    </>
+  );
 }

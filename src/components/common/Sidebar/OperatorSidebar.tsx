@@ -120,14 +120,18 @@ export function OperatorSidebar({
           {operatorNavigation.map((item) => {
             const active =
               pathname === item.path ||
+              pathname.startsWith(`${item.path}/`) ||
               Boolean(
-                item.children?.some(
-                  (child) =>
+                item.children?.some((child) => {
+                  const segments = child.path.split('/').filter(Boolean);
+                  const featurePrefix = `/${segments.slice(0, 2).join('/')}`;
+                  return (
                     pathname === child.path ||
-                    pathname.startsWith(
-                      `${child.path}/`,
-                    ),
-                ),
+                    pathname.startsWith(`${child.path}/`) ||
+                    pathname === featurePrefix ||
+                    pathname.startsWith(`${featurePrefix}/`)
+                  );
+                }),
               );
 
             return (

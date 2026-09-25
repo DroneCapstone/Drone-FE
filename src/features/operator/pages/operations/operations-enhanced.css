@@ -1,0 +1,934 @@
+/* =========================================================
+   Flight Operations — Live Tracking / Incident workflow
+   Scoped additions only. RouteTabs / icons / shared buttons are untouched.
+========================================================= */
+
+.live-ops-layout {
+  --live-tracking-stage-height: 585px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 355px;
+  gap: 14px;
+  align-items: start;
+}
+
+
+.live-ops-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.live-ops-map-panel {
+  height: var(--live-tracking-stage-height);
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.live-ops-map {
+  flex: 1;
+  min-height: 0;
+}
+
+.live-ops-ring.ring-a {
+  width: 270px;
+  height: 270px;
+  left: 8%;
+  top: 14%;
+}
+
+.live-ops-ring.ring-b {
+  width: 360px;
+  height: 360px;
+  right: -4%;
+  bottom: -22%;
+}
+
+.live-track {
+  position: absolute;
+  height: 2px;
+  border-top: 2px dashed var(--border-strong);
+  transform-origin: left center;
+  opacity: .8;
+}
+
+.live-track-1 {
+  width: 34%;
+  left: 9%;
+  top: 47%;
+  border-color: rgba(255, 107, 0, .65);
+  transform: rotate(-18deg);
+}
+
+.live-track-2 {
+  width: 30%;
+  left: 40%;
+  top: 27%;
+  border-color: rgba(222, 71, 71, .6);
+  transform: rotate(17deg);
+}
+
+.live-track-3 {
+  width: 26%;
+  left: 51%;
+  top: 61%;
+  border-color: rgba(32, 178, 107, .55);
+  transform: rotate(14deg);
+}
+
+.live-track-4 {
+  width: 23%;
+  left: 66%;
+  top: 43%;
+  border-color: rgba(32, 178, 107, .55);
+  transform: rotate(-27deg);
+}
+
+.live-track-5 {
+  width: 24%;
+  left: 15%;
+  bottom: 23%;
+  border-color: rgba(222, 71, 71, .55);
+  transform: rotate(22deg);
+}
+
+.live-aircraft-marker {
+  position: absolute;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--muted);
+  box-shadow: 0 4px 16px rgba(26, 31, 42, .06);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+
+.live-aircraft-marker b {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.live-aircraft-marker:hover,
+.live-aircraft-marker.selected {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(26, 31, 42, .1);
+}
+
+.live-aircraft-marker.health-normal {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 28%, var(--border));
+}
+
+.live-aircraft-marker.health-attention {
+  color: var(--orange);
+  border-color: color-mix(in srgb, var(--orange) 36%, var(--border));
+}
+
+.live-aircraft-marker.health-critical {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 38%, var(--border));
+}
+
+.live-aircraft-marker.health-critical::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 22%, transparent);
+}
+
+.live-aircraft-marker.selected {
+  border-width: 2px;
+}
+
+.live-aircraft-marker.pos-1 { left: 17%; bottom: 17%; }
+.live-aircraft-marker.pos-2 { left: 25%; top: 56%; }
+.live-aircraft-marker.pos-3 { left: 47%; top: 15%; }
+.live-aircraft-marker.pos-4 { left: 26%; top: 34%; }
+.live-aircraft-marker.pos-5 { right: 18%; top: 22%; }
+.live-aircraft-marker.pos-6 { left: 51%; top: 52%; }
+.live-aircraft-marker.pos-7 { right: 26%; bottom: 25%; }
+.live-aircraft-marker.pos-8 { left: 11%; top: 18%; }
+.live-aircraft-marker.pos-9 { left: 54%; top: 29%; }
+.live-aircraft-marker.pos-10 { right: 10%; top: 43%; }
+.live-aircraft-marker.pos-11 { right: 7%; bottom: 35%; }
+.live-aircraft-marker.pos-12 { left: 43%; bottom: 10%; }
+
+.live-ops-legend {
+  z-index: 5;
+}
+
+.live-selection-panel {
+  padding: 14px 16px !important;
+}
+
+.live-selection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.live-selection-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.live-selection-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.live-selection-icon.health-normal { color: var(--green); }
+.live-selection-icon.health-attention { color: var(--orange); }
+.live-selection-icon.health-critical { color: var(--red); }
+
+.live-selection-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 3px;
+}
+
+.live-selection-title strong {
+  font-size: 17px;
+}
+
+.live-selection-id small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.live-selection-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, auto));
+  gap: 0;
+}
+
+.live-selection-metrics > span {
+  min-width: 82px;
+  display: grid;
+  grid-template-columns: 18px auto;
+  align-items: center;
+  gap: 1px 6px;
+  padding: 2px 14px;
+  border-left: 1px solid var(--border);
+}
+
+.live-selection-metrics > span svg {
+  grid-row: 1 / 3;
+  color: var(--muted);
+}
+
+.live-selection-metrics strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.live-selection-metrics small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.live-ai-assessment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 13px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.live-ai-assessment.health-attention {
+  border-color: color-mix(in srgb, var(--orange) 20%, var(--border));
+}
+
+.live-ai-assessment.health-critical {
+  border-color: color-mix(in srgb, var(--red) 22%, var(--border));
+}
+
+.live-ai-assessment > div:first-child {
+  min-width: 0;
+}
+
+.live-ai-assessment strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.live-ai-assessment p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.live-ai-assessment small {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.live-ai-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-incident-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.live-aircraft-rail {
+  min-width: 0;
+
+  /* Ít aircraft -> panel co theo nội dung.
+     Nhiều aircraft -> chỉ cao tối đa bằng map bên trái. */
+  height: auto;
+  max-height: var(--live-tracking-stage-height);
+
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.live-aircraft-head {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  padding: 0 2px 8px;
+  background: var(--surface);
+}
+
+.live-health-filters {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0 10px;
+
+  overflow: visible;
+  background: var(--surface);
+}
+
+.live-health-filters button {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  padding: 0 6px;
+
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.live-health-filters button:hover,
+.live-health-filters button.active {
+  border-color: var(--orange);
+  color: var(--text);
+}
+
+.health-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.health-dot.health-normal { background: var(--green); }
+.health-dot.health-attention { background: var(--orange); }
+.health-dot.health-critical { background: var(--red); }
+
+.live-aircraft-list {
+  min-height: 0;
+
+  /* Ít aircraft: co theo content.
+     Nhiều aircraft: scroll bên trong nhưng không chạm/đè phần filter. */
+  flex: 0 1 auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding: 4px 3px 6px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.live-aircraft-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.live-aircraft-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.live-aircraft-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+/*
+ * Card layout is intentionally rigid:
+ * [status/icon] [aircraft content] [battery/signal + chevron]
+ * This keeps every row aligned even when anomaly text lengths differ.
+ */
+.live-aircraft-card {
+  width: 100%;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 72px;
+  column-gap: 11px;
+  align-items: start;
+  position: relative;
+  padding: 13px 11px 13px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease;
+}
+
+.live-aircraft-card:hover {
+  border-color: var(--orange);
+}
+
+.live-aircraft-card.selected {
+  border-color: var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 3px 12px rgba(26, 31, 42, .05);
+}
+
+.live-aircraft-card.selected:hover {
+  border-color: var(--border);
+}
+
+.live-aircraft-card-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  color: var(--green);
+}
+
+.live-aircraft-card.health-attention .live-aircraft-card-icon {
+  color: var(--orange);
+}
+
+.live-aircraft-card.health-critical .live-aircraft-card-icon {
+  color: var(--red);
+}
+
+.live-aircraft-card-main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(18px, auto);
+  align-content: start;
+  gap: 2px;
+}
+
+.live-aircraft-card-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.live-aircraft-card-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep the existing shared StatusBadge visuals. Only lock its placement. */
+.live-aircraft-card-title .badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.live-aircraft-card-main small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-aircraft-state {
+  min-width: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--green);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-aircraft-card.health-attention .live-aircraft-state {
+  color: var(--orange);
+}
+
+.live-aircraft-card.health-critical .live-aircraft-state {
+  color: var(--red);
+}
+
+.live-aircraft-card-metrics {
+  width: 72px;
+  align-self: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  grid-template-rows: repeat(2, 22px);
+  column-gap: 7px;
+  row-gap: 4px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.live-aircraft-card-metrics > span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.live-aircraft-card-metrics > span svg {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+.live-aircraft-card-metrics > svg {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--faint);
+}
+
+.live-aircraft-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 9px 4px 1px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* =========================================================
+   Incident creation — simple, system-consistent, minimal icons
+========================================================= */
+
+.incident-create-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.incident-source-panel {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.incident-source-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.incident-source-grid > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 16px;
+  border-right: 1px solid var(--border);
+}
+
+.incident-source-grid > div:last-child {
+  border-right: 0;
+}
+
+.incident-source-grid small {
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.incident-source-grid strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incident-source-grid span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incident-form-note {
+  margin-bottom: 15px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.incident-create-fields {
+  align-items: start;
+}
+
+.incident-readonly-field {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.incident-readonly-field small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.incident-description-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.incident-description-label > span:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.incident-ai-draft {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+}
+
+.incident-description-label button {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.incident-description-label button:hover {
+  color: var(--orange);
+}
+
+.incident-description-field textarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.incident-description-help {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+@media (max-width: 1280px) {
+  .live-ops-layout {
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+
+  .live-aircraft-card {
+    grid-template-columns: 30px minmax(0, 1fr) 66px;
+    column-gap: 9px;
+    padding-left: 13px;
+  }
+
+  .live-aircraft-card-metrics {
+    width: 66px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .live-ops-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .live-selection-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .live-selection-metrics {
+    width: 100%;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .live-selection-metrics > span:first-child {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .live-ops-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .live-ops-map-panel {
+    height: auto;
+  }
+
+  .live-ops-map {
+    min-height: 525px;
+  }
+
+  .live-aircraft-rail {
+    height: auto;
+    max-height: none;
+  }
+
+  .live-aircraft-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    overflow: visible;
+  }
+
+  .live-aircraft-card {
+    min-height: 112px;
+  }
+
+  .incident-source-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .incident-source-grid > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .incident-source-grid > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 700px) {
+  .live-ops-map {
+    min-height: 430px;
+  }
+
+  .live-aircraft-marker {
+    padding: 5px 7px;
+  }
+
+  .live-aircraft-marker b {
+    font-size: 10px;
+  }
+
+  .live-aircraft-marker.pos-7,
+  .live-aircraft-marker.pos-10,
+  .live-aircraft-marker.pos-12 {
+    display: none;
+  }
+
+  .live-selection-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .live-selection-metrics > span {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 8px 6px;
+  }
+
+  .live-ai-assessment {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .live-ai-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .live-ai-actions .button {
+    flex: 1;
+  }
+
+  .live-aircraft-list {
+    grid-template-columns: 1fr;
+  }
+
+  .live-aircraft-card {
+    grid-template-columns: 30px minmax(0, 1fr) 64px;
+    min-height: 104px;
+    padding: 12px 10px 12px 13px;
+  }
+
+  .live-aircraft-card-metrics {
+    width: 64px;
+  }
+
+  .incident-source-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .incident-source-grid > div,
+  .incident-source-grid > div:nth-child(2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .incident-source-grid > div:last-child {
+    border-bottom: 0;
+  }
+
+  .incident-description-label {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .incident-description-label button {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .live-ops-map {
+    min-height: 390px;
+  }
+
+  .live-health-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-aircraft-marker.pos-5,
+  .live-aircraft-marker.pos-8,
+  .live-aircraft-marker.pos-9,
+  .live-aircraft-marker.pos-11 {
+    display: none;
+  }
+
+  .live-health-filters {
+    grid-template-columns: repeat(4, max-content);
+  }
+
+  .live-selection-panel {
+    padding: 12px !important;
+  }
+
+  .live-selection-title {
+    flex-wrap: wrap;
+  }
+
+  .live-ai-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .live-ai-actions .button,
+  .live-incident-state {
+    width: 100%;
+    justify-content: center;
+  }
+}

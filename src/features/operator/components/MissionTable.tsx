@@ -10,15 +10,16 @@ export function MissionTable({ compact = false, items = allMissions }: { compact
   return (
     <div className="table-wrap">
       <table>
-        <thead><tr><th>Mission</th><th>Aircraft</th><th>Route</th><th>Status</th><th>ETA</th><th>Energy</th><th /></tr></thead>
+        <thead><tr><th>Mission</th><th>Order</th><th>Drone</th><th>Route</th><th>Status</th><th>ETA</th><th>Energy</th><th /></tr></thead>
         <tbody>{rows.map((mission) => (
           <tr key={mission.id} onClick={() => navigate(`/operator/missions/${mission.id}`)}>
-            <td><strong>{mission.name}</strong><small>{mission.id}</small></td>
+            <td><strong>{mission.id}</strong><small>{mission.type} · {mission.name}</small></td>
+            <td><button type="button" className="inline-link" onClick={(event) => { event.stopPropagation(); navigate(`/operator/orders/${mission.orderId}`); }}>{mission.orderId}</button></td>
             <td><span className="drone-id">{mission.drone}</span></td>
             <td>{mission.route}</td>
-            <td><StatusBadge tone={mission.tone}>{mission.status}</StatusBadge></td>
+            <td><StatusBadge tone={mission.tone}>{mission.status}</StatusBadge>{mission.scheduleState === 'Delayed' && <small className="table-substatus">Delayed</small>}</td>
             <td>{mission.eta}</td>
-            <td><div className="battery-cell"><span><i style={{ width: `${mission.battery}%` }}/></span>{mission.battery}%</div></td>
+            <td><strong>{mission.estimatedEnergyWh.toFixed(1)} Wh</strong><small>{mission.battery}% battery after</small></td>
             <td><button className="row-action" aria-label={`Open ${mission.id}`}>Open</button></td>
           </tr>
         ))}</tbody>
