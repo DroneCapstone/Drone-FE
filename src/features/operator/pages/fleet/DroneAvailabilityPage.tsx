@@ -4,6 +4,7 @@ import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { DroneAvailabilityTable } from '../../components/DroneAvailabilityTable';
 import { OperatorPanel } from '../../components/OperatorPanel';
+import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/OperatorPagination';
 import { operatorHubs } from '../../data/hubMockData';
 import type { TechnicalStatus } from '../../types/operator';
 import { loadOperatorFleet } from '../../utils/operatorFleetStorage';
@@ -15,6 +16,7 @@ export function DroneAvailabilityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [technicalFilter, setTechnicalFilter] = useState('All technical');
+  const [page, setPage] = useState(1);
   const fleet = loadOperatorFleet();
 
   const requestedHubId = searchParams.get('hub');
@@ -35,6 +37,7 @@ export function DroneAvailabilityPage() {
     }
 
     setSearchParams(nextParams);
+    setPage(1);
   };
 
   const filtered = useMemo(
@@ -55,6 +58,12 @@ export function DroneAvailabilityPage() {
       }),
     [fleet, hubFilter, query, technicalFilter],
   );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedDrones = filtered.slice(
+    (currentPage - 1) * OPERATOR_PAGE_SIZE,
+    currentPage * OPERATOR_PAGE_SIZE,
+  );
 
   return (
     <FleetHubPageShell active="/operator/fleet-hubs/drones">
@@ -64,7 +73,7 @@ export function DroneAvailabilityPage() {
             <Icon name="search" />
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setQuery(event.target.value); setPage(1); }}
               placeholder="Search drones…"
             />
           </div>
@@ -89,7 +98,7 @@ export function DroneAvailabilityPage() {
               'Available',
               'Maintenance',
             ]}
-            onChange={setTechnicalFilter}
+            onChange={(value) => { setTechnicalFilter(value); setPage(1); }}
             ariaLabel="Technical status"
           />
 
@@ -100,7 +109,13 @@ export function DroneAvailabilityPage() {
           </small>
         </div>
 
-        <DroneAvailabilityTable drones={filtered} hubs={operatorHubs} />
+        <DroneAvailabilityTable drones={paginatedDrones} hubs={operatorHubs} />
+        <OperatorPagination
+          currentPage={currentPage}
+          totalItems={filtered.length}
+          itemLabel="drones"
+          onPageChange={setPage}
+        />
       </OperatorPanel>
 
       {/* <p className="section-note">
