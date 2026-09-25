@@ -1,54 +1,37 @@
-import {
-  ArrowRight,
-  PackageOpen,
-} from "lucide-react";
 import { Link } from "react-router-dom";
 
 export function CTASection() {
   return (
-    <section
-      id="contact"
-      className="px-5 pb-24 pt-12 lg:px-10 lg:pb-32"
-    >
-      <div className="relative mx-auto max-w-[1500px] overflow-hidden rounded-[32px] border border-orange-400/15 bg-[#0b0b0b] px-6 py-16 sm:px-10 lg:px-16 lg:py-20">
-        <div className="absolute right-[-100px] top-[-150px] h-[500px] w-[500px] rounded-full bg-orange-500/[0.13] blur-[140px]" />
+    <section className="bg-[#F97316] px-6 py-24 text-black lg:px-12 lg:py-32">
+      <div className="mx-auto max-w-[1500px]">
+        <div className="grid items-end gap-14 lg:grid-cols-[1fr_auto]">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">
+              DroneOptAI
+            </p>
 
-        <div className="absolute bottom-[-200px] left-[20%] h-[350px] w-[500px] rounded-full bg-orange-700/[0.08] blur-[130px]" />
-
-        <div className="relative grid items-end gap-10 lg:grid-cols-[1fr_auto]">
-          <div className="max-w-[800px]">
-            <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-400/20 bg-orange-500/10">
-              <PackageOpen
-                size={21}
-                className="text-orange-400"
-              />
-            </div>
-
-            <h2 className="text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
-              Ready for your
-              <span className="bg-gradient-to-r from-orange-300 to-orange-500 bg-clip-text text-transparent">
-                {" "}
-                next delivery?
-              </span>
+            <h2 className="mt-7 max-w-[980px] text-5xl font-semibold leading-[0.94] tracking-[-0.055em] sm:text-6xl lg:text-[84px]">
+              From one hub
+              <br />
+              to the next.
             </h2>
 
-            <p className="mt-5 max-w-[620px] text-base leading-7 text-white/40">
-              Create a delivery request and
-              experience smarter drone logistics
-              with DroneOptAI.
+            <p className="mt-7 max-w-[520px] text-sm leading-6 text-black/60">
+              Connected hub-to-hub drone
+              delivery built around smarter
+              operations.
             </p>
           </div>
 
           <Link
             to="/login"
-            className="group inline-flex h-14 items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-orange-500 to-orange-300 px-7 text-sm font-semibold text-black transition hover:-translate-y-0.5 hover:brightness-110"
+            className="group flex w-fit items-center gap-5 border-b-2 border-black pb-2 text-sm font-semibold"
           >
             Start a delivery
 
-            <ArrowRight
-              size={17}
-              className="transition group-hover:translate-x-1"
-            />
+            <span className="transition-transform group-hover:translate-x-1">
+              →
+            </span>
           </Link>
         </div>
       </div>

@@ -1,22 +1,25 @@
 import { CTASection } from "../components/CTASection";
+import { DroneShowcaseSection } from "../components/DroneShowcaseSection";
 import { HeroSection } from "../components/HeroSection";
 import { HomeFooter } from "../components/HomeFooter";
 import { HomeHeader } from "../components/HomeHeader";
-import { HowItWorksSection } from "../components/HowItWorksSection";
+import { HorizontalDeliverySection } from "../components/HorizontalDeliverySection";
+import { HubShowcaseSection } from "../components/HubShowcaseSection";
 import { PlatformSection } from "../components/PlatformSection";
-import { SolutionsSection } from "../components/SolutionsSection";
 
 export function HomePage() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-black text-white">
+    <div className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
       <HomeHeader />
 
       <main>
         <HeroSection />
 
-        <SolutionsSection />
+        <HorizontalDeliverySection />
 
-        <HowItWorksSection />
+        <DroneShowcaseSection />
+
+        <HubShowcaseSection />
 
         <PlatformSection />
 
