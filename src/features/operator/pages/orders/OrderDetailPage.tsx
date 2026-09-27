@@ -82,7 +82,7 @@ export function OrderDetailPage() {
             </div>
           </OperatorPanel>
 
-          <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER · HUB TO HUB">
+          <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
               <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId)}</dd></div>

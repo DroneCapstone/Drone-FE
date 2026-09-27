@@ -17,7 +17,7 @@ export function SimulationPage() {
 
   return (
     <AiPageShell active="/operator/ai/simulation">
-      <div className="simulation-sandbox-note"><strong>Sandbox only.</strong><span>Changing these values never edits a real Order or Flight Mission.</span></div>
+      {/* <div className="simulation-sandbox-note"><strong>Sandbox only.</strong><span>Changing these values never edits a real Order or Flight Mission.</span></div> */}
       <div className="simulation-layout">
         <OperatorPanel title="Scenario controls" eyebrow="WHAT-IF INPUTS">
           <div className="slider-field"><span><label>Payload</label><strong>{payload.toFixed(1)} kg</strong></span><input type="range" min="1" max="10" step=".1" value={payload} onChange={(e) => setPayload(Number(e.target.value))} /></div>

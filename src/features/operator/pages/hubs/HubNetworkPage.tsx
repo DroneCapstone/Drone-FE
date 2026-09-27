@@ -31,14 +31,13 @@ export function HubNetworkPage() {
     <FleetHubPageShell active="/operator/fleet-hubs/hubs">
       <OperatorPanel
         title="Hub network"
-        eyebrow="DRONE + PACKAGE HANDOFF OVERVIEW"
         action={
           <NavLink className="text-button" to="/operator/fleet-hubs/drones">
             View all drones
           </NavLink>
         }
       >
-        <div className="hub-grid">
+        <div className="hub-grid hub-network-grid">
           {paginatedHubs.map((hub) => {
             const hubDrones = fleet.filter((drone) => drone.hubId === hub.id);
             const readyDrones = hubDrones.filter(
@@ -70,6 +69,7 @@ export function HubNetworkPage() {
                 awaitingPickup={hubPickupOrders.length}
                 contactRequired={contactRequired}
                 disposalRequired={disposalRequired}
+                showArea={false}
                 onSelect={() => openHubDrones(hub.id)}
               />
             );

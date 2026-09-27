@@ -13,10 +13,10 @@ const features = [
 export function ModelInsightsPage() {
   return (
     <AiPageShell active="/operator/ai/model-insights">
-      <div className="model-insights-intro">
+      {/* <div className="model-insights-intro">
         <strong>Model monitoring, not mission dispatch.</strong>
         <span>Use this area to review prediction quality and global behavior across historical flights.</span>
-      </div>
+      </div> */}
 
       <div className="metric-grid four">
         <MetricCard label="Energy MAE" value="1.94 Wh" delta="Holdout" note="Average absolute error" />

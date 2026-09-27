@@ -12,7 +12,7 @@ const navigation = [
     href: "#delivery",
   },
   {
-    label: "Aircraft",
+    label: "Drone",
     href: "#aircraft",
   },
   {
@@ -99,8 +99,8 @@ export function HomeHeader() {
               </Link>
 
               <Link
-  to="/register"
-  className="
+                to="/register"
+                className="
     inline-flex h-11 items-center justify-center
     rounded-md
     bg-orange-500
@@ -112,9 +112,9 @@ export function HomeHeader() {
     hover:bg-orange-400
     hover:shadow-[0_10px_28px_rgba(249,115,22,0.20)]
   "
->
-  Register
-</Link>
+              >
+                Register
+              </Link>
             </>
           ) : user?.role === "customer" ? (
             <>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
+// import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
@@ -41,7 +41,7 @@ export function MissionAnalysisPage() {
     .filter((mission) => mission.type === 'Delivery')
     .map((mission) => `${mission.id} · ${mission.orderId}`);
   const queryMission = missions.find((mission) => mission.orderId === queryOrderId && mission.droneId === queryDroneId && (!queryRouteId || mission.routeId === queryRouteId));
-  const [selectedMissionLabel, setSelectedMissionLabel] = useState(queryMission ? `${queryMission.id} · ${queryMission.orderId}` : missionOptions[0] ?? 'No mission');
+  const selectedMissionLabel = queryMission ? `${queryMission.id} · ${queryMission.orderId}` : missionOptions[0] ?? 'No mission';
   const [tab, setTab] = useState<AnalysisTab>('Prediction');
 
   const selectedMissionId = selectedMissionLabel.split(' · ')[0];
@@ -92,12 +92,16 @@ export function MissionAnalysisPage() {
           <ActionButton variant="secondary" onClick={() => navigate(`/operator/missions/${queryMission.id}`)}>Back to mission</ActionButton>
         </div>
       ) : (
-        <OperatorPanel title="Mission context" eyebrow="OPERATIONAL ANALYSIS">
-          <div className="ai-context-controls">
-            <label className="select-field"><span>Flight Mission</span><DropdownSelect value={selectedMissionLabel} options={missionOptions} onChange={(value) => { setSelectedMissionLabel(value); const id = value.split(' · ')[0]; const mission = missions.find((item) => item.id === id); if (mission) setAnalysisRouteId(mission.routeId); }} ariaLabel="Flight Mission" /></label>
-            <div><small>Purpose</small><strong>Inspect prediction, recommendation, explainability, and risk for a real Mission.</strong></div>
-          </div>
-        </OperatorPanel>
+        <>
+          {/* Mission context selector hidden by request.
+          <OperatorPanel title="Mission context" eyebrow="OPERATIONAL ANALYSIS" className="ai-mission-context-panel">
+            <div className="ai-context-controls">
+              <label className="select-field"><span>Flight Mission</span><DropdownSelect value={selectedMissionLabel} options={missionOptions} onChange={(value) => { setSelectedMissionLabel(value); const id = value.split(' · ')[0]; const mission = missions.find((item) => item.id === id); if (mission) setAnalysisRouteId(mission.routeId); }} ariaLabel="Flight Mission" className="w-full" /></label>
+              <div><small>Purpose</small><strong>Inspect prediction, recommendation, explainability, and risk for a real Mission.</strong></div>
+            </div>
+          </OperatorPanel>
+          */}
+        </>
       )}
 
       <div className="inner-tabs">
@@ -106,7 +110,7 @@ export function MissionAnalysisPage() {
 
       <div className="ai-route-switcher">
         {routeOptions.map((item) => (
-          <button type="button" key={item.id} className={analysisRouteId === item.id ? 'active' : ''} onClick={() => changeRoute(item.id)}>
+          <button type="button" key={item.id} className={`selectable-card ${analysisRouteId === item.id ? 'active' : ''}`} aria-pressed={analysisRouteId === item.id} onClick={() => changeRoute(item.id)}>
             <span>{item.id}</span><strong>{item.name}</strong>{item.recommended && <small>Recommended</small>}
           </button>
         ))}
@@ -114,7 +118,8 @@ export function MissionAnalysisPage() {
 
       {tab === 'Prediction' && (
         <div className="ai-grid">
-          <OperatorPanel title={`${route.id} ${route.name}`} eyebrow="PREDICTED OUTCOME">
+          {/* eyebrow="PREDICTED OUTCOME" hidden by request. */}
+          <OperatorPanel title={`${route.id} ${route.name}`}>
             {drone && timing ? (
               <EnergyPredictionSummary route={route} plannedStartAt={timing.plannedStartAt} estimatedArrivalAt={timing.estimatedArrivalAt} />
             ) : (
@@ -127,8 +132,10 @@ export function MissionAnalysisPage() {
               <span><small>Battery after</small><strong>{energy ? `${energy.remainingBattery}%` : '—'}</strong></span>
             </div>
           </OperatorPanel>
-          <OperatorPanel title="Prediction context" eyebrow={order?.id ?? 'MISSION'}>
+          {/* Order eyebrow hidden by request. */}
+          <OperatorPanel title="Prediction context">
             <dl className="key-values">
+              <div><dt>Mission</dt><dd>{queryMission?.id ?? selectedMission?.id ?? '—'}</dd></div>
               <div><dt>Order</dt><dd>{order?.id ?? '—'}</dd></div>
               <div><dt>Drone</dt><dd>{drone ? getDroneDisplayCode(drone) : '—'}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
@@ -136,7 +143,9 @@ export function MissionAnalysisPage() {
               <div><dt>Planned start</dt><dd>{timing ? formatMissionTime(timing.plannedStartAt) : selectedMission ? formatMissionTime(selectedMission.plannedStartAt) : '—'}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{timing ? formatMissionTime(timing.estimatedArrivalAt) : selectedMission ? formatMissionTime(selectedMission.estimatedArrivalAt) : '—'}</dd></div>
             </dl>
+            {/*
             <div className="confidence-note"><span>Prediction is advisory. Operator/System rules still control assignment and dispatch.</span></div>
+            */}
           </OperatorPanel>
         </div>
       )}
