@@ -50,7 +50,7 @@ export function AllOrdersPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={['All statuses', 'Pending', 'Ready for Pickup', 'Completed', 'Disposed', 'Cancelled']}
+            options={['All statuses', 'Pending', 'In Delivery', 'Delivered to Hub', 'Cancelled']}
             onChange={(value) => { setStatus(value); setPage(1); }}
             ariaLabel="Order status"
           />

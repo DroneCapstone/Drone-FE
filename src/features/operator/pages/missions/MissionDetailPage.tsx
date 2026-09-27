@@ -6,22 +6,20 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { operatorHubs } from '../../data/hubMockData';
-import type { MissionStatus, Tone } from '../../types/operator';
+import type { MissionStatus } from '../../types/operator';
 import { getBasicDroneEligibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { getMissionPreflight } from '../../utils/missionPreflight';
 import { formatMissionTime } from '../../utils/missionTiming';
 import { loadOperatorFleet } from '../../utils/operatorFleetStorage';
 import { loadOperatorMissions, reassignMissionDrone, updateMission } from '../../utils/operatorMissionStorage';
-import { getOperatorOrder, markOrderReadyForPickup } from '../../utils/operatorOrderStorage';
+import { getOperatorOrder, markOrderNeedsReplanning, updateOperatorOrderStatus } from '../../utils/operatorOrderStorage';
 import { MissionPageShell } from './MissionPageShell';
 
 const progressOrder: MissionStatus[] = ['Scheduled', 'In Progress', 'Completed'];
 
-function departureTone(state: 'Scheduled' | 'Ready for Departure' | 'Departure Hold'): Tone {
-  if (state === 'Ready for Departure') return 'success';
-  if (state === 'Departure Hold') return 'danger';
-  return 'info';
+function hubName(hubId: string) {
+  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
 }
 
 export function MissionDetailPage() {
@@ -38,11 +36,12 @@ export function MissionDetailPage() {
   const order = getOperatorOrder(mission.orderId);
   const originHub = operatorHubs.find((hub) => hub.id === mission.originHubId);
   const destinationHub = operatorHubs.find((hub) => hub.id === mission.destinationHubId);
+  const relayHubs = (mission.relayHubIds ?? []).map((hubId) => operatorHubs.find((hub) => hub.id === hubId)).filter(Boolean);
   const fleet = loadOperatorFleet();
   const assignedDrone = fleet.find((drone) => drone.id === mission.droneId);
   const otherMissions = loadOperatorMissions().filter((item) => item.id !== mission.id);
   const replacementCandidates = fleet.filter((drone) => drone.hubId === mission.originHubId && drone.id !== mission.droneId);
-  const preflight = getMissionPreflight(mission, order, assignedDrone, operatorHubs, otherMissions);
+  const preflight = getMissionPreflight(mission, order, assignedDrone, otherMissions);
 
   const applyMissionUpdate = (updates: Parameters<typeof updateMission>[1]) => {
     const updated = updateMission(mission.id, updates);
@@ -51,16 +50,18 @@ export function MissionDetailPage() {
 
   const handleStart = () => {
     if (!preflight.canStart) return;
-    applyMissionUpdate({ status: 'In Progress', actualStartedAt: new Date().toISOString() });
-  };
-
-  const handleComplete = () => {
-    const completedAt = new Date().toISOString();
-    if (order) markOrderReadyForPickup(order.id);
-    applyMissionUpdate({ status: 'Completed', actualCompletedAt: completedAt });
+    const startedAt = new Date().toISOString();
+    const legs = mission.legs?.map((leg, index) => ({
+      ...leg,
+      status: index === 0 ? 'In Progress' as const : 'Pending' as const,
+    }));
+    if (order) updateOperatorOrderStatus(order.id, 'In Delivery');
+    applyMissionUpdate({ status: 'In Progress', actualStartedAt: startedAt, legs });
   };
 
   const handleCancel = () => {
+    // Cancelling a Mission does not cancel the Order. The Pending Order moves into Needs Replanning.
+    if (order && order.status !== 'Cancelled') markOrderNeedsReplanning(order.id);
     applyMissionUpdate({ status: 'Cancelled' });
   };
 
@@ -78,6 +79,7 @@ export function MissionDetailPage() {
   };
 
   const handleFail = () => {
+    if (order && order.status !== 'Cancelled') markOrderNeedsReplanning(order.id);
     applyMissionUpdate({ status: 'Failed' });
   };
 
@@ -104,7 +106,6 @@ export function MissionDetailPage() {
                 )}
                 {mission.status === 'In Progress' && <ActionButton variant="secondary" onClick={() => setReplaceOpen((value) => !value)}>Replace drone</ActionButton>}
                 {mission.status === 'In Progress' && <ActionButton variant="danger" onClick={handleFail}>End as failed</ActionButton>}
-                {mission.status === 'In Progress' && <ActionButton icon="check" onClick={handleComplete}>Complete delivery</ActionButton>}
                 {mission.status === 'In Progress' && <ActionButton variant="secondary" onClick={() => navigate('/operator/operations/live')}>Track live</ActionButton>}
                 {mission.status !== 'Cancelled' && <ActionButton variant="secondary" onClick={() => navigate(`/operator/ai/mission-analysis?orderId=${mission.orderId}&droneId=${mission.droneId}&routeId=${mission.routeId}`)}>AI analysis</ActionButton>}
               </div>
@@ -133,19 +134,8 @@ export function MissionDetailPage() {
           </OperatorPanel>
 
           {mission.status === 'Scheduled' && (
-            // <OperatorPanel title="Pre-flight recheck" eyebrow="FINAL OPERATOR VALIDATION">
             <OperatorPanel title="Final Validation">
-              {/* <div className="preflight-head">
-                <StatusBadge tone={departureTone(preflight.state)}>{preflight.state}</StatusBadge>
-                <span>
-                  {!preflight.withinStartWindow
-                    ? `Pre-flight window opens ${Math.max(0, preflight.minutesToStart - 15)} min before Start Mission becomes available.`
-                    : preflight.canStart
-                      ? 'All checks passed. Operator can start the Mission when operationally ready.'
-                      : 'One or more checks failed. Mission remains Scheduled and must not start.'}
-                </span>
-              </div> */}
-              <div className="preflight-grid">
+              <div className="preflight-grid preflight-grid-compact">
                 {preflight.checks.map((check) => (
                   <div className={check.passed ? 'pass' : 'hold'} key={check.label}>
                     <i><Icon name={check.passed ? 'check' : 'clock'} size={14} /></i>
@@ -153,7 +143,12 @@ export function MissionDetailPage() {
                   </div>
                 ))}
               </div>
-              {/* <p className="section-note">Mission status does not change automatically at plannedStartAt. Operator Start Mission is the final dispatch action; only then does the Mission become In Progress.</p> */}
+              {!preflight.withinStartWindow && (
+                <p className="section-note">Start Mission becomes available within 15 minutes of the planned start, after all four conditions pass.</p>
+              )}
+              {preflight.packageDeadlineExpired && (
+                <p className="section-note danger-note">The 3-hour package handoff window expired. This Mission is cancelled by the system and the Order returns for replanning.</p>
+              )}
             </OperatorPanel>
           )}
 
@@ -170,14 +165,39 @@ export function MissionDetailPage() {
             </OperatorPanel>
           )}
 
-          <OperatorPanel title="Route" eyebrow={mission.status === 'In Progress' ? 'LIVE POSITION' : 'MISSION PLAN'}>
-            <div className="detail-map mini-map">
-              <div className="map-grid" />
-              <div className="route-line route-detail" />
-              <span className="map-point origin">A</span>
-              <span className="map-point destination">B</span>
-              {mission.status === 'In Progress' && <span className="drone-pin detail-pin"><Icon name="drone" size={19} /><b>{mission.drone}</b></span>}
+          <OperatorPanel title="Mission route" eyebrow={mission.status === 'In Progress' ? 'LIVE DELIVERY PATH' : 'MISSION PLAN'}>
+            <div className="mission-route-flow">
+              <div className="mission-route-node">
+                <small>Origin Hub</small>
+                <strong>{originHub?.name ?? mission.originHubId}</strong>
+              </div>
+              {relayHubs.map((hub) => hub && (
+                <Fragment key={hub.id}>
+                  <span className="mission-route-arrow">→</span>
+                  <div className="mission-route-node relay">
+                    <small>Relay Hub</small>
+                    <strong>{hub.name}</strong>
+                    <span>Technical stop</span>
+                  </div>
+                </Fragment>
+              ))}
+              <span className="mission-route-arrow">→</span>
+              <div className="mission-route-node">
+                <small>Destination Hub</small>
+                <strong>{destinationHub?.name ?? mission.destinationHubId}</strong>
+              </div>
             </div>
+
+            {mission.legs && mission.legs.length > 1 && (
+              <div className="mission-leg-list">
+                {mission.legs.map((leg, index) => (
+                  <div key={leg.id}>
+                    <span><small>Leg {index + 1}</small><strong>{hubName(leg.fromHubId)} → {hubName(leg.toHubId)}</strong></span>
+                    <StatusBadge tone={leg.status === 'Completed' ? 'success' : leg.status === 'In Progress' ? 'warning' : 'neutral'}>{leg.status}</StatusBadge>
+                  </div>
+                ))}
+              </div>
+            )}
           </OperatorPanel>
         </div>
 
@@ -204,16 +224,16 @@ export function MissionDetailPage() {
               <div><dt>Drone</dt><dd>{mission.drone}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Origin Hub</dt><dd>{originHub?.name ?? mission.originHubId}</dd></div>
+              <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
+              <div><dt>Relay Hub</dt><dd>{relayHubs.length ? relayHubs.map((hub) => hub?.name).join(' → ') : 'Not required'}</dd></div>
               <div><dt>Destination Hub</dt><dd>{destinationHub?.name ?? mission.destinationHubId}</dd></div>
-              <div><dt>Route</dt><dd>{mission.route}</dd></div>
+              <div><dt>Route</dt><dd>{mission.routeId} · {mission.route.split(' · ')[0].replace(`${mission.routeId} `, '')}</dd></div>
               <div><dt>Planned start</dt><dd>{formatMissionTime(mission.plannedStartAt)}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>
               <div><dt>Predicted duration</dt><dd>{mission.predictedDurationMin} min</dd></div>
               <div><dt>Energy</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
               <div><dt>Battery use</dt><dd>{mission.batteryConsumptionPct}%</dd></div>
               <div><dt>Battery after</dt><dd>{mission.battery}%</dd></div>
-              <div><dt>AI confidence</dt><dd>{mission.confidencePct ? `${mission.confidencePct}%` : '—'}</dd></div>
-              <div><dt>Risk</dt><dd>{mission.risk ?? '—'}</dd></div>
             </dl>
           </OperatorPanel>
         </aside>

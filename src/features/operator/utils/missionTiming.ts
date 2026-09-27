@@ -1,6 +1,7 @@
 import type { Order, RouteOption } from '../types/operator';
 
 export const MISSION_PREPARATION_BUFFER_MINUTES = 5;
+export const MISSION_PACKAGE_RECEIVE_WINDOW_MINUTES = 180;
 
 export function calculateRouteTiming(order: Order, route: RouteOption, now = new Date()) {
   if (order.deliveryMode === 'Express') {
@@ -34,7 +35,19 @@ export function calculateRouteTiming(order: Order, route: RouteOption, now = new
   };
 }
 
+export function calculatePackageReceiveDeadline(createdAt: string | Date = new Date()) {
+  const created = new Date(createdAt);
+  return new Date(
+    created.getTime() + MISSION_PACKAGE_RECEIVE_WINDOW_MINUTES * 60_000,
+  );
+}
+
 export function formatMissionTime(value: string | Date) {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

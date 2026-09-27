@@ -1,3 +1,5 @@
+import { markOrderReceivedAtOriginHub } from "../../operator/utils/operatorOrderStorage";
+
 export type OutboundDeliveryStatus =
   | "Awaiting Drop-off"
   | "At Hub"
@@ -188,6 +190,10 @@ export function confirmPackageAtHub(orderId: string) {
   });
 
   if (updated) {
+    // Shared frontend prototype state: Technician receipt immediately becomes
+    // the Operator Final Validation package-at-origin condition.
+    markOrderReceivedAtOriginHub(updated.orderId);
+
     window.dispatchEvent(
       new CustomEvent("operator-order-updated", {
         detail: {
