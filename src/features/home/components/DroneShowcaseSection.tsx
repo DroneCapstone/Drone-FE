@@ -77,7 +77,7 @@ export function DroneShowcaseSection() {
         <div className="flex items-center border-t border-white/[0.07] px-6 py-20 lg:border-l lg:border-t-0 lg:px-14 xl:px-20">
           <div className="w-full max-w-[520px]">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#f47721]">
-              Aircraft
+              Drone
             </p>
 
             <h2 className="mt-7 text-4xl font-medium leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:text-[60px]">

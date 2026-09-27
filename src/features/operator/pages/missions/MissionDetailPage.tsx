@@ -93,7 +93,7 @@ export function MissionDetailPage() {
               <div>
                 <StatusBadge tone={mission.tone}>{mission.status}</StatusBadge>
                 <h2>{mission.name}</h2>
-                <p>{mission.id} · Hub-to-Hub Delivery · Order {mission.orderId}</p>
+                <p>{mission.id}</p>
               </div>
               <div className="mission-hero-actions">
                 {mission.status === 'Scheduled' && <ActionButton variant="secondary" onClick={handleCancel}>Cancel mission</ActionButton>}
@@ -133,8 +133,9 @@ export function MissionDetailPage() {
           </OperatorPanel>
 
           {mission.status === 'Scheduled' && (
-            <OperatorPanel title="Pre-flight recheck" eyebrow="FINAL OPERATOR VALIDATION">
-              <div className="preflight-head">
+            // <OperatorPanel title="Pre-flight recheck" eyebrow="FINAL OPERATOR VALIDATION">
+            <OperatorPanel title="Final Validation">
+              {/* <div className="preflight-head">
                 <StatusBadge tone={departureTone(preflight.state)}>{preflight.state}</StatusBadge>
                 <span>
                   {!preflight.withinStartWindow
@@ -143,7 +144,7 @@ export function MissionDetailPage() {
                       ? 'All checks passed. Operator can start the Mission when operationally ready.'
                       : 'One or more checks failed. Mission remains Scheduled and must not start.'}
                 </span>
-              </div>
+              </div> */}
               <div className="preflight-grid">
                 {preflight.checks.map((check) => (
                   <div className={check.passed ? 'pass' : 'hold'} key={check.label}>
@@ -152,7 +153,7 @@ export function MissionDetailPage() {
                   </div>
                 ))}
               </div>
-              <p className="section-note">Mission status does not change automatically at plannedStartAt. Operator Start Mission is the final dispatch action; only then does the Mission become In Progress.</p>
+              {/* <p className="section-note">Mission status does not change automatically at plannedStartAt. Operator Start Mission is the final dispatch action; only then does the Mission become In Progress.</p> */}
             </OperatorPanel>
           )}
 
@@ -200,7 +201,7 @@ export function MissionDetailPage() {
 
           <OperatorPanel title="Mission details">
             <dl className="key-values">
-              <div><dt>Aircraft</dt><dd>{mission.drone}</dd></div>
+              <div><dt>Drone</dt><dd>{mission.drone}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Origin Hub</dt><dd>{originHub?.name ?? mission.originHubId}</dd></div>
               <div><dt>Destination Hub</dt><dd>{destinationHub?.name ?? mission.destinationHubId}</dd></div>

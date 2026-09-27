@@ -9,7 +9,7 @@ import { OperatorPanel } from '../../components/OperatorPanel';
 import {
   healthPriority,
   healthTone,
-  liveAircraft,
+  liveDrone,
   type LiveDroneHealth,
 } from '../../data/liveOperationsMockData';
 
@@ -24,11 +24,11 @@ export function LiveTrackingPage() {
   const navigate = useNavigate();
 
   const [filter, setFilter] = useState<HealthFilter>('All');
-  const [selectedAircraftId, setSelectedAircraftId] = useState('AX-17');
+  const [selectedDroneId, setSelectedDroneId] = useState('AX-17');
 
-  const sortedAircraft = useMemo(
+  const sortedDrone = useMemo(
     () =>
-      [...liveAircraft].sort((a, b) => {
+      [...liveDrone].sort((a, b) => {
         const healthDiff = healthPriority[a.health] - healthPriority[b.health];
         if (healthDiff !== 0) return healthDiff;
         return a.id.localeCompare(b.id);
@@ -36,42 +36,42 @@ export function LiveTrackingPage() {
     [],
   );
 
-  const filteredAircraft = useMemo(
+  const filteredDrone = useMemo(
     () =>
       filter === 'All'
-        ? sortedAircraft
-        : sortedAircraft.filter((aircraft) => aircraft.health === filter),
-    [filter, sortedAircraft],
+        ? sortedDrone
+        : sortedDrone.filter((aircraft) => aircraft.health === filter),
+    [filter, sortedDrone],
   );
 
-  const selectedAircraft =
-    liveAircraft.find((aircraft) => aircraft.id === selectedAircraftId) ??
-    liveAircraft[0];
+  const selectedDrone =
+    liveDrone.find((aircraft) => aircraft.id === selectedDroneId) ??
+    liveDrone[0];
 
   const filterCount = (value: HealthFilter) =>
     value === 'All'
-      ? liveAircraft.length
-      : liveAircraft.filter((aircraft) => aircraft.health === value).length;
+      ? liveDrone.length
+      : liveDrone.filter((aircraft) => aircraft.health === value).length;
 
   const handleFilterChange = (nextFilter: HealthFilter) => {
     setFilter(nextFilter);
 
     if (nextFilter === 'All') return;
 
-    if (selectedAircraft.health !== nextFilter) {
-      const firstMatching = sortedAircraft.find(
+    if (selectedDrone.health !== nextFilter) {
+      const firstMatching = sortedDrone.find(
         (aircraft) => aircraft.health === nextFilter,
       );
 
-      if (firstMatching) setSelectedAircraftId(firstMatching.id);
+      if (firstMatching) setSelectedDroneId(firstMatching.id);
     }
   };
 
   const openIncident = () => {
-    if (!selectedAircraft.alertId) return;
+    if (!selectedDrone.alertId) return;
 
     navigate(
-      `/operator/operations/incidents?create=1&alertId=${selectedAircraft.alertId}`,
+      `/operator/operations/incidents?create=1&alertId=${selectedDrone.alertId}`,
     );
   };
 
@@ -83,7 +83,7 @@ export function LiveTrackingPage() {
             <div className="map-toolbar">
               <div>
                 <StatusBadge tone="success">
-                  {liveAircraft.length} ACTIVE
+                  {liveDrone.length} ACTIVE
                 </StatusBadge>
                 <span>Updated just now</span>
               </div>
@@ -116,18 +116,17 @@ export function LiveTrackingPage() {
               <div className="live-track live-track-4" />
               <div className="live-track live-track-5" />
 
-              {liveAircraft.map((aircraft) => {
+              {liveDrone.map((aircraft) => {
                 const healthClass = aircraft.health.toLowerCase();
-                const isSelected = aircraft.id === selectedAircraft.id;
+                const isSelected = aircraft.id === selectedDrone.id;
 
                 return (
                   <button
                     type="button"
-                    className={`live-aircraft-marker ${aircraft.mapPosition} health-${healthClass} ${
-                      isSelected ? 'selected' : ''
-                    }`}
+                    className={`live-aircraft-marker ${aircraft.mapPosition} health-${healthClass} ${isSelected ? 'selected' : ''
+                      }`}
                     key={aircraft.id}
-                    onClick={() => setSelectedAircraftId(aircraft.id)}
+                    onClick={() => setSelectedDroneId(aircraft.id)}
                     aria-label={`Select ${aircraft.id}`}
                   >
                     <Icon name="drone" size={17} />
@@ -157,20 +156,20 @@ export function LiveTrackingPage() {
             <div className="live-selection-head">
               <div className="live-selection-id">
                 <span
-                  className={`live-selection-icon health-${selectedAircraft.health.toLowerCase()}`}
+                  className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}
                 >
                   <Icon name="drone" size={19} />
                 </span>
 
                 <div>
                   <div className="live-selection-title">
-                    <strong>{selectedAircraft.id}</strong>
-                    <StatusBadge tone={healthTone[selectedAircraft.health]}>
-                      {selectedAircraft.health}
+                    <strong>{selectedDrone.id}</strong>
+                    <StatusBadge tone={healthTone[selectedDrone.health]}>
+                      {selectedDrone.health}
                     </StatusBadge>
                   </div>
                   <small>
-                    Delivery {selectedAircraft.orderId} · {selectedAircraft.route}
+                    Delivery {selectedDrone.orderId} · {selectedDrone.route}
                   </small>
                 </div>
               </div>
@@ -178,36 +177,36 @@ export function LiveTrackingPage() {
               <div className="live-selection-metrics">
                 <span>
                   <Icon name="battery" size={16} />
-                  <strong>{selectedAircraft.battery}%</strong>
+                  <strong>{selectedDrone.battery}%</strong>
                   <small>Battery</small>
                 </span>
                 <span>
                   <Icon name="radar" size={16} />
-                  <strong>{selectedAircraft.signal}%</strong>
+                  <strong>{selectedDrone.signal}%</strong>
                   <small>Signal</small>
                 </span>
                 <span>
                   <Icon name="pin" size={16} />
-                  <strong>{selectedAircraft.altitudeM} m</strong>
+                  <strong>{selectedDrone.altitudeM} m</strong>
                   <small>Altitude</small>
                 </span>
                 <span>
                   <Icon name="speed" size={16} />
-                  <strong>{selectedAircraft.speedKmh} km/h</strong>
+                  <strong>{selectedDrone.speedKmh} km/h</strong>
                   <small>Speed</small>
                 </span>
               </div>
             </div>
 
             <div
-              className={`live-ai-assessment health-${selectedAircraft.health.toLowerCase()}`}
+              className={`live-ai-assessment health-${selectedDrone.health.toLowerCase()}`}
             >
               <div>
                 <strong>AI assessment</strong>
-                <p>{selectedAircraft.aiAssessment}</p>
+                <p>{selectedDrone.aiAssessment}</p>
 
-                {selectedAircraft.incidentReason && (
-                  <small>{selectedAircraft.incidentReason}</small>
+                {selectedDrone.incidentReason && (
+                  <small>{selectedDrone.incidentReason}</small>
                 )}
               </div>
 
@@ -216,16 +215,16 @@ export function LiveTrackingPage() {
                   variant="secondary"
                   onClick={() =>
                     navigate(
-                      `/operator/operations/telemetry?aircraft=${selectedAircraft.id}`,
+                      `/operator/operations/telemetry?aircraft=${selectedDrone.id}`,
                     )
                   }
                 >
                   View telemetry
                 </ActionButton>
 
-                {selectedAircraft.incidentPolicy === 'recommended' ? (
+                {selectedDrone.incidentPolicy === 'recommended' ? (
                   <ActionButton onClick={openIncident}>Create incident</ActionButton>
-                ) : selectedAircraft.health === 'Normal' ? (
+                ) : selectedDrone.health === 'Normal' ? (
                   <span className="live-incident-state">No active anomaly</span>
                 ) : (
                   <span className="live-incident-state">Continue monitoring</span>
@@ -243,7 +242,7 @@ export function LiveTrackingPage() {
             </button>
           </div>
 
-          <div className="live-health-filters" role="group" aria-label="Aircraft health filter">
+          <div className="live-health-filters" role="group" aria-label="Drone health filter">
             {FILTERS.map((item) => (
               <button
                 type="button"
@@ -260,18 +259,17 @@ export function LiveTrackingPage() {
           </div>
 
           <div className="live-aircraft-list">
-            {filteredAircraft.map((aircraft) => {
-              const isSelected = selectedAircraft.id === aircraft.id;
+            {filteredDrone.map((aircraft) => {
+              const isSelected = selectedDrone.id === aircraft.id;
               const healthClass = aircraft.health.toLowerCase();
 
               return (
                 <button
                   type="button"
                   key={aircraft.id}
-                  className={`live-aircraft-card health-${healthClass} ${
-                    isSelected ? 'selected' : ''
-                  }`}
-                  onClick={() => setSelectedAircraftId(aircraft.id)}
+                  className={`live-aircraft-card health-${healthClass} ${isSelected ? 'selected' : ''
+                    }`}
+                  onClick={() => setSelectedDroneId(aircraft.id)}
                 >
                   <span className="live-aircraft-card-icon">
                     <Icon name="drone" size={18} />
@@ -320,7 +318,7 @@ export function LiveTrackingPage() {
 
           <div className="live-aircraft-footer">
             <span>
-              Showing {filteredAircraft.length} of {liveAircraft.length} aircraft
+              Showing {filteredDrone.length} of {liveDrone.length} aircraft
             </span>
           </div>
         </aside>

@@ -9,8 +9,8 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import {
   healthTone,
-  liveAircraft,
-  type LiveAircraft,
+  liveDrone,
+  type LiveDrone,
 } from '../../data/liveOperationsMockData';
 
 import { OperationPageShell } from './OperationPageShell';
@@ -62,17 +62,17 @@ const initialIncidentRows: IncidentRow[] = [
   },
 ];
 
-const incidentCandidates = liveAircraft.filter(
+const incidentCandidates = liveDrone.filter(
   (aircraft) => aircraft.incidentPolicy === 'recommended',
 );
 
-const candidateLabel = (aircraft: LiveAircraft) =>
+const candidateLabel = (aircraft: LiveDrone) =>
   `${aircraft.id} · ${aircraft.missionId}`;
 
-const buildIncidentTitle = (aircraft: LiveAircraft) =>
+const buildIncidentTitle = (aircraft: LiveDrone) =>
   aircraft.anomaly ?? 'Technical anomaly detected';
 
-const buildIncidentDescription = (aircraft: LiveAircraft) => {
+const buildIncidentDescription = (aircraft: LiveDrone) => {
   const detected = aircraft.detectedAt ? ` at ${aircraft.detectedAt}` : '';
   const duration = aircraft.anomalyDuration
     ? ` The condition has persisted for ${aircraft.anomalyDuration}.`
@@ -80,9 +80,8 @@ const buildIncidentDescription = (aircraft: LiveAircraft) => {
 
   return `During mission ${aircraft.missionId}, ${aircraft.id} reported ${(
     aircraft.anomaly ?? 'an abnormal telemetry condition'
-  ).toLowerCase()}${detected}.${duration} ${aircraft.aiAssessment} ${
-    aircraft.incidentReason ?? ''
-  }`.replace(/\s+/g, ' ').trim();
+  ).toLowerCase()}${detected}.${duration} ${aircraft.aiAssessment} ${aircraft.incidentReason ?? ''
+    }`.replace(/\s+/g, ' ').trim();
 };
 
 export function IncidentsPage() {
@@ -236,13 +235,12 @@ export function IncidentsPage() {
                   onClick={() => setMode('detail')}
                 >
                   <span
-                    className={`severity-mark ${
-                      row.severity === 'Critical'
+                    className={`severity-mark ${row.severity === 'Critical'
                         ? 's-1'
                         : row.severity === 'Minor'
                           ? 's-3'
                           : ''
-                    }`}
+                      }`}
                   />
 
                   <span>
@@ -268,7 +266,7 @@ export function IncidentsPage() {
           <OperatorPanel className="incident-source-panel">
             <div className="incident-source-grid">
               <div>
-                <small>Aircraft</small>
+                <small>Drone</small>
                 <strong>{selectedCandidate.id}</strong>
                 <span>{selectedCandidate.route}</span>
               </div>
@@ -428,7 +426,7 @@ export function IncidentsPage() {
                 <dd>MSN-3088</dd>
               </div>
               <div>
-                <dt>Aircraft</dt>
+                <dt>Drone</dt>
                 <dd>AX-12</dd>
               </div>
               <div>

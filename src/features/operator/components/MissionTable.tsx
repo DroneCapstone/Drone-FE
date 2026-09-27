@@ -13,7 +13,7 @@ export function MissionTable({ compact = false, items = allMissions }: { compact
         <thead><tr><th>Mission</th><th>Order</th><th>Drone</th><th>Route</th><th>Status</th><th>ETA</th><th>Energy</th><th /></tr></thead>
         <tbody>{rows.map((mission) => (
           <tr key={mission.id} onClick={() => navigate(`/operator/missions/${mission.id}`)}>
-            <td><strong>{mission.id}</strong><small>{mission.type} · {mission.name}</small></td>
+            <td><strong>{mission.id}</strong></td>
             <td><button type="button" className="inline-link" onClick={(event) => { event.stopPropagation(); navigate(`/operator/orders/${mission.orderId}`); }}>{mission.orderId}</button></td>
             <td><span className="drone-id">{mission.drone}</span></td>
             <td>{mission.route}</td>
