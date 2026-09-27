@@ -15,7 +15,13 @@ export function loadOperatorOrders(): Order[] {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return defaultOrders;
     const parsed = JSON.parse(stored) as Order[];
-    return Array.isArray(parsed) ? parsed : defaultOrders;
+    if (!Array.isArray(parsed)) return defaultOrders;
+
+    // Preserve the user's prototype state while making newly added seed Orders
+    // available to browsers that already have an older v5 snapshot.
+    const storedIds = new Set(parsed.map((order) => order.id));
+    const newSeedOrders = defaultOrders.filter((order) => !storedIds.has(order.id));
+    return [...parsed, ...newSeedOrders];
   } catch {
     return defaultOrders;
   }

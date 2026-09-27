@@ -60,4 +60,10 @@ export const operatorDrones: OperatorDrone[] = [
   { id: 'DR-057', name: 'MX', displayId: '57', model: 'DJI Matrice 300', hubId: 'HUB-HCM-08', technicalStatus: 'Available', maxPayloadKg: 6 },
   { id: 'DR-058', name: 'CX', displayId: '58', model: 'DJI Matrice 350', hubId: 'HUB-HCM-08', technicalStatus: 'Available', maxPayloadKg: 8 },
   { id: 'DR-059', name: 'AX', displayId: '59', model: 'DJI FlyCart 30', hubId: 'HUB-HCM-08', technicalStatus: 'Available', maxPayloadKg: 12 },
+  // Standby capacity for the mission-planning prototype. These drones are not
+  // referenced by any seeded mission, so HCM-01..03 always retain a selectable
+  // candidate even while the sample Scheduled/In Progress missions are active.
+  { id: 'DR-060', name: 'AX', displayId: '60', model: 'DJI FlyCart 30', hubId: 'HUB-HCM-01', technicalStatus: 'Available', maxPayloadKg: 12 },
+  { id: 'DR-061', name: 'AX', displayId: '61', model: 'DJI FlyCart 30', hubId: 'HUB-HCM-02', technicalStatus: 'Available', maxPayloadKg: 12 },
+  { id: 'DR-062', name: 'AX', displayId: '62', model: 'DJI FlyCart 30', hubId: 'HUB-HCM-03', technicalStatus: 'Available', maxPayloadKg: 12 },
 ];

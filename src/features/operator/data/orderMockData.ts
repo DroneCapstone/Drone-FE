@@ -249,6 +249,15 @@ export const defaultOrders: Order[] = [
     true,
   ),
 
+  // Prototype-ready Orders for the rest of the hub network. Each package is
+  // already received and its planning window is open, so every hub can be
+  // exercised from Ready for Planning -> Create Mission without extra setup.
+  pendingOrder('ORD-1119', 'HUB-HCM-04', 'HUB-HCM-06', 42, 3.4, 'Design sample kit', 'Hoang Vu', 'Standard parcel', 'Express', true),
+  pendingOrder('ORD-1120', 'HUB-HCM-05', 'HUB-HCM-07', 38, 4.2, 'Store supplies', 'Yen Nguyen', 'Standard parcel', 'Express', true),
+  pendingOrder('ORD-1121', 'HUB-HCM-06', 'HUB-HCM-08', 50, 2.9, 'Legal documents', 'Son Pham', 'Standard parcel', 'Scheduled', true),
+  pendingOrder('ORD-1122', 'HUB-HCM-07', 'HUB-HCM-04', 45, 5.1, 'Replacement components', 'Thao Le', 'Standard parcel', 'Scheduled', true),
+  pendingOrder('ORD-1123', 'HUB-HCM-08', 'HUB-HCM-05', 32, 3.8, 'Medical test kit', 'Quynh Tran', 'Standard parcel', 'Express', true),
+
   // Closed examples for filters and audit-like detail pages.
   {
     ...pendingOrder('ORD-1111', 'HUB-HCM-03', 'HUB-HCM-01', -360, 3.5, 'Consumer parcel', 'Vy Tran'),
