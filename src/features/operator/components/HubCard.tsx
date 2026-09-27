@@ -9,6 +9,7 @@ interface HubCardProps {
   awaitingPickup?: number;
   contactRequired?: number;
   disposalRequired?: number;
+  showArea?: boolean;
   selected?: boolean;
   onSelect?: () => void;
 }
@@ -20,6 +21,7 @@ export function HubCard({
   awaitingPickup,
   contactRequired,
   disposalRequired,
+  showArea = true,
   selected = false,
   onSelect,
 }: HubCardProps) {
@@ -32,7 +34,7 @@ export function HubCard({
     <>
       <div className="hub-card-head">
         <div>
-          <span className="eyebrow">{hub.area}</span>
+          {showArea && <span className="eyebrow">{hub.area}</span>}
           <h3>{hub.name}</h3>
         </div>
 

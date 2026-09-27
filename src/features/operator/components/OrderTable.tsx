@@ -27,11 +27,11 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
 
   return (
     <div className="table-wrap">
-      <table>
+      <table className="order-table">
         <thead>
           <tr>
             <th>Order</th>
-            <th>Origin Hub → Destination Hub</th>
+            <th className="order-route-heading">Origin Hub → Destination Hub</th>
             <th>Package</th>
             <th>Estimated delivery</th>
             <th />
@@ -67,11 +67,10 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
               <tr key={order.id} onClick={() => navigate(`/operator/orders/${order.id}`)}>
                 <td>
                   <strong>{order.id}</strong>
-                  <small>{order.customerName} · {order.deliveryMode}</small>
+                  <small>{order.deliveryMode}</small>
                 </td>
-                <td>
-                  <strong>{hubName(order.originHubId)}</strong>
-                  <small>→ {hubName(order.destinationHubId)}</small>
+                <td className="order-route-cell">
+                  <strong>{hubName(order.originHubId)} → {hubName(order.destinationHubId)}</strong>
                 </td>
                 <td>{order.packageLabel}<small>{order.payloadKg} kg · {order.packageType}</small></td>
                 <td>

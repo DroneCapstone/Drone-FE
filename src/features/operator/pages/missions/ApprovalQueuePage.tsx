@@ -87,7 +87,7 @@
 //           </div>
 //           <div className="approval-facts">
 //             <span>
-//               <small>Aircraft</small>
+//               <small>Drone</small>
 //               <strong>CX-09</strong>
 //             </span>
 //             <span>
@@ -107,7 +107,7 @@
 //           <div className="checklist">
 //             <span>
 //               <Icon name="check" />
-//               Aircraft readiness verified
+//               Drone readiness verified
 //             </span>
 //             <span>
 //               <Icon name="check" />
@@ -296,7 +296,7 @@ export function ApprovalQueuePage() {
 
           <div className="approval-facts">
             <span>
-              <small>Aircraft</small>
+              <small>Drone</small>
               <strong>CX-09</strong>
             </span>
 
@@ -321,7 +321,7 @@ export function ApprovalQueuePage() {
           <div className="checklist">
             <span>
               <Icon name="check" />
-              Aircraft readiness verified
+              Drone readiness verified
             </span>
 
             <span>

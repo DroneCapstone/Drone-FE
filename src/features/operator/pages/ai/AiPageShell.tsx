@@ -12,12 +12,12 @@ export function AiPageShell({ active, children }: { active: string; children: Re
         action={<span className="model-chip"><Icon name="spark" />Energy Model <span className="model-health"><i />Ready</span></span>}
       />
       <RouteTabs items={aiTabs} active={active} />
-      <div className="model-audit-strip">
+      {/* <div className="model-audit-strip">
         <span><small>ROLE</small><strong>Decision support only</strong></span>
         <span><small>INPUT SOURCES</small><strong>Order · Drone · Route · Weather</strong></span>
         <span><small>PRIMARY OUTPUTS</small><strong>Energy · Duration · Timing · Risk</strong></span>
         <span><small>EXPLAINABILITY</small><strong>Local SHAP + operational rules</strong></span>
-      </div>
+      </div> */}
       {children}
     </>
   );

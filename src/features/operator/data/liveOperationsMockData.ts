@@ -1,7 +1,7 @@
 export type LiveDroneHealth = 'Normal' | 'Attention' | 'Critical';
 export type IncidentPolicy = 'none' | 'monitor' | 'recommended';
 
-export interface LiveAircraft {
+export interface LiveDrone {
   id: string;
   missionId: string;
   orderId: string;
@@ -21,7 +21,7 @@ export interface LiveAircraft {
   mapPosition: string;
 }
 
-export const liveAircraft: LiveAircraft[] = [
+export const liveDrone: LiveDrone[] = [
   {
     id: 'AX-09',
     missionId: 'MSN-3109',
@@ -57,7 +57,7 @@ export const liveAircraft: LiveAircraft[] = [
     speedKmh: 28,
     detectedAt: '14:29:42',
     aiAssessment:
-      'Aircraft has remained outside the expected corridor despite a recovery command. Continue operational recovery and log a technical incident if instability persists.',
+      'Drone has remained outside the expected corridor despite a recovery command. Continue operational recovery and log a technical incident if instability persists.',
     incidentPolicy: 'recommended',
     incidentReason: 'Persistent route deviation with control-response anomaly.',
     mapPosition: 'pos-2',
@@ -132,7 +132,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 92,
     altitudeM: 118,
     speedKmh: 35,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-6',
   },
@@ -146,7 +146,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 85,
     altitudeM: 114,
     speedKmh: 33,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-7',
   },
@@ -160,7 +160,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 87,
     altitudeM: 101,
     speedKmh: 31,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-8',
   },
@@ -174,7 +174,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 90,
     altitudeM: 108,
     speedKmh: 29,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-9',
   },
@@ -188,7 +188,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 89,
     altitudeM: 111,
     speedKmh: 34,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-10',
   },
@@ -202,7 +202,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 94,
     altitudeM: 126,
     speedKmh: 39,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-11',
   },
@@ -216,7 +216,7 @@ export const liveAircraft: LiveAircraft[] = [
     signal: 86,
     altitudeM: 107,
     speedKmh: 30,
-    aiAssessment: 'Aircraft is operating within expected telemetry and route bounds.',
+    aiAssessment: 'Drone is operating within expected telemetry and route bounds.',
     incidentPolicy: 'none',
     mapPosition: 'pos-12',
   },

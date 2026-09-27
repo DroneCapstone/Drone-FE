@@ -68,7 +68,7 @@ export function PredictionPage() {
               <dd>11 km/h</dd>
             </div>
             <div>
-              <dt>Aircraft health</dt>
+              <dt>Drone health</dt>
               <dd>
                 <StatusBadge tone="success">Optimal</StatusBadge>
               </dd>

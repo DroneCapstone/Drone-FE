@@ -68,7 +68,7 @@ export function HubShowcaseSection() {
 
               <HubFeature
                 number="02"
-                title="Aircraft operations"
+                title="Drone operations"
                 description="Drones launch and land through dedicated hub infrastructure."
               />
 

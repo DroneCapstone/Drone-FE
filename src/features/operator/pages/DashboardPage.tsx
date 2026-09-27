@@ -112,7 +112,7 @@ export function DashboardPage() {
         </OperatorPanel>
       </div>
 
-      <div className="dashboard-section-label"><span>TODAY’S OPERATING BASELINE</span><small>Order planning, Mission execution, and Hub pickup handoff</small></div>
+      {/* <div className="dashboard-section-label"><span>TODAY’S OPERATING BASELINE</span><small>Order planning, Mission execution, and Hub pickup handoff</small></div> */}
 
       <div className="metric-grid">
         <MetricCard label="Ready for planning" value={String(readyOrders.length).padStart(2, '0')} delta="Action" note={`${planningOverdue.length} planning overdue`} />

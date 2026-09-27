@@ -8,7 +8,7 @@ const links = [
     href: "#delivery",
   },
   {
-    label: "Aircraft",
+    label: "Drone",
     href: "#aircraft",
   },
   {
