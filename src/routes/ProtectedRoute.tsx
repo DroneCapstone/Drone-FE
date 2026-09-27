@@ -10,11 +10,21 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 
 import type { UserRole } from "../features/auth/types/auth";
 
+/* =========================================================
+   PROPS
+========================================================= */
+
 interface ProtectedRouteProps {
   children?: ReactNode;
+
   allowedRoles?: UserRole[];
+
   redirectTo?: string;
 }
+
+/* =========================================================
+   ROLE HOME
+========================================================= */
 
 function getRoleHome(role?: UserRole) {
   switch (role) {
@@ -35,6 +45,10 @@ function getRoleHome(role?: UserRole) {
   }
 }
 
+/* =========================================================
+   PROTECTED ROUTE
+========================================================= */
+
 export function ProtectedRoute({
   children,
   allowedRoles,
@@ -47,11 +61,17 @@ export function ProtectedRoute({
     isAuthenticated,
   } = useAuth();
 
-  /* =========================
+  /* =========================================================
      NOT LOGGED IN
-  ========================= */
 
-  if (!isAuthenticated) {
+     Ví dụ:
+     user nhập trực tiếp /customer/dashboard
+
+     -> chuyển sang /login
+     -> lưu route cũ trong state.from
+  ========================================================= */
+
+  if (!isAuthenticated || !user) {
     return (
       <Navigate
         to={redirectTo}
@@ -63,13 +83,17 @@ export function ProtectedRoute({
     );
   }
 
-  /* =========================
+  /* =========================================================
      WRONG ROLE
-  ========================= */
+
+     Ví dụ:
+     Customer cố vào /operator/dashboard
+
+     -> đưa về /customer/dashboard
+  ========================================================= */
 
   if (
     allowedRoles &&
-    user &&
     !allowedRoles.includes(user.role)
   ) {
     return (
@@ -79,6 +103,10 @@ export function ProtectedRoute({
       />
     );
   }
+
+  /* =========================================================
+     AUTHORIZED
+  ========================================================= */
 
   return children ?? <Outlet />;
 }

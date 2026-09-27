@@ -4,6 +4,7 @@ import { Navigate, useRoutes } from "react-router-dom";
 import { useAuth } from "../features/auth/hooks/useAuth";
 
 import { technicianRoutes } from "../features/technician/technicianRoutes";
+import { customerRoutes } from "../features/customer/customerRoutes";
 import { operatorRoutes } from "./operatorRoutes";
 
 import { ProtectedRoute } from "./ProtectedRoute";
@@ -29,6 +30,12 @@ const OperatorLayout = lazy(() =>
 const TechnicianLayout = lazy(() =>
   import("../layouts/TechnicianLayout").then((module) => ({
     default: module.TechnicianLayout,
+  })),
+);
+
+const CustomerLayout = lazy(() =>
+  import("../layouts/CustomerLayout").then((module) => ({
+    default: module.CustomerLayout,
   })),
 );
 
@@ -65,6 +72,8 @@ export function AppRoutes() {
   return useRoutes([
     /* =========================================================
        PUBLIC HOME PAGE
+
+       Tất cả user khi mở website đều có thể vào landing page.
     ========================================================= */
 
     {
@@ -78,6 +87,7 @@ export function AppRoutes() {
 
     {
       path: "/login",
+
       element: isAuthenticated ? (
         <Navigate
           to={getCurrentHome()}
@@ -94,6 +104,7 @@ export function AppRoutes() {
 
     {
       path: "/register",
+
       element: isAuthenticated ? (
         <Navigate
           to={getCurrentHome()}
@@ -105,23 +116,24 @@ export function AppRoutes() {
     },
 
     /* =========================================================
-   OPERATOR
-========================================================= */
+       OPERATOR
+    ========================================================= */
 
-{
-  element: (
-    <ProtectedRoute
-      allowedRoles={["operator"]}
-    />
-  ),
-  children: [
     {
-      path: "/operator",
-      element: <OperatorLayout />,
-      children: operatorRoutes,
+      element: (
+        <ProtectedRoute
+          allowedRoles={["operator"]}
+        />
+      ),
+
+      children: [
+        {
+          path: "/operator",
+          element: <OperatorLayout />,
+          children: operatorRoutes,
+        },
+      ],
     },
-  ],
-},
 
     /* =========================================================
        TECHNICIAN
@@ -145,10 +157,8 @@ export function AppRoutes() {
 
     /* =========================================================
        CUSTOMER
-       Thêm sau khi CustomerLayout + customerRoutes được tạo
     ========================================================= */
 
-    /*
     {
       element: (
         <ProtectedRoute
@@ -164,10 +174,11 @@ export function AppRoutes() {
         },
       ],
     },
-    */
 
     /* =========================================================
        FALLBACK
+
+       Route không tồn tại -> quay về Landing Page.
     ========================================================= */
 
     {
