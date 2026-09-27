@@ -6,9 +6,6 @@ interface HubCardProps {
   hub: Hub;
   totalDrones: number;
   readyDrones: number;
-  awaitingPickup?: number;
-  contactRequired?: number;
-  disposalRequired?: number;
   showArea?: boolean;
   selected?: boolean;
   onSelect?: () => void;
@@ -18,18 +15,10 @@ export function HubCard({
   hub,
   totalDrones,
   readyDrones,
-  awaitingPickup,
-  contactRequired,
-  disposalRequired,
   showArea = true,
   selected = false,
   onSelect,
 }: HubCardProps) {
-  const showPackageStats =
-    awaitingPickup !== undefined ||
-    contactRequired !== undefined ||
-    disposalRequired !== undefined;
-
   const content = (
     <>
       <div className="hub-card-head">
@@ -54,27 +43,9 @@ export function HubCard({
           <strong>{totalDrones}</strong>
         </span>
         <span>
-          <small>Ready now</small>
+          <small>Available now</small>
           <strong>{readyDrones}</strong>
         </span>
-        {showPackageStats && (
-          <span>
-            <small>Awaiting pickup</small>
-            <strong>{awaitingPickup ?? 0}</strong>
-          </span>
-        )}
-        {showPackageStats && (
-          <span>
-            <small>Contact required</small>
-            <strong>{contactRequired ?? 0}</strong>
-          </span>
-        )}
-        {showPackageStats && (
-          <span>
-            <small>Disposal required</small>
-            <strong>{disposalRequired ?? 0}</strong>
-          </span>
-        )}
       </div>
     </>
   );

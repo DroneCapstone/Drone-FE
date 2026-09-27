@@ -12,19 +12,49 @@ import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
 import { operatorHubs } from '../../data/hubMockData';
 import { routeOptions } from '../../data/routeMockData';
-import type { Mission, OperatorDrone } from '../../types/operator';
-import { formatDeliveryWindow, getOrderPlanningBadge, isActionablePlanningState } from '../../utils/deliveryPlanning';
+import type { Mission, MissionLeg, OperatorDrone } from '../../types/operator';
+import {
+  formatDeliveryWindow,
+  getDeliveryMission,
+  getOrderPlanningBadge,
+  isActionablePlanningState,
+} from '../../utils/deliveryPlanning';
 import { getBasicDroneEligibility, getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../utils/missionDraftStorage';
-import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
+import {
+  calculatePackageReceiveDeadline,
+  calculateRouteTiming,
+  formatMissionTime,
+} from '../../utils/missionTiming';
 import { loadOperatorFleet } from '../../utils/operatorFleetStorage';
 import { loadOperatorMissions, prependMission } from '../../utils/operatorMissionStorage';
-import { loadOperatorOrders } from '../../utils/operatorOrderStorage';
+import { clearOrderReplanning, loadOperatorOrders } from '../../utils/operatorOrderStorage';
 
 import { MissionPageShell } from './MissionPageShell';
 
-const STEPS = ['Order info', 'Origin Hub & drone', 'Route & Energy Planning', 'Review & assign'] as const;
+const STEPS = ['Order info', 'Hub route & drone', 'Route & Energy Planning', 'Review & assign'] as const;
+
+function hubName(hubId: string) {
+  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+}
+
+function getRouteRelayHubIds(routeId: string, originHubId: string, destinationHubId: string) {
+  const route = routeOptions.find((item) => item.id === routeId);
+  return (route?.relayHubIds ?? []).filter(
+    (hubId) => hubId !== originHubId && hubId !== destinationHubId,
+  );
+}
+
+function buildMissionLegs(originHubId: string, relayHubIds: string[], destinationHubId: string): MissionLeg[] {
+  const path = [originHubId, ...relayHubIds, destinationHubId];
+  return path.slice(0, -1).map((fromHubId, index) => ({
+    id: `LEG-${index + 1}`,
+    fromHubId,
+    toHubId: path[index + 1],
+    status: 'Pending',
+  }));
+}
 
 export function CreateMissionPage() {
   const navigate = useNavigate();
@@ -36,7 +66,7 @@ export function CreateMissionPage() {
   const fleet = useMemo(() => loadOperatorFleet(), []);
   const order = orders.find((item) => item.id === orderId);
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
-  const existingMission = order ? missions.find((mission) => mission.orderId === order.id) : undefined;
+  const existingMission = order ? getDeliveryMission(order.id, missions) : undefined;
 
   const [step, setStep] = useState(restoredDraft?.step ?? 1);
   const [toast, setToast] = useState('');
@@ -76,10 +106,13 @@ export function CreateMissionPage() {
   const selectedDrone = fleet.find((drone) => drone.id === selectedDroneId);
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
   const dronesAtOriginHub = fleet.filter((drone) => drone.hubId === order.originHubId);
-  const readyAtOrigin = dronesAtOriginHub.filter(
+  const eligibleDronesAtOrigin = dronesAtOriginHub.filter(
     (drone) => getBasicDroneEligibility(drone, order.originHubId, order.payloadKg, missions).eligible,
-  ).length;
+  );
   const selectedTiming = selectedRoute ? calculateRouteTiming(order, selectedRoute) : undefined;
+  const selectedRelayHubIds = selectedRoute
+    ? getRouteRelayHubIds(selectedRoute.id, order.originHubId, order.destinationHubId)
+    : [];
 
   const canContinueStep1 = isActionablePlanningState(planningState);
   const canContinueStep2 = Boolean(originHub && destinationHub && selectedDrone);
@@ -112,17 +145,15 @@ export function CreateMissionPage() {
   const handleAssignMission = () => {
     if (!originHub || !destinationHub || !selectedDrone || !selectedRoute || !selectedTiming) return;
 
-    if (!order.originHubReceivedAt) {
-      showToast('Package handoff at the Origin Hub has not been confirmed yet');
-      return;
-    }
-
     const energy = getEnergyFeasibility(selectedRoute);
     if (!energy.feasible) {
       showToast('Selected route does not keep the minimum battery reserve');
       return;
     }
 
+    const createdAt = new Date();
+    const relayHubIds = getRouteRelayHubIds(selectedRoute.id, originHub.id, destinationHub.id);
+    const routePath = [originHub.name, ...relayHubIds.map(hubName), destinationHub.name].join(' → ');
     const missionId = `MSN-${String(Date.now()).slice(-6)}`;
     const mission: Mission = {
       id: missionId,
@@ -133,22 +164,26 @@ export function CreateMissionPage() {
       drone: getDroneDisplayCode(selectedDrone),
       originHubId: originHub.id,
       destinationHubId: destinationHub.id,
+      relayHubIds,
+      legs: buildMissionLegs(originHub.id, relayHubIds, destinationHub.id),
       routeId: selectedRoute.id,
-      route: `${selectedRoute.id} ${selectedRoute.name}`,
+      route: `${selectedRoute.id} ${selectedRoute.name} · ${routePath}`,
       status: 'Scheduled',
       tone: 'info',
       eta: selectedTiming.estimatedArrivalAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       battery: energy.remainingBattery,
       plannedStartAt: selectedTiming.plannedStartAt.toISOString(),
+      packageReceiveDeadlineAt: calculatePackageReceiveDeadline(createdAt).toISOString(),
       estimatedArrivalAt: selectedTiming.estimatedArrivalAt.toISOString(),
       predictedDurationMin: selectedRoute.predictedDurationMin,
       estimatedEnergyWh: selectedRoute.predictedEnergyWh,
       batteryConsumptionPct: selectedRoute.batteryConsumptionPct,
       confidencePct: selectedRoute.confidencePct,
       risk: selectedRoute.risk,
-      createdAt: new Date().toISOString(),
+      createdAt: createdAt.toISOString(),
     };
 
+    clearOrderReplanning(order.id);
     prependMission(mission);
     clearMissionDraft(order.id);
     showToast('Mission assigned successfully');
@@ -183,21 +218,27 @@ export function CreateMissionPage() {
               <label><span>Order</span><input value={order.id} readOnly /></label>
               <label><span>Customer</span><input value={order.customerName} readOnly /></label>
               <label><span>Delivery mode</span><input value={order.deliveryMode} readOnly /></label>
-              <label><span>Package handoff</span><input value={order.originHubReceivedAt ? 'Received at Origin Hub' : 'Awaiting customer drop-off'} readOnly /></label>
+              <label>
+                <span>Origin package</span>
+                <input
+                  value={order.originHubReceivedAt ? `Received at Hub · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}
+                  readOnly
+                />
+              </label>
               <label><span>Origin Hub</span><input value={originHub?.name ?? order.originHubId} readOnly /></label>
               <label><span>Destination Hub</span><input value={destinationHub?.name ?? order.destinationHubId} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
             <div className="mission-planning-note">
-              <StatusBadge tone={canContinueStep1 ? 'warning' : planningState === 'Awaiting Package' ? 'neutral' : 'info'}>
-                {planningState ?? 'Mission already planned'}
+              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
+                {planningState ?? 'Closed'}
               </StatusBadge>
               <span>
-                {planningState === 'Awaiting Package'
-                  ? 'Planning time has opened, but the package must be physically received at the Origin Hub first.'
-                  : canContinueStep1
-                    ? `${order.deliveryMode === 'Express' ? 'Express planning is active.' : 'Planning is open.'} No drone was reserved when the Order was placed.`
+                {planningState === 'Ready for Planning'
+                  ? `${order.deliveryMode === 'Express' ? 'Express planning is active.' : 'Planning is open.'} The Mission can be assigned before the package reaches the Origin Hub.`
+                  : planningState === 'Needs Replanning'
+                    ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
             </div>
@@ -206,30 +247,51 @@ export function CreateMissionPage() {
 
         {step === 2 && (
           <div className="mission-step-stack">
-            <OperatorPanel title="Origin Hub">
+            <OperatorPanel title="Delivery network">
+              <div className="delivery-network-strip">
+                <div className="delivery-network-node">
+                  <small>Origin Hub</small>
+                  <strong>{originHub?.name ?? order.originHubId}</strong>
+                  <span>Customer selected</span>
+                </div>
+                <div className="delivery-network-arrow">→</div>
+                <div className="delivery-network-node">
+                  <small>Destination Hub</small>
+                  <strong>{destinationHub?.name ?? order.destinationHubId}</strong>
+                  <span>Customer selected</span>
+                </div>
+              </div>
+              <p className="section-note">Origin and Destination Hubs are fixed by the customer. Route planning may add an intermediate Relay Hub when a long-distance flight requires a technical stop.</p>
+            </OperatorPanel>
+
+            <OperatorPanel title="Origin Hub & available drones">
               {originHub ? (
                 <div className="hub-grid hub-grid-select">
                   <HubCard
                     hub={originHub}
                     totalDrones={dronesAtOriginHub.length}
-                    readyDrones={readyAtOrigin}
+                    readyDrones={eligibleDronesAtOrigin.length}
                   />
                 </div>
               ) : (
                 <div className="operator-empty-state">Origin Hub is unavailable.</div>
               )}
-              <p className="section-note">The customer selected the Origin Hub when creating the Order. Operator does not change the handoff Hub during Mission planning.</p>
-            </OperatorPanel>
-
-            <OperatorPanel title="Choose drone">
-              <p className="section-note">Technical status comes from Technician. A technically Available drone is still blocked if it already has a Scheduled or In Progress Mission.</p>
+              <p className="section-note">Only drones currently available for assignment are shown below. Technical readiness is managed by Technician before a drone enters the Operator available pool.</p>
               <div className="eligible-drone-grid">
-                {dronesAtOriginHub.map((drone) => {
+                {eligibleDronesAtOrigin.map((drone) => {
                   const eligibility = getBasicDroneEligibility(drone, order.originHubId, order.payloadKg, missions);
-                  return <EligibleDroneCard key={drone.id} drone={drone} eligibility={eligibility} selected={drone.id === selectedDroneId} onSelect={() => handleDroneSelect(drone)} />;
+                  return (
+                    <EligibleDroneCard
+                      key={drone.id}
+                      drone={drone}
+                      eligibility={eligibility}
+                      selected={drone.id === selectedDroneId}
+                      onSelect={() => handleDroneSelect(drone)}
+                    />
+                  );
                 })}
               </div>
-              {dronesAtOriginHub.length === 0 && <div className="operator-empty-state">No drones are registered at this Origin Hub.</div>}
+              {eligibleDronesAtOrigin.length === 0 && <div className="operator-empty-state">No available drones can carry this package from the Origin Hub.</div>}
             </OperatorPanel>
           </div>
         )}
@@ -237,10 +299,6 @@ export function CreateMissionPage() {
         {step === 3 && selectedDrone && (
           <div className="mission-step-stack">
             <OperatorPanel title="Route, energy & timing">
-              {/* <div className="ai-inline-note">
-                <Icon name="spark" size={17} />
-                <span><strong>AI calculates route outcome and timing automatically.</strong> Express Orders are planned from now; Scheduled Orders target the customer delivery window.</span>
-              </div> */}
               <div className="route-option-list">
                 {routeOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
@@ -264,6 +322,12 @@ export function CreateMissionPage() {
 
             {selectedRoute && selectedTiming && (
               <OperatorPanel title="Selected route summary" eyebrow="AI PREDICTED OUTCOME">
+                {selectedRelayHubIds.length > 0 && (
+                  <div className="relay-route-note">
+                    <strong>Relay Hub</strong>
+                    <span>{selectedRelayHubIds.map(hubName).join(' → ')} · technical stop handled by Technician.</span>
+                  </div>
+                )}
                 <EnergyPredictionSummary
                   route={selectedRoute}
                   plannedStartAt={selectedTiming.plannedStartAt}
@@ -276,7 +340,7 @@ export function CreateMissionPage() {
 
         {step === 3 && !selectedDrone && (
           <OperatorPanel title="Route, energy & timing">
-            <div className="operator-empty-state">Choose an eligible drone in Step 2 before AI compares route, energy, and timing.</div>
+            <div className="operator-empty-state">Choose an available drone in Step 2 before AI compares route, energy, and timing.</div>
           </OperatorPanel>
         )}
 
@@ -286,14 +350,19 @@ export function CreateMissionPage() {
               <dl className="review-values">
                 <div><dt>Order</dt><dd>{order.id}</dd></div><div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
                 <div><dt>Origin Hub</dt><dd>{originHub.name}</dd></div><div><dt>Destination Hub</dt><dd>{destinationHub.name}</dd></div>
-                <div><dt>Package handoff</dt><dd>{order.originHubReceivedAt ? 'Confirmed' : 'Not confirmed'}</dd></div><div><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></div>
-                <div><dt>Route</dt><dd>{selectedRoute.id} · {selectedRoute.name}</dd></div><div><dt>Predicted duration</dt><dd>{selectedRoute.predictedDurationMin} min</dd></div>
+                <div>
+                  <dt>Origin package</dt>
+                  <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
+                </div>
+                <div><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></div>
+                <div><dt>Route</dt><dd>{selectedRoute.id} · {selectedRoute.name}</dd></div>
+                <div><dt>Relay Hub</dt><dd>{selectedRelayHubIds.length ? selectedRelayHubIds.map(hubName).join(' → ') : 'Not required'}</dd></div>
                 <div><dt>Planned start</dt><dd>{formatMissionTime(selectedTiming.plannedStartAt)}</dd></div><div><dt>Estimated arrival</dt><dd>{formatMissionTime(selectedTiming.estimatedArrivalAt)}</dd></div>
               </dl>
               <div className="mission-review-side">
                 <div className="review-readiness">
-                  <StatusBadge tone="success">Hub-to-Hub handoff ready</StatusBadge>
-                  <small>Assign Mission creates a Scheduled Mission. The drone does not start automatically; a final pre-flight recheck is required near planned start.</small>
+                  <StatusBadge tone="info">Mission plan ready</StatusBadge>
+                  <small>Assign Mission creates a Scheduled Mission. Package receipt is checked later in Final Validation before the Mission can start.</small>
                 </div>
                 <EnergyPredictionSummary route={selectedRoute} plannedStartAt={selectedTiming.plannedStartAt} estimatedArrivalAt={selectedTiming.estimatedArrivalAt} />
               </div>

@@ -1,7 +1,9 @@
 import { missions as defaultMissions } from '../data/mockOperatorData';
-import type { Mission, MissionStatus, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, Tone } from '../types/operator';
+import { calculatePackageReceiveDeadline } from './missionTiming';
+import { loadOperatorOrders, markOrderNeedsReplanning } from './operatorOrderStorage';
 
-const STORAGE_KEY = 'droneoptai.operator.missions.v5';
+const STORAGE_KEY = 'droneoptai.operator.missions.v6';
 
 export function getMissionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
@@ -10,7 +12,28 @@ export function getMissionTone(status: MissionStatus): Tone {
   return 'info';
 }
 
-function normalizeMission(item: Partial<Mission> & Record<string, unknown>): Mission {
+function buildMissionLegs(
+  originHubId: string,
+  destinationHubId: string,
+  relayHubIds: string[],
+  status: MissionStatus,
+): MissionLeg[] {
+  const path = [originHubId, ...relayHubIds, destinationHubId].filter(Boolean);
+  return path.slice(0, -1).map((fromHubId, index) => ({
+    id: `LEG-${index + 1}`,
+    fromHubId,
+    toHubId: path[index + 1],
+    status:
+      status === 'Completed'
+        ? 'Completed'
+        : status === 'In Progress' && index === 0
+          ? 'In Progress'
+          : 'Pending',
+  }));
+}
+
+function normalizeMission(item: Partial<Mission>): Mission {
+  const legacy = item as Partial<Mission> & Record<string, unknown>;
   const rawStatus = String(item.status ?? 'Scheduled');
   let status: MissionStatus = 'Scheduled';
   let scheduleState: Mission['scheduleState'];
@@ -25,8 +48,17 @@ function normalizeMission(item: Partial<Mission> & Record<string, unknown>): Mis
   } else if (rawStatus === 'Review') status = 'Scheduled';
 
   const now = new Date().toISOString();
-  const legacyStart = String(item.plannedStartAt ?? item.scheduledDepartureAt ?? now);
+  const createdAt = String(item.createdAt ?? now);
+  const legacyStart = String(item.plannedStartAt ?? legacy.scheduledDepartureAt ?? now);
   const predictedDurationMin = Number(item.predictedDurationMin ?? 30);
+  const originHubId = String(item.originHubId ?? legacy.hubId ?? '');
+  const destinationHubId = String(item.destinationHubId ?? '');
+  const relayHubIds = Array.isArray(item.relayHubIds)
+    ? item.relayHubIds.map(String)
+    : [];
+  const legs = Array.isArray(item.legs) && item.legs.length > 0
+    ? item.legs as MissionLeg[]
+    : buildMissionLegs(originHubId, destinationHubId, relayHubIds, status);
 
   return {
     id: String(item.id ?? `MSN-${Date.now()}`),
@@ -35,8 +67,10 @@ function normalizeMission(item: Partial<Mission> & Record<string, unknown>): Mis
     name: String(item.name ?? 'Delivery mission'),
     droneId: String(item.droneId ?? ''),
     drone: String(item.drone ?? 'Unassigned'),
-    originHubId: String(item.originHubId ?? item.hubId ?? ''),
-    destinationHubId: String(item.destinationHubId ?? ''),
+    originHubId,
+    destinationHubId,
+    relayHubIds,
+    legs,
     routeId: String(item.routeId ?? ''),
     route: String(item.route ?? 'Pending route'),
     status,
@@ -44,6 +78,9 @@ function normalizeMission(item: Partial<Mission> & Record<string, unknown>): Mis
     eta: String(item.eta ?? 'Pending'),
     battery: Number(item.battery ?? 0),
     plannedStartAt: legacyStart,
+    packageReceiveDeadlineAt: String(
+      item.packageReceiveDeadlineAt ?? calculatePackageReceiveDeadline(createdAt).toISOString(),
+    ),
     actualStartedAt: item.actualStartedAt,
     actualCompletedAt: item.actualCompletedAt,
     estimatedArrivalAt: String(item.estimatedArrivalAt ?? now),
@@ -54,7 +91,7 @@ function normalizeMission(item: Partial<Mission> & Record<string, unknown>): Mis
     risk: item.risk,
     scheduleState: item.scheduleState ?? scheduleState,
     assignmentHistory: Array.isArray(item.assignmentHistory) ? item.assignmentHistory : [],
-    createdAt: String(item.createdAt ?? now),
+    createdAt,
   };
 }
 
@@ -62,16 +99,41 @@ function isActive(mission: Mission) {
   return mission.status === 'Scheduled' || mission.status === 'In Progress';
 }
 
+function cancelExpiredPackageWaits(items: Mission[]) {
+  const orders = loadOperatorOrders();
+  const now = Date.now();
+  let changed = false;
+
+  const next = items.map((mission) => {
+    if (mission.status !== 'Scheduled' || !mission.packageReceiveDeadlineAt) return mission;
+    const order = orders.find((item) => item.id === mission.orderId);
+    if (order?.originHubReceivedAt) return mission;
+    if (now < new Date(mission.packageReceiveDeadlineAt).getTime()) return mission;
+
+    changed = true;
+    if (order) markOrderNeedsReplanning(order.id);
+    return { ...mission, status: 'Cancelled' as const, tone: getMissionTone('Cancelled') };
+  });
+
+  if (changed && typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  }
+  return next;
+}
+
 export function loadOperatorMissions(): Mission[] {
-  if (typeof window === 'undefined') return defaultMissions;
+  if (typeof window === 'undefined') return defaultMissions.map((item) => normalizeMission(item));
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const parsed: Array<Partial<Mission> & Record<string, unknown>> = stored
-      ? JSON.parse(stored) as Array<Partial<Mission> & Record<string, unknown>>
-      : defaultMissions as unknown as Array<Partial<Mission> & Record<string, unknown>>;
-    return Array.isArray(parsed) ? parsed.map(normalizeMission) : defaultMissions;
+    const parsed: Array<Partial<Mission>> = stored
+      ? JSON.parse(stored) as Array<Partial<Mission>>
+      : defaultMissions as Array<Partial<Mission>>;
+    const normalized = Array.isArray(parsed)
+      ? parsed.map(normalizeMission)
+      : defaultMissions.map((item) => normalizeMission(item));
+    return cancelExpiredPackageWaits(normalized);
   } catch {
-    return defaultMissions;
+    return defaultMissions.map((item) => normalizeMission(item));
   }
 }
 
@@ -131,7 +193,9 @@ export function reassignMissionDrone(
 }
 
 export function getMissionForOrder(orderId: string) {
-  return loadOperatorMissions().find((mission) => mission.orderId === orderId);
+  return loadOperatorMissions().find(
+    (mission) => mission.orderId === orderId && mission.status !== 'Cancelled' && mission.status !== 'Failed',
+  );
 }
 
 export function getMissionsForOrder(orderId: string) {

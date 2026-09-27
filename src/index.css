@@ -9785,3 +9785,146 @@ button.alert-row:last-child {
     grid-template-columns: 1fr;
   }
 }
+
+/* Operator flow refinement: Order -> Mission -> Destination Hub */
+.delivery-network-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.delivery-network-node,
+.mission-route-node {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.delivery-network-node small,
+.mission-route-node small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted-foreground);
+}
+
+.delivery-network-node strong,
+.mission-route-node strong {
+  display: block;
+  color: var(--foreground);
+}
+
+.delivery-network-node span,
+.mission-route-node span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.delivery-network-arrow,
+.mission-route-arrow {
+  color: var(--muted-foreground);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.relay-route-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.relay-route-note span {
+  color: var(--muted-foreground);
+  text-align: right;
+}
+
+.mission-route-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.mission-route-node {
+  flex: 1 0 190px;
+}
+
+.mission-route-node.relay {
+  border-color: rgba(255, 122, 0, 0.45);
+}
+
+.mission-leg-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.mission-leg-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.mission-leg-list span small,
+.mission-leg-list span strong {
+  display: block;
+}
+
+.mission-leg-list span small {
+  margin-bottom: 3px;
+  color: var(--muted-foreground);
+}
+
+.preflight-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.package-received-text {
+  color: var(--success, #31c48d) !important;
+}
+
+.package-awaiting-text {
+  color: var(--muted-foreground) !important;
+}
+
+.danger-note {
+  color: #ef6b6b !important;
+}
+
+@media (max-width: 900px) {
+  .delivery-network-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-network-arrow {
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+
+  .preflight-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .relay-route-note {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .relay-route-note span {
+    text-align: left;
+  }
+}

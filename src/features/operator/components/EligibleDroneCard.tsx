@@ -25,15 +25,11 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
           <small>ID {drone.displayId} · {drone.model}</small>
         </div>
         <StatusBadge tone={eligibility.eligible ? 'success' : 'neutral'}>
-          {eligibility.eligible ? 'Candidate' : 'Unavailable'}
+          {eligibility.eligible ? 'Available' : 'Unavailable'}
         </StatusBadge>
       </div>
 
-      <div
-        className="eligible-drone-meta"
-        style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}
-      >
-        <span><small>Technical</small><strong>{drone.technicalStatus}</strong></span>
+      <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr' }}>
         <span><small>Max payload</small><strong>{drone.maxPayloadKg} kg</strong></span>
       </div>
 

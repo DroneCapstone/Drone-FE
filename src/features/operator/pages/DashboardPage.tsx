@@ -8,8 +8,7 @@ import { OperationalStateBar } from '../components/OperationalStateBar';
 import { OperatorPanel } from '../components/OperatorPanel';
 import { PageHeader } from '../components/PageHeader';
 import { PlanningQueue } from '../components/PlanningQueue';
-import { operatorHubs } from '../data/hubMockData';
-import { getOrderPlanningBadge, getPickupState, isActionablePlanningState } from '../utils/deliveryPlanning';
+import { getOrderPlanningBadge, isActionablePlanningState } from '../utils/deliveryPlanning';
 import { getMissionPreflight } from '../utils/missionPreflight';
 import { loadOperatorFleet } from '../utils/operatorFleetStorage';
 import { loadOperatorMissions } from '../utils/operatorMissionStorage';
@@ -23,10 +22,7 @@ export function DashboardPage() {
   const fleet = useMemo(() => loadOperatorFleet(), []);
 
   const readyOrders = orders.filter((order) => isActionablePlanningState(getOrderPlanningBadge(order, missions)));
-  const planningOverdue = orders.filter((order) => getOrderPlanningBadge(order, missions) === 'Planning Overdue');
-  const contactRequired = orders.filter((order) => getPickupState(order) === 'Contact Required');
-  const finalReminder = orders.filter((order) => getPickupState(order) === 'Final Reminder');
-  const disposalRequired = orders.filter((order) => getPickupState(order) === 'Disposal Required');
+  const needsReplanning = orders.filter((order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning');
   const activeMissions = missions.filter((mission) => mission.status === 'In Progress');
   const scheduledMissions = missions.filter((mission) => mission.status === 'Scheduled');
   const completedMissions = missions.filter((mission) => mission.status === 'Completed');
@@ -38,7 +34,6 @@ export function DashboardPage() {
       mission,
       orders.find((order) => order.id === mission.orderId),
       fleet.find((drone) => drone.id === mission.droneId),
-      operatorHubs,
       missions,
     ),
   }));
@@ -51,19 +46,13 @@ export function DashboardPage() {
     Month: { total: '128', delta: '+4.1% vs last month', labels: ['W1', 'W2', 'W3', 'W4', 'Today', 'Forecast'] },
   }[period];
 
-  const needsAttentionCount = planningOverdue.length + contactRequired.length + finalReminder.length + disposalRequired.length + (departureHold ? 1 : 0);
+  const needsAttentionCount = needsReplanning.length + (departureHold ? 1 : 0) + (readyDeparture ? 1 : 0) + 1;
 
   return (
     <>
       <PageHeader
         section="dashboard"
-        action={
-          <>
-            {/* REPORT FEATURE DISABLED — snapshot export kept for future re-enable. */}
-            {/* <ActionButton variant="secondary">Export snapshot</ActionButton> */}
-            <ActionButton onClick={() => navigate('/operator/orders/ready')}>View planning queue</ActionButton>
-          </>
-        }
+        action={<ActionButton onClick={() => navigate('/operator/orders/ready')}>View planning queue</ActionButton>}
       />
 
       <OperationalStateBar />
@@ -75,34 +64,19 @@ export function DashboardPage() {
 
         <OperatorPanel title="Needs attention" eyebrow="ACTION REQUIRED" action={<span className="counter">{needsAttentionCount} open</span>}>
           <div className="alert-list">
-            {planningOverdue[0] && (
-              <button className="alert-row danger" type="button" onClick={() => navigate(`/operator/orders/${planningOverdue[0].id}`)}>
-                <span className="alert-icon"><Icon name="clock" /></span><div><strong>Mission planning overdue</strong><small>{planningOverdue[0].id} · create a Flight Mission</small></div><Icon name="chevron" size={15} />
+            {needsReplanning[0] && (
+              <button className="alert-row danger" type="button" onClick={() => navigate(`/operator/orders/${needsReplanning[0].id}`)}>
+                <span className="alert-icon"><Icon name="clock" /></span><div><strong>Order needs replanning</strong><small>{needsReplanning[0].id} · previous Mission was cancelled</small></div><Icon name="chevron" size={15} />
               </button>
             )}
             {departureHold && (
               <button className="alert-row danger" type="button" onClick={() => navigate(`/operator/missions/${departureHold.mission.id}`)}>
-                <span className="alert-icon"><Icon name="wind" /></span><div><strong>Departure hold</strong><small>{departureHold.mission.id} · pre-flight check requires review</small></div><Icon name="chevron" size={15} />
+                <span className="alert-icon"><Icon name="wind" /></span><div><strong>Departure hold</strong><small>{departureHold.mission.id} · Final Validation is not ready</small></div><Icon name="chevron" size={15} />
               </button>
             )}
             {readyDeparture && (
               <button className="alert-row warning" type="button" onClick={() => navigate(`/operator/missions/${readyDeparture.mission.id}`)}>
-                <span className="alert-icon"><Icon name="mission" /></span><div><strong>Mission ready for departure</strong><small>{readyDeparture.mission.id} · Operator Start Mission required</small></div><Icon name="chevron" size={15} />
-              </button>
-            )}
-            {contactRequired[0] && (
-              <button className="alert-row warning" type="button" onClick={() => navigate(`/operator/orders/${contactRequired[0].id}`)}>
-                <span className="alert-icon"><Icon name="clock" /></span><div><strong>Customer contact required</strong><small>{contactRequired[0].id} · expected pickup time passed</small></div><Icon name="chevron" size={15} />
-              </button>
-            )}
-            {finalReminder[0] && (
-              <button className="alert-row warning" type="button" onClick={() => navigate(`/operator/orders/${finalReminder[0].id}`)}>
-                <span className="alert-icon"><Icon name="bell" /></span><div><strong>Final pickup reminder</strong><small>{finalReminder[0].id} · holding deadline is near</small></div><Icon name="chevron" size={15} />
-              </button>
-            )}
-            {disposalRequired[0] && (
-              <button className="alert-row danger" type="button" onClick={() => navigate(`/operator/orders/${disposalRequired[0].id}`)}>
-                <span className="alert-icon"><Icon name="clock" /></span><div><strong>Disposal required</strong><small>{disposalRequired[0].id} · awaiting physical confirmation at Destination Hub</small></div><Icon name="chevron" size={15} />
+                <span className="alert-icon"><Icon name="mission" /></span><div><strong>Mission ready for departure</strong><small>{readyDeparture.mission.id} · Final Validation passed</small></div><Icon name="chevron" size={15} />
               </button>
             )}
             <button className="alert-row warning" type="button" onClick={() => navigate('/operator/operations/incidents')}>
@@ -112,13 +86,11 @@ export function DashboardPage() {
         </OperatorPanel>
       </div>
 
-      {/* <div className="dashboard-section-label"><span>TODAY’S OPERATING BASELINE</span><small>Order planning, Mission execution, and Hub pickup handoff</small></div> */}
-
       <div className="metric-grid">
-        <MetricCard label="Ready for planning" value={String(readyOrders.length).padStart(2, '0')} delta="Action" note={`${planningOverdue.length} planning overdue`} />
-        <MetricCard label="Active missions" value={String(activeMissions.length).padStart(2, '0')} delta="Live" note={`${scheduledMissions.length} scheduled next`} />
-        <MetricCard label="Pickup exceptions" value={String(contactRequired.length + finalReminder.length + disposalRequired.length).padStart(2, '0')} delta="Follow up" note={`${disposalRequired.length} disposal required`} />
-        <MetricCard label="Completed missions" value={`${completedMissions.length}`} delta="Today" note="Hub-to-Hub delivery execution" />
+        <MetricCard label="Ready for planning" value={String(readyOrders.length).padStart(2, '0')} delta="Action" note={`${needsReplanning.length} need replanning`} />
+        <MetricCard label="Active missions" value={String(activeMissions.length).padStart(2, '0')} delta="Live" note="Currently in delivery" />
+        <MetricCard label="Scheduled missions" value={String(scheduledMissions.length).padStart(2, '0')} delta="Queued" note="Waiting for start / Final Validation" />
+        <MetricCard label="Completed missions" value={`${completedMissions.length}`} delta="Today" note="Delivered to Destination Hub" />
       </div>
 
       <div className="dashboard-grid">

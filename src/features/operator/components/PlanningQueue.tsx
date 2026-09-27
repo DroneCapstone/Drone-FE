@@ -20,7 +20,7 @@ export function PlanningQueue({ orders, missions, limit = 4 }: { orders: Order[]
         return (
           <div className="planning-queue-row" key={order.id}>
             <div><strong>{order.id}</strong><small>{order.deliveryMode} · {formatDeliveryWindow(order)} · {order.payloadKg} kg</small></div>
-            {state && <StatusBadge tone={state === 'Planning Overdue' ? 'danger' : 'warning'}>{state}</StatusBadge>}
+            {state && <StatusBadge tone="warning">{state}</StatusBadge>}
             <button type="button" className="row-action" onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>Create mission</button>
           </div>
         );

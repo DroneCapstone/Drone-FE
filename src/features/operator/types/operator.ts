@@ -9,53 +9,35 @@ export type MissionStatus =
   | 'Cancelled'
   | 'Failed';
 
+export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
+
 export type MissionType = 'Delivery';
 
 export type DeliveryMode = 'Express' | 'Scheduled';
 
+/**
+ * Operator-facing Order lifecycle.
+ * Operator scope ends when the package is received at the Destination Hub.
+ */
 export type OrderStatus =
   | 'Pending'
-  | 'Ready for Pickup'
-  | 'Completed'
-  | 'Disposed'
+  | 'In Delivery'
+  | 'Delivered to Hub'
   | 'Cancelled';
 
+/**
+ * Planning state is separate from Order status.
+ * It only answers whether Operator needs to create/re-create a Mission.
+ */
 export type PlanningState =
-  | 'Planning Overdue'
+  | 'Future'
   | 'Ready for Planning'
-  | 'Awaiting Package'
-  | 'Upcoming'
-  | 'Future';
-
-export type PickupState =
-  | 'Waiting'
-  | 'Contact Required'
-  | 'Final Reminder'
-  | 'Disposal Required';
-
-export type PackageDisposition = 'Delivered' | 'Disposed';
-
-export type CustomerContactChannel = 'Phone' | 'SMS';
-export type CustomerContactResult = 'Reached' | 'No Answer' | 'Will Pick Up' | 'Sent' | 'Failed';
-
-export interface CustomerContactEntry {
-  id: string;
-  channel: CustomerContactChannel;
-  result: CustomerContactResult;
-  contactedAt: string;
-  note?: string;
-}
+  | 'Planned'
+  | 'Needs Replanning';
 
 export interface DeliveryWindow {
   start: string;
   end: string;
-}
-
-export interface OrderCharges {
-  deliveryFee: number;
-  penaltyFee?: number;
-  refundAmount?: number;
-  currency: 'VND';
 }
 
 export interface Order {
@@ -74,16 +56,14 @@ export interface Order {
   currentEstimatedWindow: DeliveryWindow;
   planningAt: string;
   status: OrderStatus;
+
+  /** Technician event at the Origin Hub. Null/undefined means Awaiting package. */
   originHubReceivedAt?: string;
-  readyForPickupAt?: string;
-  expectedPickupAt?: string;
-  pickupDeadline?: string;
-  pickupState?: PickupState;
-  contactHistory?: CustomerContactEntry[];
-  packageDisposition?: PackageDisposition;
-  disposedAt?: string;
-  disposalConfirmedBy?: string;
-  charges?: OrderCharges;
+  /** Technician event at the Destination Hub. Completing this event closes Operator scope. */
+  destinationHubReceivedAt?: string;
+  /** Set when a Mission is cancelled/failed and a new customer delivery window is required. */
+  replanRequiredAt?: string;
+
   createdAt: string;
 }
 
@@ -92,6 +72,13 @@ export interface DroneAssignmentHistory {
   droneName: string;
   replacedAt: string;
   reason: string;
+}
+
+export interface MissionLeg {
+  id: string;
+  fromHubId: string;
+  toHubId: string;
+  status: MissionLegStatus;
 }
 
 export interface Mission {
@@ -103,6 +90,8 @@ export interface Mission {
   drone: string;
   originHubId: string;
   destinationHubId: string;
+  relayHubIds?: string[];
+  legs?: MissionLeg[];
   routeId: string;
   route: string;
   status: MissionStatus;
@@ -110,6 +99,8 @@ export interface Mission {
   eta: string;
   battery: number;
   plannedStartAt: string;
+  /** Customer has 3 hours after Mission assignment to hand the package to the Origin Hub. */
+  packageReceiveDeadlineAt?: string;
   actualStartedAt?: string;
   actualCompletedAt?: string;
   estimatedArrivalAt: string;
@@ -174,6 +165,9 @@ export interface RouteOption {
   confidencePct: number;
   risk: 'Low' | 'Medium' | 'High';
   weatherImpact: string;
+  /** Optional intermediate Hub(s) selected by route planning for long-distance Missions. */
+  relayHubIds?: string[];
+  relayStopMinutes?: number;
   recommended?: boolean;
   recommendationReasons: string[];
   tradeOff: string;
