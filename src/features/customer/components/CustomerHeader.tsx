@@ -1,0 +1,375 @@
+import { useState } from "react";
+
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  Menu,
+  X,
+} from "lucide-react";
+
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
+import { useAuth } from "../../auth/hooks/useAuth";
+
+import logo from "../../../assets/images/home/logo.png";
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+const navigation = [
+  {
+    label: "Dashboard",
+    to: "/customer/dashboard",
+  },
+  {
+    label: "Create delivery",
+    to: "/customer/deliveries/create",
+  },
+  {
+    label: "My deliveries",
+    to: "/customer/deliveries",
+  },
+];
+
+/* =========================================================
+   CUSTOMER HEADER
+========================================================= */
+
+export function CustomerHeader() {
+  const [mobileOpen, setMobileOpen] =
+    useState(false);
+
+  const { user, logout } = useAuth();
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
+  const handleLogout = () => {
+    logout();
+
+    navigate("/", {
+      replace: true,
+    });
+  };
+
+  /* =========================================================
+     AVATAR
+  ========================================================= */
+
+  const initial =
+    user?.name
+      ?.trim()
+      .charAt(0)
+      .toUpperCase() ?? "C";
+
+  /* =========================================================
+     ACTIVE NAV
+  ========================================================= */
+
+  const isNavActive = (to: string) => {
+    const path = location.pathname;
+
+    /* DASHBOARD */
+    if (to === "/customer/dashboard") {
+      return path === "/customer/dashboard";
+    }
+
+    /* CREATE DELIVERY */
+    if (
+      to === "/customer/deliveries/create"
+    ) {
+      return (
+        path ===
+          "/customer/deliveries/create" ||
+        path ===
+          "/customer/deliveries/review"
+      );
+    }
+
+    /* MY DELIVERIES */
+    if (
+      to === "/customer/deliveries"
+    ) {
+      const isDeliveryRoute =
+        path ===
+          "/customer/deliveries" ||
+        path.startsWith(
+          "/customer/deliveries/",
+        ) ||
+        path.startsWith(
+          "/customer/payment/",
+        );
+
+      const isCreateFlow =
+        path ===
+          "/customer/deliveries/create" ||
+        path ===
+          "/customer/deliveries/review";
+
+      return (
+        isDeliveryRoute &&
+        !isCreateFlow
+      );
+    }
+
+    return false;
+  };
+
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07] bg-[#060606]/95 backdrop-blur-xl">
+      <div className="mx-auto flex h-[72px] max-w-[1500px] items-center justify-between px-6 lg:px-10">
+        {/* =====================================================
+            BRAND
+        ====================================================== */}
+
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-3"
+        >
+          <img
+            src={logo}
+            alt="DroneOptAI"
+            className="h-9 w-auto object-contain"
+          />
+
+          <span className="bg-gradient-to-r from-orange-300 via-orange-400 to-orange-500 bg-clip-text text-[17px] font-semibold tracking-[-0.02em] text-transparent">
+            DroneOptAI
+          </span>
+        </Link>
+
+        {/* =====================================================
+            DESKTOP NAVIGATION
+        ====================================================== */}
+
+        <nav className="hidden h-full items-center gap-10 md:flex">
+          {navigation.map((item) => {
+            const active =
+              isNavActive(item.to);
+
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="group relative flex h-full items-center px-1"
+              >
+                {/* LABEL */}
+                <span
+                  className={`relative z-10 text-[13px] font-medium transition-colors duration-300 ${
+                    active
+                      ? "text-white"
+                      : "text-white/45 group-hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </span>
+
+                {/* =============================================
+                    UNDERLINE
+                    Scale từ giữa ra hai bên
+                ============================================== */}
+
+                <span
+                  className={`
+                    absolute
+    bottom-0
+    left-1/2
+    h-[2px]
+    w-full
+    -translate-x-1/2
+    origin-center
+    bg-gradient-to-r
+    from-orange-300
+    via-orange-600
+    to-orange-300
+    transition-transform
+    duration-300
+    ease-out
+                    ${
+                      active
+                        ? "scale-x-100"
+                        : "scale-x-0 group-hover:scale-x-100"
+                    }
+                  `}
+                />
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* =====================================================
+            USER ACTIONS
+        ====================================================== */}
+
+        <div className="hidden items-center gap-3 md:flex">
+          {/* NOTIFICATIONS */}
+          <Link
+            to="/customer/notifications"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.04] hover:text-white"
+            aria-label="Notifications"
+          >
+            <Bell size={18} />
+          </Link>
+
+          <div className="h-8 w-px bg-white/[0.08]" />
+
+          {/* USER */}
+          <Link
+            to="/customer/profile"
+            className="group flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.035]"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-[14px] font-semibold text-black">
+              {initial}
+            </div>
+
+            <div className="min-w-[95px]">
+              <p className="max-w-[145px] truncate text-[13px] font-medium text-white/85">
+                {user?.name ??
+                  "Customer"}
+              </p>
+
+              <p className="mt-0.5 text-[10px] text-white/30">
+                Customer
+              </p>
+            </div>
+
+            <ChevronDown
+              size={14}
+              className="text-white/25 transition group-hover:text-white/50"
+            />
+          </Link>
+
+          <div className="h-8 w-px bg-white/[0.08]" />
+
+          {/* LOGOUT */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-white/30 transition hover:bg-white/[0.04] hover:text-white"
+            aria-label="Sign out"
+          >
+            <LogOut size={17} />
+          </button>
+        </div>
+
+        {/* =====================================================
+            MOBILE BUTTON
+        ====================================================== */}
+
+        <button
+          type="button"
+          onClick={() =>
+            setMobileOpen(
+              (value) => !value,
+            )
+          }
+          className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] text-white/70 md:hidden"
+          aria-label="Toggle navigation"
+        >
+          {mobileOpen ? (
+            <X size={20} />
+          ) : (
+            <Menu size={20} />
+          )}
+        </button>
+      </div>
+
+      {/* =====================================================
+          MOBILE NAVIGATION
+      ====================================================== */}
+
+      {mobileOpen && (
+        <div className="border-t border-white/[0.07] bg-[#060606] px-6 py-5 md:hidden">
+          <nav className="flex flex-col">
+            {navigation.map((item) => {
+              const active =
+                isNavActive(item.to);
+
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() =>
+                    setMobileOpen(false)
+                  }
+                  className={`group relative border-b border-white/[0.06] px-1 py-4 text-[13px] font-medium transition-colors ${
+                    active
+                      ? "text-white"
+                      : "text-white/45 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+
+                  <span
+                    className={`
+                      absolute
+                      bottom-0
+                      left-1/2
+                      h-[2px]
+                      w-full
+                      -translate-x-1/2
+                      origin-center
+                      bg-gradient-to-r
+                      from-orange-600
+                      via-orange-300
+                      to-orange-600
+                      transition-transform
+                      duration-300
+                      ease-out
+                      ${
+                        active
+                          ? "scale-x-100"
+                          : "scale-x-0 group-hover:scale-x-100"
+                      }
+                    `}
+                  />
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* ===================================================
+              USER MOBILE
+          ==================================================== */}
+
+          <div className="mt-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-[13px] font-semibold text-black">
+                {initial}
+              </div>
+
+              <div>
+                <p className="text-[13px] font-medium text-white/80">
+                  {user?.name ??
+                    "Customer"}
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-white/30">
+                  Customer
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] text-white/40"
+              aria-label="Sign out"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
