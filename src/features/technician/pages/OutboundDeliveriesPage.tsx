@@ -1,4 +1,5 @@
 import {
+  BatteryFull,
   Check,
   History,
   PackageCheck,
@@ -13,8 +14,6 @@ import {
   useState,
 } from "react";
 
-import { useNavigate } from "react-router-dom";
-
 import { Button } from "@/components/shadcn/ui/button";
 import {
   Card,
@@ -22,7 +21,16 @@ import {
 } from "@/components/shadcn/ui/card";
 
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
-import { TECHNICIAN_HUB } from "../utils/fleetStorage";
+
+import {
+  loadFleet,
+  saveFleet,
+  TECHNICIAN_HUB,
+} from "../utils/fleetStorage";
+
+import {
+  installFullBatteryOnDrone,
+} from "../utils/batteryStorage";
 
 import {
   applyOperatorMissionAssignment,
@@ -30,14 +38,39 @@ import {
   dispatchOutboundDelivery,
   loadOutboundDeliveries,
   loadOutboundDeliveryHistory,
+  markOutboundReady,
   type OperatorAssignmentPayload,
   type OutboundDelivery,
   type OutboundDeliveryHistory,
 } from "../utils/outboundDeliveryStorage";
 
-export function OutboundDeliveriesPage() {
-  const navigate = useNavigate();
+function getMissionDisplayId(
+  missionId?: string,
+) {
+  if (!missionId) {
+    return "—";
+  }
 
+  if (missionId.startsWith("MSN-")) {
+    return missionId;
+  }
+
+  if (missionId.startsWith("MS-")) {
+    return missionId.replace(
+      /^MS-/,
+      "MSN-",
+    );
+  }
+
+  const suffix =
+    missionId.match(/(\d+)$/)?.[1];
+
+  return suffix
+    ? `MSN-${suffix}`
+    : `MSN-${missionId}`;
+}
+
+export function OutboundDeliveriesPage() {
   const [deliveries, setDeliveries] =
     useState<OutboundDelivery[]>(loadOutboundDeliveries);
 
@@ -47,6 +80,9 @@ export function OutboundDeliveriesPage() {
     );
 
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  const [actionMessage, setActionMessage] =
+    useState("");
 
   const refresh = () => {
     setDeliveries(loadOutboundDeliveries());
@@ -113,8 +149,110 @@ export function OutboundDeliveriesPage() {
     refresh();
   };
 
+  const handlePrepareBattery = (
+    delivery: OutboundDelivery,
+  ) => {
+    if (
+      delivery.status !== "Mission Assigned" ||
+      !delivery.missionId ||
+      !delivery.assignedDroneId
+    ) {
+      setActionMessage(
+        "This order does not have a valid Operator-assigned mission and drone.",
+      );
+      return;
+    }
+
+    const fleet = loadFleet();
+
+    const assignedDrone = fleet.find(
+      (drone) =>
+        drone.id === delivery.assignedDroneId &&
+        drone.location === TECHNICIAN_HUB &&
+        drone.status === "Available",
+    );
+
+    if (!assignedDrone) {
+      setActionMessage(
+        "The assigned drone is not Available at this hub.",
+      );
+      return;
+    }
+
+    /*
+     * Frontend mock:
+     * automatically takes one Ready 100% battery from Battery Management
+     * and installs it on the Operator-assigned drone.
+     *
+     * Production:
+     * backend should perform this allocation transaction and return
+     * the installed Battery ID.
+     */
+    const installedBattery =
+      installFullBatteryOnDrone({
+        droneId: assignedDrone.id,
+        hub: TECHNICIAN_HUB,
+        missionId: delivery.missionId,
+        orderId: delivery.orderId,
+      });
+
+    if (
+      !installedBattery ||
+      installedBattery.chargeLevelPct !== 100
+    ) {
+      setActionMessage(
+        "No fully charged battery is available in Battery Management.",
+      );
+      return;
+    }
+
+    saveFleet(
+      fleet.map((drone) =>
+        drone.id === assignedDrone.id
+          ? {
+              ...drone,
+              battery: 100,
+            }
+          : drone,
+      ),
+    );
+
+    const updatedDelivery =
+      markOutboundReady({
+        orderId: delivery.orderId,
+        batteryId: installedBattery.id,
+      });
+
+    if (!updatedDelivery) {
+      setActionMessage(
+        "Battery was installed, but the outbound mission could not be marked Ready.",
+      );
+      refresh();
+      return;
+    }
+
+    setActionMessage(
+      `${installedBattery.id} at 100% was installed on ${delivery.assignedDroneCode ?? assignedDrone.id}. The mission is Ready to dispatch.`,
+    );
+
+    refresh();
+  };
+
   const handleDispatch = (orderId: string) => {
-    dispatchOutboundDelivery(orderId);
+    const dispatched =
+      dispatchOutboundDelivery(orderId);
+
+    if (!dispatched) {
+      setActionMessage(
+        "This mission is not ready to dispatch yet.",
+      );
+      return;
+    }
+
+    setActionMessage(
+      "Mission dispatched. Operator was notified immediately.",
+    );
+
     refresh();
   };
 
@@ -123,6 +261,24 @@ export function OutboundDeliveriesPage() {
       title="Outbound deliveries"
       description={`Paid customer orders assigned to ${TECHNICIAN_HUB}. Destination indicates the hub where the recipient will collect the parcel.`}
     >
+      {actionMessage && (
+        <div className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-orange-500/25 bg-[var(--tech-surface)] px-4 py-3">
+          <p className="text-[13px] leading-5 text-[var(--tech-text-secondary)]">
+            {actionMessage}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              setActionMessage("")
+            }
+            className="shrink-0 text-[12px] font-medium text-[var(--tech-muted)] transition-colors hover:text-orange-500"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="flex justify-end border-b border-[var(--tech-border)] p-4">
           <button
@@ -168,22 +324,37 @@ export function OutboundDeliveriesPage() {
               </div>
 
               <span className="text-[13px] text-[var(--tech-text-secondary)]">
-                {delivery.missionId ?? "—"}
+                {getMissionDisplayId(
+                  delivery.missionId,
+                )}
               </span>
 
               <span className="text-[13px] text-[var(--tech-text-secondary)]">
                 {delivery.assignedDroneCode ?? "—"}
               </span>
 
-              <span
-                className={
-                  delivery.installedBatteryId
-                    ? "text-[13px] font-semibold text-orange-500"
-                    : "text-[13px] text-[var(--tech-muted)]"
-                }
-              >
-                {delivery.installedBatteryId ?? "—"}
-              </span>
+              {delivery.installedBatteryId ? (
+                <div className="flex items-center gap-2">
+                  <BatteryFull
+                    size={16}
+                    className="shrink-0 text-orange-500"
+                  />
+
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-orange-500">
+                      {delivery.installedBatteryId}
+                    </p>
+
+                    <p className="mt-0.5 text-[11px] text-[var(--tech-muted)]">
+                      100% · Ready
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <span className="text-[13px] text-[var(--tech-muted)]">
+                  —
+                </span>
+              )}
 
               <StatusText status={delivery.status} />
 
@@ -211,10 +382,13 @@ export function OutboundDeliveriesPage() {
                   <Button
                     type="button"
                     onClick={() =>
-                      navigate("/technician/fleet/batteries")
+                      handlePrepareBattery(
+                        delivery,
+                      )
                     }
                     className="h-9 rounded-md bg-orange-500 px-3 text-[12px] font-medium text-black hover:bg-orange-600"
                   >
+                    <BatteryFull size={14} />
                     Prepare battery
                   </Button>
                 )}
@@ -309,7 +483,9 @@ export function OutboundDeliveriesPage() {
                         </span>
 
                         <span className="text-[13px] text-[var(--tech-text-secondary)]">
-                          {item.missionId}
+                          {getMissionDisplayId(
+                            item.missionId,
+                          )}
                         </span>
 
                         <span className="text-[13px] text-[var(--tech-text-secondary)]">

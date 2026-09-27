@@ -15,7 +15,6 @@ import {
   History,
   PlaneTakeoff,
   Search,
-  Send,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -105,6 +104,35 @@ function getMissionDroneCode(
   );
 }
 
+function getMissionDisplayId(
+  missionId: string,
+) {
+  if (missionId.startsWith("MSN-")) {
+    return missionId;
+  }
+
+  if (missionId.startsWith("MS-")) {
+    return missionId.replace(
+      /^MS-/,
+      "MSN-",
+    );
+  }
+
+  if (missionId.startsWith("MISSION-")) {
+    return missionId.replace(
+      /^MISSION-/,
+      "MSN-",
+    );
+  }
+
+  const suffix =
+    missionId.match(/(\d+)$/)?.[1];
+
+  return suffix
+    ? `MSN-${suffix}`
+    : `MSN-${missionId}`;
+}
+
 function getPurposeLabel(
   purpose: TransitMissionPurpose,
 ) {
@@ -182,7 +210,19 @@ export function TransitMissionsPage() {
     setMissions,
   ] = useState<
     TransitMission[]
-  >(loadTransitMissions);
+  >(() =>
+    loadTransitMissions().map(
+      (mission) =>
+        mission.status ===
+        "Replacement Requested"
+          ? {
+              ...mission,
+              status:
+                "Cannot Continue" as const,
+            }
+          : mission,
+    ),
+  );
 
   const [
     fleet,
@@ -281,6 +321,33 @@ export function TransitMissionsPage() {
     );
   };
 
+  useEffect(() => {
+    const stored =
+      loadTransitMissions();
+
+    if (
+      stored.some(
+        (mission) =>
+          mission.status ===
+          "Replacement Requested",
+      )
+    ) {
+      saveTransitMissions(
+        stored.map(
+          (mission) =>
+            mission.status ===
+            "Replacement Requested"
+              ? {
+                  ...mission,
+                  status:
+                    "Cannot Continue" as const,
+                }
+              : mission,
+        ),
+      );
+    }
+  }, []);
+
   const visibleMissions =
     useMemo(() => {
       const query =
@@ -295,11 +362,19 @@ export function TransitMissionsPage() {
               mission,
             ).toLowerCase();
 
+          const displayMissionId =
+            getMissionDisplayId(
+              mission.missionId,
+            ).toLowerCase();
+
           const matchesSearch =
             !query ||
             mission.missionId
               .toLowerCase()
               .includes(query) ||
+            displayMissionId.includes(
+              query,
+            ) ||
             code.includes(query);
 
           const matchesStatus =
@@ -809,6 +884,9 @@ export function TransitMissionsPage() {
       return;
     }
 
+    const now =
+      formatTransitTime();
+
     const nextFleet =
       fleet.map(
         (drone) =>
@@ -833,6 +911,10 @@ export function TransitMissionsPage() {
                   "Cannot Continue" as const,
                 cannotContinueReason:
                   "Drone failed the technician hub readiness check and cannot safely continue this active mission.",
+                replacementRequestedAt:
+                  now,
+                replacementReason:
+                  "TECHNICAL_FAILURE",
               }
             : item,
       );
@@ -845,11 +927,6 @@ export function TransitMissionsPage() {
       nextMissions,
     );
 
-    /*
-     * Đây KHÔNG phải Incident do Operator phát hiện.
-     * Đây là lỗi Technician phát hiện tại Hub,
-     * nên system tạo HUB_INSPECTION alert.
-     */
     const maintenanceAlert =
       createMaintenanceAlert({
         drone:
@@ -869,40 +946,6 @@ export function TransitMissionsPage() {
         reason:
           "Drone failed the technician hub readiness check and requires maintenance before further flight.",
       });
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} moved to Maintenance. ${maintenanceAlert.id} was created. Send a replacement request to Operator.`,
-    );
-  };
-
-  const requestReplacement = (
-    mission: TransitMission,
-  ) => {
-    const now =
-      formatTransitTime();
-
-    const nextMissions =
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                status:
-                  "Replacement Requested" as const,
-                replacementRequestedAt:
-                  now,
-                replacementReason:
-                  "TECHNICAL_FAILURE",
-              }
-            : item,
-      );
-
-    persistMissions(
-      nextMissions,
-    );
 
     window.dispatchEvent(
       new CustomEvent(
@@ -927,7 +970,9 @@ export function TransitMissionsPage() {
     );
 
     pushActionMessage(
-      `Replacement request for ${mission.missionId} sent to Operator.`,
+      `${getMissionDroneCode(
+        mission,
+      )} moved to Maintenance. ${maintenanceAlert.id} was created and Operator was automatically notified to assign a replacement drone.`,
     );
   };
 
@@ -1145,9 +1190,10 @@ export function TransitMissionsPage() {
     setSelectedMissionId(null);
 
     /*
-     * Technician Continue:
-     * active row biến mất.
-     * Operator nhận event để biết chuyến bay đã tiếp tục.
+     * Manual Dispatch by Technician:
+     * - the Ready mission leaves the active Transit list immediately;
+     * - the drone continues the flight without waiting for Operator approval;
+     * - Operator is notified at the same time through MISSION_CONTINUED.
      */
     window.dispatchEvent(
       new CustomEvent(
@@ -1173,70 +1219,21 @@ export function TransitMissionsPage() {
             departedAt:
               now,
             message:
-              `${mission.missionId} continued from ${mission.hub}.`,
+              `${getMissionDisplayId(
+                mission.missionId,
+              )} dispatched from ${mission.hub} and continued toward ${mission.destination}.`,
           },
         },
       ),
     );
 
     pushActionMessage(
-      `${mission.missionId} continued from ${TECHNICIAN_HUB}. Operator has been notified.`,
+      `${getMissionDisplayId(
+        mission.missionId,
+      )} dispatched from ${TECHNICIAN_HUB}. Operator has been notified.`,
     );
   };
 
-  useEffect(() => {
-    const onDroneTakeoff = (
-      event: Event,
-    ) => {
-      const detail = (
-        event as CustomEvent<{
-          missionId: string;
-          droneId: string;
-        }>
-      ).detail;
-
-      if (!detail) {
-        return;
-      }
-
-      const readyMission =
-        missions.find(
-          (mission) =>
-            mission.missionId ===
-              detail.missionId &&
-            mission.currentDroneId ===
-              detail.droneId &&
-            mission.status ===
-              "Ready" &&
-            mission.purpose ===
-              "BATTERY_STOP",
-        );
-
-      if (!readyMission) {
-        return;
-      }
-
-      dispatchMission(
-        readyMission,
-      );
-    };
-
-    window.addEventListener(
-      "drone-takeoff-detected",
-      onDroneTakeoff,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "drone-takeoff-detected",
-        onDroneTakeoff,
-      );
-    };
-  }, [
-    missions,
-    fleet,
-    missionHistory,
-  ]);
 
   return (
     <TechnicianPageShell
@@ -1318,7 +1315,6 @@ export function TransitMissionsPage() {
               "At Hub",
               "Ready",
               "Cannot Continue",
-              "Replacement Requested",
             ]}
             ariaLabel="Transit mission status"
             className="min-w-[230px]"
@@ -1401,7 +1397,7 @@ export function TransitMissionsPage() {
                     {/* MISSION */}
                     <div>
                       <p className="text-[16px] font-semibold text-[var(--tech-text)]">
-                        {mission.missionId}
+                        {getMissionDisplayId(mission.missionId)}
                       </p>
                     </div>
 
@@ -1546,25 +1542,7 @@ export function TransitMissionsPage() {
                         )}
 
                       {mission.status ===
-                        "Cannot Continue" && (
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            requestReplacement(
-                              mission,
-                            )
-                          }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                        >
-                          <Send
-                            size={14}
-                          />
-                          Request replacement
-                        </Button>
-                      )}
-
-                      {mission.status ===
-                        "Replacement Requested" &&
+                        "Cannot Continue" &&
                         !mission.replacementDroneId && (
                           <span className="text-[13px] font-medium text-[var(--tech-muted)]">
                             Waiting for Operator
@@ -1572,7 +1550,7 @@ export function TransitMissionsPage() {
                         )}
 
                       {mission.status ===
-                        "Replacement Requested" &&
+                        "Cannot Continue" &&
                         mission.replacementDroneId && (
                           <Button
                             type="button"
@@ -1592,12 +1570,20 @@ export function TransitMissionsPage() {
 
                       {mission.status ===
                         "Ready" && (
-                        <span className="inline-flex h-9 shrink-0 items-center gap-2 px-2 text-[12px] font-medium text-orange-500">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            dispatchMission(
+                              mission,
+                            )
+                          }
+                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
+                        >
                           <PlaneTakeoff
                             size={14}
                           />
-                          Waiting for takeoff
-                        </span>
+                          Dispatch
+                        </Button>
                       )}
 
                       <button
@@ -1716,9 +1702,7 @@ export function TransitMissionsPage() {
                           className="grid grid-cols-[130px_145px_160px_100px_190px_1fr] items-center gap-4 px-6 py-4"
                         >
                           <span className="text-[14px] font-semibold text-[var(--tech-text)]">
-                            {
-                              item.missionId
-                            }
+                            {getMissionDisplayId(item.missionId)}
                           </span>
 
                           <div>
@@ -1780,7 +1764,7 @@ export function TransitMissionsPage() {
                     </p>
 
                     <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-                      Confirmed returns and continued missions will appear here.
+                      Confirmed returns and dispatched transit missions will appear here.
                     </p>
                   </div>
                 )}
@@ -1812,9 +1796,7 @@ export function TransitMissionsPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-3">
                   <h2 className="text-[21px] font-semibold text-[var(--tech-text)]">
-                    {
-                      selectedMission.missionId
-                    }
+                    {getMissionDisplayId(selectedMission.missionId)}
                   </h2>
 
                   <TransitStatus
@@ -1855,9 +1837,7 @@ export function TransitMissionsPage() {
                 <div className="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                   <DetailField
                     label="Mission"
-                    value={
-                      selectedMission.missionId
-                    }
+                    value={getMissionDisplayId(selectedMission.missionId)}
                   />
 
                   <DetailField
@@ -2050,17 +2030,13 @@ export function TransitMissionsPage() {
                       label="Can continue"
                       value={
                         selectedMission.status ===
-                          "Cannot Continue" ||
-                        selectedMission.status ===
-                          "Replacement Requested"
+                          "Cannot Continue"
                           ? "No"
                           : "Yes"
                       }
                       danger={
                         selectedMission.status ===
-                          "Cannot Continue" ||
-                        selectedMission.status ===
-                          "Replacement Requested"
+                          "Cannot Continue"
                       }
                     />
                   </div>
@@ -2128,7 +2104,7 @@ export function TransitMissionsPage() {
               {selectedMission.purpose ===
                 "BATTERY_STOP" &&
                 (selectedMission.status ===
-                  "Replacement Requested" ||
+                  "Cannot Continue" ||
                   selectedMission.replacementDroneId ||
                   selectedMission.replacementRequestedAt ||
                   selectedMission.replacementAssignedAt) && (
@@ -2139,7 +2115,7 @@ export function TransitMissionsPage() {
 
                     <div className="mt-4 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
                       {selectedMission.status ===
-                        "Replacement Requested" &&
+                        "Cannot Continue" &&
                         !selectedMission.replacementDroneId && (
                           <div className="flex items-start gap-3">
                             <Clock3
@@ -2153,7 +2129,7 @@ export function TransitMissionsPage() {
                               </p>
 
                               <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                                Technician requested a replacement. Operator selects the next drone.
+                                Operator was notified automatically when Technician marked Cannot Continue. Operator selects the next drone.
                               </p>
                             </div>
                           </div>
@@ -2378,9 +2354,7 @@ function TransitStatus({
     "Cannot Continue";
 
   const needsAttention =
-    status === "Incoming" ||
-    status ===
-      "Replacement Requested";
+    status === "Incoming";
 
   const style =
     isCritical
