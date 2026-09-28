@@ -4,9 +4,8 @@ import { ActionButton } from '../../../components/ui/ActionButton';
 import { Switch } from '../../../components/ui/Switch';
 import { OperatorPanel } from '../components/OperatorPanel';
 import { PageHeader } from '../components/PageHeader';
-import { operatorHubs } from '../data/hubMockData';
 import type { Tone } from '../types/operator';
-import { formatDeliveryWindow, getOrderPlanningBadge, getPickupState, isActionablePlanningState } from '../utils/deliveryPlanning';
+import { formatDeliveryWindow, getOrderPlanningBadge, isActionablePlanningState } from '../utils/deliveryPlanning';
 import { getMissionPreflight } from '../utils/missionPreflight';
 import { loadOperatorFleet } from '../utils/operatorFleetStorage';
 import { loadOperatorMissions } from '../utils/operatorMissionStorage';
@@ -19,9 +18,7 @@ export function NotificationsPage() {
   const fleet = useMemo(() => loadOperatorFleet(), []);
 
   const planningOrder = orders.find((order) => isActionablePlanningState(getOrderPlanningBadge(order, missions)));
-  const contactOrder = orders.find((order) => getPickupState(order) === 'Contact Required');
-  const finalReminderOrder = orders.find((order) => getPickupState(order) === 'Final Reminder');
-  const disposalOrder = orders.find((order) => getPickupState(order) === 'Disposal Required');
+  const replanOrder = orders.find((order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning');
   const departureItem = missions
     .filter((mission) => mission.status === 'Scheduled')
     .map((mission) => ({
@@ -30,7 +27,6 @@ export function NotificationsPage() {
         mission,
         orders.find((order) => order.id === mission.orderId),
         fleet.find((drone) => drone.id === mission.droneId),
-        operatorHubs,
         missions,
       ),
     }))
@@ -38,17 +34,15 @@ export function NotificationsPage() {
 
   const initial = useMemo(() => {
     const values: Array<{ title: string; body: string; time: string; tone: Tone; category: string; read: boolean; target?: string }> = [];
-    if (planningOrder) values.push({ title: `${planningOrder.id} is ready for Mission planning`, body: `Estimated delivery ${formatDeliveryWindow(planningOrder)}. Create the Mission now; no drone was held when the Order was placed.`, time: 'Now', tone: 'warning', category: 'Planning', read: false, target: `/operator/orders/${planningOrder.id}` });
-    if (departureItem) values.push({ title: `${departureItem.mission.id} · ${departureItem.evaluation.state}`, body: departureItem.evaluation.state === 'Ready for Departure' ? 'Pre-flight checks passed. Operator Start Mission is required before the drone begins execution.' : 'One or more pre-flight checks failed. Review before departure.', time: 'Now', tone: departureItem.evaluation.state === 'Departure Hold' ? 'danger' : 'warning', category: 'Departure', read: false, target: `/operator/missions/${departureItem.mission.id}` });
-    if (contactOrder) values.push({ title: `${contactOrder.id} customer contact required`, body: 'Expected pickup time passed. Contact the customer by Phone / SMS and record the result.', time: 'Now', tone: 'warning', category: 'Pickup', read: false, target: `/operator/orders/${contactOrder.id}` });
-    if (finalReminderOrder) values.push({ title: `${finalReminderOrder.id} final pickup reminder`, body: 'The Hub holding deadline is approaching. Send the final customer reminder.', time: 'Now', tone: 'warning', category: 'Pickup', read: false, target: `/operator/orders/${finalReminderOrder.id}` });
-    if (disposalOrder) values.push({ title: `${disposalOrder.id} disposal required`, body: 'The holding deadline expired. Package stays physically at the Hub until Hub staff / Technician confirms disposal.', time: 'Now', tone: 'danger', category: 'Pickup', read: false, target: `/operator/orders/${disposalOrder.id}` });
+    if (planningOrder) values.push({ title: `${planningOrder.id} is ready for Mission planning`, body: `Estimated delivery ${formatDeliveryWindow(planningOrder)}. Create the Mission now; package receipt will be checked later in Final Validation.`, time: 'Now', tone: 'warning', category: 'Planning', read: false, target: `/operator/orders/${planningOrder.id}` });
+    if (replanOrder) values.push({ title: `${replanOrder.id} needs replanning`, body: 'The previous Mission was cancelled before delivery. A new customer/system delivery window is required before another Mission is created.', time: 'Now', tone: 'danger', category: 'Planning', read: false, target: `/operator/orders/${replanOrder.id}` });
+    if (departureItem) values.push({ title: `${departureItem.mission.id} · ${departureItem.evaluation.state}`, body: departureItem.evaluation.state === 'Ready for Departure' ? 'Final Validation passed. Start Mission is available in the departure window.' : 'One or more Final Validation conditions are not ready. The Mission remains Scheduled.', time: 'Now', tone: departureItem.evaluation.state === 'Departure Hold' ? 'danger' : 'warning', category: 'Departure', read: false, target: `/operator/missions/${departureItem.mission.id}` });
     values.push(
       { title: 'Mission incident requires monitoring', body: 'MSN-3110 is continuing with a replacement drone after a serious alert was escalated to a Technical Incident.', time: '2 min ago', tone: 'warning', category: 'Operational', read: false, target: '/operator/missions/MSN-3110' },
       { title: 'Telemetry log validated', body: 'Flight log FLT-9179 passed all quality checks.', time: '1 hour ago', tone: 'success', category: 'System', read: true },
     );
     return values;
-  }, [contactOrder, departureItem, disposalOrder, finalReminderOrder, planningOrder]);
+  }, [departureItem, planningOrder, replanOrder]);
 
   const [items, setItems] = useState(initial);
   const [filter, setFilter] = useState('All');
@@ -60,7 +54,7 @@ export function NotificationsPage() {
       <div className="notification-layout">
         <OperatorPanel className="flush-panel">
           <div className="notification-filter">
-            {['All', 'Planning', 'Departure', 'Pickup', 'Operational', 'System'].map((item) => (
+            {['All', 'Planning', 'Departure', 'Operational', 'System'].map((item) => (
               <button type="button" className={filter === item ? 'active' : ''} onClick={() => setFilter(item)} key={item}>{item}{item === 'All' && <span>{items.length}</span>}</button>
             ))}
           </div>
@@ -87,9 +81,8 @@ export function NotificationsPage() {
 
         <OperatorPanel title="Notification settings">
           <div className="toggle-row"><span><strong>Critical alerts</strong><small>Airspace, energy, safety, and technical events</small></span><Switch aria-label="Critical alerts" defaultChecked /></div>
-          <div className="toggle-row"><span><strong>Planning updates</strong><small>Ready-for-planning and overdue Order reminders</small></span><Switch aria-label="Planning updates" defaultChecked /></div>
-          <div className="toggle-row"><span><strong>Departure checks</strong><small>Ready-for-departure and departure-hold reminders</small></span><Switch aria-label="Departure checks" defaultChecked /></div>
-          <div className="toggle-row"><span><strong>Pickup exceptions</strong><small>Customer contact, final reminder, and disposal-required alerts</small></span><Switch aria-label="Pickup exceptions" defaultChecked /></div>
+          <div className="toggle-row"><span><strong>Planning updates</strong><small>Ready-for-planning and replanning reminders</small></span><Switch aria-label="Planning updates" defaultChecked /></div>
+          <div className="toggle-row"><span><strong>Departure checks</strong><small>Final Validation readiness and departure-hold reminders</small></span><Switch aria-label="Departure checks" defaultChecked /></div>
         </OperatorPanel>
       </div>
     </>

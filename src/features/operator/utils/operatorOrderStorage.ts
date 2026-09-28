@@ -1,12 +1,7 @@
 import { defaultOrders } from '../data/orderMockData';
-import type {
-  CustomerContactChannel,
-  CustomerContactResult,
-  Order,
-} from '../types/operator';
-import { getPickupHoldMinutes } from './pickupPolicy';
+import type { Order, OrderStatus } from '../types/operator';
 
-const STORAGE_KEY = 'droneoptai.operator.orders.v5';
+const STORAGE_KEY = 'droneoptai.operator.orders.v6';
 
 export function loadOperatorOrders(): Order[] {
   if (typeof window === 'undefined') return defaultOrders;
@@ -15,13 +10,7 @@ export function loadOperatorOrders(): Order[] {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return defaultOrders;
     const parsed = JSON.parse(stored) as Order[];
-    if (!Array.isArray(parsed)) return defaultOrders;
-
-    // Preserve the user's prototype state while making newly added seed Orders
-    // available to browsers that already have an older v5 snapshot.
-    const storedIds = new Set(parsed.map((order) => order.id));
-    const newSeedOrders = defaultOrders.filter((order) => !storedIds.has(order.id));
-    return [...parsed, ...newSeedOrders];
+    return Array.isArray(parsed) ? parsed : defaultOrders;
   } catch {
     return defaultOrders;
   }
@@ -42,68 +31,36 @@ export function updateOperatorOrder(orderId: string, updates: Partial<Order>) {
   return next.find((order) => order.id === orderId);
 }
 
+export function updateOperatorOrderStatus(orderId: string, status: OrderStatus) {
+  return updateOperatorOrder(orderId, { status });
+}
+
+
+export function markOrderNeedsReplanning(orderId: string, at = new Date()) {
+  return updateOperatorOrder(orderId, {
+    status: 'Pending',
+    replanRequiredAt: at.toISOString(),
+  });
+}
+
+export function clearOrderReplanning(orderId: string) {
+  return updateOperatorOrder(orderId, { replanRequiredAt: undefined });
+}
+
+/** Technician confirms the physical package handoff at the Origin Hub. */
 export function markOrderReceivedAtOriginHub(orderId: string, receivedAt = new Date()) {
   return updateOperatorOrder(orderId, {
     originHubReceivedAt: receivedAt.toISOString(),
   });
 }
 
-export function markOrderReadyForPickup(orderId: string) {
-  const order = getOperatorOrder(orderId);
-  if (!order) return undefined;
-
-  const readyAt = new Date();
-  const plannedPickup = new Date(order.currentEstimatedWindow.end);
-  const expectedPickupAt = plannedPickup.getTime() > readyAt.getTime() ? plannedPickup : readyAt;
-  const holdMinutes = getPickupHoldMinutes(order.packageType);
-  const deadline = new Date(readyAt.getTime() + holdMinutes * 60_000);
-
+/**
+ * Technician confirms the package at the Destination Hub.
+ * For Operator this is the end of the delivery lifecycle.
+ */
+export function markOrderDeliveredToHub(orderId: string, receivedAt = new Date()) {
   return updateOperatorOrder(orderId, {
-    status: 'Ready for Pickup',
-    readyForPickupAt: readyAt.toISOString(),
-    expectedPickupAt: expectedPickupAt.toISOString(),
-    pickupDeadline: deadline.toISOString(),
-    pickupState: 'Waiting',
-    contactHistory: order.contactHistory ?? [],
-  });
-}
-
-export function addCustomerContact(
-  orderId: string,
-  channel: CustomerContactChannel,
-  result: CustomerContactResult,
-  note?: string,
-) {
-  const order = getOperatorOrder(orderId);
-  if (!order) return undefined;
-
-  const entry = {
-    id: `CONTACT-${Date.now()}`,
-    channel,
-    result,
-    note: note?.trim() || undefined,
-    contactedAt: new Date().toISOString(),
-  };
-
-  return updateOperatorOrder(orderId, {
-    contactHistory: [...(order.contactHistory ?? []), entry],
-  });
-}
-
-export function completeOrderPickup(orderId: string) {
-  return updateOperatorOrder(orderId, {
-    status: 'Completed',
-    packageDisposition: 'Delivered',
-    pickupState: undefined,
-  });
-}
-
-export function markOrderDisposed(orderId: string, confirmedBy = 'Hub staff') {
-  return updateOperatorOrder(orderId, {
-    status: 'Disposed',
-    packageDisposition: 'Disposed',
-    disposedAt: new Date().toISOString(),
-    disposalConfirmedBy: confirmedBy,
-    pickupState: undefined,
+    destinationHubReceivedAt: receivedAt.toISOString(),
+    status: 'Delivered to Hub',
   });
 }

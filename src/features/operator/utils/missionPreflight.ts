@@ -1,4 +1,4 @@
-import type { Hub, Mission, OperatorDrone, Order } from '../types/operator';
+import type { Mission, OperatorDrone, Order } from '../types/operator';
 
 export const PREFLIGHT_WINDOW_MINUTES = 15;
 export const MINIMUM_BATTERY_RESERVE_PCT = 20;
@@ -15,12 +15,9 @@ export function getMissionPreflight(
   mission: Mission,
   order: Order | undefined,
   drone: OperatorDrone | undefined,
-  hubs: Hub[],
   otherMissions: Mission[] = [],
   now = new Date(),
 ) {
-  const originHub = hubs.find((hub) => hub.id === mission.originHubId);
-  const destinationHub = hubs.find((hub) => hub.id === mission.destinationHubId);
   const conflictingMission = otherMissions.some(
     (item) =>
       item.id !== mission.id &&
@@ -28,51 +25,41 @@ export function getMissionPreflight(
       (item.status === 'Scheduled' || item.status === 'In Progress'),
   );
 
+  const droneReady = Boolean(
+    drone &&
+    drone.technicalStatus === 'Available' &&
+    drone.hubId === mission.originHubId &&
+    !conflictingMission,
+  );
+
   const checks: PreflightCheck[] = [
     {
       label: 'Package at origin hub',
       passed: Boolean(order?.originHubReceivedAt),
       detail: order?.originHubReceivedAt
-        ? 'Package handoff at the origin hub is confirmed.'
-        : 'Waiting for physical package handoff at the origin hub.',
+        ? `Received ${new Date(order.originHubReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+        : 'Waiting for Technician to confirm package receipt.',
     },
     {
-      label: 'Drone technical status',
-      passed: drone?.technicalStatus === 'Available',
-      detail: drone
-        ? `Technical status: ${drone.technicalStatus}.`
-        : 'Assigned drone is not available in the fleet record.',
+      label: 'Drone ready at origin hub',
+      passed: droneReady,
+      detail: droneReady
+        ? 'Assigned drone is ready for departure.'
+        : 'Assigned drone is not ready at the Origin Hub.',
     },
     {
-      label: 'Drone at origin hub',
-      passed: Boolean(drone && drone.hubId === mission.originHubId),
-      detail: drone?.hubId === mission.originHubId
-        ? 'Assigned drone is positioned at the origin hub.'
-        : 'Assigned drone is not positioned at the origin hub.',
-    },
-    {
-      label: 'Battery reserve',
-      passed: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT,
-      detail: `Predicted battery after mission: ${mission.battery}%.`,
-    },
-    {
-      label: 'Route / weather risk',
+      label: 'Route & weather',
       passed: mission.risk !== 'High',
-      detail: `Current mission risk: ${mission.risk ?? 'Not rated'}.`,
+      detail: mission.risk === 'High'
+        ? 'Current route or weather conditions are not safe for departure.'
+        : 'Current route remains safe for departure.',
     },
     {
-      label: 'Hub availability',
-      passed: originHub?.status === 'Active' && destinationHub?.status === 'Active',
-      detail: originHub?.status === 'Active' && destinationHub?.status === 'Active'
-        ? 'Origin and destination hubs are active.'
-        : 'One or more hubs are unavailable.',
-    },
-    {
-      label: 'No assignment conflict',
-      passed: !conflictingMission,
-      detail: conflictingMission
-        ? 'Assigned drone is linked to another active mission.'
-        : 'No conflicting active mission detected.',
+      label: 'Energy sufficient',
+      passed: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT,
+      detail: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT
+        ? `Predicted battery after the planned route: ${mission.battery}%.`
+        : `Predicted battery after the planned route is below the ${MINIMUM_BATTERY_RESERVE_PCT}% reserve.`,
     },
   ];
 
@@ -81,6 +68,11 @@ export function getMissionPreflight(
   const windowOpensMs = plannedStartMs - PREFLIGHT_WINDOW_MINUTES * 60_000;
   const withinStartWindow = now.getTime() >= windowOpensMs;
   const minutesToStart = Math.ceil((plannedStartMs - now.getTime()) / 60_000);
+  const packageDeadlineExpired = Boolean(
+    !order?.originHubReceivedAt &&
+    mission.packageReceiveDeadlineAt &&
+    now.getTime() >= new Date(mission.packageReceiveDeadlineAt).getTime(),
+  );
 
   let state: MissionDepartureState = 'Scheduled';
   if (withinStartWindow) state = allPassed ? 'Ready for Departure' : 'Departure Hold';
@@ -90,7 +82,8 @@ export function getMissionPreflight(
     checks,
     allPassed,
     withinStartWindow,
-    canStart: withinStartWindow && allPassed,
+    canStart: withinStartWindow && allPassed && !packageDeadlineExpired,
     minutesToStart,
+    packageDeadlineExpired,
   };
 }
