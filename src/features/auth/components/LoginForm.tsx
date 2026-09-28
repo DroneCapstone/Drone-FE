@@ -1,76 +1,124 @@
-import { useState, type FormEvent } from "react";
+import {
+  useState,
+  type FormEvent,
+} from "react";
 
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../hooks/useAuth";
-
 import { Input } from "../../../components/ui/Input";
-
+import { useAuth } from "../hooks/useAuth";
 import type { UserRole } from "../types/auth";
 
 interface LoginFormProps {
   onSwitchMode: () => void;
 }
 
-const ROLE_PATHS: Partial<Record<UserRole, string>> = {
+const ROLE_PATHS: Partial<
+  Record<UserRole, string>
+> = {
   customer: "/customer/dashboard",
   operator: "/operator/dashboard",
   technician: "/technician/dashboard",
+  admin: "/admin/dashboard",
 };
 
-export function LoginForm({ onSwitchMode }: LoginFormProps) {
+const viteEnv = (import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+}).env;
+
+const ENABLE_DEMO_ACCESS =
+  viteEnv?.VITE_ENABLE_DEMO_AUTH ===
+  "true";
+
+export function LoginForm({
+  onSwitchMode,
+}: LoginFormProps) {
   const navigate = useNavigate();
 
-  const { loginAsRole } = useAuth();
+  const {
+    login,
+    loginAsRole,
+    loginWithGoogle,
+  } = useAuth();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [email, setEmail] =
+    useState("");
 
-  // =========================================================
-  // NORMAL LOGIN
-  // Tạm thời không redirect
-  // =========================================================
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const [password, setPassword] =
+    useState("");
 
-    setError("");
+  const [showPassword, setShowPassword] =
+    useState(false);
 
-    // Sau này khi nối backend thì xử lý login tại đây.
-  };
+  const [error, setError] =
+    useState("");
 
-  // =========================================================
-  // MOCK ROLE LOGIN
-  // Chỉ các role đã có page mới được redirect
-  // =========================================================
-  const handleMockLogin = (role: UserRole) => {
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const redirectForRole = (
+    role: UserRole,
+  ) => {
     const path = ROLE_PATHS[role];
 
-    // Role chưa có route thì không làm gì
     if (!path) {
-      return;
+      throw new Error(
+        `No frontend route is configured for role ${role}.`,
+      );
     }
-
-    loginAsRole(role);
 
     navigate(path, {
       replace: true,
     });
   };
 
-  // =========================================================
-  // GOOGLE
-  // Tạm thời không redirect
-  // =========================================================
-  const handleGoogleLogin = () => {
-    // Sau này implement Google login tại đây.
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    setError("");
+    setSubmitting(true);
+
+    try {
+      const user = await login({
+        email,
+        password,
+      });
+
+      redirectForRole(user.role);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Unable to sign in.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleMockLogin = (
+    role: UserRole,
+  ) => {
+    try {
+      const user = loginAsRole(role);
+      redirectForRole(user.role);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Unable to open demo access.",
+      );
+    }
   };
 
   return (
     <div className="auth-form-slide">
       <div className="auth-form-content">
-        <span className="auth-eyebrow">SECURE ACCESS</span>
+        <span className="auth-eyebrow">
+          SECURE ACCESS
+        </span>
 
         <h1>Welcome back.</h1>
 
@@ -78,26 +126,20 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
           Sign in to continue to DroneOptAI.
         </p>
 
-        {/* =========================
-            GOOGLE
-        ========================== */}
-
         <button
           type="button"
           className="auth-google"
-          onClick={handleGoogleLogin}
+          onClick={loginWithGoogle}
         >
-          <span className="google-mark">G</span>
+          <span className="google-mark">
+            G
+          </span>
           Continue with Google
         </button>
 
         <div className="auth-divider">
           <span>or</span>
         </div>
-
-        {/* =========================
-            NORMAL LOGIN
-        ========================== */}
 
         <form
           className="auth-form"
@@ -112,7 +154,9 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
               type="email"
               value={email}
               onChange={(event) =>
-                setEmail(event.target.value)
+                setEmail(
+                  event.target.value,
+                )
               }
               placeholder="name@droneopt.ai"
               required
@@ -125,10 +169,16 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
             <span className="auth-password-wrap">
               <Input
                 autoComplete="current-password"
-                type={showPassword ? "text" : "password"}
+                type={
+                  showPassword
+                    ? "text"
+                    : "password"
+                }
                 value={password}
                 onChange={(event) =>
-                  setPassword(event.target.value)
+                  setPassword(
+                    event.target.value,
+                  )
                 }
                 placeholder="Enter password"
                 required
@@ -138,13 +188,30 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
                 type="button"
                 className="auth-password-toggle"
                 onClick={() =>
-                  setShowPassword((value) => !value)
+                  setShowPassword(
+                    (value) => !value,
+                  )
                 }
               >
-                {showPassword ? "Hide" : "Show"}
+                {showPassword
+                  ? "Hide"
+                  : "Show"}
               </button>
             </span>
           </label>
+
+          <p className="auth-switch-copy">
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  "/forgot-password",
+                )
+              }
+            >
+              Forgot password?
+            </button>
+          </p>
 
           {error && (
             <div
@@ -158,67 +225,68 @@ export function LoginForm({ onSwitchMode }: LoginFormProps) {
           <button
             className="auth-submit"
             type="submit"
+            disabled={submitting}
           >
-            <span>Sign in</span>
+            <span>
+              {submitting
+                ? "Signing in…"
+                : "Sign in"}
+            </span>
             <b>→</b>
           </button>
         </form>
 
-        {/* =========================
-            MOCK ROLE LOGIN
-        ========================== */}
+        {ENABLE_DEMO_ACCESS && (
+          <div className="auth-demo">
+            <span className="auth-demo-label">
+              DEMO ACCESS · UI ONLY
+            </span>
 
-        <div className="auth-demo">
-          <span className="auth-demo-label">
-            DEMO ACCESS
-          </span>
+            <div className="auth-role-grid">
+              <button
+                type="button"
+                onClick={() =>
+                  handleMockLogin(
+                    "customer",
+                  )
+                }
+              >
+                Customer
+              </button>
 
-          <div className="auth-role-grid">
-            {/* CUSTOMER */}
-            <button
-              type="button"
-              onClick={() =>
-                handleMockLogin("customer")
-              }
-            >
-              Customer
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleMockLogin(
+                    "operator",
+                  )
+                }
+              >
+                Operator
+              </button>
 
-            {/* OPERATOR */}
-            <button
-              type="button"
-              onClick={() =>
-                handleMockLogin("operator")
-              }
-            >
-              Operator
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleMockLogin("admin")
+                }
+              >
+                Admin
+              </button>
 
-            {/* ADMIN - chưa có */}
-            <button
-              type="button"
-              onClick={() =>
-                handleMockLogin("admin")
-              }
-            >
-              Admin
-            </button>
-
-            {/* TECHNICIAN */}
-            <button
-              type="button"
-              onClick={() =>
-                handleMockLogin("technician")
-              }
-            >
-              Technician
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleMockLogin(
+                    "technician",
+                  )
+                }
+              >
+                Technician
+              </button>
+            </div>
           </div>
-        </div>
-
-        {/* =========================
-            REGISTER
-        ========================== */}
+        )}
 
         <p className="auth-switch-copy">
           New to DroneOptAI?

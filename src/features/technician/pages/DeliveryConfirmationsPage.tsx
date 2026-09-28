@@ -1,6 +1,5 @@
 import {
   type ReactNode,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -26,11 +25,13 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  autoCancelExpiredDeliveries,
-  confirmOrderReceived,
-  loadDeliveryConfirmations,
   type DeliveryConfirmation,
 } from "../utils/deliveryConfirmationStorage";
+
+import {
+  useConfirmPickupMutation,
+  useDeliveryConfirmationsQuery,
+} from "../hooks/useDeliveryQueries";
 
 type DeliveryFilter =
   | "Pending confirmation"
@@ -85,14 +86,14 @@ function getRemainingPickupTime(
 }
 
 export function DeliveryConfirmationsPage() {
-  const [
-    deliveries,
-    setDeliveries,
-  ] = useState<
-    DeliveryConfirmation[]
-  >(
-    loadDeliveryConfirmations,
-  );
+  const confirmationsQuery =
+    useDeliveryConfirmationsQuery();
+
+  const confirmPickupMutation =
+    useConfirmPickupMutation();
+
+  const deliveries: DeliveryConfirmation[] =
+    confirmationsQuery.data ?? [];
 
   const [
     filter,
@@ -100,53 +101,6 @@ export function DeliveryConfirmationsPage() {
   ] = useState<DeliveryFilter>(
     "Pending confirmation",
   );
-
-  const refresh = () => {
-    setDeliveries(
-      loadDeliveryConfirmations(),
-    );
-  };
-
-  useEffect(() => {
-    /*
-     * Frontend mock checks periodically.
-     *
-     * Production:
-     * backend scheduler should cancel overdue orders even when
-     * no Technician browser is open.
-     */
-    autoCancelExpiredDeliveries();
-    refresh();
-
-    const intervalId =
-      window.setInterval(
-        () => {
-          autoCancelExpiredDeliveries();
-          refresh();
-        },
-        60_000,
-      );
-
-    const sync = () => {
-      refresh();
-    };
-
-    window.addEventListener(
-      "technician-delivery-confirmations-updated",
-      sync,
-    );
-
-    return () => {
-      window.clearInterval(
-        intervalId,
-      );
-
-      window.removeEventListener(
-        "technician-delivery-confirmations-updated",
-        sync,
-      );
-    };
-  }, []);
 
   const visible =
     useMemo(
@@ -175,21 +129,32 @@ export function DeliveryConfirmationsPage() {
       ],
     );
 
-  const handleConfirm = (
+  const handleConfirm = async (
     orderId: string,
   ) => {
-    confirmOrderReceived(
-      orderId,
-    );
-
-    refresh();
+    try {
+      await confirmPickupMutation.mutateAsync(
+        orderId,
+      );
+    } catch (error) {
+      console.error(
+        "Failed to confirm customer pickup",
+        error,
+      );
+    }
   };
 
   return (
     <TechnicianPageShell
       title="Delivery confirmations"
-      description="Technician manually confirms customer receipt. Unclaimed deliveries are automatically cancelled after 48 hours."
+      description="Technician manually confirms customer receipt. Pickup countdown is calculated from backend arrival time."
     >
+      {confirmationsQuery.error instanceof Error && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {confirmationsQuery.error.message}
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterButton
           active={

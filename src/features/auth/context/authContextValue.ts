@@ -1,15 +1,51 @@
-import { createContext } from "react";
+import {
+  createContext,
+} from "react";
 
-import type { AuthUser, LoginPayload, RegisterPayload, UserRole } from "../types/auth";
+import type {
+  AuthUser,
+  ForgotPasswordPayload,
+  LoginPayload,
+  RegisterPayload,
+  ResetPasswordPayload,
+  UserRole,
+} from "../types/auth";
 
 export interface AuthContextValue {
   user: AuthUser | null;
+
   isAuthenticated: boolean;
-  login: (payload: LoginPayload) => Promise<AuthUser>;
-  register: (payload: RegisterPayload) => Promise<AuthUser>;
-  loginAsRole: (role: UserRole) => AuthUser;
-  loginWithGoogle: () => AuthUser;
-  logout: () => void;
+
+  isRestoring: boolean;
+
+  login: (
+    payload: LoginPayload,
+  ) => Promise<AuthUser>;
+
+  register: (
+    payload: RegisterPayload,
+  ) => Promise<AuthUser>;
+
+  forgotPassword: (
+    payload:
+      ForgotPasswordPayload,
+  ) => Promise<string>;
+
+  resetPassword: (
+    payload:
+      ResetPasswordPayload,
+  ) => Promise<string>;
+
+  loginAsRole: (
+    role: UserRole,
+  ) => AuthUser;
+
+  loginWithGoogle: () => void;
+
+  logout: () => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export const AuthContext =
+  createContext<
+    AuthContextValue | undefined
+  >(undefined);

@@ -30,16 +30,19 @@ import {
 } from "@/components/shadcn/ui/card";
 
 import {
-  loadFleet,
   type FleetDrone,
 } from "../utils/fleetStorage";
+
+import {
+  useDroneDetailQuery,
+  useDroneMaintenanceHistoryQuery,
+} from "../hooks/useFleetQueries";
 
 import {
   getBatteryForDrone,
 } from "../utils/batteryStorage";
 
 import {
-  loadMaintenanceRecords,
   type CompletedMaintenanceRecord,
 } from "../utils/maintenanceStorage";
 
@@ -281,17 +284,33 @@ export function DroneDetailPage() {
   const { droneId } =
     useParams();
 
-  const [
-    fleet,
-  ] = useState<
-    FleetDrone[]
-  >(loadFleet);
+  const droneQuery =
+    useDroneDetailQuery(
+      droneId,
+    );
 
-  const [
-    maintenanceRecords,
-  ] = useState<
-    CompletedMaintenanceRecord[]
-  >(loadMaintenanceRecords);
+  const maintenanceQuery =
+    useDroneMaintenanceHistoryQuery(
+      droneId,
+    );
+
+  const drone =
+    droneQuery.data;
+
+  const maintenanceRecords:
+    CompletedMaintenanceRecord[] =
+    maintenanceQuery.data ?? [];
+
+  const loading =
+    droneQuery.isPending &&
+    !drone;
+
+  const apiError =
+    droneQuery.error instanceof Error
+      ? droneQuery.error.message
+      : maintenanceQuery.error instanceof Error
+        ? maintenanceQuery.error.message
+        : "";
 
   const [
     activeTab,
@@ -305,12 +324,6 @@ export function DroneDetailPage() {
     setBatteryRefreshKey,
   ] = useState(0);
 
-
-  const drone =
-    fleet.find(
-      (item) =>
-        item.id === droneId,
-    );
 
   const droneMaintenanceRecords =
     useMemo(
@@ -338,6 +351,8 @@ export function DroneDetailPage() {
         droneMaintenanceRecords,
       ],
     );
+
+
 
   useEffect(() => {
     const syncBattery = () => {
@@ -370,6 +385,14 @@ export function DroneDetailPage() {
     };
   }, []);
 
+  if (loading) {
+    return (
+      <div className="px-6 py-8 text-[14px] text-[var(--tech-muted)]">
+        Loading drone details...
+      </div>
+    );
+  }
+
   if (!drone) {
     return (
       <div className="px-6 py-6 md:px-8">
@@ -378,7 +401,7 @@ export function DroneDetailPage() {
         </h1>
 
         <p className="mt-2 text-[14px] text-[var(--tech-muted)]">
-          The requested drone does not exist.
+          {apiError || "The requested drone does not exist."}
         </p>
 
         <Button
@@ -399,40 +422,54 @@ export function DroneDetailPage() {
     );
   }
 
-  const installedBattery =
-    useMemo(
-      () =>
-        getBatteryForDrone(
-          drone.id,
-        ),
-      [
-        drone.id,
-        batteryRefreshKey,
-      ],
+  void batteryRefreshKey;
+
+  const localInstalledBattery =
+    getBatteryForDrone(
+      drone.id,
     );
+
+  const installedBattery =
+    drone.installedBatteryId
+      ? {
+          id: drone.installedBatteryId,
+          chargeLevelPct:
+            drone.installedBatteryPct ?? 100,
+        }
+      : localInstalledBattery;
 
   const lowBattery =
     Boolean(
       installedBattery &&
-        installedBattery.chargeLevelPct <
-          40,
+        installedBattery.chargeLevelPct < 40,
     );
 
   /*
    * Nếu đã có Maintenance Record thật của drone thì dùng lần hoàn thành
    * gần nhất. Nếu chưa có record thì dùng lịch mock demo.
    */
+  const apiLastMaintenanceAt =
+    drone.lastMaintenanceAt
+      ? new Date(drone.lastMaintenanceAt)
+      : null;
+
   const lastMaintenanceAt =
-    latestCompletedMaintenance
-      ?.date ??
-    getMockLastMaintenance(
-      drone.id,
-    );
+    apiLastMaintenanceAt &&
+    !Number.isNaN(apiLastMaintenanceAt.getTime())
+      ? apiLastMaintenanceAt
+      : latestCompletedMaintenance?.date ??
+        getMockLastMaintenance(drone.id);
+
+  const apiNextMaintenanceAt =
+    drone.nextMaintenanceAt
+      ? new Date(drone.nextMaintenanceAt)
+      : null;
 
   const nextMaintenanceAt =
-    addOneMonth(
-      lastMaintenanceAt,
-    );
+    apiNextMaintenanceAt &&
+    !Number.isNaN(apiNextMaintenanceAt.getTime())
+      ? apiNextMaintenanceAt
+      : addOneMonth(lastMaintenanceAt);
 
   const scheduleState =
     getScheduleState(
@@ -447,6 +484,11 @@ export function DroneDetailPage() {
 
   return (
     <div className="px-6 py-5 md:px-8">
+      {apiError && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {apiError}
+        </div>
+      )}
       {/* BACK */}
       <button
         type="button"

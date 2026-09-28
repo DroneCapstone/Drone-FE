@@ -14,6 +14,10 @@ import {
   useState,
 } from "react";
 
+import {
+  useQueryClient,
+} from "@tanstack/react-query";
+
 import { Button } from "@/components/shadcn/ui/button";
 import {
   Card,
@@ -23,26 +27,31 @@ import {
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
 
 import {
-  loadFleet,
-  saveFleet,
   TECHNICIAN_HUB,
 } from "../utils/fleetStorage";
 
 import {
-  installFullBatteryOnDrone,
-} from "../utils/batteryStorage";
+  useFirstReadyBatteryMutation,
+} from "../hooks/useBatteryQueries";
 
 import {
   applyOperatorMissionAssignment,
-  confirmPackageAtHub,
-  dispatchOutboundDelivery,
   loadOutboundDeliveries,
-  loadOutboundDeliveryHistory,
-  markOutboundReady,
   type OperatorAssignmentPayload,
   type OutboundDelivery,
-  type OutboundDeliveryHistory,
 } from "../utils/outboundDeliveryStorage";
+
+import {
+  useDispatchOutboundMutation,
+  useOutboundDeliveriesQuery,
+  useOutboundHistoryQuery,
+  usePrepareOutboundBatteryMutation,
+  useReceiveOutboundMutation,
+} from "../hooks/useOutboundQueries";
+
+import {
+  technicianQueryKeys,
+} from "../hooks/queryKeys";
 
 function getMissionDisplayId(
   missionId?: string,
@@ -71,27 +80,39 @@ function getMissionDisplayId(
 }
 
 export function OutboundDeliveriesPage() {
-  const [deliveries, setDeliveries] =
-    useState<OutboundDelivery[]>(loadOutboundDeliveries);
+  const queryClient =
+    useQueryClient();
 
-  const [history, setHistory] =
-    useState<OutboundDeliveryHistory[]>(
-      loadOutboundDeliveryHistory,
-    );
+  const outboundQuery =
+    useOutboundDeliveriesQuery();
+
+  const historyQuery =
+    useOutboundHistoryQuery();
+
+  const receiveMutation =
+    useReceiveOutboundMutation();
+
+  const prepareMutation =
+    usePrepareOutboundBatteryMutation();
+
+  const readyBatteryMutation =
+    useFirstReadyBatteryMutation();
+
+  const dispatchMutation =
+    useDispatchOutboundMutation();
+
+  const deliveries: OutboundDelivery[] =
+    outboundQuery.data ?? [];
+
+  const history =
+    historyQuery.data ?? [];
 
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const [actionMessage, setActionMessage] =
     useState("");
 
-  const refresh = () => {
-    setDeliveries(loadOutboundDeliveries());
-    setHistory(loadOutboundDeliveryHistory());
-  };
-
   useEffect(() => {
-    const sync = () => refresh();
-
     const onOperatorAssigned = (event: Event) => {
       const detail = (
         event as CustomEvent<OperatorAssignmentPayload>
@@ -102,13 +123,12 @@ export function OutboundDeliveriesPage() {
       }
 
       applyOperatorMissionAssignment(detail);
-      refresh();
-    };
 
-    window.addEventListener(
-      "technician-outbound-deliveries-updated",
-      sync,
-    );
+      queryClient.setQueryData(
+        technicianQueryKeys.outbound(),
+        loadOutboundDeliveries(),
+      );
+    };
 
     window.addEventListener(
       "operator-outbound-assigned",
@@ -117,22 +137,14 @@ export function OutboundDeliveriesPage() {
 
     return () => {
       window.removeEventListener(
-        "technician-outbound-deliveries-updated",
-        sync,
-      );
-
-      window.removeEventListener(
         "operator-outbound-assigned",
         onOperatorAssigned,
       );
     };
-  }, []);
+  }, [queryClient]);
 
   const visibleDeliveries = useMemo(
-    () =>
-      deliveries.filter(
-        (delivery) => delivery.hub === TECHNICIAN_HUB,
-      ),
+    () => deliveries,
     [deliveries],
   );
 
@@ -144,116 +156,90 @@ export function OutboundDeliveriesPage() {
     [history],
   );
 
-  const handleReceiveAtHub = (orderId: string) => {
-    confirmPackageAtHub(orderId);
-    refresh();
+  const handleReceiveAtHub = async (orderId: string) => {
+    try {
+      setActionMessage("");
+      await receiveMutation.mutateAsync(
+        orderId,
+      );
+      setActionMessage("Package received at hub. Operator state was updated by backend.");
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to receive this package.",
+      );
+    }
   };
 
-  const handlePrepareBattery = (
+  const handlePrepareBattery = async (
     delivery: OutboundDelivery,
   ) => {
     if (
       delivery.status !== "Mission Assigned" ||
-      !delivery.missionId ||
-      !delivery.assignedDroneId
+      !delivery.missionId
     ) {
       setActionMessage(
-        "This order does not have a valid Operator-assigned mission and drone.",
+        "This order does not have a valid Operator-assigned mission.",
       );
       return;
     }
 
-    const fleet = loadFleet();
+    try {
+      setActionMessage("");
 
-    const assignedDrone = fleet.find(
-      (drone) =>
-        drone.id === delivery.assignedDroneId &&
-        drone.location === TECHNICIAN_HUB &&
-        drone.status === "Available",
-    );
+      const installedBattery =
+        await readyBatteryMutation.mutateAsync(
+          delivery.missionId,
+        );
 
-    if (!assignedDrone) {
-      setActionMessage(
-        "The assigned drone is not Available at this hub.",
-      );
-      return;
-    }
+      if (!installedBattery) {
+        setActionMessage(
+          "No fully charged Ready battery is available at this hub.",
+        );
+        return;
+      }
 
-    /*
-     * Frontend mock:
-     * automatically takes one Ready 100% battery from Battery Management
-     * and installs it on the Operator-assigned drone.
-     *
-     * Production:
-     * backend should perform this allocation transaction and return
-     * the installed Battery ID.
-     */
-    const installedBattery =
-      installFullBatteryOnDrone({
-        droneId: assignedDrone.id,
-        hub: TECHNICIAN_HUB,
-        missionId: delivery.missionId,
+      await prepareMutation.mutateAsync({
         orderId: delivery.orderId,
+        installedBatteryId:
+          installedBattery.id,
       });
 
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !== 100
-    ) {
       setActionMessage(
-        "No fully charged battery is available in Battery Management.",
+        `${installedBattery.id} at 100% was assigned to ${getMissionDisplayId(
+          delivery.missionId,
+        )}. The mission is Ready to dispatch.`,
       );
-      return;
-    }
-
-    saveFleet(
-      fleet.map((drone) =>
-        drone.id === assignedDrone.id
-          ? {
-              ...drone,
-              battery: 100,
-            }
-          : drone,
-      ),
-    );
-
-    const updatedDelivery =
-      markOutboundReady({
-        orderId: delivery.orderId,
-        batteryId: installedBattery.id,
-      });
-
-    if (!updatedDelivery) {
+    } catch (error) {
       setActionMessage(
-        "Battery was installed, but the outbound mission could not be marked Ready.",
+        error instanceof Error
+          ? error.message
+          : "Unable to prepare a battery for this mission.",
       );
-      refresh();
-      return;
     }
-
-    setActionMessage(
-      `${installedBattery.id} at 100% was installed on ${delivery.assignedDroneCode ?? assignedDrone.id}. The mission is Ready to dispatch.`,
-    );
-
-    refresh();
   };
 
-  const handleDispatch = (orderId: string) => {
-    const dispatched =
-      dispatchOutboundDelivery(orderId);
-
-    if (!dispatched) {
-      setActionMessage(
-        "This mission is not ready to dispatch yet.",
+  /*
+   * The supplied Backend API document does not define an outbound Dispatch endpoint.
+   * This keeps the current FE dispatch behavior/event until Backend exposes one.
+   */
+  const handleDispatch = async (orderId: string) => {
+    try {
+      await dispatchMutation.mutateAsync(
+        orderId,
       );
-      return;
+
+      setActionMessage(
+        "Mission dispatched. Operator was notified immediately.",
+      );
+    } catch (error) {
+      setActionMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to dispatch this mission.",
+      );
     }
-
-    setActionMessage(
-      "Mission dispatched. Operator was notified immediately.",
-    );
-
-    refresh();
   };
 
   return (
@@ -261,6 +247,12 @@ export function OutboundDeliveriesPage() {
       title="Outbound deliveries"
       description={`Paid customer orders assigned to ${TECHNICIAN_HUB}. Destination indicates the hub where the recipient will collect the parcel.`}
     >
+      {outboundQuery.error instanceof Error && (
+        <div className="mb-4 rounded-lg border border-red-500/25 bg-[var(--tech-surface)] px-4 py-3 text-[13px] text-red-500">
+          {outboundQuery.error.message}
+        </div>
+      )}
+
       {actionMessage && (
         <div className="mb-4 flex items-start justify-between gap-4 rounded-lg border border-orange-500/25 bg-[var(--tech-surface)] px-4 py-3">
           <p className="text-[13px] leading-5 text-[var(--tech-text-secondary)]">

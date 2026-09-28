@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 
 import {
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -25,11 +24,14 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  loadMaintenanceAlerts,
   type AlertSource,
   type AlertStatus,
   type MaintenanceAlert,
 } from "../utils/maintenanceAlertStorage";
+
+import {
+  useMaintenanceAlertsQuery,
+} from "../hooks/useMaintenanceQueries";
 
 type AlertLog = {
   id: string;
@@ -81,12 +83,11 @@ function loadAlertLogs(): AlertLog[] {
 export function MaintenanceAlertsPage() {
   const navigate = useNavigate();
 
-  const [
-    maintenanceAlerts,
-    setMaintenanceAlerts,
-  ] = useState<
-    MaintenanceAlert[]
-  >(loadMaintenanceAlerts);
+  const alertsQuery =
+    useMaintenanceAlertsQuery();
+
+  const maintenanceAlerts: MaintenanceAlert[] =
+    alertsQuery.data ?? [];
 
   const [query, setQuery] =
     useState("");
@@ -108,25 +109,7 @@ export function MaintenanceAlertsPage() {
       loadAlertLogs,
     );
 
-  useEffect(() => {
-    const syncAlerts = () => {
-      setMaintenanceAlerts(
-        loadMaintenanceAlerts(),
-      );
-    };
 
-    window.addEventListener(
-      "technician-maintenance-alerts-updated",
-      syncAlerts,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "technician-maintenance-alerts-updated",
-        syncAlerts,
-      );
-    };
-  }, []);
 
   const normalizedQuery = query
     .trim()

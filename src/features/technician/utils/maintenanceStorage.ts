@@ -1,3 +1,25 @@
+import {
+  createMaintenanceRecordApi,
+  createWorkOrderApi,
+  getWorkOrderApi,
+  getWorkOrdersApi,
+  updateWorkOrderApi,
+  updateWorkOrderInspectionApi,
+} from "../api/maintenanceApi";
+
+import {
+  getDroneMaintenanceHistoryApi,
+} from "../api/fleetApi";
+
+import {
+  formatApiDateTime,
+  isRecord,
+  pickString,
+  toBackendNumericId,
+  unwrapList,
+  unwrapObject,
+} from "../api/httpClient";
+
 import type {
   DroneStatus,
 } from "./fleetStorage";
@@ -286,4 +308,213 @@ export function addMaintenanceRecord(
     record,
     ...withoutSameWorkOrder,
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+function maintenanceDisplayId(prefix: string, value: string, width = 4) {
+  if (!value) return "";
+  if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
+}
+
+function normalizeApiWorkOrderStatus(value: string): WorkOrderStatus {
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (key === "COMPLETED") return "Completed";
+  if (key === "IN_PROGRESS") return "In Progress";
+  return "Not Started";
+}
+
+function normalizeApiPriority(value: string): WorkOrderPriority {
+  const key = value.trim().toUpperCase();
+  if (key === "HIGH" || key === "CRITICAL") return "High";
+  if (key === "LOW") return "Low";
+  return "Medium";
+}
+
+function mapApiWorkOrder(value: unknown): WorkOrder | null {
+  if (!isRecord(value)) return null;
+
+  const rawId = pickString(value, ["work_order_id", "id"]);
+  const rawDroneId = pickString(value, ["drone_id", "droneId"]);
+  if (!rawId || !rawDroneId) return null;
+
+  const droneId = maintenanceDisplayId("DR", rawDroneId, 3);
+
+  return {
+    id: maintenanceDisplayId("WO", rawId, 4),
+    drone: pickString(value, ["drone_name", "drone_code", "drone"], droneId),
+    droneId,
+    title: pickString(value, ["title", "issue_description", "task", "description"], "Maintenance work order"),
+    priority: normalizeApiPriority(
+      pickString(value, ["priority"], "Medium"),
+    ),
+    status: normalizeApiWorkOrderStatus(
+      pickString(value, ["status"], "NOT_STARTED"),
+    ),
+    assignedTo: pickString(value, ["assigned_to", "technician_name", "assignee"], "Technician"),
+    createdAt: formatApiDateTime(
+      pickString(value, ["created_at"], ""),
+      "—",
+    ),
+    scheduledAt: (() => {
+      const scheduled = pickString(value, ["scheduled_at", "due_at"], "");
+      return scheduled ? formatApiDateTime(scheduled, scheduled) : undefined;
+    })(),
+    relatedAlertId: (() => {
+      const alert = pickString(value, ["alert_id", "maintenance_alert_id"], "");
+      return alert ? maintenanceDisplayId("ALT", alert, 3) : undefined;
+    })(),
+  };
+}
+
+function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | null {
+  if (!isRecord(value)) return null;
+
+  const rawWorkOrderId = pickString(value, ["work_order_id", "workOrderId"]);
+  const rawDroneId = pickString(value, ["drone_id", "droneId"]);
+  if (!rawWorkOrderId || !rawDroneId) return null;
+
+  const inspectionRaw = value.inspection_items;
+  const inspectionItems = Array.isArray(inspectionRaw)
+    ? inspectionRaw.map((item) =>
+        typeof item === "string"
+          ? item
+          : isRecord(item)
+            ? pickString(item, ["label", "name", "item", "description"], JSON.stringify(item))
+            : String(item),
+      )
+    : [];
+
+  const resultStatus = pickString(
+    value,
+    ["resulting_drone_status", "resulting_status"],
+    "Available",
+  );
+
+  return {
+    id: maintenanceDisplayId(
+      "MR",
+      pickString(value, ["maintenance_record_id", "id"], `${rawWorkOrderId}`),
+      4,
+    ),
+    workOrderId: maintenanceDisplayId("WO", rawWorkOrderId, 4),
+    droneId: maintenanceDisplayId("DR", rawDroneId, 3),
+    drone: pickString(value, ["drone_name", "drone_code"], maintenanceDisplayId("DR", rawDroneId, 3)),
+    title: pickString(value, ["title", "issue_description"], "Maintenance record"),
+    priority: normalizeApiPriority(
+      pickString(value, ["priority"], "Medium"),
+    ),
+    assignedTo: pickString(value, ["assigned_to", "technician_name"], "Technician"),
+    diagnosis: pickString(value, ["diagnosis"], "—"),
+    correctiveAction: pickString(value, ["corrective_action", "action_taken"], "—"),
+    inspectionItems,
+    resultingStatus:
+      resultStatus.trim().toUpperCase() === "MAINTENANCE"
+        ? "Maintenance"
+        : "Available",
+    createdAt: formatApiDateTime(
+      pickString(value, ["created_at"], ""),
+      "—",
+    ),
+    scheduledAt: (() => {
+      const scheduled = pickString(value, ["scheduled_at"], "");
+      return scheduled ? formatApiDateTime(scheduled, scheduled) : undefined;
+    })(),
+    completedAt: formatApiDateTime(
+      pickString(value, ["completed_at", "updated_at"], ""),
+      "—",
+    ),
+  };
+}
+
+export async function refreshWorkOrdersFromApi() {
+  const payload = await getWorkOrdersApi();
+  const next = unwrapList(payload)
+    .map(mapApiWorkOrder)
+    .filter((item): item is WorkOrder => Boolean(item));
+
+  saveWorkOrders(next);
+  window.dispatchEvent(new Event("technician-work-orders-updated"));
+  return next;
+}
+
+export async function fetchWorkOrderFromApi(workOrderId: string) {
+  const payload = await getWorkOrderApi(workOrderId);
+  return mapApiWorkOrder(unwrapObject(payload));
+}
+
+export async function createWorkOrderOnServer(payload: {
+  droneId: string;
+  batteryId: string;
+  issueDescription: string;
+}) {
+  const result = await createWorkOrderApi({
+    drone_id: toBackendNumericId(payload.droneId),
+    battery_id: toBackendNumericId(payload.batteryId),
+    issue_description: payload.issueDescription,
+  });
+
+  await refreshWorkOrdersFromApi();
+  return result;
+}
+
+export async function updateWorkOrderOnServer(
+  workOrderId: string,
+  payload: Record<string, unknown>,
+) {
+  const result = await updateWorkOrderApi(workOrderId, payload);
+  await refreshWorkOrdersFromApi();
+  return result;
+}
+
+export async function updateWorkOrderInspectionOnServer(
+  workOrderId: string,
+  payload: Record<string, unknown>,
+) {
+  const result = await updateWorkOrderInspectionApi(workOrderId, payload);
+  await refreshWorkOrdersFromApi();
+  return result;
+}
+
+export async function createMaintenanceRecordOnServer(payload: {
+  workOrderId: string;
+  droneId: string;
+  title: string;
+  diagnosis: string;
+  correctiveAction: string;
+  resultingDroneStatus: DroneStatus;
+  inspectionItems: unknown[];
+}) {
+  const result = await createMaintenanceRecordApi({
+    work_order_id: toBackendNumericId(payload.workOrderId),
+    drone_id: toBackendNumericId(payload.droneId),
+    title: payload.title,
+    diagnosis: payload.diagnosis,
+    corrective_action: payload.correctiveAction,
+    resulting_drone_status:
+      payload.resultingDroneStatus === "Maintenance"
+        ? "MAINTENANCE"
+        : "AVAILABLE",
+    inspection_items: payload.inspectionItems,
+  });
+
+  return result;
+}
+
+export async function refreshDroneMaintenanceHistoryFromApi(droneId: string) {
+  const payload = await getDroneMaintenanceHistoryApi(droneId);
+  const next = unwrapList(payload)
+    .map(mapApiMaintenanceRecord)
+    .filter((item): item is CompletedMaintenanceRecord => Boolean(item));
+
+  const all = loadMaintenanceRecords();
+  const withoutDrone = all.filter((record) => record.droneId !== droneId);
+  saveMaintenanceRecords([...next, ...withoutDrone]);
+  window.dispatchEvent(new Event("technician-maintenance-records-updated"));
+  return next;
 }

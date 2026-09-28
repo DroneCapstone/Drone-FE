@@ -44,11 +44,11 @@ const CustomerLayout = lazy(() =>
 ========================================================= */
 
 export function AppRoutes() {
-  const { user, isAuthenticated } = useAuth();
-
-  /* =========================================================
-     HOME THEO ROLE
-  ========================================================= */
+  const {
+    user,
+    isAuthenticated,
+    isRestoring,
+  } = useAuth();
 
   function getCurrentHome() {
     switch (user?.role) {
@@ -69,55 +69,40 @@ export function AppRoutes() {
     }
   }
 
+  const authPageElement = isRestoring ? null : isAuthenticated ? (
+    <Navigate
+      to={getCurrentHome()}
+      replace
+    />
+  ) : (
+    <AuthPage />
+  );
+
   return useRoutes([
-    /* =========================================================
-       PUBLIC HOME PAGE
-
-       Tất cả user khi mở website đều có thể vào landing page.
-    ========================================================= */
-
     {
       path: "/",
       element: <HomePage />,
     },
 
-    /* =========================================================
-       LOGIN
-    ========================================================= */
-
     {
       path: "/login",
-
-      element: isAuthenticated ? (
-        <Navigate
-          to={getCurrentHome()}
-          replace
-        />
-      ) : (
-        <AuthPage />
-      ),
+      element: authPageElement,
     },
-
-    /* =========================================================
-       REGISTER
-    ========================================================= */
 
     {
       path: "/register",
-
-      element: isAuthenticated ? (
-        <Navigate
-          to={getCurrentHome()}
-          replace
-        />
-      ) : (
-        <AuthPage />
-      ),
+      element: authPageElement,
     },
 
-    /* =========================================================
-       OPERATOR
-    ========================================================= */
+    {
+      path: "/forgot-password",
+      element: authPageElement,
+    },
+
+    {
+      path: "/reset-password",
+      element: authPageElement,
+    },
 
     {
       element: (
@@ -125,7 +110,6 @@ export function AppRoutes() {
           allowedRoles={["operator"]}
         />
       ),
-
       children: [
         {
           path: "/operator",
@@ -135,17 +119,12 @@ export function AppRoutes() {
       ],
     },
 
-    /* =========================================================
-       TECHNICIAN
-    ========================================================= */
-
     {
       element: (
         <ProtectedRoute
           allowedRoles={["technician"]}
         />
       ),
-
       children: [
         {
           path: "/technician",
@@ -155,17 +134,12 @@ export function AppRoutes() {
       ],
     },
 
-    /* =========================================================
-       CUSTOMER
-    ========================================================= */
-
     {
       element: (
         <ProtectedRoute
           allowedRoles={["customer"]}
         />
       ),
-
       children: [
         {
           path: "/customer",
@@ -174,12 +148,6 @@ export function AppRoutes() {
         },
       ],
     },
-
-    /* =========================================================
-       FALLBACK
-
-       Route không tồn tại -> quay về Landing Page.
-    ========================================================= */
 
     {
       path: "*",

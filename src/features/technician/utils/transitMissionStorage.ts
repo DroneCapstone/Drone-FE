@@ -1,3 +1,16 @@
+import {
+  confirmMissionArrivalApi,
+  getIncomingMissionsApi,
+} from "../api/transitApi";
+
+import {
+  isRecord,
+  pickBoolean,
+  pickNumber,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
 export type TransitMissionStatus =
   | "Incoming"
   | "At Hub"
@@ -261,4 +274,102 @@ export function saveTransitMissionHistory(
         ...item,
       }),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+function normalizeTransitStatus(value: string): TransitMissionStatus {
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+  if (key === "AT_HUB") return "At Hub";
+  if (key === "READY") return "Ready";
+  if (key === "CANNOT_CONTINUE") return "Cannot Continue";
+  if (key === "REPLACEMENT_REQUESTED") return "Cannot Continue";
+  return "Incoming";
+}
+
+function normalizeTransitPurpose(value: string): TransitMissionPurpose {
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (key === "RETURN_TO_HUB") return "RETURN_TO_HUB";
+  if (key === "INCIDENT_RETURN") return "INCIDENT_RETURN";
+  return "BATTERY_STOP";
+}
+
+function displayId(prefix: string, value: string, width = 4) {
+  if (!value) return `${prefix}-UNKNOWN`;
+  if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
+}
+
+function mapApiTransitMission(value: unknown): TransitMission | null {
+  if (!isRecord(value)) return null;
+
+  const missionRaw = pickString(value, ["mission_id", "missionId", "id"]);
+  if (!missionRaw) return null;
+
+  const droneRaw = pickString(value, ["drone_id", "current_drone_id", "droneId"], "0");
+  const missionId = displayId("MSN", missionRaw);
+  const droneId = displayId("DR", droneRaw, 3);
+  const droneName = pickString(value, ["drone_name", "drone_code", "name"], "DR");
+  const droneType = (droneName.match(/[A-Za-z]+/)?.[0] ?? pickString(value, ["drone_type"], "DR")).toUpperCase();
+
+  const status = normalizeTransitStatus(
+    pickString(value, ["handling_status", "status"], "INCOMING"),
+  );
+
+  const purpose = normalizeTransitPurpose(
+    pickString(value, ["purpose", "mission_purpose", "arrival_reason"], "BATTERY_STOP"),
+  );
+
+  return {
+    id: pickString(value, ["transit_id", "id"], `TM-${missionRaw}`),
+    missionId,
+    legId: pickString(value, ["leg_id", "mission_leg_id"], `LEG-${missionRaw}`),
+    purpose,
+    currentDroneId: droneId,
+    droneType,
+    droneModel: pickString(value, ["drone_model", "model"], "—"),
+    batteryId: (() => {
+      const battery = pickString(value, ["battery_id", "installed_battery_id"], "");
+      return battery ? displayId("BAT", battery, 3) : undefined;
+    })(),
+    batteryLevelPct: pickNumber(value, ["battery_level_pct", "battery_pct", "charge_level_pct"], 0),
+    requiredDepartureBatteryPct: pickNumber(value, ["required_departure_battery_pct", "required_battery_pct"], 100),
+    batteryServiceRequired: pickBoolean(value, ["battery_service_required", "requires_battery_service"], status === "At Hub" && purpose === "BATTERY_STOP"),
+    origin: pickString(value, ["origin", "origin_hub_name", "origin_name"], "—"),
+    hub: pickString(value, ["hub", "hub_name", "target_hub_name"], "Hub"),
+    destination: pickString(value, ["destination", "destination_hub_name", "destination_name"], "—"),
+    status,
+    arrivalConfirmedAt: pickString(value, ["arrival_confirmed_at"], "") || undefined,
+    cannotContinueReason: pickString(value, ["cannot_continue_reason"], "") || undefined,
+    replacementRequestedAt: pickString(value, ["replacement_requested_at"], "") || undefined,
+    replacementReason: pickString(value, ["replacement_reason"], "") || undefined,
+    replacementDroneId: (() => {
+      const replacement = pickString(value, ["replacement_drone_id"], "");
+      return replacement ? displayId("DR", replacement, 3) : undefined;
+    })(),
+    replacementAssignedAt: pickString(value, ["replacement_assigned_at"], "") || undefined,
+    incidentAlertId: pickString(value, ["incident_alert_id", "maintenance_alert_id"], "") || undefined,
+  };
+}
+
+export async function refreshTransitMissionsFromApi() {
+  const payload = await getIncomingMissionsApi();
+  const next = unwrapList(payload)
+    .map(mapApiTransitMission)
+    .filter((item): item is TransitMission => Boolean(item));
+
+  demoTransitMissions = next;
+  window.dispatchEvent(new Event("technician-transit-missions-updated"));
+  return loadTransitMissions();
+}
+
+export async function confirmTransitArrivalOnServer(missionId: string) {
+  const result = await confirmMissionArrivalApi(missionId);
+  await refreshTransitMissionsFromApi();
+  return result;
 }

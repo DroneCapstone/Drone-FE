@@ -1,3 +1,17 @@
+import {
+  getBatteriesApi,
+  markBatteryChargedApi,
+  useBatteryApi,
+} from "../api/batteryApi";
+
+import {
+  formatApiDateTime,
+  isRecord,
+  pickNumber,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
 export type BatteryStatus =
   | "Ready"
   | "Charging";
@@ -842,4 +856,107 @@ export function replaceBatteryForTransitStop({
     installedBattery,
     removedBattery,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+function normalizeApiBatteryStatus(value: string): BatteryStatus {
+  return value.trim().toUpperCase() === "READY" ? "Ready" : "Charging";
+}
+
+function toBatteryDisplayId(value: string) {
+  if (/^BAT-/i.test(value)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${value}`;
+}
+
+function mapApiBattery(value: unknown): HubBattery | null {
+  if (!isRecord(value)) return null;
+
+  const rawId = pickString(value, ["battery_id", "id", "batteryId"]);
+  if (!rawId) return null;
+
+  const status = normalizeApiBatteryStatus(
+    pickString(value, ["status"], "CHARGING"),
+  );
+  const chargeLevelPct = pickNumber(
+    value,
+    ["charge_level_pct", "battery_level_pct", "charge_pct", "level"],
+    status === "Ready" ? 100 : 0,
+  );
+  const remainingMinutes = pickNumber(
+    value,
+    ["estimated_minutes_remaining", "minutes_remaining"],
+    0,
+  );
+  const estimatedReadyAtRaw = pickString(
+    value,
+    ["estimated_ready_at", "ready_at"],
+    "",
+  );
+  const estimatedReadyAt = estimatedReadyAtRaw
+    ? new Date(estimatedReadyAtRaw).toISOString()
+    : status === "Charging" && remainingMinutes > 0
+      ? new Date(Date.now() + remainingMinutes * 60_000).toISOString()
+      : undefined;
+
+  return {
+    id: toBatteryDisplayId(rawId),
+    hub: pickString(value, ["hub_name", "hub"], TECHNICIAN_HUB),
+    chargeLevelPct,
+    status,
+    updatedAt: formatApiDateTime(
+      pickString(value, ["updated_at", "charged_at", "created_at"], ""),
+      "—",
+    ),
+    estimatedReadyAt,
+  };
+}
+
+export async function refreshBatteriesFromApi() {
+  const payload = await getBatteriesApi();
+  demoBatteries = unwrapList(payload)
+    .map(mapApiBattery)
+    .filter((item): item is HubBattery => Boolean(item));
+
+  window.dispatchEvent(new Event("technician-batteries-updated"));
+  return loadBatteries();
+}
+
+export async function useBatteryOnServer(
+  batteryId: string,
+  missionId: string,
+) {
+  const result = await useBatteryApi(batteryId, missionId);
+  await refreshBatteriesFromApi();
+  return result;
+}
+
+export async function markBatteryChargedOnServer(
+  batteryId: string,
+) {
+  const result = await markBatteryChargedApi(batteryId);
+  await refreshBatteriesFromApi();
+  return result;
+}
+
+export async function useFirstReadyBatteryForMissionOnServer(
+  missionId: string,
+) {
+  const batteries = await refreshBatteriesFromApi();
+  const ready = batteries.find(
+    (battery) =>
+      battery.status === "Ready" &&
+      battery.chargeLevelPct >= 100,
+  );
+
+  if (!ready) {
+    return null;
+  }
+
+  await useBatteryOnServer(ready.id, missionId);
+  return ready;
 }

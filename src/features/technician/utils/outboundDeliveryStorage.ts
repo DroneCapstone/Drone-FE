@@ -1,3 +1,16 @@
+import {
+  getOutboundDeliveriesApi,
+  prepareOutboundBatteryApi,
+  receiveOutboundOrderApi,
+} from "../api/outboundApi";
+
+import {
+  isRecord,
+  pickNumber,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
 export type OutboundDeliveryStatus =
   | "Awaiting Drop-off"
   | "At Hub"
@@ -346,6 +359,8 @@ export function dispatchOutboundDelivery(orderId: string) {
     (item) => item.orderId !== orderId,
   );
 
+  clientDispatchedOrderIds.add(orderId);
+
   window.dispatchEvent(
     new CustomEvent("operator-mission-updated", {
       detail: {
@@ -366,4 +381,112 @@ export function dispatchOutboundDelivery(orderId: string) {
   notifyOutboundUpdate();
 
   return { ...historyItem };
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+const clientDispatchedOrderIds = new Set<string>();
+
+function outboundDisplayId(prefix: string, value: string, width = 4) {
+  if (!value) return "";
+  if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
+}
+
+function normalizeOutboundStatus(
+  raw: string,
+  hasMission: boolean,
+  hasDrone: boolean,
+): OutboundDeliveryStatus {
+  const key = raw.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (key === "READY") return "Ready";
+  if (key === "MISSION_ASSIGNED" || (hasMission && hasDrone && key === "AT_HUB")) {
+    return "Mission Assigned";
+  }
+  if (key === "AT_HUB" || key === "RECEIVED") return "At Hub";
+  return "Awaiting Drop-off";
+}
+
+function mapApiOutbound(value: unknown): OutboundDelivery | null {
+  if (!isRecord(value)) return null;
+
+  const rawOrderId = pickString(value, ["order_id", "orderId", "id"]);
+  if (!rawOrderId) return null;
+  const orderId = outboundDisplayId("ORD", rawOrderId);
+
+  const rawMissionId = pickString(value, ["mission_id", "missionId"], "");
+  const rawDroneId = pickString(value, ["drone_id", "assigned_drone_id", "droneId"], "");
+  const rawBatteryId = pickString(value, ["battery_id", "installed_battery_id"], "");
+  const missionId = rawMissionId ? outboundDisplayId("MSN", rawMissionId) : undefined;
+  const assignedDroneId = rawDroneId ? outboundDisplayId("DR", rawDroneId, 3) : undefined;
+  const assignedDroneCode = pickString(value, ["drone_code", "assigned_drone_code", "drone_name"], assignedDroneId ?? "") || undefined;
+
+  return {
+    orderId,
+    customerName: pickString(value, ["customer_name", "recipient_name", "customer"], "Customer"),
+    packageName: pickString(value, ["package_name", "package_type", "parcel_name"], "Package"),
+    weightKg: pickNumber(value, ["weight_kg", "package_weight_kg", "weight"], 0),
+    hub: pickString(value, ["origin_hub_name", "hub_name", "hub"], TECHNICIAN_HUB),
+    destination: pickString(value, ["destination_hub_name", "destination", "destination_name"], "—"),
+    status: normalizeOutboundStatus(
+      pickString(value, ["status", "handling_status", "package_status"], "INCOMING"),
+      Boolean(missionId),
+      Boolean(assignedDroneId),
+    ),
+    missionId,
+    legId: pickString(value, ["leg_id", "mission_leg_id"], "") || undefined,
+    assignedDroneId,
+    assignedDroneCode,
+    packageReceivedAt: pickString(value, ["package_received_at", "received_at"], "") || undefined,
+    installedBatteryId: rawBatteryId ? outboundDisplayId("BAT", rawBatteryId, 3) : undefined,
+    readyConfirmedAt: pickString(value, ["ready_confirmed_at", "ready_at"], "") || undefined,
+  };
+}
+
+export async function refreshOutboundDeliveriesFromApi() {
+  const payload = await getOutboundDeliveriesApi();
+  demoOutboundDeliveries = unwrapList(payload)
+    .map(mapApiOutbound)
+    .filter((item): item is OutboundDelivery => Boolean(item))
+    .filter((item) => !clientDispatchedOrderIds.has(item.orderId));
+
+  notifyOutboundUpdate();
+  return loadOutboundDeliveries();
+}
+
+export async function receiveOutboundOrderOnServer(orderId: string) {
+  const result = await receiveOutboundOrderApi(orderId);
+  await refreshOutboundDeliveriesFromApi();
+  return result;
+}
+
+export async function prepareOutboundBatteryOnServer(
+  orderId: string,
+  installedBatteryId?: string,
+) {
+  const result = await prepareOutboundBatteryApi(orderId);
+  await refreshOutboundDeliveriesFromApi();
+
+  if (installedBatteryId) {
+    demoOutboundDeliveries = demoOutboundDeliveries.map((item) =>
+      item.orderId === orderId
+        ? {
+            ...item,
+            status: "Ready",
+            installedBatteryId,
+          }
+        : item,
+    );
+    notifyOutboundUpdate();
+  }
+
+  return result;
+}
+
+export function rememberClientDispatchedOrder(orderId: string) {
+  clientDispatchedOrderIds.add(orderId);
 }
