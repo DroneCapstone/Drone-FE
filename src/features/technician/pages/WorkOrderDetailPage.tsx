@@ -7,7 +7,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useNavigate,
@@ -29,17 +29,24 @@ import {
   addMaintenanceRecord,
   appendWorkOrderLog,
   formatMaintenanceTime,
-  loadWorkOrders,
-  saveWorkOrders,
-  type WorkOrder,
   type WorkOrderStatus,
 } from "../utils/maintenanceStorage";
 
 import {
-  loadFleet,
-  saveFleet,
+  useCreateMaintenanceRecordMutation,
+  useUpdateWorkOrderInspectionMutation,
+  useUpdateWorkOrderMutation,
+  useWorkOrderQuery,
+} from "../hooks/useMaintenanceQueries";
+
+import {
   type DroneStatus,
 } from "../utils/fleetStorage";
+
+import {
+  useFleetQuery,
+  useUpdateDroneStatusMutation,
+} from "../hooks/useFleetQueries";
 
 const inspectionItems = [
   "Visual inspection of drone body",
@@ -55,16 +62,34 @@ export function WorkOrderDetailPage() {
   const { workOrderId } =
     useParams();
 
-  const [orders] =
-    useState<WorkOrder[]>(
-      loadWorkOrders,
+  const workOrderQuery =
+    useWorkOrderQuery(
+      workOrderId,
     );
 
+  const fleetQuery =
+    useFleetQuery();
+
+  const updateWorkOrderMutation =
+    useUpdateWorkOrderMutation();
+
+  const updateInspectionMutation =
+    useUpdateWorkOrderInspectionMutation();
+
+  const createMaintenanceRecordMutation =
+    useCreateMaintenanceRecordMutation();
+
+  const updateDroneStatusMutation =
+    useUpdateDroneStatusMutation();
+
   const order =
-    orders.find(
-      (item) =>
-        item.id === workOrderId,
-    );
+    workOrderQuery.data;
+
+  const loading =
+    workOrderQuery.isPending &&
+    !order;
+
+  const [apiError, setApiError] = useState("");
 
   const [
     workOrderStatus,
@@ -96,14 +121,31 @@ export function WorkOrderDetailPage() {
     "Maintenance",
   );
 
+  useEffect(() => {
+    if (order) {
+      setWorkOrderStatus(
+        order.status,
+      );
+    }
+  }, [order]);
+
+
   const fleetDrone =
     order
-      ? loadFleet().find(
+      ? (fleetQuery.data ?? []).find(
           (item) =>
             item.id ===
             order.droneId,
         )
       : undefined;
+
+  if (loading) {
+    return (
+      <TechnicianPageShell title="Work order" description="">
+        <p className="text-[14px] text-[var(--tech-muted)]">Loading work order...</p>
+      </TechnicianPageShell>
+    );
+  }
 
   if (!order) {
     return (
@@ -127,43 +169,41 @@ export function WorkOrderDetailPage() {
     );
   }
 
-  const persistStatus = (
+  const persistStatus = async (
     nextStatus: WorkOrderStatus,
     action: string,
   ) => {
-    const currentOrders =
-      loadWorkOrders();
+    try {
+      setApiError("");
+      await updateWorkOrderMutation.mutateAsync({
+        workOrderId: order.id,
+        payload: {
+          status:
+            nextStatus === "In Progress"
+              ? "IN_PROGRESS"
+              : nextStatus === "Completed"
+                ? "COMPLETED"
+                : "NOT_STARTED",
+        },
+      });
 
-    const nextOrders =
-      currentOrders.map(
-        (item) =>
-          item.id === order.id
-            ? {
-                ...item,
-                status:
-                  nextStatus,
-              }
-            : item,
+      appendWorkOrderLog({
+        workOrderId: order.id,
+        drone: order.drone,
+        action,
+        status: nextStatus,
+        changedAt: formatMaintenanceTime(),
+        changedBy: order.assignedTo,
+      });
+
+      setWorkOrderStatus(nextStatus);
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update work order status.",
       );
-
-    saveWorkOrders(
-      nextOrders,
-    );
-
-    appendWorkOrderLog({
-      workOrderId: order.id,
-      drone: order.drone,
-      action,
-      status: nextStatus,
-      changedAt:
-        formatMaintenanceTime(),
-      changedBy:
-        order.assignedTo,
-    });
-
-    setWorkOrderStatus(
-      nextStatus,
-    );
+    }
   };
 
   const toggleInspection = (
@@ -182,7 +222,7 @@ export function WorkOrderDetailPage() {
       workOrderStatus ===
       "Not Started"
     ) {
-      persistStatus(
+      void persistStatus(
         "In Progress",
         "Work order started",
       );
@@ -199,94 +239,72 @@ export function WorkOrderDetailPage() {
     correctiveAction.trim()
       .length > 0;
 
-  const completeWorkOrder = () => {
-    if (!canComplete) {
-      return;
-    }
+  const completeWorkOrder = async () => {
+    if (!canComplete) return;
 
-    const completedAt =
-      formatMaintenanceTime();
+    try {
+      setApiError("");
 
-    const currentOrders =
-      loadWorkOrders();
+      await updateInspectionMutation.mutateAsync({
+        workOrderId: order.id,
+        payload: { status: "COMPLETED" },
+      });
 
-    const nextOrders =
-      currentOrders.map(
-        (item) =>
-          item.id === order.id
-            ? {
-                ...item,
-                status:
-                  "Completed" as const,
-              }
-            : item,
+      await updateWorkOrderMutation.mutateAsync({
+        workOrderId: order.id,
+        payload: {
+          status: "COMPLETED",
+          diagnosis: diagnosis.trim(),
+          corrective_action: correctiveAction.trim(),
+        },
+      });
+
+      await createMaintenanceRecordMutation.mutateAsync({
+        workOrderId: order.id,
+        droneId: order.droneId,
+        title: order.title,
+        diagnosis: diagnosis.trim(),
+        correctiveAction: correctiveAction.trim(),
+        resultingDroneStatus: droneStatus,
+        inspectionItems: [...checkedItems],
+      });
+
+      await updateDroneStatusMutation.mutateAsync({
+        droneId: order.droneId,
+        status: droneStatus,
+      });
+
+      const completedAt = formatMaintenanceTime();
+
+      addMaintenanceRecord({
+        id: `MR-${Date.now()}`,
+        workOrderId: order.id,
+        droneId: order.droneId,
+        drone: order.drone,
+        title: order.title,
+        priority: order.priority,
+        assignedTo: order.assignedTo,
+        diagnosis: diagnosis.trim(),
+        correctiveAction: correctiveAction.trim(),
+        inspectionItems: [...checkedItems],
+        resultingStatus: droneStatus,
+        createdAt: order.createdAt,
+        scheduledAt: order.scheduledAt,
+        completedAt,
+      });
+
+      setWorkOrderStatus("Completed");
+      navigate(
+        "/technician/maintenance/work-orders",
+        { replace: true },
       );
-
-    saveWorkOrders(
-      nextOrders,
-    );
-
-    appendWorkOrderLog({
-      workOrderId: order.id,
-      drone: order.drone,
-      action: "Work order completed",
-      status: "Completed",
-      changedAt: completedAt,
-      changedBy:
-        order.assignedTo,
-    });
-
-    addMaintenanceRecord({
-      id: `MR-${Date.now()}`,
-      workOrderId: order.id,
-      droneId: order.droneId,
-      drone: order.drone,
-      title: order.title,
-      priority: order.priority,
-      assignedTo:
-        order.assignedTo,
-      diagnosis:
-        diagnosis.trim(),
-      correctiveAction:
-        correctiveAction.trim(),
-      inspectionItems: [
-        ...checkedItems,
-      ],
-      resultingStatus:
-        droneStatus,
-      createdAt:
-        order.createdAt,
-      scheduledAt:
-        order.scheduledAt,
-      completedAt,
-    });
-
-    const fleet =
-      loadFleet();
-
-    saveFleet(
-      fleet.map((item) =>
-        item.id ===
-        order.droneId
-          ? {
-              ...item,
-              status:
-                droneStatus,
-            }
-          : item,
-      ),
-    );
-
-    setWorkOrderStatus(
-      "Completed",
-    );
-
-    navigate(
-      "/technician/maintenance/work-orders",
-      {
-        replace: true,
-      },
-    );
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to complete work order.",
+      );
+    }
   };
 
   return (
@@ -315,6 +333,15 @@ export function WorkOrderDetailPage() {
         </Button>
       }
     >
+      {(apiError || workOrderQuery.error instanceof Error) && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {apiError ||
+            (workOrderQuery.error instanceof Error
+              ? workOrderQuery.error.message
+              : "")}
+        </div>
+      )}
+
       {/* Back */}
       <button
         type="button"
@@ -367,18 +394,19 @@ export function WorkOrderDetailPage() {
 
             {inspectionItems.map(
               (item) => (
-                <InspectionItem
-                  key={item}
-                  label={item}
-                  checked={checkedItems.includes(
-                    item,
-                  )}
-                  onClick={() =>
-                    toggleInspection(
+                <div key={item}>
+                  <InspectionItem
+                    label={item}
+                    checked={checkedItems.includes(
                       item,
-                    )
-                  }
-                />
+                    )}
+                    onClick={() =>
+                      toggleInspection(
+                        item,
+                      )
+                    }
+                  />
+                </div>
               ),
             )}
 

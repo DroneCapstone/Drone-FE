@@ -1,3 +1,15 @@
+import {
+  getMaintenanceAlertsApi,
+  syncMaintenanceAlertsApi,
+} from "../api/maintenanceApi";
+
+import {
+  formatApiDateTime,
+  isRecord,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
 export type AlertSource =
   | "Schedule"
   | "Incident"
@@ -200,4 +212,72 @@ export function resetDemoMaintenanceAlerts() {
       "technician-maintenance-alerts-updated",
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+function alertDisplayId(prefix: string, value: string, width = 3) {
+  if (!value) return "";
+  if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
+}
+
+function normalizeAlertSource(value: string): AlertSource {
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (key.includes("INCIDENT")) return "Incident";
+  if (key.includes("HUB") || key.includes("INSPECTION")) return "Hub inspection";
+  return "Schedule";
+}
+
+function mapApiMaintenanceAlert(value: unknown): MaintenanceAlert | null {
+  if (!isRecord(value)) return null;
+
+  const rawId = pickString(value, ["alert_id", "id"]);
+  const rawDroneId = pickString(value, ["drone_id", "droneId"]);
+  if (!rawId || !rawDroneId) return null;
+
+  const droneName = pickString(value, ["drone_name", "drone_code", "name"], "");
+  const droneId = alertDisplayId("DR", rawDroneId, 3);
+
+  return {
+    id: alertDisplayId("ALT", rawId, 3),
+    drone: droneName || droneId,
+    droneId,
+    title: pickString(value, ["title", "message", "issue_description", "reason"], "Maintenance alert"),
+    source: normalizeAlertSource(
+      pickString(value, ["source", "alert_type", "type"], "Schedule"),
+    ),
+    createdAt: formatApiDateTime(
+      pickString(value, ["created_at", "alerted_at", "due_at"], ""),
+      "—",
+    ),
+    missionId: (() => {
+      const mission = pickString(value, ["mission_id"], "");
+      return mission ? alertDisplayId("MSN", mission, 4) : undefined;
+    })(),
+    legId: pickString(value, ["leg_id", "mission_leg_id"], "") || undefined,
+    reason: pickString(value, ["reason", "description", "message"], "") || undefined,
+    reportedBy: pickString(value, ["reported_by", "created_by"], "") || undefined,
+    incidentId: pickString(value, ["incident_id"], "") || undefined,
+  };
+}
+
+export async function refreshMaintenanceAlertsFromApi() {
+  const payload = await getMaintenanceAlertsApi();
+  demoMaintenanceAlerts = unwrapList(payload)
+    .map(mapApiMaintenanceAlert)
+    .filter((item): item is MaintenanceAlert => Boolean(item));
+
+  window.dispatchEvent(new Event("technician-maintenance-alerts-updated"));
+  return loadMaintenanceAlerts();
+}
+
+export async function syncMaintenanceAlertsOnServer() {
+  const result = await syncMaintenanceAlertsApi();
+  await refreshMaintenanceAlertsFromApi();
+  return result;
 }

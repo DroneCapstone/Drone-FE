@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -31,6 +32,18 @@ import {
 import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
+
+import {
+  formatApiDateTime,
+  isRecord,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
+import {
+  useMarkAllNotificationsReadMutation,
+  useNotificationsQuery,
+} from "../hooks/useNotificationQueries";
 
 type NotificationType =
   | "incoming"
@@ -183,6 +196,45 @@ const defaultNotifications:
   },
 ];
 
+function mapApiNotification(
+  value: unknown,
+): TechnicianNotification | null {
+  if (!isRecord(value)) return null;
+
+  const id = pickString(value, ["notification_id", "id"]);
+  if (!id) return null;
+
+  const rawType = pickString(value, ["type", "notification_type"], "incoming")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  const type: NotificationType =
+    rawType.includes("battery")
+      ? "battery"
+      : rawType.includes("work")
+        ? "work_order"
+        : rawType.includes("overdue")
+          ? "overdue"
+          : rawType.includes("inspection") || rawType.includes("maintenance")
+            ? "inspection"
+            : "incoming";
+
+  const createdAt = pickString(value, ["created_at", "timestamp", "sent_at"], "");
+  const readValue = value.is_read ?? value.read ?? false;
+
+  return {
+    id: /^NOT-/i.test(id) ? id : `NOT-${id}`,
+    type,
+    title: pickString(value, ["title", "subject"], "Notification"),
+    message: pickString(value, ["message", "body", "content"], ""),
+    time: formatApiDateTime(createdAt, "—"),
+    timestamp: formatApiDateTime(createdAt, "—"),
+    unread: typeof readValue === "boolean" ? !readValue : true,
+    droneId: pickString(value, ["drone_id"], "") || undefined,
+    workOrderId: pickString(value, ["work_order_id"], "") || undefined,
+  };
+}
+
 function loadNotifications():
   TechnicianNotification[] {
   try {
@@ -212,6 +264,12 @@ export function TechnicianNotificationsPage() {
   const navigate =
     useNavigate();
 
+  const notificationsQuery =
+    useNotificationsQuery();
+
+  const markAllMutation =
+    useMarkAllNotificationsReadMutation();
+
   const [
     notifications,
     setNotifications,
@@ -225,6 +283,29 @@ export function TechnicianNotificationsPage() {
   ] = useState<NotificationFilter>(
     "all",
   );
+
+  useEffect(() => {
+    if (!notificationsQuery.data) {
+      return;
+    }
+
+    const next = unwrapList(
+      notificationsQuery.data,
+    )
+      .map(mapApiNotification)
+      .filter(
+        (item): item is TechnicianNotification =>
+          Boolean(item),
+      );
+
+    setNotifications(next);
+
+    localStorage.setItem(
+      NOTIFICATION_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+  }, [notificationsQuery.data]);
+
 
   const unreadCount =
     notifications.filter(
@@ -285,14 +366,18 @@ export function TechnicianNotificationsPage() {
     saveNotifications(next);
   };
 
-  const markAllAsRead = () => {
-    const next =
-      notifications.map(
-        (notification) => ({
-          ...notification,
-          unread: false,
-        }),
-      );
+  const markAllAsRead = async () => {
+    try {
+      await markAllMutation.mutateAsync();
+    } catch (error) {
+      console.error("Failed to mark notifications as read", error);
+      return;
+    }
+
+    const next = notifications.map((notification) => ({
+      ...notification,
+      unread: false,
+    }));
 
     saveNotifications(next);
   };

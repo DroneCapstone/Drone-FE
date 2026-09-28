@@ -5,19 +5,26 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-import { useAuth } from "../hooks/useAuth";
 import { Input } from "../../../components/ui/Input";
+import { useAuth } from "../hooks/useAuth";
+import type { UserRole } from "../types/auth";
+
+const ROLE_PATHS: Partial<
+  Record<UserRole, string>
+> = {
+  customer: "/customer/dashboard",
+  operator: "/operator/dashboard",
+  technician: "/technician/dashboard",
+  admin: "/admin/dashboard",
+};
 
 export function RegisterForm({
   onSwitchMode,
 }: {
   onSwitchMode: () => void;
 }) {
-  const navigate =
-    useNavigate();
-
-  const { register } =
-    useAuth();
+  const navigate = useNavigate();
+  const { register } = useAuth();
 
   const [name, setName] =
     useState("");
@@ -28,10 +35,8 @@ export function RegisterForm({
   const [password, setPassword] =
     useState("");
 
-  const [
-    confirmPassword,
-    setConfirmPassword,
-  ] = useState("");
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
 
   const [error, setError] =
     useState("");
@@ -43,42 +48,42 @@ export function RegisterForm({
     event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
-
     setError("");
 
     if (password.length < 8) {
       setError(
         "Password must contain at least 8 characters.",
       );
-
       return;
     }
 
-    if (
-      password !== confirmPassword
-    ) {
+    if (password !== confirmPassword) {
       setError(
         "Passwords do not match.",
       );
-
       return;
     }
 
     setSubmitting(true);
 
     try {
-      await register({
+      const user = await register({
         name,
         email,
         password,
       });
 
-      navigate(
-        "/customer/dashboard",
-        {
-          replace: true,
-        },
-      );
+      const path = ROLE_PATHS[user.role];
+
+      if (!path) {
+        throw new Error(
+          `No frontend route is configured for role ${user.role}.`,
+        );
+      }
+
+      navigate(path, {
+        replace: true,
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -158,9 +163,7 @@ export function RegisterForm({
           </label>
 
           <label className="auth-field">
-            <span>
-              Confirm password
-            </span>
+            <span>Confirm password</span>
 
             <Input
               type="password"
@@ -195,7 +198,6 @@ export function RegisterForm({
                 ? "Creating…"
                 : "Create account"}
             </span>
-
             <b>→</b>
           </button>
         </form>

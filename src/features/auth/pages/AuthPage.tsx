@@ -1,4 +1,8 @@
-import { motion, useReducedMotion } from "framer-motion";
+import {
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+
 import {
   useLocation,
   useNavigate,
@@ -6,19 +10,51 @@ import {
 
 import droneOptLogo from "../../../assets/images/droneopt-logo.png";
 
+import { ForgotPasswordForm } from "../components/ForgotPasswordForm";
 import { LoginForm } from "../components/LoginForm";
 import { RegisterForm } from "../components/RegisterForm";
+import { ResetPasswordForm } from "../components/ResetPasswordForm";
+
+type AuthMode =
+  | "login"
+  | "register"
+  | "forgot"
+  | "reset";
+
+function getAuthMode(
+  pathname: string,
+): AuthMode {
+  if (pathname === "/register") {
+    return "register";
+  }
+
+  if (pathname === "/forgot-password") {
+    return "forgot";
+  }
+
+  if (pathname === "/reset-password") {
+    return "reset";
+  }
+
+  return "login";
+}
 
 export function AuthPage() {
-  const location =
-    useLocation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const reduceMotion =
+    useReducedMotion();
 
-  const navigate =
-    useNavigate();
+  const mode = getAuthMode(
+    location.pathname,
+  );
 
   const isRegister =
-    location.pathname === "/register";
-  const reduceMotion = useReducedMotion();
+    mode === "register";
+
+  const isRecovery =
+    mode === "forgot" ||
+    mode === "reset";
 
   return (
     <main
@@ -34,14 +70,25 @@ export function AuthPage() {
 
       <motion.section
         className="auth-card"
-        initial={reduceMotion ? false : { opacity: 0, y: 10, scale: 0.992 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.28, ease: "easeOut" }}
+        initial={
+          reduceMotion
+            ? false
+            : {
+                opacity: 0,
+                y: 10,
+                scale: 0.992,
+              }
+        }
+        animate={{
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        }}
+        transition={{
+          duration: 0.28,
+          ease: "easeOut",
+        }}
       >
-        {/* ==================================
-            VISUAL
-        =================================== */}
-
         <aside className="auth-visual">
           <div className="auth-brand">
             <img
@@ -55,39 +102,27 @@ export function AuthPage() {
             </span>
           </div>
 
-          {/* Background visual only */}
-
           <div className="auth-orbit auth-orbit-large" />
           <div className="auth-orbit auth-orbit-small" />
-
           <div className="auth-route-line" />
-
           <div className="auth-route-dot auth-route-dot-one" />
           <div className="auth-route-dot auth-route-dot-two" />
-
-         
         </aside>
-
-        {/* ==================================
-            FORM
-        =================================== */}
 
         <section className="auth-form-stage">
           <div className="auth-mode-tabs">
             <button
               type="button"
               className={
-                !isRegister
+                mode === "login" ||
+                isRecovery
                   ? "active"
                   : ""
               }
               onClick={() =>
-                navigate(
-                  "/login",
-                  {
-                    replace: true,
-                  },
-                )
+                navigate("/login", {
+                  replace: true,
+                })
               }
             >
               Sign in
@@ -96,17 +131,14 @@ export function AuthPage() {
             <button
               type="button"
               className={
-                isRegister
+                mode === "register"
                   ? "active"
                   : ""
               }
               onClick={() =>
-                navigate(
-                  "/register",
-                  {
-                    replace: true,
-                  },
-                )
+                navigate("/register", {
+                  replace: true,
+                })
               }
             >
               Register
@@ -114,23 +146,45 @@ export function AuthPage() {
           </div>
 
           <div className="auth-form-viewport">
-            <div className="auth-form-track">
-              <LoginForm
-                onSwitchMode={() =>
-                  navigate(
-                    "/register",
-                  )
-                }
-              />
+            {mode === "login" && (
+              <div className="auth-form-track">
+                <LoginForm
+                  onSwitchMode={() =>
+                    navigate("/register")
+                  }
+                />
 
-              <RegisterForm
-                onSwitchMode={() =>
-                  navigate(
-                    "/login",
-                  )
-                }
-              />
-            </div>
+                <RegisterForm
+                  onSwitchMode={() =>
+                    navigate("/login")
+                  }
+                />
+              </div>
+            )}
+
+            {mode === "register" && (
+              <div className="auth-form-track">
+                <LoginForm
+                  onSwitchMode={() =>
+                    navigate("/register")
+                  }
+                />
+
+                <RegisterForm
+                  onSwitchMode={() =>
+                    navigate("/login")
+                  }
+                />
+              </div>
+            )}
+
+            {mode === "forgot" && (
+              <ForgotPasswordForm />
+            )}
+
+            {mode === "reset" && (
+              <ResetPasswordForm />
+            )}
           </div>
         </section>
       </motion.section>

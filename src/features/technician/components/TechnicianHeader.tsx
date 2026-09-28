@@ -18,6 +18,24 @@ import {
   useAuth,
 } from "../../auth/hooks/useAuth";
 
+import {
+  pickNumber,
+  pickString,
+  unwrapObject,
+} from "../api/httpClient";
+
+import {
+  useUnreadCountQuery,
+} from "../hooks/useNotificationQueries";
+
+import {
+  useTechnicianProfileQuery,
+} from "../hooks/useProfileQueries";
+
+import {
+  TechnicianQueryProvider,
+} from "../query/TechnicianQueryProvider";
+
 type ThemeMode =
   | "dark"
   | "light";
@@ -125,7 +143,7 @@ function getUnreadNotificationCount() {
   }
 }
 
-export function TechnicianHeader({
+function TechnicianHeaderContent({
   onOpenMobile,
   theme,
   onToggleTheme,
@@ -133,6 +151,12 @@ export function TechnicianHeader({
   const {
     user,
   } = useAuth();
+
+  const profileQuery =
+    useTechnicianProfileQuery();
+
+  const unreadQuery =
+    useUnreadCountQuery();
 
   const [
     technicianProfile,
@@ -142,12 +166,6 @@ export function TechnicianHeader({
       () => getSavedProfile(),
     );
 
-  const [
-    unreadNotificationCount,
-    setUnreadNotificationCount,
-  ] = useState(
-    getUnreadNotificationCount,
-  );
 
   useEffect(() => {
     const handleProfileUpdate = (
@@ -175,56 +193,64 @@ export function TechnicianHeader({
   }, []);
 
   useEffect(() => {
-    const refreshNotificationCount =
-      () => {
-        setUnreadNotificationCount(
-          getUnreadNotificationCount(),
-        );
-      };
+    if (!profileQuery.data) {
+      return;
+    }
 
-    const handleStorage = (
-      event: StorageEvent,
-    ) => {
-      if (
-        event.key ===
-        NOTIFICATION_STORAGE_KEY
-      ) {
-        refreshNotificationCount();
-      }
-    };
-
-    window.addEventListener(
-      "storage",
-      handleStorage,
+    const profileData = unwrapObject(
+      profileQuery.data,
     );
 
-    window.addEventListener(
-      "technician-notifications-updated",
-      refreshNotificationCount,
+    setTechnicianProfile((current) => ({
+      name: pickString(
+        profileData,
+        ["name", "full_name"],
+        current?.name ??
+          user?.name ??
+          "Technician",
+      ),
+      email: pickString(
+        profileData,
+        ["email"],
+        current?.email ??
+          user?.email ??
+          "",
+      ),
+      avatar:
+        current?.avatar ?? null,
+      technicianId: pickString(
+        profileData,
+        ["technician_id", "user_id", "id"],
+        current?.technicianId ?? "",
+      ),
+      controlCenter: pickString(
+        profileData,
+        ["hub_name", "hub", "control_center"],
+        current?.controlCenter ?? "",
+      ),
+    }));
+  }, [
+    profileQuery.data,
+    user?.email,
+    user?.name,
+  ]);
+
+  const unreadData =
+    unwrapObject(
+      unreadQuery.data,
     );
 
-    window.addEventListener(
-      "focus",
-      refreshNotificationCount,
-    );
+  const unreadNotificationCount =
+    typeof unreadQuery.data === "number"
+      ? unreadQuery.data
+      : unreadQuery.data
+        ? pickNumber(
+            unreadData,
+            ["unread_count", "count", "total"],
+            getUnreadNotificationCount(),
+          )
+        : getUnreadNotificationCount();
 
-    return () => {
-      window.removeEventListener(
-        "storage",
-        handleStorage,
-      );
-
-      window.removeEventListener(
-        "technician-notifications-updated",
-        refreshNotificationCount,
-      );
-
-      window.removeEventListener(
-        "focus",
-        refreshNotificationCount,
-      );
-    };
-  }, []);
 
   const displayName =
     technicianProfile?.name ??
@@ -425,5 +451,18 @@ export function TechnicianHeader({
         </NavLink>
       </div>
     </header>
+  );
+}
+
+
+export function TechnicianHeader(
+  props: TechnicianHeaderProps,
+) {
+  return (
+    <TechnicianQueryProvider>
+      <TechnicianHeaderContent
+        {...props}
+      />
+    </TechnicianQueryProvider>
   );
 }

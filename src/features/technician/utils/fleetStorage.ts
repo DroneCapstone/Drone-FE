@@ -1,4 +1,17 @@
 import {
+  getDroneDetailApi,
+  getFleetDronesApi,
+  updateDroneStatusApi,
+} from "../api/fleetApi";
+
+import {
+  isRecord,
+  pickNumber,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
+import {
   technicianDrones,
 } from "../data/technicianMockData";
 
@@ -15,6 +28,10 @@ export type FleetDrone = {
   utilization: number;
   lastFlight: string;
   location: string;
+  installedBatteryId?: string;
+  installedBatteryPct?: number;
+  lastMaintenanceAt?: string;
+  nextMaintenanceAt?: string;
 };
 
 export const TECHNICIAN_HUB =
@@ -55,7 +72,7 @@ const defaultLocationById: Record<
 export function normalizeDroneStatus(
   status: string,
 ): DroneStatus {
-  if (status === "Maintenance") {
+  if (status.trim().toUpperCase() === "MAINTENANCE") {
     return "Maintenance";
   }
 
@@ -156,4 +173,86 @@ export function resetDemoFleet() {
       "technician-fleet-updated",
     ),
   );
+}
+
+
+function mapApiDrone(value: unknown): FleetDrone | null {
+  if (!isRecord(value)) return null;
+
+  const rawId = pickString(value, ["drone_id", "id", "droneId"]);
+  if (!rawId) return null;
+
+  const id = /^DR-/i.test(rawId)
+    ? rawId.toUpperCase()
+    : `DR-${String(Number(rawId) || rawId).padStart(3, "0")}`;
+
+  const name = pickString(value, ["name", "drone_name", "code"], id);
+  const model = pickString(value, ["model", "drone_model"], "—");
+  const status = normalizeDroneStatus(
+    pickString(value, ["status", "technical_status", "operational_status"], "Available"),
+  );
+  const hub = pickString(value, ["hub_name", "hub", "location"], TECHNICIAN_HUB);
+  const battery = pickNumber(value, ["battery_level_pct", "battery_pct", "battery", "charge_level_pct"], 0);
+
+  return {
+    id,
+    name,
+    model,
+    status,
+    battery,
+    utilization: 0,
+    lastFlight: pickString(value, ["last_flight", "last_mission_id"], "Not flown"),
+    location: hub,
+    installedBatteryId: (() => {
+      const raw = pickString(value, ["installed_battery_id", "battery_id"], "");
+      if (!raw) return undefined;
+      if (/^BAT-/i.test(raw)) return raw.toUpperCase();
+      const match = raw.match(/(\d+)$/);
+      return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${raw}`;
+    })(),
+    installedBatteryPct: battery || undefined,
+    lastMaintenanceAt: pickString(value, ["last_maintenance", "last_maintenance_at"], "") || undefined,
+    nextMaintenanceAt: pickString(value, ["next_maintenance", "next_maintenance_at"], "") || undefined,
+  };
+}
+
+export async function refreshFleetFromApi() {
+  const payload = await getFleetDronesApi();
+  const next = unwrapList(payload)
+    .map(mapApiDrone)
+    .filter((item): item is FleetDrone => Boolean(item));
+
+  demoFleet = next;
+  window.dispatchEvent(new Event("technician-fleet-updated"));
+  return loadFleet();
+}
+
+export async function updateDroneStatusOnServer(
+  droneId: string,
+  status: DroneStatus,
+) {
+  await updateDroneStatusApi(droneId, status);
+
+  demoFleet = demoFleet.map((drone) =>
+    drone.id === droneId ? { ...drone, status } : drone,
+  );
+
+  window.dispatchEvent(new Event("technician-fleet-updated"));
+  return loadFleet();
+}
+
+export async function fetchDroneDetailFromApi(droneId: string) {
+  const payload = await getDroneDetailApi(droneId);
+  const record = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+  const mapped = mapApiDrone(record);
+  if (!mapped) {
+    throw new Error("Backend returned an invalid drone detail response.");
+  }
+
+  demoFleet = [
+    mapped,
+    ...demoFleet.filter((drone) => drone.id !== mapped.id),
+  ];
+  window.dispatchEvent(new Event("technician-fleet-updated"));
+  return { ...mapped };
 }

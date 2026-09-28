@@ -35,9 +35,7 @@ import {
 
 import {
   loadWorkOrders,
-  saveWorkOrders,
   loadWorkOrderLogs,
-  saveWorkOrderLogs,
   loadMaintenanceRecords,
   type CompletedMaintenanceRecord,
   type WorkOrder,
@@ -45,6 +43,12 @@ import {
   type WorkOrderPriority,
   type WorkOrderStatus,
 } from "../utils/maintenanceStorage";
+
+import {
+  useCreateWorkOrderMutation,
+  useUpdateWorkOrderMutation,
+  useWorkOrdersQuery,
+} from "../hooks/useMaintenanceQueries";
 
 type AlertSource =
   | "Schedule"
@@ -60,6 +64,7 @@ type ActiveWorkOrderStatus =
 type WorkOrderForm = {
   drone: string;
   droneId: string;
+  batteryId: string;
   title: string;
   priority: WorkOrderPriority;
   assignedTo: string;
@@ -84,6 +89,7 @@ const ALERT_LOG_STORAGE_KEY =
 const initialForm: WorkOrderForm = {
   drone: "",
   droneId: "",
+  batteryId: "",
   title: "",
   priority: "Medium",
   assignedTo: "Technician Demo",
@@ -134,12 +140,17 @@ export function WorkOrdersPage() {
     setSearchParams,
   ] = useSearchParams();
 
-  const [
-    workOrders,
-    setWorkOrders,
-  ] = useState<WorkOrder[]>(
-    loadWorkOrders,
-  );
+  const workOrdersQuery =
+    useWorkOrdersQuery();
+
+  const createWorkOrderMutation =
+    useCreateWorkOrderMutation();
+
+  const updateWorkOrderMutation =
+    useUpdateWorkOrderMutation();
+
+  const workOrders: WorkOrder[] =
+    workOrdersQuery.data ?? [];
 
   const [
     workOrderLogs,
@@ -195,6 +206,11 @@ export function WorkOrdersPage() {
       initialForm,
     );
 
+  const [apiError, setApiError] =
+    useState("");
+
+
+
   useEffect(() => {
     const drone =
       searchParams.get("drone");
@@ -216,6 +232,10 @@ export function WorkOrdersPage() {
       droneId:
         searchParams.get(
           "droneId",
+        ) ?? "",
+      batteryId:
+        searchParams.get(
+          "batteryId",
         ) ?? "",
       title,
       priority: "Medium",
@@ -323,188 +343,89 @@ export function WorkOrdersPage() {
     setHistoryOpen(true);
   };
 
-  const appendWorkOrderLog = (
-    workOrderId: string,
-    drone: string,
-    action: string,
-    status: WorkOrderStatus,
-  ) => {
-    const nextLog: WorkOrderLog = {
-      id: `WOL-${Date.now()}`,
-      workOrderId,
-      drone,
-      action,
-      status,
-      changedAt: formatNow(),
-      changedBy:
-        "Technician Demo",
-    };
 
-    setWorkOrderLogs(
-      (current) => {
-        const next = [
-          nextLog,
-          ...current,
-        ];
 
-        saveWorkOrderLogs(
-          next,
-        );
-
-        return next;
-      },
-    );
-  };
-
-  const handleCreateWorkOrder = (
+  const handleCreateWorkOrder = async (
     event: FormEvent,
   ) => {
     event.preventDefault();
 
     if (
-      !form.drone.trim() ||
+      !form.droneId.trim() ||
+      !form.batteryId.trim() ||
       !form.title.trim()
     ) {
+      setApiError(
+        "Drone ID, Battery ID and issue description are required by Backend.",
+      );
       return;
     }
 
-    const nextNumber =
-      1057 +
-      workOrders.length;
+    try {
+      setApiError("");
+      await createWorkOrderMutation.mutateAsync({
+        droneId: form.droneId,
+        batteryId: form.batteryId,
+        issueDescription: form.title,
+      });
 
-    const newOrder: WorkOrder = {
-      id: `WO-${nextNumber}`,
-      drone: form.drone,
-      droneId:
-        form.droneId ||
-        "DR-NEW",
-      title: form.title,
-      priority: form.priority,
-      status: "Not Started",
-      assignedTo:
-        form.assignedTo,
-      createdAt: formatNow(),
-      relatedAlertId:
-        form.relatedAlertId,
-    };
+      const nextOrders =
+        loadWorkOrders();
 
-    const nextOrders = [
-      newOrder,
-      ...workOrders,
-    ];
-
-    setWorkOrders(
-      nextOrders,
-    );
-
-    saveWorkOrders(
-      nextOrders,
-    );
-
-    appendWorkOrderLog(
-      newOrder.id,
-      newOrder.drone,
-      "Work order created",
-      "Not Started",
-    );
-
-    /*
-     * If this work order was created from a maintenance alert,
-     * that alert becomes Handled and disappears from Active alerts.
-     * The alert is preserved in Alert history.
-     */
-    if (
-      form.relatedAlertId &&
-      form.alertSource
-    ) {
-      const currentAlertLogs =
-        loadAlertLogs();
-
-      const alreadyLogged =
-        currentAlertLogs.some(
-          (log) =>
-            log.alertId ===
-            form.relatedAlertId,
-        );
-
-      if (!alreadyLogged) {
-        const alertLog: AlertLog = {
-          id: `ALOG-${Date.now()}`,
-          alertId:
-            form.relatedAlertId,
-          drone:
-            newOrder.drone,
-          title:
-            newOrder.title,
-          source:
-            form.alertSource,
-          status: "Handled",
-          workOrderId:
-            newOrder.id,
-          handledAt:
-            formatNow(),
-        };
-
-        localStorage.setItem(
-          ALERT_LOG_STORAGE_KEY,
-          JSON.stringify([
-            alertLog,
-            ...currentAlertLogs,
-          ]),
-        );
+      if (form.relatedAlertId && form.alertSource) {
+        const currentAlertLogs = loadAlertLogs();
+        if (!currentAlertLogs.some((log) => log.alertId === form.relatedAlertId)) {
+          const created = nextOrders[0];
+          const alertLog: AlertLog = {
+            id: `ALOG-${Date.now()}`,
+            alertId: form.relatedAlertId,
+            drone: form.drone,
+            title: form.title,
+            source: form.alertSource,
+            status: "Handled",
+            workOrderId: created?.id ?? "WO",
+            handledAt: formatNow(),
+          };
+          localStorage.setItem(
+            ALERT_LOG_STORAGE_KEY,
+            JSON.stringify([alertLog, ...currentAlertLogs]),
+          );
+        }
       }
-    }
 
-    setCreateModalOpen(false);
-    setForm(initialForm);
+      setCreateModalOpen(false);
+      setForm(initialForm);
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create work order.",
+      );
+    }
   };
 
-  const handleStatusChange = (
+  const handleStatusChange = async (
     orderId: string,
     nextStatus: ActiveWorkOrderStatus,
   ) => {
-    const order =
-      workOrders.find(
-        (item) =>
-          item.id === orderId,
+    try {
+      setApiError("");
+      await updateWorkOrderMutation.mutateAsync({
+        workOrderId: orderId,
+        payload: {
+          status:
+            nextStatus === "In Progress"
+              ? "IN_PROGRESS"
+              : "NOT_STARTED",
+        },
+      });
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update work order.",
       );
-
-    if (
-      !order ||
-      order.status === nextStatus
-    ) {
-      return;
     }
-
-    const nextOrders =
-      workOrders.map(
-        (item) =>
-          item.id === orderId
-            ? {
-                ...item,
-                status:
-                  nextStatus,
-              }
-            : item,
-      );
-
-    setWorkOrders(
-      nextOrders,
-    );
-
-    saveWorkOrders(
-      nextOrders,
-    );
-
-    appendWorkOrderLog(
-      order.id,
-      order.drone,
-      nextStatus ===
-        "Not Started"
-        ? "Work order moved to Not Started"
-        : "Work order started",
-      nextStatus,
-    );
   };
 
   return (
@@ -524,6 +445,15 @@ export function WorkOrdersPage() {
         </Button>
       }
     >
+      {(apiError || workOrdersQuery.error instanceof Error) && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {apiError ||
+            (workOrdersQuery.error instanceof Error
+              ? workOrdersQuery.error.message
+              : "")}
+        </div>
+      )}
+
       {/* WORK ORDERS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         {/* FILTERS */}
@@ -1061,6 +991,38 @@ export function WorkOrdersPage() {
                     className="tech-control h-10 w-full px-3 !text-[14px]"
                   />
                 </Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Drone ID">
+                    <input
+                      required
+                      value={form.droneId}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          droneId: event.target.value,
+                        }))
+                      }
+                      placeholder="DR-001"
+                      className="tech-control h-10 w-full px-3 !text-[14px]"
+                    />
+                  </Field>
+
+                  <Field label="Battery ID">
+                    <input
+                      required
+                      value={form.batteryId}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          batteryId: event.target.value,
+                        }))
+                      }
+                      placeholder="BAT-001"
+                      className="tech-control h-10 w-full px-3 !text-[14px]"
+                    />
+                  </Field>
+                </div>
 
                 <Field label="Task / issue">
                   <input

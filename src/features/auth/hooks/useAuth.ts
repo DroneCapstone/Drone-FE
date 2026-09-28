@@ -3,7 +3,8 @@ import { useContext } from "react";
 import { AuthContext } from "../context/authContextValue";
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(

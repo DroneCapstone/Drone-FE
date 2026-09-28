@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -37,6 +38,16 @@ import {
 import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
+
+import {
+  pickString,
+  unwrapObject,
+} from "../api/httpClient";
+
+import {
+  useTechnicianProfileQuery,
+  useUpdateTechnicianProfileMutation,
+} from "../hooks/useProfileQueries";
 
 
 /* =========================================================
@@ -116,6 +127,12 @@ export function TechnicianProfilePage() {
     user,
   } = useAuth();
 
+  const profileQuery =
+    useTechnicianProfileQuery();
+
+  const updateProfileMutation =
+    useUpdateTechnicianProfileMutation();
+
   const fileInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -168,6 +185,59 @@ export function TechnicianProfilePage() {
     setEditing,
   ] = useState(false);
 
+  const [apiError, setApiError] = useState("");
+
+  useEffect(() => {
+    if (!profileQuery.data) {
+      return;
+    }
+
+    const data = unwrapObject(
+      profileQuery.data,
+    );
+
+    const nextProfile: TechnicianProfile = {
+      name: pickString(
+        data,
+        ["name", "full_name"],
+        profile.name,
+      ),
+      email: pickString(
+        data,
+        ["email"],
+        profile.email,
+      ),
+      avatar: profile.avatar,
+      technicianId: pickString(
+        data,
+        ["technician_id", "user_id", "id"],
+        profile.technicianId,
+      ),
+      controlCenter: pickString(
+        data,
+        ["hub_name", "hub", "control_center"],
+        profile.controlCenter,
+      ),
+    };
+
+    setProfile(nextProfile);
+    setDraft(nextProfile);
+
+    localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify(nextProfile),
+    );
+  }, [profileQuery.data]);
+
+  useEffect(() => {
+    if (profileQuery.error instanceof Error) {
+      setApiError(
+        profileQuery.error.message,
+      );
+    }
+  }, [profileQuery.error]);
+
+
 
   /* =========================
      EDIT
@@ -195,52 +265,63 @@ export function TechnicianProfilePage() {
      SAVE
   ========================= */
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const nextProfile: TechnicianProfile = {
       ...draft,
-
-      name:
-        draft.name.trim() ||
-        profile.name,
-
-      email:
-        draft.email.trim() ||
-        profile.email,
-
+      name: draft.name.trim() || profile.name,
+      email: draft.email.trim() || profile.email,
       controlCenter:
-        draft.controlCenter.trim() ||
-        profile.controlCenter,
+        draft.controlCenter.trim() || profile.controlCenter,
     };
 
-    setProfile(
-      nextProfile,
-    );
+    try {
+      setApiError("");
 
-    setDraft(
-      nextProfile,
-    );
+      /*
+       * Backend document explicitly supports updating full name / username.
+       * Email and managed Hub remain backend-owned/read-only fields.
+       */
+      await updateProfileMutation.mutateAsync({
+        name: nextProfile.name,
+      });
 
-    localStorage.setItem(
-      PROFILE_STORAGE_KEY,
-      JSON.stringify(
-        nextProfile,
-      ),
-    );
+      const refreshed =
+        await profileQuery.refetch();
 
+      const data = unwrapObject(
+        refreshed.data,
+      );
 
-    /* Update TechnicianHeader immediately */
+      const syncedProfile: TechnicianProfile = {
+        ...nextProfile,
+        name: pickString(data, ["name", "full_name"], nextProfile.name),
+        email: pickString(data, ["email"], nextProfile.email),
+        technicianId: pickString(data, ["technician_id", "user_id", "id"], nextProfile.technicianId),
+        controlCenter: pickString(data, ["hub_name", "hub", "control_center"], nextProfile.controlCenter),
+      };
 
-    window.dispatchEvent(
-      new CustomEvent(
-        "technician-profile-updated",
-        {
-          detail:
-            nextProfile,
-        },
-      ),
-    );
+      setProfile(syncedProfile);
+      setDraft(syncedProfile);
+      localStorage.setItem(
+        PROFILE_STORAGE_KEY,
+        JSON.stringify(syncedProfile),
+      );
 
-    setEditing(false);
+      window.dispatchEvent(
+        new CustomEvent(
+          "technician-profile-updated",
+          { detail: syncedProfile },
+        ),
+      );
+
+      setEditing(false);
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update profile.",
+      );
+    }
   };
 
 
@@ -418,6 +499,12 @@ export function TechnicianProfilePage() {
         )
       }
     >
+      {apiError && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {apiError}
+        </div>
+      )}
+
       <div
         className="
           grid gap-5
@@ -830,22 +917,7 @@ export function TechnicianProfilePage() {
                     value={
                       draft.email
                     }
-                    onChange={(
-                      event,
-                    ) =>
-                      setDraft(
-                        (
-                          current,
-                        ) => ({
-                          ...current,
-
-                          email:
-                            event
-                              .target
-                              .value,
-                        }),
-                      )
-                    }
+                    disabled
                     className="
                       h-10
 
@@ -857,9 +929,10 @@ export function TechnicianProfilePage() {
 
                       text-[14px]
 
-                      text-[var(--tech-text)]
+                      text-[var(--tech-muted)]
 
-                      focus-visible:border-orange-500 focus-visible:ring-0 focus-visible:outline-none
+                      disabled:cursor-not-allowed
+                      disabled:opacity-60
                     "
                   />
                 </ProfileField>
@@ -906,22 +979,7 @@ export function TechnicianProfilePage() {
                     value={
                       draft.controlCenter
                     }
-                    onChange={(
-                      event,
-                    ) =>
-                      setDraft(
-                        (
-                          current,
-                        ) => ({
-                          ...current,
-
-                          controlCenter:
-                            event
-                              .target
-                              .value,
-                        }),
-                      )
-                    }
+                    disabled
                     className="
                       h-10
 
@@ -933,9 +991,10 @@ export function TechnicianProfilePage() {
 
                       text-[14px]
 
-                      text-[var(--tech-text)]
+                      text-[var(--tech-muted)]
 
-                      focus-visible:border-orange-500 focus-visible:ring-0 focus-visible:outline-none
+                      disabled:cursor-not-allowed
+                      disabled:opacity-60
                     "
                   />
                 </ProfileField>
@@ -966,7 +1025,7 @@ export function TechnicianProfilePage() {
                     text-[var(--tech-muted)]
                   "
                 >
-                  Technician ID and role are managed by the system and cannot be edited.
+                  Technician ID, email, role and managed Hub are backend-owned fields. Only supported profile fields are editable here.
                 </p>
               </div>
             )}

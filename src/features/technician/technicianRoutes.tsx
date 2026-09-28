@@ -55,6 +55,10 @@ import {
   TechnicianProfilePage,
 } from "./pages/TechnicianProfilePage";
 
+import {
+  TechnicianQueryProvider,
+} from "./query/TechnicianQueryProvider";
+
 export const technicianRoutes:
   RouteObject[] = [
   {
@@ -70,31 +74,43 @@ export const technicianRoutes:
   {
     path: "dashboard",
     element: (
-      <TechnicianDashboardPage />
+      <TechnicianQueryProvider>
+        <TechnicianDashboardPage />
+      </TechnicianQueryProvider>
     ),
   },
 
   /* Fleet */
   {
     path: "fleet",
-    element: <FleetPage />,
+    element: (
+      <TechnicianQueryProvider>
+        <FleetPage />
+      </TechnicianQueryProvider>
+    ),
   },
   {
     path: "fleet/transit",
     element: (
-      <TransitMissionsPage />
+      <TechnicianQueryProvider>
+        <TransitMissionsPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "fleet/batteries",
     element: (
-      <BatteryManagementPage />
+      <TechnicianQueryProvider>
+        <BatteryManagementPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "fleet/:droneId",
     element: (
-      <DroneDetailPage />
+      <TechnicianQueryProvider>
+        <DroneDetailPage />
+      </TechnicianQueryProvider>
     ),
   },
 
@@ -102,13 +118,17 @@ export const technicianRoutes:
   {
     path: "deliveries/outbound",
     element: (
-      <OutboundDeliveriesPage />
+      <TechnicianQueryProvider>
+        <OutboundDeliveriesPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "deliveries/confirmations",
     element: (
-      <DeliveryConfirmationsPage />
+      <TechnicianQueryProvider>
+        <DeliveryConfirmationsPage />
+      </TechnicianQueryProvider>
     ),
   },
 
@@ -116,39 +136,51 @@ export const technicianRoutes:
   {
     path: "maintenance",
     element: (
-      <MaintenancePage />
+      <TechnicianQueryProvider>
+        <MaintenancePage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "maintenance/alerts",
     element: (
-      <MaintenanceAlertsPage />
+      <TechnicianQueryProvider>
+        <MaintenanceAlertsPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "maintenance/work-orders",
     element: (
-      <WorkOrdersPage />
+      <TechnicianQueryProvider>
+        <WorkOrdersPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path:
       "maintenance/work-orders/:workOrderId",
     element: (
-      <WorkOrderDetailPage />
+      <TechnicianQueryProvider>
+        <WorkOrderDetailPage />
+      </TechnicianQueryProvider>
     ),
   },
 
   {
     path: "notifications",
     element: (
-      <TechnicianNotificationsPage />
+      <TechnicianQueryProvider>
+        <TechnicianNotificationsPage />
+      </TechnicianQueryProvider>
     ),
   },
   {
     path: "profile",
     element: (
-      <TechnicianProfilePage />
+      <TechnicianQueryProvider>
+        <TechnicianProfilePage />
+      </TechnicianQueryProvider>
     ),
   },
 

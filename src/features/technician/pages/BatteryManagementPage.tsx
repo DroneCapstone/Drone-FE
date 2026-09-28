@@ -1,6 +1,5 @@
 import {
   type ReactNode,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -35,26 +34,29 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  checkoutBatteryForFlight,
-  loadBatteries,
-  loadBatteryHistory,
-  syncChargingBatteries,
   type BatteryHistoryRecord,
   type BatteryStatus,
   type HubBattery,
 } from "../utils/batteryStorage";
 
 import {
-  loadFleet,
-  saveFleet,
+  useBatteriesQuery,
+  useBatteryHistoryQuery,
+  useBatteryMutation as useBatteryApiMutation,
+} from "../hooks/useBatteryQueries";
+
+import {
   TECHNICIAN_HUB,
 } from "../utils/fleetStorage";
 
 import {
-  loadOutboundDeliveries,
-  markOutboundReady,
   type OutboundDelivery,
 } from "../utils/outboundDeliveryStorage";
+
+import {
+  useOutboundDeliveriesQuery,
+  usePrepareOutboundBatteryMutation,
+} from "../hooks/useOutboundQueries";
 
 type BatteryFilter =
   | "All status"
@@ -106,26 +108,29 @@ export function BatteryManagementPage() {
   const navigate =
     useNavigate();
 
-  const [
-    batteries,
-    setBatteries,
-  ] = useState<
-    HubBattery[]
-  >(loadBatteries);
+  const batteriesQuery =
+    useBatteriesQuery();
 
-  const [
-    history,
-    setHistory,
-  ] = useState<
-    BatteryHistoryRecord[]
-  >(loadBatteryHistory);
+  const historyQuery =
+    useBatteryHistoryQuery();
 
-  const [
-    outboundDeliveries,
-    setOutboundDeliveries,
-  ] = useState<
-    OutboundDelivery[]
-  >(loadOutboundDeliveries);
+  const outboundQuery =
+    useOutboundDeliveriesQuery();
+
+  const batteryUseMutation =
+    useBatteryApiMutation();
+
+  const prepareBatteryMutation =
+    usePrepareOutboundBatteryMutation();
+
+  const batteries: HubBattery[] =
+    batteriesQuery.data ?? [];
+
+  const history: BatteryHistoryRecord[] =
+    historyQuery.data ?? [];
+
+  const outboundDeliveries: OutboundDelivery[] =
+    outboundQuery.data ?? [];
 
   const [
     statusFilter,
@@ -155,81 +160,6 @@ export function BatteryManagementPage() {
     actionError,
     setActionError,
   ] = useState("");
-
-  const refresh = () => {
-    setBatteries(
-      loadBatteries(),
-    );
-
-    setHistory(
-      loadBatteryHistory(),
-    );
-
-    setOutboundDeliveries(
-      loadOutboundDeliveries(),
-    );
-  };
-
-  useEffect(() => {
-    /*
-     * Frontend mock:
-     * asks the mocked backend state to refresh every 10 seconds.
-     *
-     * Production:
-     * replace this with backend polling, WebSocket or SSE.
-     */
-    syncChargingBatteries();
-    refresh();
-
-    const intervalId =
-      window.setInterval(
-        () => {
-          syncChargingBatteries();
-          refresh();
-        },
-        10_000,
-      );
-
-    const sync = () => {
-      refresh();
-    };
-
-    window.addEventListener(
-      "technician-batteries-updated",
-      sync,
-    );
-
-    window.addEventListener(
-      "technician-battery-history-updated",
-      sync,
-    );
-
-    window.addEventListener(
-      "technician-outbound-deliveries-updated",
-      sync,
-    );
-
-    return () => {
-      window.clearInterval(
-        intervalId,
-      );
-
-      window.removeEventListener(
-        "technician-batteries-updated",
-        sync,
-      );
-
-      window.removeEventListener(
-        "technician-battery-history-updated",
-        sync,
-      );
-
-      window.removeEventListener(
-        "technician-outbound-deliveries-updated",
-        sync,
-      );
-    };
-  }, []);
 
   const hubBatteries =
     useMemo(
@@ -336,112 +266,60 @@ export function BatteryManagementPage() {
     setActionError("");
   };
 
-  const handleUseBattery = () => {
+  const handleUseBattery = async () => {
     if (
       !selectedBattery ||
       !selectedDelivery ||
-      !selectedDelivery
-        .assignedDroneId ||
-      !selectedDelivery
-        .missionId
+      !selectedDelivery.missionId
     ) {
       setActionError(
         "Select an Operator-assigned mission before using this battery.",
       );
-
       return;
     }
 
-    const fleet =
-      loadFleet();
+    try {
+      setActionError("");
 
-    const drone =
-      fleet.find(
-        (item) =>
-          item.id ===
-            selectedDelivery
-              .assignedDroneId &&
-        item.location ===
-          TECHNICIAN_HUB &&
-        item.status ===
-          "Available",
-      );
-
-    if (!drone) {
-      setActionError(
-        "The assigned drone is not Available in this Hub Fleet.",
-      );
-
-      return;
-    }
-
-    const flightBattery =
-      checkoutBatteryForFlight({
-        batteryId:
-          selectedBattery.id,
-
-        droneId:
-          drone.id,
-
-        hub:
-          TECHNICIAN_HUB,
-
-        missionId:
-          selectedDelivery
-            .missionId,
-
-        orderId:
-          selectedDelivery
-            .orderId,
+      await batteryUseMutation.mutateAsync({
+        batteryId: selectedBattery.id,
+        missionId: selectedDelivery.missionId,
       });
 
-    if (!flightBattery) {
-      setActionError(
-        "This battery is no longer Ready.",
+      await prepareBatteryMutation.mutateAsync({
+        orderId: selectedDelivery.orderId,
+        installedBatteryId: selectedBattery.id,
+      });
+
+      closeUseBattery();
+      navigate(
+        "/technician/deliveries/outbound",
       );
-
-      return;
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Unable to assign this battery to the mission.",
+      );
     }
-
-    saveFleet(
-      fleet.map(
-        (item) =>
-          item.id ===
-          drone.id
-            ? {
-                ...item,
-                battery: 100,
-              }
-            : item,
-      ),
-    );
-
-    markOutboundReady({
-      orderId:
-        selectedDelivery
-          .orderId,
-
-      batteryId:
-        flightBattery.id,
-    });
-
-    /*
-     * Battery has been assigned successfully.
-     * Return directly to Outbound Deliveries so Technician can
-     * dispatch the now-Ready mission immediately.
-     */
-    closeUseBattery();
-
-    navigate(
-      "/technician/deliveries/outbound",
-    );
   };
 
   return (
     <TechnicianPageShell
       title="Battery management"
-      description={`Shared battery inventory at ${TECHNICIAN_HUB}. Charging completion is updated automatically from backend charging time.`}
+      description={`Shared battery inventory at ${TECHNICIAN_HUB}. Charge level and estimated full time are loaded from the backend.`}
     >
+      {(batteriesQuery.error instanceof Error ||
+        outboundQuery.error instanceof Error) && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {batteriesQuery.error instanceof Error
+            ? batteriesQuery.error.message
+            : outboundQuery.error instanceof Error
+              ? outboundQuery.error.message
+              : "Unable to load battery data."}
+        </div>
+      )}
+
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <StatCard
           label="Ready"

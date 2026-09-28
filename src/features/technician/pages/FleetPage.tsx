@@ -1,7 +1,6 @@
 import {
   type FormEvent,
   type ReactNode,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -44,12 +43,15 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  loadFleet,
-  saveFleet,
   TECHNICIAN_HUB,
   type DroneStatus,
   type FleetDrone,
 } from "../utils/fleetStorage";
+
+import {
+  useFleetQuery,
+  useUpdateDroneStatusMutation,
+} from "../hooks/useFleetQueries";
 
 import {
   getBatteryForDrone,
@@ -102,13 +104,14 @@ function getDroneDisplayCode(
 export function FleetPage() {
   const navigate = useNavigate();
 
-  const [
-    drones,
-    setDrones,
-  ] = useState<FleetDrone[]>(
-    loadFleet,
-  );
+  const fleetQuery =
+    useFleetQuery();
 
+  const updateStatusMutation =
+    useUpdateDroneStatusMutation();
+
+  const drones =
+    fleetQuery.data ?? [];
 
 
   const [
@@ -148,29 +151,12 @@ export function FleetPage() {
     setFormError,
   ] = useState("");
 
-  useEffect(() => {
-    saveFleet(drones);
-  }, [drones]);
+  const [apiError, setApiError] = useState("");
 
-  useEffect(() => {
-    const syncFleet = () => {
-      setDrones(
-        loadFleet(),
-      );
-    };
-
-    window.addEventListener(
-      "technician-fleet-updated",
-      syncFleet,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "technician-fleet-updated",
-        syncFleet,
-      );
-    };
-  }, []);
+  const queryError =
+    fleetQuery.error instanceof Error
+      ? fleetQuery.error.message
+      : "";
 
 
 
@@ -182,12 +168,7 @@ export function FleetPage() {
    * in Transit missions.
    */
   const hubDrones = useMemo(
-    () =>
-      drones.filter(
-        (drone) =>
-          drone.location ===
-          TECHNICIAN_HUB,
-      ),
+    () => drones,
     [drones],
   );
 
@@ -268,57 +249,45 @@ export function FleetPage() {
     setFormError("");
   };
 
-  const handleSubmit = (
+  const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
-    if (!editingDroneId) {
-      return;
-    }
+    if (!editingDroneId) return;
 
-
-    if (!form.model.trim()) {
+    try {
+      setFormError("");
+      await updateStatusMutation.mutateAsync({
+        droneId: editingDroneId,
+        status: form.status,
+      });
+      closeModal();
+    } catch (error) {
       setFormError(
-        "Please enter the drone model.",
+        error instanceof Error
+          ? error.message
+          : "Unable to update drone status.",
       );
-
-      return;
     }
-
-
-    setDrones((current) =>
-      current.map((drone) =>
-        drone.id ===
-        editingDroneId
-          ? {
-              ...drone,
-              model:
-                form.model.trim(),
-              status:
-                form.status,
-            }
-          : drone,
-      ),
-    );
-
-    closeModal();
   };
 
-  const handleStatusChange = (
+  const handleStatusChange = async (
     droneId: string,
     status: DroneStatus,
   ) => {
-    setDrones((current) =>
-      current.map((drone) =>
-        drone.id === droneId
-          ? {
-              ...drone,
-              status,
-            }
-          : drone,
-      ),
-    );
+    try {
+      await updateStatusMutation.mutateAsync({
+        droneId,
+        status,
+      });
+    } catch (error) {
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update drone status.",
+      );
+    }
   };
 
 
@@ -335,6 +304,12 @@ export function FleetPage() {
       title="Hub fleet"
       description={`Drones physically stored at ${TECHNICIAN_HUB}. Batteries are installed only when a drone is prepared for departure.`}
     >
+      {(apiError || queryError) && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          {apiError || queryError}
+        </div>
+      )}
+
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         {/* FILTERS */}
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] px-4 py-4">
@@ -424,6 +399,14 @@ export function FleetPage() {
                         drone.id,
                       );
 
+                    const installedBatteryId =
+                      drone.installedBatteryId ??
+                      installedBattery?.id;
+
+                    const installedBatteryPct =
+                      drone.installedBatteryPct ??
+                      installedBattery?.chargeLevelPct;
+
                     const code =
                       getDroneDisplayCode(
                         drone,
@@ -473,14 +456,14 @@ export function FleetPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          {installedBattery ? (
+                          {installedBatteryId ? (
                             <div>
                               <p className="text-[13px] font-semibold text-[var(--tech-text-secondary)]">
-                                {installedBattery.id}
+                                {installedBatteryId}
                               </p>
 
                               <p className="mt-1 text-[11px] text-orange-500">
-                                {installedBattery.chargeLevelPct}% · Installed
+                                {installedBatteryPct ?? 100}% · Installed
                               </p>
                             </div>
                           ) : (
@@ -493,7 +476,7 @@ export function FleetPage() {
 
                         <TableCell className="text-center text-[12px] text-[var(--tech-muted)]">
                           {
-                            TECHNICIAN_HUB
+                            drone.location || TECHNICIAN_HUB
                           }
                         </TableCell>
 
@@ -606,26 +589,9 @@ export function FleetPage() {
 
                   <Field label="Model">
                     <input
-                      required
-                      value={
-                        form.model
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setForm(
-                          (
-                            current,
-                          ) => ({
-                            ...current,
-                            model:
-                              event
-                                .target
-                                .value,
-                          }),
-                        )
-                      }
-                      className="tech-control h-10 w-full px-3 !text-[13px]"
+                      disabled
+                      value={form.model}
+                      className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
                     />
                   </Field>
 
@@ -661,6 +627,7 @@ export function FleetPage() {
                       <input
                         disabled
                         value={
+                          editingDrone.installedBatteryId ??
                           getBatteryForDrone(
                             editingDrone.id,
                           )?.id ??

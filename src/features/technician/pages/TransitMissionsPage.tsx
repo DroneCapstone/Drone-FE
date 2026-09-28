@@ -44,6 +44,10 @@ import {
 } from "../utils/fleetStorage";
 
 import {
+  useFleetQuery,
+} from "../hooks/useFleetQueries";
+
+import {
   formatTransitTime,
   loadTransitMissionHistory,
   loadTransitMissions,
@@ -56,16 +60,22 @@ import {
 } from "../utils/transitMissionStorage";
 
 import {
+  useConfirmTransitArrivalMutation,
+  useTransitMissionsQuery,
+} from "../hooks/useTransitQueries";
+
+import {
   createMaintenanceAlert,
-  loadMaintenanceAlerts,
 } from "../utils/maintenanceAlertStorage";
 
 import {
-  detachBatteryFromDrone,
   getBatteryForDrone,
   installFullBatteryOnDrone,
-  replaceBatteryForTransitStop,
 } from "../utils/batteryStorage";
+
+import {
+  useFirstReadyBatteryMutation,
+} from "../hooks/useBatteryQueries";
 
 type TransitFilter =
   | "All transit"
@@ -205,6 +215,18 @@ function getHistoryResultLabel(
 }
 
 export function TransitMissionsPage() {
+  const transitQuery =
+    useTransitMissionsQuery();
+
+  const fleetQuery =
+    useFleetQuery();
+
+  const confirmArrivalMutation =
+    useConfirmTransitArrivalMutation();
+
+  const readyBatteryMutation =
+    useFirstReadyBatteryMutation();
+
   const [
     missions,
     setMissions,
@@ -348,6 +370,48 @@ export function TransitMissionsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (transitQuery.data) {
+      setMissions(
+        transitQuery.data.map(
+          (mission) =>
+            mission.status ===
+            "Replacement Requested"
+              ? {
+                  ...mission,
+                  status:
+                    "Cannot Continue" as const,
+                }
+              : mission,
+        ),
+      );
+    }
+  }, [transitQuery.data]);
+
+  useEffect(() => {
+    if (fleetQuery.data) {
+      setFleet(
+        fleetQuery.data,
+      );
+    }
+  }, [fleetQuery.data]);
+
+  useEffect(() => {
+    const error =
+      transitQuery.error ??
+      fleetQuery.error;
+
+    if (error instanceof Error) {
+      pushActionMessage(
+        error.message,
+      );
+    }
+  }, [
+    transitQuery.error,
+    fleetQuery.error,
+  ]);
+
+
   const visibleMissions =
     useMemo(() => {
       const query =
@@ -400,64 +464,7 @@ export function TransitMissionsPage() {
       statusFilter,
     ]);
 
-  const upsertDroneAtHub = (
-    mission: TransitMission,
-    status:
-      FleetDrone["status"],
-    batteryLevelPct:
-      number = mission.batteryLevelPct,
-  ) => {
-    const existing =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId,
-      );
 
-    if (existing) {
-      return fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                location:
-                  TECHNICIAN_HUB,
-                battery:
-                  batteryLevelPct,
-                status,
-                lastFlight:
-                  mission.missionId,
-              }
-            : drone,
-      );
-    }
-
-    const newDrone:
-      FleetDrone = {
-      id:
-        mission.currentDroneId,
-      name:
-        getMissionDroneCode(
-          mission,
-        ),
-      model:
-        mission.droneModel,
-      status,
-      battery:
-        batteryLevelPct,
-      utilization: 0,
-      lastFlight:
-        mission.missionId,
-      location:
-        TECHNICIAN_HUB,
-    };
-
-    return [
-      ...fleet,
-      newDrone,
-    ];
-  };
 
   const addHistory = (
     mission: TransitMission,
@@ -506,301 +513,82 @@ export function TransitMissionsPage() {
     ]);
   };
 
-  const confirmArrival = (
+  const confirmArrival = async (
     mission: TransitMission,
   ) => {
-    const now =
-      formatTransitTime();
+    try {
+      await confirmArrivalMutation.mutateAsync(
+        mission.missionId,
+      );
 
-    /*
-     * CASE 1:
-     * Active mission stops at this hub for battery service.
-     *
-     * Keep the row in Transit Missions.
-     */
-    if (
-      mission.purpose ===
-      "BATTERY_STOP"
-    ) {
-      const nextMissions =
-        missions.map(
-          (item) =>
-            item.id ===
-            mission.id
-              ? {
-                  ...item,
-                  status:
-                    "At Hub" as const,
-                  batteryServiceRequired:
-                    true,
-                  arrivalConfirmedAt:
-                    now,
-                }
-              : item,
-        );
-
-      persistFleet(
-        upsertDroneAtHub(
+      if (mission.purpose !== "BATTERY_STOP") {
+        addHistory(
           mission,
-          "Available",
-        ),
-      );
-
-      persistMissions(
-        nextMissions,
-      );
-
-      pushActionMessage(
-        `${getMissionDroneCode(
-          mission,
-        )} arrival confirmed. Battery replacement is required before the mission continues.`,
-      );
-
-      return;
-    }
-
-    /*
-     * CASE 2:
-     * Delivery already completed.
-     * Drone returns to this hub.
-     *
-     * Confirm -> add to Hub Fleet -> remove from active Transit Missions.
-     */
-    if (
-      mission.purpose ===
-      "RETURN_TO_HUB"
-    ) {
-      detachBatteryFromDrone({
-        batteryId:
-          mission.batteryId,
-        droneId:
-          mission.currentDroneId,
-        hub:
-          TECHNICIAN_HUB,
-        chargeLevelPct:
+          mission.purpose === "RETURN_TO_HUB"
+            ? "Returned to hub"
+            : "Sent to maintenance",
+          formatTransitTime(),
           mission.batteryLevelPct,
-        missionId:
-          mission.missionId,
-      });
-
-      persistFleet(
-        upsertDroneAtHub(
-          mission,
-          "Available",
-          0,
-        ),
-      );
-
-      persistMissions(
-        missions.filter(
-          (item) =>
-            item.id !==
-            mission.id,
-        ),
-      );
-
-      addHistory(
-        mission,
-        "Returned to hub",
-        now,
-        mission.batteryLevelPct,
-      );
+        );
+      }
 
       setSelectedMissionId(null);
+      pushActionMessage(
+        `${getMissionDisplayId(mission.missionId)} arrival confirmed by backend.`,
+      );
+    } catch (error) {
+      pushActionMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to confirm mission arrival.",
+      );
+    }
+  };
 
-      window.dispatchEvent(
-        new CustomEvent(
-          "operator-mission-updated",
-          {
-            detail: {
-              eventType:
-                "DRONE_RETURNED_TO_HUB",
-              missionId:
-                mission.missionId,
-              droneId:
-                mission.currentDroneId,
-              hub:
-                mission.hub,
-              arrivedAt:
-                now,
-            },
-          },
+  const replaceBattery = async (
+    mission: TransitMission,
+  ) => {
+    if (mission.purpose !== "BATTERY_STOP") return;
+
+    try {
+      const readyBattery = await readyBatteryMutation.mutateAsync(
+        mission.missionId,
+      );
+
+      if (!readyBattery) {
+        pushActionMessage(
+          "No fully charged battery is available at this hub.",
+        );
+        return;
+      }
+
+      persistMissions(
+        missions.map((item) =>
+          item.id === mission.id
+            ? {
+                ...item,
+                batteryId: readyBattery.id,
+                batteryLevelPct: 100,
+                batteryServiceRequired: false,
+                status: "Ready" as const,
+              }
+            : item,
         ),
       );
 
+
       pushActionMessage(
-        `${getMissionDroneCode(
-          mission,
-        )} return confirmed. Battery removed for charging and drone stored in Hub Fleet without a battery installed.`,
-      );
-
-      return;
-    }
-
-    /*
-     * CASE 3:
-     * Operator/System already detected an Incident.
-     *
-     * The Incident must already exist in Maintenance Alerts.
-     * Technician only confirms physical arrival here.
-     */
-    detachBatteryFromDrone({
-      batteryId:
-        mission.batteryId,
-      droneId:
-        mission.currentDroneId,
-      hub:
-        TECHNICIAN_HUB,
-      chargeLevelPct:
-        mission.batteryLevelPct,
-      missionId:
-        mission.missionId,
-    });
-
-    persistFleet(
-      upsertDroneAtHub(
-        mission,
-        "Maintenance",
-        0,
-      ),
-    );
-
-    persistMissions(
-      missions.filter(
-        (item) =>
-          item.id !==
-          mission.id,
-      ),
-    );
-
-    addHistory(
-      mission,
-      "Sent to maintenance",
-      now,
-      mission.batteryLevelPct,
-    );
-
-    setSelectedMissionId(null);
-
-    const existingIncidentAlert =
-      loadMaintenanceAlerts().find(
-        (alert) =>
-          alert.id ===
-            mission.incidentAlertId ||
-          (alert.source ===
-            "Incident" &&
-            alert.droneId ===
-              mission.currentDroneId &&
-            alert.missionId ===
-              mission.missionId),
-      );
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "operator-mission-updated",
-        {
-          detail: {
-            eventType:
-              "INCIDENT_DRONE_ARRIVED",
-            missionId:
-              mission.missionId,
-            droneId:
-              mission.currentDroneId,
-            batteryId:
-              mission.batteryId,
-            hub:
-              mission.hub,
-            arrivedAt:
-              now,
-          },
-        },
-      ),
-    );
-
-    pushActionMessage(
-      existingIncidentAlert
-        ? `${getMissionDroneCode(
-            mission,
-          )} arrival confirmed and moved to Maintenance. Open ${existingIncidentAlert.id} in Maintenance Alerts.`
-        : `${getMissionDroneCode(
-            mission,
-          )} arrival confirmed and moved to Maintenance. Review the related Incident in Maintenance Alerts.`,
-    );
-  };
-
-  const replaceBattery = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const batterySwap =
-      replaceBatteryForTransitStop({
-        incomingBatteryId:
-          mission.batteryId,
-        droneId:
-          mission.currentDroneId,
-        hub:
-          TECHNICIAN_HUB,
-        incomingChargeLevelPct:
-          mission.batteryLevelPct,
-        missionId:
+        `${readyBattery.id} at 100% was assigned to ${getMissionDisplayId(
           mission.missionId,
-      });
-
-    if (!batterySwap) {
+        )}. Mission is ready to dispatch.`,
+      );
+    } catch (error) {
       pushActionMessage(
-        "No fully charged battery is available at this hub.",
+        error instanceof Error
+          ? error.message
+          : "Unable to replace the mission battery.",
       );
-
-      return;
     }
-
-    const nextFleet =
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                battery: 100,
-                status:
-                  "Available" as const,
-              }
-            : drone,
-      );
-
-    const nextMissions =
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                batteryId:
-                  batterySwap.installedBattery.id,
-                batteryLevelPct:
-                  100,
-                batteryServiceRequired:
-                  false,
-                status:
-                  "Ready" as const,
-              }
-            : item,
-      );
-
-    persistFleet(nextFleet);
-    persistMissions(nextMissions);
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} battery replaced with ${batterySwap.installedBattery.id} at 100%. Drone is ready to continue.`,
-    );
   };
 
   const markReady = (
@@ -874,6 +662,7 @@ export function TransitMissionsPage() {
     );
   };
 
+  /* Backend document has no Cannot Continue / replacement endpoint yet. */
   const markCannotContinue = (
     mission: TransitMission,
   ) => {
@@ -1097,6 +886,7 @@ export function TransitMissionsPage() {
     );
   };
 
+  /* Backend document has no Transit Dispatch endpoint yet. */
   const dispatchMission = (
     mission: TransitMission,
   ) => {

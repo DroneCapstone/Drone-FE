@@ -1,3 +1,15 @@
+import {
+  confirmDeliveryPickupApi,
+  getDeliveryConfirmationsApi,
+} from "../api/deliveryApi";
+
+import {
+  formatApiDateTime,
+  isRecord,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
 export type DeliveryStatus =
   | "Delivered"
   | "Completed"
@@ -416,4 +428,68 @@ export function confirmOrderReceived(
   }
 
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Backend API integration
+// ---------------------------------------------------------------------------
+
+
+function confirmationDisplayId(prefix: string, value: string, width = 4) {
+  if (!value) return "";
+  if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
+  const match = value.match(/(\d+)$/);
+  return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
+}
+
+function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation | null {
+  if (!isRecord(value)) return null;
+
+  const rawOrderId = pickString(value, ["order_id", "orderId", "id"]);
+  if (!rawOrderId) return null;
+
+  const deliveredAtRaw = pickString(value, ["arrived_at", "delivered_at", "arrival_at"], "");
+  const deliveredDate = deliveredAtRaw ? new Date(deliveredAtRaw) : new Date();
+  const deliveredIso = Number.isNaN(deliveredDate.getTime())
+    ? new Date().toISOString()
+    : deliveredDate.toISOString();
+  const deadline = buildPickupDeadline(deliveredIso);
+  const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at", "received_confirmed_at"], "");
+
+  return {
+    orderId: confirmationDisplayId("ORD", rawOrderId),
+    missionId: confirmationDisplayId(
+      "MSN",
+      pickString(value, ["mission_id", "missionId"], "0"),
+    ),
+    droneId: confirmationDisplayId(
+      "DR",
+      pickString(value, ["drone_id", "droneId"], "0"),
+      3,
+    ),
+    recipient: pickString(value, ["recipient_name", "customer_name", "recipient"], "Customer"),
+    destination: pickString(value, ["destination_hub_name", "hub_name", "destination"], "—"),
+    status: confirmedAt ? "Completed" : "Delivered",
+    deliveredAt: formatApiDateTime(deliveredAtRaw, "—"),
+    deliveredAtIso: deliveredIso,
+    ...deadline,
+    receivedConfirmedAt: confirmedAt ? formatApiDateTime(confirmedAt, confirmedAt) : undefined,
+    confirmedBy: pickString(value, ["confirmed_by", "technician_name"], "") || undefined,
+  };
+}
+
+export async function refreshDeliveryConfirmationsFromApi() {
+  const payload = await getDeliveryConfirmationsApi();
+  demoDeliveries = unwrapList(payload)
+    .map(mapApiDeliveryConfirmation)
+    .filter((item): item is DeliveryConfirmation => Boolean(item));
+
+  notifyDeliveryUpdate();
+  return loadDeliveryConfirmations();
+}
+
+export async function confirmPickupOnServer(orderId: string) {
+  const result = await confirmDeliveryPickupApi(orderId);
+  await refreshDeliveryConfirmationsFromApi();
+  return result;
 }

@@ -6,7 +6,6 @@ import {
 
 import {
   useMemo,
-  useState,
 } from "react";
 
 import {
@@ -27,10 +26,18 @@ import {
 } from "../components/TechnicianStatCard";
 
 import {
-  loadFleet,
   TECHNICIAN_HUB,
   type FleetDrone,
 } from "../utils/fleetStorage";
+
+import {
+  useFleetQuery,
+} from "../hooks/useFleetQueries";
+
+import {
+  useMaintenanceAlertsQuery,
+  useWorkOrdersQuery,
+} from "../hooks/useMaintenanceQueries";
 
 type AlertSource =
   | "Schedule"
@@ -63,66 +70,8 @@ type AlertLog = {
   status: "Handled";
 };
 
-const WORK_ORDERS_STORAGE_KEY =
-  "droneoptai.technician.work-orders.v2";
-
 const ALERT_LOG_STORAGE_KEY =
   "droneoptai.technician.maintenance-alert-log.v1";
-
-/*
- * Dashboard preview only.
- * Later replace these mocks with backend/API data or shared state.
- */
-const defaultAlerts: DashboardAlert[] = [
-  {
-    id: "ALT-201",
-    drone: "CX-09",
-    title: "Scheduled inspection is due",
-    source: "Schedule",
-    createdAt: "20 Sep · 08:20",
-  },
-  {
-    id: "ALT-202",
-    drone: "AX-08",
-    title:
-      "Abnormal landing detected — inspection required",
-    source: "Flight event",
-    createdAt: "20 Sep · 07:45",
-  },
-  {
-    id: "ALT-203",
-    drone: "CX-12",
-    title:
-      "Inspection required after reported incident",
-    source: "Incident",
-    createdAt: "19 Sep · 16:10",
-  },
-];
-
-const defaultWorkOrders: DashboardWorkOrder[] = [
-  {
-    id: "WO-1054",
-    drone: "CX-09",
-    title: "Scheduled drone inspection",
-    status: "In Progress",
-    assignedTo: "Technician Demo",
-  },
-  {
-    id: "WO-1055",
-    drone: "AX-08",
-    title: "Inspect after abnormal landing",
-    status: "Not Started",
-    assignedTo: "Technician Demo",
-  },
-  {
-    id: "WO-1056",
-    drone: "CX-12",
-    title:
-      "Technical inspection after incident",
-    status: "Completed",
-    assignedTo: "Technician Demo",
-  },
-];
 
 function loadAlertLogs(): AlertLog[] {
   try {
@@ -146,91 +95,52 @@ function loadAlertLogs(): AlertLog[] {
   }
 }
 
-function loadWorkOrders(): DashboardWorkOrder[] {
-  try {
-    const stored = localStorage.getItem(
-      WORK_ORDERS_STORAGE_KEY,
-    );
-
-    if (!stored) {
-      return defaultWorkOrders;
-    }
-
-    const parsed = JSON.parse(
-      stored,
-    ) as DashboardWorkOrder[];
-
-    if (!Array.isArray(parsed)) {
-      return defaultWorkOrders;
-    }
-
-    /*
-     * Compatibility with old mock data:
-     * Open -> Not Started
-     */
-    return parsed.map((order) => ({
-      ...order,
-      status:
-        String(order.status) === "Open"
-          ? "Not Started"
-          : order.status,
-    })) as DashboardWorkOrder[];
-  } catch {
-    return defaultWorkOrders;
-  }
-}
-
-function isIncomingToMyHub(
-  drone: FleetDrone,
-) {
-  const location =
-    drone.location.toLowerCase();
-
-  const hub =
-    TECHNICIAN_HUB.toLowerCase();
-
-  return (
-    location.includes(hub) &&
-    (location.startsWith(
-      "heading to",
-    ) ||
-      location.startsWith(
-        "en route",
-      ) ||
-      location.startsWith(
-        "in transit",
-      ))
-  );
-}
-
-function isAtMyHub(
-  drone: FleetDrone,
-) {
-  return (
-    drone.location === TECHNICIAN_HUB
-  );
-}
 
 export function TechnicianDashboardPage() {
   const navigate = useNavigate();
 
-  /*
-   * IMPORTANT:
-   * Dashboard uses the same fleetStorage as FleetPage,
-   * so status/battery changes stay consistent.
-   */
-  const [fleet] =
-    useState<FleetDrone[]>(loadFleet);
+  const fleetQuery =
+    useFleetQuery();
+
+  const alertsQuery =
+    useMaintenanceAlertsQuery();
+
+  const workOrdersQuery =
+    useWorkOrdersQuery();
+
+  const fleet: FleetDrone[] =
+    fleetQuery.data ?? [];
 
   const alertLogs = useMemo(
     () => loadAlertLogs(),
     [],
   );
 
-  const workOrders = useMemo(
-    () => loadWorkOrders(),
-    [],
-  );
+  const alerts: DashboardAlert[] =
+    (alertsQuery.data ?? []).map(
+      (alert) => ({
+        id: alert.id,
+        drone: alert.drone,
+        title: alert.title,
+        source:
+          alert.source === "Incident"
+            ? "Incident"
+            : "Schedule",
+        createdAt: alert.createdAt,
+      }),
+    );
+
+  const workOrders: DashboardWorkOrder[] =
+    (workOrdersQuery.data ?? []).map(
+      (order) => ({
+        id: order.id,
+        drone: order.drone,
+        title: order.title,
+        status: order.status,
+        assignedTo: order.assignedTo,
+      }),
+    );
+
 
   /*
    * Same scope as FleetPage:
@@ -238,12 +148,7 @@ export function TechnicianDashboardPage() {
    * - drones currently heading to technician hub
    */
   const hubDrones = useMemo(
-    () =>
-      fleet.filter(
-        (drone) =>
-          isAtMyHub(drone) ||
-          isIncomingToMyHub(drone),
-      ),
+    () => fleet,
     [fleet],
   );
 
@@ -272,9 +177,7 @@ export function TechnicianDashboardPage() {
       hubDrones.filter(
         (drone) =>
           drone.status ===
-            "Maintenance" ||
-          drone.status ===
-            "Battery Replacement",
+            "Maintenance",
       ),
     [hubDrones],
   );
@@ -283,14 +186,15 @@ export function TechnicianDashboardPage() {
     () =>
       hubDrones.filter(
         (drone) =>
-          drone.battery < 40,
+          Boolean(drone.installedBatteryId) &&
+          (drone.installedBatteryPct ?? drone.battery) < 40,
       ),
     [hubDrones],
   );
 
   const activeAlerts = useMemo(
     () =>
-      defaultAlerts.filter(
+      alerts.filter(
         (alert) =>
           !alertLogs.some(
             (log) =>
@@ -300,7 +204,7 @@ export function TechnicianDashboardPage() {
                 "Handled",
           ),
       ),
-    [alertLogs],
+    [alertLogs, alerts],
   );
 
   const activeWorkOrders = useMemo(
