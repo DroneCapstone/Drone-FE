@@ -96,106 +96,6 @@ type TechnicianNotification = {
 const NOTIFICATION_STORAGE_KEY =
   "droneoptai.technician.notifications.v4";
 
-const defaultNotifications:
-  TechnicianNotification[] = [
-  {
-    id: "NOT-001",
-    type: "incoming",
-
-    title:
-      "CX-02 is heading to Hub HCM-02",
-
-    message:
-      "MS-1024 is approaching your hub. Open Transit Missions to monitor the arrival and confirm it after the drone physically reaches the hub.",
-
-    time: "12 min ago",
-    timestamp:
-      "22 Sep 2026 · 21:48",
-
-    unread: true,
-
-    droneId: "DR-002",
-  },
-
-  {
-    id: "NOT-002",
-    type: "inspection",
-
-    title:
-      "CX-09 scheduled inspection is approaching",
-
-    message:
-      "CX-09 is due for its periodic inspection tomorrow at 09:00. Review the drone and prepare for the scheduled maintenance task.",
-
-    time: "35 min ago",
-    timestamp:
-      "22 Sep 2026 · 21:25",
-
-    unread: true,
-
-    droneId: "DR-001",
-  },
-
-  {
-    id: "NOT-003",
-    type: "battery",
-
-    title:
-      "AX-04 battery dropped below 40%",
-
-    message:
-      "AX-04 crossed the low-battery attention threshold while at the hub. Check its battery condition before the next assignment.",
-
-    time: "1 h ago",
-    timestamp:
-      "22 Sep 2026 · 21:00",
-
-    unread: true,
-
-    droneId: "DR-003",
-  },
-
-  {
-    id: "NOT-004",
-    type: "work_order",
-
-    title:
-      "WO-1055 was assigned to you",
-
-    message:
-      "A maintenance work order for AX-08 has been assigned to Technician Demo.",
-
-    time: "2 h ago",
-    timestamp:
-      "22 Sep 2026 · 20:00",
-
-    unread: false,
-
-    droneId: "DR-004",
-    workOrderId: "WO-1055",
-  },
-
-  {
-    id: "NOT-005",
-    type: "overdue",
-
-    title:
-      "WO-1054 is past its scheduled time",
-
-    message:
-      "The scheduled maintenance time for CX-09 has passed and the work order is still not completed.",
-
-    time: "3 h ago",
-    timestamp:
-      "22 Sep 2026 · 19:00",
-
-    unread: false,
-
-    droneId: "DR-001",
-    workOrderId: "WO-1054",
-  },
-];
-
 function mapApiNotification(
   value: unknown,
 ): TechnicianNotification | null {
@@ -244,7 +144,7 @@ function loadNotifications():
       );
 
     if (!stored) {
-      return defaultNotifications;
+      return [];
     }
 
     const parsed =
@@ -254,9 +154,9 @@ function loadNotifications():
 
     return Array.isArray(parsed)
       ? parsed
-      : defaultNotifications;
+      : [];
   } catch {
-    return defaultNotifications;
+    return [];
   }
 }
 

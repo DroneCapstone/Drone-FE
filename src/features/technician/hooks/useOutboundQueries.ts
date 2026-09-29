@@ -6,7 +6,6 @@ import {
 
 import {
   dispatchOutboundDelivery,
-  loadOutboundDeliveries,
   loadOutboundDeliveryHistory,
   prepareOutboundBatteryOnServer,
   receiveOutboundOrderOnServer,
@@ -23,8 +22,6 @@ export function useOutboundDeliveriesQuery() {
       technicianQueryKeys.outbound(),
     queryFn:
       refreshOutboundDeliveriesFromApi,
-    placeholderData: () =>
-      loadOutboundDeliveries(),
   });
 }
 

@@ -1,6 +1,5 @@
 import {
   type ReactNode,
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -35,12 +34,11 @@ import {
 
 import {
   useDroneDetailQuery,
-  useDroneMaintenanceHistoryQuery,
 } from "../hooks/useFleetQueries";
 
 import {
-  getBatteryForDrone,
-} from "../utils/batteryStorage";
+  useMaintenanceRecordsQuery,
+} from "../hooks/useMaintenanceQueries";
 
 import {
   type CompletedMaintenanceRecord,
@@ -290,7 +288,7 @@ export function DroneDetailPage() {
     );
 
   const maintenanceQuery =
-    useDroneMaintenanceHistoryQuery(
+    useMaintenanceRecordsQuery(
       droneId,
     );
 
@@ -318,11 +316,6 @@ export function DroneDetailPage() {
   ] = useState<DetailTab>(
     "overview",
   );
-
-  const [
-    batteryRefreshKey,
-    setBatteryRefreshKey,
-  ] = useState(0);
 
 
   const droneMaintenanceRecords =
@@ -354,36 +347,6 @@ export function DroneDetailPage() {
 
 
 
-  useEffect(() => {
-    const syncBattery = () => {
-      setBatteryRefreshKey(
-        (current) =>
-          current + 1,
-      );
-    };
-
-    window.addEventListener(
-      "technician-batteries-updated",
-      syncBattery,
-    );
-
-    window.addEventListener(
-      "technician-outbound-deliveries-updated",
-      syncBattery,
-    );
-
-    return () => {
-      window.removeEventListener(
-        "technician-batteries-updated",
-        syncBattery,
-      );
-
-      window.removeEventListener(
-        "technician-outbound-deliveries-updated",
-        syncBattery,
-      );
-    };
-  }, []);
 
   if (loading) {
     return (
@@ -422,13 +385,6 @@ export function DroneDetailPage() {
     );
   }
 
-  void batteryRefreshKey;
-
-  const localInstalledBattery =
-    getBatteryForDrone(
-      drone.id,
-    );
-
   const installedBattery =
     drone.installedBatteryId
       ? {
@@ -436,7 +392,7 @@ export function DroneDetailPage() {
           chargeLevelPct:
             drone.installedBatteryPct ?? 100,
         }
-      : localInstalledBattery;
+      : undefined;
 
   const lowBattery =
     Boolean(

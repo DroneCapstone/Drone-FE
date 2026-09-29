@@ -238,47 +238,7 @@ const activeFlightBatteries:
   > = {};
 
 let demoBatteryHistory:
-  BatteryHistoryRecord[] = [
-  {
-    id: "BH-001",
-    batteryId: "BAT-004",
-    hub: TECHNICIAN_HUB,
-
-    action:
-      "Removed at hub",
-
-    chargeLevelPct: 72,
-
-    droneId: "DR-011",
-    missionId: "MS-1098",
-
-    occurredAt:
-      "24 Sep 2026 · 09:10",
-
-    note:
-      "Battery removed after drone arrival and charging started.",
-  },
-
-  {
-    id: "BH-002",
-    batteryId: "BAT-005",
-    hub: TECHNICIAN_HUB,
-
-    action:
-      "Removed at hub",
-
-    chargeLevelPct: 35,
-
-    droneId: "DR-013",
-    missionId: "MS-1100",
-
-    occurredAt:
-      "24 Sep 2026 · 09:20",
-
-    note:
-      "Battery removed after drone arrival and charging started.",
-  },
-];
+  BatteryHistoryRecord[] = [];
 
 let fallbackBatterySequence = 8;
 

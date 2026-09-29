@@ -6,7 +6,6 @@ import {
 
 import {
   confirmTransitArrivalOnServer,
-  loadTransitMissions,
   loadTransitMissionHistory,
   refreshTransitMissionsFromApi,
 } from "../utils/transitMissionStorage";
@@ -15,15 +14,27 @@ import {
   technicianQueryKeys,
 } from "./queryKeys";
 
+import {
+  getTechnicianMissionsApi,
+} from "../api/transitApi";
+
 export function useTransitMissionsQuery() {
   return useQuery({
     queryKey:
       technicianQueryKeys.transit(),
     queryFn:
       refreshTransitMissionsFromApi,
-    placeholderData: () =>
-      loadTransitMissions(),
     refetchInterval: 15_000,
+  });
+}
+
+
+export function useTechnicianMissionsQuery() {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.missions(),
+    queryFn: getTechnicianMissionsApi,
+    staleTime: 30_000,
   });
 }
 

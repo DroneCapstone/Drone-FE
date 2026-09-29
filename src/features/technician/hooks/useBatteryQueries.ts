@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-query";
 
 import {
-  loadBatteries,
   loadBatteryHistory,
   markBatteryChargedOnServer,
   refreshBatteriesFromApi,
@@ -22,8 +21,7 @@ export function useBatteriesQuery() {
     queryKey:
       technicianQueryKeys.batteries(),
     queryFn: refreshBatteriesFromApi,
-    placeholderData: () => loadBatteries(),
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
   });
 }
 

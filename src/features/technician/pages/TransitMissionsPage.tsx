@@ -37,7 +37,6 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  loadFleet,
   saveFleet,
   TECHNICIAN_HUB,
   type FleetDrone,
@@ -50,7 +49,6 @@ import {
 import {
   formatTransitTime,
   loadTransitMissionHistory,
-  loadTransitMissions,
   saveTransitMissionHistory,
   saveTransitMissions,
   type TransitMission,
@@ -230,28 +228,12 @@ export function TransitMissionsPage() {
   const [
     missions,
     setMissions,
-  ] = useState<
-    TransitMission[]
-  >(() =>
-    loadTransitMissions().map(
-      (mission) =>
-        mission.status ===
-        "Replacement Requested"
-          ? {
-              ...mission,
-              status:
-                "Cannot Continue" as const,
-            }
-          : mission,
-    ),
-  );
+  ] = useState<TransitMission[]>([]);
 
   const [
     fleet,
     setFleet,
-  ] = useState<
-    FleetDrone[]
-  >(loadFleet);
+  ] = useState<FleetDrone[]>([]);
 
   const [
     missionHistory,
@@ -343,32 +325,6 @@ export function TransitMissionsPage() {
     );
   };
 
-  useEffect(() => {
-    const stored =
-      loadTransitMissions();
-
-    if (
-      stored.some(
-        (mission) =>
-          mission.status ===
-          "Replacement Requested",
-      )
-    ) {
-      saveTransitMissions(
-        stored.map(
-          (mission) =>
-            mission.status ===
-            "Replacement Requested"
-              ? {
-                  ...mission,
-                  status:
-                    "Cannot Continue" as const,
-                }
-              : mission,
-        ),
-      );
-    }
-  }, []);
 
   useEffect(() => {
     if (transitQuery.data) {
@@ -447,12 +403,10 @@ export function TransitMissionsPage() {
             mission.status ===
               statusFilter;
 
-          const belongsToThisHub =
-            mission.hub ===
-            TECHNICIAN_HUB;
-
+          // The Backend incoming endpoint is already scoped to the
+          // authenticated Technician's hub. Do not apply a hard-coded
+          // Hub HCM-02 filter on top of the server result.
           return (
-            belongsToThisHub &&
             matchesSearch &&
             matchesStatus
           );

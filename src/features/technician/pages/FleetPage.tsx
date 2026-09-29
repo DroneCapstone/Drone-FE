@@ -53,10 +53,6 @@ import {
   useUpdateDroneStatusMutation,
 } from "../hooks/useFleetQueries";
 
-import {
-  getBatteryForDrone,
-} from "../utils/batteryStorage";
-
 type DroneForm = {
   model: string;
   status: DroneStatus;
@@ -112,6 +108,10 @@ export function FleetPage() {
 
   const drones =
     fleetQuery.data ?? [];
+
+  const hubLabel =
+    drones[0]?.location ||
+    TECHNICIAN_HUB;
 
 
   const [
@@ -302,7 +302,7 @@ export function FleetPage() {
   return (
     <TechnicianPageShell
       title="Hub fleet"
-      description={`Drones physically stored at ${TECHNICIAN_HUB}. Batteries are installed only when a drone is prepared for departure.`}
+      description={`Drones physically stored at ${hubLabel}. Batteries are installed only when a drone is prepared for departure.`}
     >
       {(apiError || queryError) && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
@@ -394,18 +394,12 @@ export function FleetPage() {
               {filteredDrones.length >
               0 ? (
                 filteredDrones.map(
-                  (drone) => {                    const installedBattery =
-                      getBatteryForDrone(
-                        drone.id,
-                      );
-
+                  (drone) => {
                     const installedBatteryId =
-                      drone.installedBatteryId ??
-                      installedBattery?.id;
+                      drone.installedBatteryId;
 
                     const installedBatteryPct =
-                      drone.installedBatteryPct ??
-                      installedBattery?.chargeLevelPct;
+                      drone.installedBatteryPct;
 
                     const code =
                       getDroneDisplayCode(
@@ -628,9 +622,6 @@ export function FleetPage() {
                         disabled
                         value={
                           editingDrone.installedBatteryId ??
-                          getBatteryForDrone(
-                            editingDrone.id,
-                          )?.id ??
                           "Not installed"
                         }
                         className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
