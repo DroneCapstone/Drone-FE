@@ -59,7 +59,7 @@ export function CustomerDashboardPage() {
     user?.name?.trim().split(" ")[0] ?? "Customer";
 
   return (
-    <div className="min-h-[calc(100vh-72px)] bg-[#070707] font-sans">
+    <div className="min-h-[calc(100vh-72px)] bg-transparent font-sans">
       {/* =====================================================
           FULL WIDTH HERO
       ====================================================== */}
@@ -112,12 +112,12 @@ export function CustomerDashboardPage() {
                 Welcome back,
                 <br />
 
-                <span className="text-white/40">
+                <span className="text-white/[0.52]">
                   {firstName}
                 </span>
               </h1>
 
-              <p className="mt-6 max-w-[620px] text-[16px] leading-7 text-white/60 lg:text-[17px]">
+              <p className="mt-6 max-w-[620px] text-[16px] leading-7 text-white/[0.70] lg:text-[17px]">
                 Create hub-to-hub deliveries, track shipment progress and
                 manage package handovers in one place.
               </p>
@@ -137,7 +137,7 @@ export function CustomerDashboardPage() {
 
                 <Link
                   to="/customer/deliveries"
-                  className="inline-flex h-[54px] items-center rounded-xl border border-white/[0.14] bg-black/25 px-7 text-[14px] font-medium text-white/80 backdrop-blur-sm transition hover:border-white/30 hover:bg-white/[0.05] hover:text-white"
+                  className="inline-flex h-[54px] items-center rounded-xl border border-white/[0.14] bg-black/[0.25] px-7 text-[14px] font-medium text-white/[0.80] backdrop-blur-sm transition hover:border-white/[0.30] hover:bg-white/[0.05] hover:text-white"
                 >
                   View deliveries
                 </Link>
@@ -204,11 +204,11 @@ export function CustomerDashboardPage() {
 
           {/* QUICK ACTIONS */}
           <section>
-            <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/45">
+            <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/[0.58]">
               Quick actions
             </p>
 
-            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]">
+            <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 shadow-[0_12px_32px_rgba(0,0,0,0.30)] backdrop-blur-sm">
               <QuickAction
                 to="/customer/deliveries/create"
                 title="Create delivery"
@@ -245,7 +245,7 @@ export function CustomerDashboardPage() {
             actionTo="/customer/deliveries"
           />
 
-          <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 shadow-[0_12px_32px_rgba(0,0,0,0.30)] backdrop-blur-sm">
             {recentDeliveries.length === 0 ? (
               <EmptyRecentDeliveries />
             ) : (
@@ -300,13 +300,13 @@ function StatCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-6 py-5">
+    <div className="rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 px-6 py-5 shadow-[0_10px_26px_rgba(0,0,0,0.26)] backdrop-blur-sm">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/40">
+        <p className="text-[12px] font-medium uppercase tracking-[0.12em] text-white/[0.52]">
           {label}
         </p>
 
-        <div className="text-white/30">
+        <div className="text-white/[0.40]">
           {icon}
         </div>
       </div>
@@ -333,13 +333,13 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-4 flex items-center justify-between">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-white/45">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-white/[0.58]">
         {title}
       </p>
 
       <Link
         to={actionTo}
-        className="text-[13px] text-white/40 transition hover:text-white"
+        className="text-[13px] text-white/[0.52] transition hover:text-white"
       >
         {actionLabel}
       </Link>
@@ -371,7 +371,7 @@ function ActiveDeliveryCard({
   return (
     <Link
       to={target}
-      className="group block rounded-xl border border-white/[0.08] bg-[#0a0a0a] p-7 transition hover:border-white/[0.15]"
+      className="group block rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 p-7 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-sm transition hover:border-white/[0.18] hover:bg-[#111116]"
     >
       <div className="flex flex-col gap-7">
         {/* TOP */}
@@ -382,15 +382,15 @@ function ActiveDeliveryCard({
                 {delivery.id}
               </p>
 
-              <span className="rounded-full border border-orange-500/20 bg-orange-500/[0.07] px-3 py-1.5 text-[11px] font-medium text-orange-400">
+              <span className="rounded-full border border-orange-500/[0.20] bg-orange-500/[0.07] px-3 py-1.5 text-[11px] font-medium text-orange-400">
                 {status}
               </span>
             </div>
 
-            <p className="mt-3 text-[15px] text-white/55">
+            <p className="mt-3 text-[15px] text-white/[0.66]">
               {delivery.originHub.name}
 
-              <span className="mx-3 text-white/20">
+              <span className="mx-3 text-white/[0.20]">
                 →
               </span>
 
@@ -400,7 +400,7 @@ function ActiveDeliveryCard({
 
           <ArrowRight
             size={19}
-            className="mt-1 text-white/20 transition group-hover:translate-x-1 group-hover:text-orange-500"
+            className="mt-1 text-white/[0.20] transition group-hover:translate-x-1 group-hover:text-orange-500"
           />
         </div>
 
@@ -438,19 +438,19 @@ function ActiveDeliveryCard({
 
 function EmptyActiveDelivery() {
   return (
-    <div className="rounded-xl border border-dashed border-white/[0.1] bg-[#0a0a0a] p-8">
+    <div className="rounded-2xl border border-dashed border-white/[0.12] bg-[#0d0d10]/95 p-8 shadow-[0_12px_30px_rgba(0,0,0,0.26)] backdrop-blur-sm">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/[0.035] text-white/35">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/[0.035] text-white/[0.58]">
             <Package size={19} />
           </div>
 
           <div>
-            <p className="text-[15px] font-medium text-white/80">
+            <p className="text-[15px] font-medium text-white/[0.80]">
               No active delivery
             </p>
 
-            <p className="mt-2 max-w-[520px] text-[13px] leading-6 text-white/40">
+            <p className="mt-2 max-w-[520px] text-[13px] leading-6 text-white/[0.52]">
               Create a delivery to start tracking package handover,
               payment, flight progress and estimated arrival.
             </p>
@@ -459,7 +459,7 @@ function EmptyActiveDelivery() {
 
         <Link
           to="/customer/deliveries/create"
-          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/[0.1] px-5 text-[13px] font-medium text-white/70 transition hover:border-orange-500/40 hover:text-white"
+          className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/[0.1] px-5 text-[13px] font-medium text-white/[0.70] transition hover:border-orange-500/[0.40] hover:text-white"
         >
           Create delivery
 
@@ -483,11 +483,11 @@ function DeliveryMetric({
 }) {
   return (
     <div>
-      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/30">
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/[0.40]">
         {label}
       </p>
 
-      <p className="mt-2 text-[13px] leading-5 text-white/65">
+      <p className="mt-2 text-[13px] leading-5 text-white/[0.74]">
         {value}
       </p>
     </div>
@@ -520,23 +520,23 @@ function QuickAction({
           : "border-b border-white/[0.07]"
       }`}
     >
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.035] text-white/35 transition group-hover:bg-orange-500/[0.08] group-hover:text-orange-500">
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.035] text-white/[0.58] transition group-hover:bg-orange-500/[0.08] group-hover:text-orange-500">
         {icon}
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[14px] font-medium text-white/75 transition group-hover:text-white">
+        <p className="text-[14px] font-medium text-white/[0.82] transition group-hover:text-white">
           {title}
         </p>
 
-        <p className="mt-1.5 text-[12px] leading-5 text-white/35">
+        <p className="mt-1.5 text-[12px] leading-5 text-white/[0.58]">
           {description}
         </p>
       </div>
 
       <ArrowRight
         size={15}
-        className="mt-2 text-white/20 transition group-hover:translate-x-0.5 group-hover:text-orange-500"
+        className="mt-2 text-white/[0.20] transition group-hover:translate-x-0.5 group-hover:text-orange-500"
       />
     </Link>
   );
@@ -563,11 +563,11 @@ function RecentDeliveryRow({
     >
       {/* ORDER */}
       <div>
-        <p className="text-[14px] font-medium text-white/75">
+        <p className="text-[14px] font-medium text-white/[0.82]">
           {delivery.id}
         </p>
 
-        <p className="mt-1 text-[11px] text-white/25">
+        <p className="mt-1 text-[11px] text-white/[0.25]">
           {formatDateTime(
             delivery.createdAt,
           )}
@@ -575,10 +575,10 @@ function RecentDeliveryRow({
       </div>
 
       {/* ROUTE */}
-      <p className="truncate text-[13px] text-white/50">
+      <p className="truncate text-[13px] text-white/[0.62]">
         {delivery.originHub.name}
 
-        <span className="mx-2 text-white/15">
+        <span className="mx-2 text-white/[0.15]">
           →
         </span>
 
@@ -586,18 +586,18 @@ function RecentDeliveryRow({
       </p>
 
       {/* PACKAGE */}
-      <p className="text-[13px] text-white/45">
+      <p className="text-[13px] text-white/[0.58]">
         {delivery.weightKg} kg · {delivery.packageSize}
       </p>
 
       {/* STATUS */}
-      <p className="text-[13px] text-white/50">
+      <p className="text-[13px] text-white/[0.62]">
         {status}
       </p>
 
       <ArrowRight
         size={16}
-        className="text-white/20 transition group-hover:translate-x-0.5 group-hover:text-orange-500"
+        className="text-white/[0.20] transition group-hover:translate-x-0.5 group-hover:text-orange-500"
       />
     </Link>
   );
@@ -611,15 +611,15 @@ function EmptyRecentDeliveries() {
   return (
     <div className="relative overflow-hidden px-6 py-14">
       <div className="relative z-10 mx-auto max-w-[460px] text-center">
-        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-white/[0.035] text-white/30">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-white/[0.035] text-white/[0.40]">
           <Package size={19} />
         </div>
 
-        <p className="mt-5 text-[15px] font-medium text-white/60">
+        <p className="mt-5 text-[15px] font-medium text-white/[0.70]">
           No delivery history yet
         </p>
 
-        <p className="mx-auto mt-2 max-w-[360px] text-[12px] leading-6 text-white/30">
+        <p className="mx-auto mt-2 max-w-[360px] text-[12px] leading-6 text-white/[0.40]">
           Your completed and previous delivery orders will appear here.
         </p>
       </div>
@@ -644,7 +644,7 @@ function TableHeader({
   children: ReactNode;
 }) {
   return (
-    <span className="text-[11px] font-medium uppercase tracking-[0.13em] text-white/30">
+    <span className="text-[11px] font-medium uppercase tracking-[0.13em] text-white/[0.40]">
       {children}
     </span>
   );
