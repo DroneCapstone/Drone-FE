@@ -20,4 +20,29 @@ export const operatorQueryKeys = {
 
   eligibleDrones: (orderId: string) =>
     [...operatorQueryKeys.orders(), 'detail', orderId, 'eligible-drones'] as const,
+
+  missions: () => [...operatorQueryKeys.all, 'missions'] as const,
+
+  missionHubs: () => [...operatorQueryKeys.missions(), 'hubs'] as const,
+
+  missionMiniHubs: () => [...operatorQueryKeys.missions(), 'mini-hubs'] as const,
+
+  liveTracking: () => [...operatorQueryKeys.missions(), 'live-tracking'] as const,
+
+  missionDetail: (missionId: string) =>
+    [...operatorQueryKeys.missions(), 'detail', missionId] as const,
+
+  missionTelemetry: (missionId: string) =>
+    [...operatorQueryKeys.missionDetail(missionId), 'telemetry'] as const,
+
+  missionHubCheckpoints: (missionId: string) =>
+    [...operatorQueryKeys.missionDetail(missionId), 'hub-checkpoints'] as const,
+
+  incidents: () => [...operatorQueryKeys.missions(), 'incidents'] as const,
+
+  incidentDetail: (incidentId: string) =>
+    [...operatorQueryKeys.incidents(), 'detail', incidentId] as const,
+
+  missionPlanning: (orderId: string, droneId: string) =>
+    [...operatorQueryKeys.missions(), 'planning', orderId, droneId] as const,
 };
