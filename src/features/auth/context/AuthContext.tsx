@@ -46,10 +46,6 @@ export function AuthProvider({
     let active = true;
 
     if (!authService.getAccessToken()) {
-      /*
-       * Khi chuyển từ mock auth sang backend auth:
-       * không giữ user cache cũ nếu không có access token thật.
-       */
       setUser(null);
       setIsRestoring(false);
       return;
@@ -84,66 +80,52 @@ export function AuthProvider({
         await authService.login(payload);
 
       setUser(nextUser);
-
       return nextUser;
     },
     [],
   );
 
   const register = useCallback(
-    async (
-      payload: RegisterPayload,
-    ) => {
+    async (payload: RegisterPayload) => {
       const nextUser =
-        await authService.register(
-          payload,
-        );
+        await authService.register(payload);
 
       setUser(nextUser);
-
       return nextUser;
     },
     [],
   );
 
-  const forgotPassword =
-    useCallback(
-      (
-        payload:
-          ForgotPasswordPayload,
-      ) =>
-        authService.forgotPassword(
-          payload,
-        ),
-      [],
-    );
+  const forgotPassword = useCallback(
+    (
+      payload: ForgotPasswordPayload,
+    ) =>
+      authService.forgotPassword(
+        payload,
+      ),
+    [],
+  );
 
-  const resetPassword =
-    useCallback(
-      (
-        payload:
-          ResetPasswordPayload,
-      ) =>
-        authService.resetPassword(
-          payload,
-        ),
-      [],
-    );
+  const resetPassword = useCallback(
+    (
+      payload: ResetPasswordPayload,
+    ) =>
+      authService.resetPassword(
+        payload,
+      ),
+    [],
+  );
 
-  const loginAsRole =
-    useCallback(
-      (role: UserRole) => {
-        const nextUser =
-          authService.loginAsRole(
-            role,
-          );
+  const loginAsRole = useCallback(
+    (role: UserRole) => {
+      const nextUser =
+        authService.loginAsRole(role);
 
-        setUser(nextUser);
-
-        return nextUser;
-      },
-      [],
-    );
+      setUser(nextUser);
+      return nextUser;
+    },
+    [],
+  );
 
   const loginWithGoogle =
     useCallback(() => {
@@ -158,38 +140,34 @@ export function AuthProvider({
     [],
   );
 
-  const value =
-    useMemo<AuthContextValue>(
-      () => ({
-        user,
-        isAuthenticated:
-          Boolean(user),
-        isRestoring,
-        login,
-        register,
-        forgotPassword,
-        resetPassword,
-        loginAsRole,
-        loginWithGoogle,
-        logout,
-      }),
-      [
-        user,
-        isRestoring,
-        login,
-        register,
-        forgotPassword,
-        resetPassword,
-        loginAsRole,
-        loginWithGoogle,
-        logout,
-      ],
-    );
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isAuthenticated: Boolean(user),
+      isRestoring,
+      login,
+      register,
+      forgotPassword,
+      resetPassword,
+      loginAsRole,
+      loginWithGoogle,
+      logout,
+    }),
+    [
+      user,
+      isRestoring,
+      login,
+      register,
+      forgotPassword,
+      resetPassword,
+      loginAsRole,
+      loginWithGoogle,
+      logout,
+    ],
+  );
 
   return (
-    <AuthContext.Provider
-      value={value}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
