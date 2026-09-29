@@ -7,10 +7,10 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
-import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
 import { operatorHubs } from '../../data/hubMockData';
+import { useOperatorEligibleDronesQuery, useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import { routeOptions } from '../../data/routeMockData';
 import type { Mission, MissionLeg, OperatorDrone } from '../../types/operator';
 import {
@@ -19,7 +19,7 @@ import {
   getOrderPlanningBadge,
   isActionablePlanningState,
 } from '../../utils/deliveryPlanning';
-import { getBasicDroneEligibility, getEnergyFeasibility } from '../../utils/droneEligibility';
+import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../utils/missionDraftStorage';
 import {
@@ -27,9 +27,8 @@ import {
   calculateRouteTiming,
   formatMissionTime,
 } from '../../utils/missionTiming';
-import { loadOperatorFleet } from '../../utils/operatorFleetStorage';
 import { loadOperatorMissions, prependMission } from '../../utils/operatorMissionStorage';
-import { clearOrderReplanning, loadOperatorOrders } from '../../utils/operatorOrderStorage';
+import { clearOrderReplanning } from '../../utils/operatorOrderStorage';
 
 import { MissionPageShell } from './MissionPageShell';
 
@@ -61,10 +60,19 @@ export function CreateMissionPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId') ?? '';
 
-  const orders = useMemo(() => loadOperatorOrders(), []);
   const missions = useMemo(() => loadOperatorMissions(), []);
-  const fleet = useMemo(() => loadOperatorFleet(), []);
-  const order = orders.find((item) => item.id === orderId);
+  const {
+    data: order,
+    error: orderError,
+    isLoading: isOrderLoading,
+    refetch: refetchOrder,
+  } = useOperatorOrderQuery(orderId);
+  const {
+    data: eligibleDronesData,
+    error: eligibleDronesError,
+    isLoading: isEligibleDronesLoading,
+    refetch: refetchEligibleDrones,
+  } = useOperatorEligibleDronesQuery(orderId);
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
   const existingMission = order ? getDeliveryMission(order.id, missions) : undefined;
 
@@ -72,6 +80,30 @@ export function CreateMissionPage() {
   const [toast, setToast] = useState('');
   const [selectedDroneId, setSelectedDroneId] = useState(restoredDraft?.selectedDroneId || '');
   const [selectedRouteId, setSelectedRouteId] = useState(restoredDraft?.selectedRouteId || '');
+
+  if (isOrderLoading) {
+    return (
+      <MissionPageShell active="/operator/missions/all">
+        <OperatorPanel title="Create a mission from an order" eyebrow="DELIVERY OPERATIONS">
+          <div className="operator-empty-state mission-create-gate">Loading Order…</div>
+        </OperatorPanel>
+      </MissionPageShell>
+    );
+  }
+
+  if (orderError) {
+    return (
+      <MissionPageShell active="/operator/missions/all">
+        <OperatorPanel title="Create a mission from an order" eyebrow="DELIVERY OPERATIONS">
+          <div className="operator-empty-state mission-create-gate">
+            <strong>Unable to load Order</strong>
+            <span>{orderError instanceof Error ? orderError.message : 'Could not load order.'}</span>
+            <ActionButton onClick={() => void refetchOrder()}>Retry</ActionButton>
+          </div>
+        </OperatorPanel>
+      </MissionPageShell>
+    );
+  }
 
   if (!order) {
     return (
@@ -103,12 +135,11 @@ export function CreateMissionPage() {
   const planningState = getOrderPlanningBadge(order, missions);
   const originHub = operatorHubs.find((hub) => hub.id === order.originHubId);
   const destinationHub = operatorHubs.find((hub) => hub.id === order.destinationHubId);
-  const selectedDrone = fleet.find((drone) => drone.id === selectedDroneId);
+  const eligibleDronesAtOrigin = eligibleDronesData?.drones ?? [];
+  const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const dronesAtOriginHub = fleet.filter((drone) => drone.hubId === order.originHubId);
-  const eligibleDronesAtOrigin = dronesAtOriginHub.filter(
-    (drone) => getBasicDroneEligibility(drone, order.originHubId, order.payloadKg, missions).eligible,
-  );
+  const originHubLabel = originHub?.name || eligibleDronesData?.hub.name || order.originHubId || 'Origin Hub';
+  const destinationHubLabel = destinationHub?.name || order.destinationHubId || 'Destination Hub';
   const selectedTiming = selectedRoute ? calculateRouteTiming(order, selectedRoute) : undefined;
   const selectedRelayHubIds = selectedRoute
     ? getRouteRelayHubIds(selectedRoute.id, order.originHubId, order.destinationHubId)
@@ -251,13 +282,13 @@ export function CreateMissionPage() {
               <div className="delivery-network-strip">
                 <div className="delivery-network-node">
                   <small>Origin Hub</small>
-                  <strong>{originHub?.name ?? order.originHubId}</strong>
+                  <strong>{originHubLabel}</strong>
                   <span>Customer selected</span>
                 </div>
                 <div className="delivery-network-arrow">→</div>
                 <div className="delivery-network-node">
                   <small>Destination Hub</small>
-                  <strong>{destinationHub?.name ?? order.destinationHubId}</strong>
+                  <strong>{destinationHubLabel}</strong>
                   <span>Customer selected</span>
                 </div>
               </div>
@@ -265,33 +296,53 @@ export function CreateMissionPage() {
             </OperatorPanel>
 
             <OperatorPanel title="Origin Hub & available drones">
-              {originHub ? (
-                <div className="hub-grid hub-grid-select">
-                  <HubCard
-                    hub={originHub}
-                    totalDrones={dronesAtOriginHub.length}
-                    readyDrones={eligibleDronesAtOrigin.length}
-                  />
+              {isEligibleDronesLoading ? (
+                <div className="operator-empty-state">Loading available drones…</div>
+              ) : eligibleDronesError ? (
+                <div className="operator-empty-state mission-create-gate">
+                  <strong>Unable to load eligible drones</strong>
+                  <span>{eligibleDronesError instanceof Error ? eligibleDronesError.message : 'Could not load eligible drones.'}</span>
+                  <ActionButton onClick={() => void refetchEligibleDrones()}>Retry</ActionButton>
                 </div>
+              ) : eligibleDronesData ? (
+                <>
+                  <div className="hub-grid hub-grid-select">
+                    <div className="hub-card">
+                      <div className="hub-card-head">
+                        <div>
+                          <span className="eyebrow">Origin Hub</span>
+                          <h3>{eligibleDronesData.hub.name}</h3>
+                        </div>
+                        <StatusBadge tone="success">Active</StatusBadge>
+                      </div>
+                      <div className="hub-card-stats">
+                        <span><small>Total drones</small><strong>{eligibleDronesData.hub.totalDrones}</strong></span>
+                        <span><small>Available now</small><strong>{eligibleDronesData.hub.availableDrones}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="section-note">Only drones returned by the Backend eligibility check are shown. The API already filters by Origin Hub, availability, assignment conflict, and payload capacity.</p>
+
+                  <div className="eligible-drone-grid">
+                    {eligibleDronesAtOrigin.map((drone) => (
+                      <EligibleDroneCard
+                        key={drone.id}
+                        drone={drone}
+                        eligibility={{ eligible: true, reasons: [] }}
+                        selected={drone.id === selectedDroneId}
+                        onSelect={() => handleDroneSelect(drone)}
+                      />
+                    ))}
+                  </div>
+
+                  {eligibleDronesAtOrigin.length === 0 && (
+                    <div className="operator-empty-state">No eligible drones are currently available at the Origin Hub.</div>
+                  )}
+                </>
               ) : (
-                <div className="operator-empty-state">Origin Hub is unavailable.</div>
+                <div className="operator-empty-state">No eligible drone data is available.</div>
               )}
-              <p className="section-note">Only drones currently available for assignment are shown below. Technical readiness is managed by Technician before a drone enters the Operator available pool.</p>
-              <div className="eligible-drone-grid">
-                {eligibleDronesAtOrigin.map((drone) => {
-                  const eligibility = getBasicDroneEligibility(drone, order.originHubId, order.payloadKg, missions);
-                  return (
-                    <EligibleDroneCard
-                      key={drone.id}
-                      drone={drone}
-                      eligibility={eligibility}
-                      selected={drone.id === selectedDroneId}
-                      onSelect={() => handleDroneSelect(drone)}
-                    />
-                  );
-                })}
-              </div>
-              {eligibleDronesAtOrigin.length === 0 && <div className="operator-empty-state">No available drones can carry this package from the Origin Hub.</div>}
             </OperatorPanel>
           </div>
         )}

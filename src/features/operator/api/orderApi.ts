@@ -4,12 +4,11 @@ import type {
   Order,
   OrderStatus,
   PlanningState,
+  OperatorDrone,
 } from '../types/operator';
 
 const DEFAULT_OPERATOR_API_BASE_URL =
   'https://execute-blind-pitch-frequently.trycloudflare.com/api/v1';
-
-console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
 
 const viteEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
@@ -83,6 +82,34 @@ export interface BackendOperatorOrder {
 export interface ListOperatorOrdersParams {
   search?: string;
   status?: BackendOrderStatus;
+}
+
+interface BackendEligibleDronesHub {
+  id: string | number;
+  name: string;
+  totalDrones: number;
+  availableDrones: number;
+}
+
+interface BackendEligibleDrone {
+  id: string | number;
+  model: string;
+  maxPayloadKg: number;
+}
+
+interface BackendEligibleDronesResponse {
+  hub: BackendEligibleDronesHub;
+  drones: BackendEligibleDrone[];
+}
+
+export interface EligibleDronesResult {
+  hub: {
+    id: string;
+    name: string;
+    totalDrones: number;
+    availableDrones: number;
+  };
+  drones: OperatorDrone[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -251,6 +278,21 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
   };
 }
 
+
+export async function getOperatorOrderApi(orderId: string): Promise<Order> {
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    throw new OperatorApiError('Order ID is required.', 400);
+  }
+
+  const payload = await operatorApiRequest<BackendOperatorOrder>(
+    `/operator/orders/${encodeURIComponent(normalizedOrderId)}`,
+  );
+
+  return toOperatorOrder(payload);
+}
+
 export async function listOperatorOrdersApi(
   params: ListOperatorOrdersParams = {},
 ): Promise<Order[]> {
@@ -263,4 +305,39 @@ export async function listOperatorOrdersApi(
   const payload = await operatorApiRequest<unknown>(`/operator/orders${suffix}`);
 
   return unwrapOrderList(payload).map(toOperatorOrder);
+}
+
+
+export async function getEligibleDronesApi(
+  orderId: string,
+): Promise<EligibleDronesResult> {
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    throw new OperatorApiError('Order ID is required.', 400);
+  }
+
+  const payload = await operatorApiRequest<BackendEligibleDronesResponse>(
+    `/operator/orders/${encodeURIComponent(normalizedOrderId)}/eligible-drones`,
+  );
+
+  const hubId = String(payload.hub.id);
+
+  return {
+    hub: {
+      id: hubId,
+      name: payload.hub.name,
+      totalDrones: Number(payload.hub.totalDrones ?? 0),
+      availableDrones: Number(payload.hub.availableDrones ?? 0),
+    },
+    drones: (payload.drones ?? []).map((drone) => ({
+      id: String(drone.id),
+      name: `DR-${String(drone.id)}`,
+      displayId: String(drone.id),
+      model: drone.model || '—',
+      hubId,
+      technicalStatus: 'Available',
+      maxPayloadKg: Number(drone.maxPayloadKg ?? 0),
+    })),
+  };
 }
