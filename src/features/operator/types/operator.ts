@@ -55,6 +55,8 @@ export interface Order {
   initialEstimatedWindow: DeliveryWindow;
   currentEstimatedWindow: DeliveryWindow;
   planningAt: string;
+  /** Planning State returned/computed by Backend for API-backed Orders. */
+  planningState?: PlanningState;
   status: OrderStatus;
 
   /** Technician event at the Origin Hub. Null/undefined means Awaiting package. */

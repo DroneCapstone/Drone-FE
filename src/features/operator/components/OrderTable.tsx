@@ -17,6 +17,7 @@ function planningTone(state: PlanningState): Tone {
 }
 
 function hubName(hubId: string) {
+  if (!hubId) return 'Hub data unavailable';
   return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
 }
 
@@ -65,7 +66,11 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                   <small>{order.deliveryMode} · {order.status}</small>
                 </td>
                 <td className="order-route-cell">
-                  <strong>{hubName(order.originHubId)} → {hubName(order.destinationHubId)}</strong>
+                  <strong>
+                    {order.originHubId || order.destinationHubId
+                      ? `${hubName(order.originHubId)} → ${hubName(order.destinationHubId)}`
+                      : 'Hub data unavailable'}
+                  </strong>
                 </td>
                 <td>
                   {order.packageLabel}

@@ -30,9 +30,13 @@ export function AuthProvider({
       authService.getAccessToken(),
     );
 
+  const hasStoredDemoSession =
+    authService.isDemoSession();
+
   const [user, setUser] =
     useState<AuthUser | null>(() =>
-      hasStoredAccessToken
+      hasStoredAccessToken ||
+      hasStoredDemoSession
         ? authService.getCurrentUser()
         : null,
     );
@@ -44,6 +48,10 @@ export function AuthProvider({
 
   useEffect(() => {
     let active = true;
+
+    if (authService.isDemoSession()) {
+      return;
+    }
 
     if (!authService.getAccessToken()) {
       setUser(null);

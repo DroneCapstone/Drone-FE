@@ -23,6 +23,8 @@ export const API_BASE_URL = (
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const USER_KEY = "droneoptai.auth.user";
+const DEMO_SESSION_KEY =
+  "droneoptai.auth.demo";
 
 export class AuthApiError extends Error {
   status: number;
@@ -403,6 +405,10 @@ function persistTokens(
   tokens: AuthTokens,
   preserveExistingRefresh = false,
 ) {
+  sessionStorage.removeItem(
+    DEMO_SESSION_KEY,
+  );
+
   localStorage.setItem(
     ACCESS_TOKEN_KEY,
     tokens.accessToken,
@@ -442,6 +448,10 @@ function clearStoredSession() {
   ].forEach((key) => {
     localStorage.removeItem(key);
   });
+
+  sessionStorage.removeItem(
+    DEMO_SESSION_KEY,
+  );
 }
 
 function readStoredUser(): AuthUser | null {
@@ -716,6 +726,14 @@ export const authService = {
     );
   },
 
+  isDemoSession() {
+    return (
+      sessionStorage.getItem(
+        DEMO_SESSION_KEY,
+      ) === "true"
+    );
+  },
+
   async login(
     payload: LoginPayload,
   ): Promise<AuthUser> {
@@ -902,7 +920,13 @@ export const authService = {
   ): AuthUser {
     const user = MOCK_USERS[role];
 
+    clearStoredSession();
     persistUser(user);
+    sessionStorage.setItem(
+      DEMO_SESSION_KEY,
+      "true",
+    );
+
     return user;
   },
 
