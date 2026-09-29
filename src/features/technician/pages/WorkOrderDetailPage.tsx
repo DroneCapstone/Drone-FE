@@ -517,9 +517,6 @@ export function WorkOrderDetailPage() {
                 Maintenance
               </option>
 
-              <option value="Battery Replacement">
-                Battery replacement
-              </option>
             </select>
           </Section>
         </div>

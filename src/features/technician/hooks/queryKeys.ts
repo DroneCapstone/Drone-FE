@@ -21,6 +21,10 @@ export const technicianQueryKeys = {
   transit: () =>
     [...technicianQueryKeys.all, "transit"] as const,
 
+  missions: () =>
+    [...technicianQueryKeys.all, "missions"] as const,
+
+
   batteries: () =>
     [...technicianQueryKeys.all, "batteries"] as const,
 
@@ -44,6 +48,42 @@ export const technicianQueryKeys = {
       ...technicianQueryKeys.all,
       "work-order",
       workOrderId,
+    ] as const,
+
+
+  maintenanceAlert: (alertId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "maintenance-alert",
+      alertId,
+    ] as const,
+
+  maintenanceRecords: (droneId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "maintenance-records",
+      droneId,
+    ] as const,
+
+  workOrderLogs: (workOrderId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "work-order-logs",
+      workOrderId,
+    ] as const,
+
+  maintenanceSchedules: () =>
+    [
+      ...technicianQueryKeys.all,
+      "maintenance-schedules",
+    ] as const,
+
+  droneMaintenanceSchedules: (droneId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "maintenance-schedules",
+      "drone",
+      droneId,
     ] as const,
 
   notifications: () =>

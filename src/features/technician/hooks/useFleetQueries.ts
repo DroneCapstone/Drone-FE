@@ -6,7 +6,6 @@ import {
 
 import {
   fetchDroneDetailFromApi,
-  loadFleet,
   refreshFleetFromApi,
   updateDroneStatusOnServer,
   type DroneStatus,
@@ -24,7 +23,6 @@ export function useFleetQuery() {
   return useQuery({
     queryKey: technicianQueryKeys.fleet(),
     queryFn: refreshFleetFromApi,
-    placeholderData: () => loadFleet(),
   });
 }
 
@@ -40,11 +38,6 @@ export function useDroneDetailQuery(
         droneId as string,
       ),
     enabled: Boolean(droneId),
-    placeholderData: () =>
-      loadFleet().find(
-        (drone) =>
-          drone.id === droneId,
-      ),
   });
 }
 

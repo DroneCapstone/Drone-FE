@@ -6,7 +6,6 @@ import {
 
 import {
   confirmPickupOnServer,
-  loadDeliveryConfirmations,
   refreshDeliveryConfirmationsFromApi,
 } from "../utils/deliveryConfirmationStorage";
 
@@ -20,8 +19,6 @@ export function useDeliveryConfirmationsQuery() {
       technicianQueryKeys.confirmations(),
     queryFn:
       refreshDeliveryConfirmationsFromApi,
-    placeholderData: () =>
-      loadDeliveryConfirmations(),
     refetchInterval: 30_000,
   });
 }
