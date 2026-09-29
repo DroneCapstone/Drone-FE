@@ -29,6 +29,9 @@ export function RegisterForm({
   const [name, setName] =
     useState("");
 
+  const [username, setUsername] =
+    useState("");
+
   const [email, setEmail] =
     useState("");
 
@@ -50,6 +53,27 @@ export function RegisterForm({
     event.preventDefault();
     setError("");
 
+    const normalizedName = name.trim();
+    const normalizedUsername = username.trim();
+    const normalizedEmail = email
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedName) {
+      setError("Full name is required.");
+      return;
+    }
+
+    if (!normalizedUsername) {
+      setError("Username is required.");
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setError("Email address is required.");
+      return;
+    }
+
     if (password.length < 8) {
       setError(
         "Password must contain at least 8 characters.",
@@ -68,8 +92,9 @@ export function RegisterForm({
 
     try {
       const user = await register({
-        name,
-        email,
+        name: normalizedName,
+        username: normalizedUsername,
+        email: normalizedEmail,
         password,
       });
 
@@ -124,6 +149,22 @@ export function RegisterForm({
                 )
               }
               placeholder="Your name"
+              required
+            />
+          </label>
+
+          <label className="auth-field">
+            <span>Username</span>
+
+            <Input
+              autoComplete="username"
+              value={username}
+              onChange={(event) =>
+                setUsername(
+                  event.target.value,
+                )
+              }
+              placeholder="Choose a username"
               required
             />
           </label>
