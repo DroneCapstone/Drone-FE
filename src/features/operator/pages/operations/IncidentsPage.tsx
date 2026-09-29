@@ -6,12 +6,15 @@ import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
+import type { LiveTrackingDrone } from '../../api/missionApi';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import {
-  healthTone,
-  liveDrone,
-  type LiveDrone,
-} from '../../data/liveOperationsMockData';
+  useCreateIncidentMutation,
+  useIncidentQuery,
+  useIncidentsQuery,
+  useLiveTrackingQuery,
+  useUpdateIncidentStatusMutation,
+} from '../../hooks/useMissionQueries';
 
 import { OperationPageShell } from './OperationPageShell';
 import './operations-enhanced.css';
@@ -29,50 +32,19 @@ type IncidentRow = {
   state: string;
 };
 
-const initialIncidentRows: IncidentRow[] = [
-  {
-    id: 'INC-041',
-    title: 'Motor temperature exceeded safe threshold',
-    aircraft: 'AX-12',
-    missionId: 'MSN-3088',
-    severity: 'Critical',
-    tone: 'danger',
-    age: '8 min ago',
-    state: 'Technician review',
-  },
-  {
-    id: 'INC-039',
-    title: 'Persistent flight-control deviation',
-    aircraft: 'NX-06',
-    missionId: 'MSN-3079',
-    severity: 'Major',
-    tone: 'warning',
-    age: '24 min ago',
-    state: 'Monitoring',
-  },
-  {
-    id: 'INC-037',
-    title: 'Battery discharge outside expected range',
-    aircraft: 'AX-03',
-    missionId: 'MSN-3068',
-    severity: 'Major',
-    tone: 'warning',
-    age: '1 h ago',
-    state: 'Technician review',
-  },
-];
+const healthTone: Record<LiveTrackingDrone['health'], 'danger' | 'warning' | 'success'> = {
+  Critical: 'danger',
+  Attention: 'warning',
+  Normal: 'success',
+};
 
-const incidentCandidates = liveDrone.filter(
-  (aircraft) => aircraft.incidentPolicy === 'recommended',
-);
-
-const candidateLabel = (aircraft: LiveDrone) =>
+const candidateLabel = (aircraft: LiveTrackingDrone) =>
   `${aircraft.id} · ${aircraft.missionId}`;
 
-const buildIncidentTitle = (aircraft: LiveDrone) =>
+const buildIncidentTitle = (aircraft: LiveTrackingDrone) =>
   aircraft.anomaly ?? 'Technical anomaly detected';
 
-const buildIncidentDescription = (aircraft: LiveDrone) => {
+const buildIncidentDescription = (aircraft: LiveTrackingDrone) => {
   const detected = aircraft.detectedAt ? ` at ${aircraft.detectedAt}` : '';
   const duration = aircraft.anomalyDuration
     ? ` The condition has persisted for ${aircraft.anomalyDuration}.`
@@ -80,48 +52,91 @@ const buildIncidentDescription = (aircraft: LiveDrone) => {
 
   return `During mission ${aircraft.missionId}, ${aircraft.id} reported ${(
     aircraft.anomaly ?? 'an abnormal telemetry condition'
-  ).toLowerCase()}${detected}.${duration} ${aircraft.aiAssessment} ${aircraft.incidentReason ?? ''
-    }`.replace(/\s+/g, ' ').trim();
+  ).toLowerCase()}${detected}.${duration} ${aircraft.aiAssessment} ${aircraft.incidentReason ?? ''}`
+    .replace(/\s+/g, ' ')
+    .trim();
 };
+
+function incidentTone(severity: IncidentRow['severity']): IncidentRow['tone'] {
+  if (severity === 'Critical') return 'danger';
+  if (severity === 'Minor') return 'info';
+  return 'warning';
+}
+
+function formatIncidentAge(value?: string) {
+  if (!value) return 'Recently';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const minutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60_000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.round(minutes / 60)} h ago`;
+}
 
 export function IncidentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { data: liveTrackingData, isLoading: liveLoading } = useLiveTrackingQuery();
+  const { data: incidentsData, isLoading: incidentsLoading, error: incidentsError } = useIncidentsQuery();
+  const createIncidentMutation = useCreateIncidentMutation();
+  const updateIncidentStatusMutation = useUpdateIncidentStatusMutation();
+
+  const liveDrone = liveTrackingData ?? [];
+  const incidentCandidates = liveDrone.filter(
+    (aircraft) => aircraft.incidentPolicy === 'recommended',
+  );
 
   const requestedAlertId = searchParams.get('alertId');
   const requestedCandidate = incidentCandidates.find(
     (aircraft) => aircraft.alertId === requestedAlertId,
   );
 
-  const [mode, setMode] = useState<IncidentMode>(
-    searchParams.get('create') === '1' && requestedCandidate ? 'create' : 'list',
-  );
-  const [rows, setRows] = useState<IncidentRow[]>(initialIncidentRows);
+  const [mode, setMode] = useState<IncidentMode>('list');
   const [query, setQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState('All severity');
-  const [selectedCandidateId, setSelectedCandidateId] = useState(
-    requestedCandidate?.id ?? incidentCandidates[0]?.id ?? '',
-  );
+  const [selectedCandidateId, setSelectedCandidateId] = useState('');
+  const [selectedIncidentId, setSelectedIncidentId] = useState('');
+  const [incidentTitle, setIncidentTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const selectedCandidate =
     incidentCandidates.find((aircraft) => aircraft.id === selectedCandidateId) ??
+    requestedCandidate ??
     incidentCandidates[0];
 
-  const [incidentTitle, setIncidentTitle] = useState(
-    selectedCandidate ? buildIncidentTitle(selectedCandidate) : '',
-  );
-  const [description, setDescription] = useState(
-    selectedCandidate ? buildIncidentDescription(selectedCandidate) : '',
+  const selectedSeverity: 'Critical' | 'Major' =
+    selectedCandidate?.health === 'Critical' ? 'Critical' : 'Major';
+
+  const { data: selectedIncident, isLoading: incidentDetailLoading } = useIncidentQuery(
+    mode === 'detail' ? selectedIncidentId : '',
   );
 
-  const selectedSeverity =
-    selectedCandidate?.health === 'Critical' ? 'Critical' : 'Major';
+  useEffect(() => {
+    if (!requestedCandidate || searchParams.get('create') !== '1') return;
+    setSelectedCandidateId(requestedCandidate.id);
+    setMode('create');
+  }, [requestedCandidate, searchParams]);
 
   useEffect(() => {
     if (!selectedCandidate) return;
-
     setIncidentTitle(buildIncidentTitle(selectedCandidate));
     setDescription(buildIncidentDescription(selectedCandidate));
   }, [selectedCandidate]);
+
+  const rows: IncidentRow[] = useMemo(
+    () =>
+      (incidentsData ?? []).map((incident) => ({
+        id: incident.id,
+        title: incident.title,
+        aircraft: incident.droneId || '—',
+        missionId: incident.missionId || '—',
+        severity: incident.severity,
+        tone: incidentTone(incident.severity),
+        age: formatIncidentAge(incident.createdAt ?? incident.detectedAt),
+        state: incident.status || 'Open',
+      })),
+    [incidentsData],
+  );
 
   const visibleRows = useMemo(
     () =>
@@ -131,7 +146,6 @@ export function IncidentsPage() {
           .includes(query.toLowerCase());
         const matchesSeverity =
           severityFilter === 'All severity' || row.severity === severityFilter;
-
         return matchesQuery && matchesSeverity;
       }),
     [query, rows, severityFilter],
@@ -141,15 +155,16 @@ export function IncidentsPage() {
     const candidate = candidateId
       ? incidentCandidates.find((aircraft) => aircraft.id === candidateId)
       : incidentCandidates[0];
-
     if (!candidate) return;
 
+    setActionError('');
     setSelectedCandidateId(candidate.id);
     setMode('create');
     setSearchParams({ create: '1', alertId: candidate.alertId ?? '' });
   };
 
   const closeCreate = () => {
+    setActionError('');
     setMode('list');
     setSearchParams({});
   };
@@ -158,7 +173,6 @@ export function IncidentsPage() {
     const candidate = incidentCandidates.find(
       (aircraft) => candidateLabel(aircraft) === value,
     );
-
     if (!candidate) return;
 
     setSelectedCandidateId(candidate.id);
@@ -170,22 +184,51 @@ export function IncidentsPage() {
     setDescription(buildIncidentDescription(selectedCandidate));
   };
 
-  const logIncident = () => {
+  const logIncident = async () => {
     if (!selectedCandidate || !incidentTitle.trim() || !description.trim()) return;
+    setActionError('');
 
-    const nextIncident: IncidentRow = {
-      id: `INC-${String(42 + rows.length).padStart(3, '0')}`,
-      title: incidentTitle.trim(),
-      aircraft: selectedCandidate.id,
-      missionId: selectedCandidate.missionId,
-      severity: selectedSeverity,
-      tone: selectedSeverity === 'Critical' ? 'danger' : 'warning',
-      age: 'Just now',
-      state: 'Technician review',
-    };
+    try {
+      await createIncidentMutation.mutateAsync({
+        missionId: selectedCandidate.missionId,
+        droneId: selectedCandidate.id,
+        severity: selectedSeverity,
+        title: incidentTitle.trim(),
+        description: description.trim(),
+        detectedAt: selectedCandidate.detectedAt,
+      });
+      closeCreate();
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Unable to create incident.');
+    }
+  };
 
-    setRows((current) => [nextIncident, ...current]);
-    closeCreate();
+  const openDetail = (incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    setMode('detail');
+    setActionError('');
+  };
+
+  const listDetail = rows.find((row) => row.id === selectedIncidentId);
+  const detailSeverity = selectedIncident?.severity ?? listDetail?.severity ?? 'Major';
+  const detailTitle = selectedIncident?.title ?? listDetail?.title ?? 'Incident';
+  const detailMissionId = selectedIncident?.missionId ?? listDetail?.missionId ?? '—';
+  const detailDroneId = selectedIncident?.droneId ?? listDetail?.aircraft ?? '—';
+  const detailStatus = selectedIncident?.status ?? listDetail?.state ?? 'Open';
+  const detailDescription = selectedIncident?.description || 'No incident description was returned by the Backend.';
+
+  const resolveIncident = async () => {
+    if (!selectedIncidentId) return;
+    setActionError('');
+    try {
+      await updateIncidentStatusMutation.mutateAsync({
+        incidentId: selectedIncidentId,
+        status: 'RESOLVED',
+      });
+      setMode('list');
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : 'Unable to update incident status.');
+    }
   };
 
   return (
@@ -193,32 +236,20 @@ export function IncidentsPage() {
       {mode === 'list' && (
         <>
           <div className="incident-summary">
-            <span>
-              <strong>{rows.length}</strong>
-              <small>Open incidents</small>
-            </span>
-            <span>
-              <strong>{rows.filter((row) => row.severity === 'Critical').length}</strong>
-              <small>High priority</small>
-            </span>
-            <span>
-              <strong>{incidentCandidates.length}</strong>
-              <small>Eligible alerts</small>
-            </span>
-            <ActionButton onClick={() => openCreate()}>Create incident</ActionButton>
+            <span><strong>{rows.length}</strong><small>Open incidents</small></span>
+            <span><strong>{rows.filter((row) => row.severity === 'Critical').length}</strong><small>High priority</small></span>
+            <span><strong>{incidentCandidates.length}</strong><small>Eligible alerts</small></span>
+            <ActionButton disabled={liveLoading || incidentCandidates.length === 0} onClick={() => openCreate()}>
+              Create incident
+            </ActionButton>
           </div>
 
           <OperatorPanel className="flush-panel">
             <div className="toolbar">
               <div className="filter-search">
                 <Icon name="search" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search incidents…"
-                />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search incidents…" />
               </div>
-
               <DropdownSelect
                 value={severityFilter}
                 options={['All severity', 'Critical', 'Major', 'Minor']}
@@ -227,36 +258,29 @@ export function IncidentsPage() {
               />
             </div>
 
-            <div className="incident-list">
-              {visibleRows.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => setMode('detail')}
-                >
-                  <span
-                    className={`severity-mark ${row.severity === 'Critical'
-                        ? 's-1'
-                        : row.severity === 'Minor'
-                          ? 's-3'
-                          : ''
-                      }`}
-                  />
-
-                  <span>
-                    <strong>
-                      {row.id} · {row.title}
-                    </strong>
-                    <small>
-                      {row.aircraft} · {row.missionId} · {row.age} · {row.state}
-                    </small>
-                  </span>
-
-                  <StatusBadge tone={row.tone}>{row.severity}</StatusBadge>
-                  <Icon name="chevron" />
-                </button>
-              ))}
-            </div>
+            {incidentsLoading ? (
+              <div className="operator-empty-state">Loading incidents…</div>
+            ) : incidentsError ? (
+              <div className="operator-empty-state">
+                {incidentsError instanceof Error ? incidentsError.message : 'Unable to load incidents.'}
+              </div>
+            ) : visibleRows.length === 0 ? (
+              <div className="operator-empty-state">No incidents were returned by the Backend.</div>
+            ) : (
+              <div className="incident-list">
+                {visibleRows.map((row) => (
+                  <button key={row.id} type="button" onClick={() => openDetail(row.id)}>
+                    <span className={`severity-mark ${row.severity === 'Critical' ? 's-1' : row.severity === 'Minor' ? 's-3' : ''}`} />
+                    <span>
+                      <strong>{row.id} · {row.title}</strong>
+                      <small>{row.aircraft} · {row.missionId} · {row.age} · {row.state}</small>
+                    </span>
+                    <StatusBadge tone={row.tone}>{row.severity}</StatusBadge>
+                    <Icon name="chevron" />
+                  </button>
+                ))}
+              </div>
+            )}
           </OperatorPanel>
         </>
       )}
@@ -265,40 +289,16 @@ export function IncidentsPage() {
         <div className="incident-create-stack">
           <OperatorPanel className="incident-source-panel">
             <div className="incident-source-grid">
-              <div>
-                <small>Drone</small>
-                <strong>{selectedCandidate.id}</strong>
-                <span>{selectedCandidate.route}</span>
-              </div>
-              <div>
-                <small>Mission</small>
-                <strong>{selectedCandidate.missionId}</strong>
-                <span>Delivery {selectedCandidate.orderId}</span>
-              </div>
-              <div>
-                <small>Detected anomaly</small>
-                <strong>{selectedCandidate.anomaly}</strong>
-                <span>{selectedCandidate.anomalyDuration}</span>
-              </div>
-              <div>
-                <small>AI assessment</small>
-                <strong>{selectedSeverity}</strong>
-                <span>Technician inspection recommended</span>
-              </div>
+              <div><small>Drone</small><strong>{selectedCandidate.id}</strong><span>{selectedCandidate.route}</span></div>
+              <div><small>Mission</small><strong>{selectedCandidate.missionId}</strong><span>Delivery {selectedCandidate.orderId}</span></div>
+              <div><small>Detected anomaly</small><strong>{selectedCandidate.anomaly ?? 'Telemetry anomaly'}</strong><span>{selectedCandidate.anomalyDuration ?? '—'}</span></div>
+              <div><small>AI assessment</small><strong>{selectedSeverity}</strong><span>Technician inspection recommended</span></div>
             </div>
           </OperatorPanel>
 
-          <OperatorPanel
-            title="Create technical incident"
-            action={
-              <button className="text-button" onClick={closeCreate}>
-                Back to list
-              </button>
-            }
-          >
+          <OperatorPanel title="Create technical incident" action={<button className="text-button" onClick={closeCreate}>Back to list</button>}>
             <div className="incident-form-note">
-              Temporary anomalies are monitored automatically. Only alerts that meet
-              technician-escalation criteria appear in this form.
+              Temporary anomalies are monitored automatically. Only alerts that meet technician-escalation criteria appear in this form.
             </div>
 
             <div className="fields two incident-create-fields">
@@ -316,47 +316,21 @@ export function IncidentsPage() {
               <label>
                 <span>Severity</span>
                 <div className="incident-readonly-field">
-                  <StatusBadge tone={healthTone[selectedCandidate.health]}>
-                    {selectedSeverity}
-                  </StatusBadge>
+                  <StatusBadge tone={healthTone[selectedCandidate.health]}>{selectedSeverity}</StatusBadge>
                   <small>AI-assessed from telemetry and flight context</small>
                 </div>
               </label>
 
-              <label>
-                <span>Incident title</span>
-                <input
-                  value={incidentTitle}
-                  onChange={(event) => setIncidentTitle(event.target.value)}
-                  placeholder="Incident title"
-                />
-              </label>
-
-              <label>
-                <span>Detected at</span>
-                <input
-                  value={selectedCandidate.detectedAt ?? 'Just now'}
-                  readOnly
-                />
-              </label>
+              <label><span>Incident title</span><input value={incidentTitle} onChange={(event) => setIncidentTitle(event.target.value)} placeholder="Incident title" /></label>
+              <label><span>Detected at</span><input value={selectedCandidate.detectedAt ?? '—'} readOnly /></label>
 
               <label className="wide incident-description-field">
                 <span className="incident-description-label">
                   <span>Description</span>
                   <span className="incident-ai-draft">AI draft · editable</span>
-                  <button type="button" onClick={regenerateDescription}>
-                    <Icon name="refresh" size={14} />
-                    Regenerate
-                  </button>
+                  <button type="button" onClick={regenerateDescription}><Icon name="refresh" size={14} />Regenerate</button>
                 </span>
-
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  maxLength={2000}
-                  rows={6}
-                />
-
+                <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={6} />
                 <small className="incident-description-help">
                   You can edit the AI-generated description before logging the incident.
                   <span>{description.length}/2000</span>
@@ -364,79 +338,74 @@ export function IncidentsPage() {
               </label>
             </div>
 
+            {actionError && <div className="auth-error" role="alert">{actionError}</div>}
+
             <div className="form-actions">
-              <ActionButton variant="ghost" onClick={closeCreate}>
-                Cancel
+              <ActionButton variant="ghost" onClick={closeCreate}>Cancel</ActionButton>
+              <ActionButton disabled={createIncidentMutation.isPending} onClick={() => void logIncident()}>
+                {createIncidentMutation.isPending ? 'Logging…' : 'Log incident'}
               </ActionButton>
-              <ActionButton onClick={logIncident}>Log incident</ActionButton>
             </div>
           </OperatorPanel>
         </div>
       )}
 
+      {mode === 'create' && !liveLoading && !selectedCandidate && (
+        <OperatorPanel>
+          <div className="operator-empty-state">No live alert currently meets the incident escalation criteria.</div>
+        </OperatorPanel>
+      )}
+
       {mode === 'detail' && (
         <div className="detail-layout">
           <OperatorPanel className="detail-main">
-            <button className="text-button" onClick={() => setMode('list')}>
-              ← Back to incidents
-            </button>
+            <button className="text-button" onClick={() => setMode('list')}>← Back to incidents</button>
 
-            <div className="incident-detail-title">
-              <div>
-                <StatusBadge tone="danger">Critical</StatusBadge>
-                <h2>Motor temperature exceeded safe threshold</h2>
-                <p>INC-041 · AX-12 · Reported 8 minutes ago</p>
-              </div>
-              <ActionButton variant="secondary">Resolve incident</ActionButton>
-            </div>
+            {incidentDetailLoading ? (
+              <div className="operator-empty-state">Loading incident…</div>
+            ) : (
+              <>
+                <div className="incident-detail-title">
+                  <div>
+                    <StatusBadge tone={incidentTone(detailSeverity)}>{detailSeverity}</StatusBadge>
+                    <h2>{detailTitle}</h2>
+                    <p>{selectedIncidentId} · {detailDroneId} · {formatIncidentAge(selectedIncident?.createdAt ?? selectedIncident?.detectedAt)}</p>
+                  </div>
+                  <ActionButton
+                    variant="secondary"
+                    disabled={updateIncidentStatusMutation.isPending || detailStatus.toUpperCase() === 'RESOLVED'}
+                    onClick={() => void resolveIncident()}
+                  >
+                    {updateIncidentStatusMutation.isPending ? 'Updating…' : detailStatus.toUpperCase() === 'RESOLVED' ? 'Resolved' : 'Resolve incident'}
+                  </ActionButton>
+                </div>
 
-            <div className="incident-timeline">
-              <span>
-                <i />
-                <div>
-                  <strong>Anomaly detected</strong>
-                  <small>14:21:08 · Automatic telemetry trigger</small>
-                  <p>
-                    Motor temperature exceeded the configured safe operating threshold.
-                  </p>
+                {actionError && <div className="auth-error" role="alert">{actionError}</div>}
+
+                <div className="incident-timeline">
+                  <span>
+                    <i />
+                    <div>
+                      <strong>Anomaly detected</strong>
+                      <small>{selectedIncident?.detectedAt ?? 'Backend event'}</small>
+                      <p>{detailDescription}</p>
+                    </div>
+                  </span>
+                  <span className="current">
+                    <i />
+                    <div><strong>{detailStatus}</strong><small>Current incident status</small></div>
+                  </span>
                 </div>
-              </span>
-              <span>
-                <i />
-                <div>
-                  <strong>Operator reviewed AI assessment</strong>
-                  <small>14:22:31</small>
-                  <p>Technical inspection was recommended after landing.</p>
-                </div>
-              </span>
-              <span className="current">
-                <i />
-                <div>
-                  <strong>Technician review</strong>
-                  <small>In progress</small>
-                </div>
-              </span>
-            </div>
+              </>
+            )}
           </OperatorPanel>
 
           <OperatorPanel className="detail-side" title="Event context">
             <dl className="key-values">
-              <div>
-                <dt>Flight</dt>
-                <dd>MSN-3088</dd>
-              </div>
-              <div>
-                <dt>Drone</dt>
-                <dd>AX-12</dd>
-              </div>
-              <div>
-                <dt>Severity</dt>
-                <dd>Critical</dd>
-              </div>
-              <div>
-                <dt>Escalation</dt>
-                <dd>Technician review</dd>
-              </div>
+              <div><dt>Flight</dt><dd>{detailMissionId}</dd></div>
+              <div><dt>Drone</dt><dd>{detailDroneId}</dd></div>
+              <div><dt>Severity</dt><dd>{detailSeverity}</dd></div>
+              <div><dt>Status</dt><dd>{detailStatus}</dd></div>
             </dl>
           </OperatorPanel>
         </div>

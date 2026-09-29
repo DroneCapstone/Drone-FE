@@ -9,50 +9,36 @@ import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
-import { operatorHubs } from '../../data/hubMockData';
 import { useOperatorEligibleDronesQuery, useOperatorOrderQuery } from '../../hooks/useOrderQueries';
-import { routeOptions } from '../../data/routeMockData';
-import type { Mission, MissionLeg, OperatorDrone } from '../../types/operator';
+import {
+  useCreateMissionMutation,
+  useMissionHubsQuery,
+  useMissionMiniHubsQuery,
+  useMissionPlanningAnalysisQuery,
+} from '../../hooks/useMissionQueries';
+import type { OperatorDrone, RouteOption } from '../../types/operator';
 import {
   formatDeliveryWindow,
-  getDeliveryMission,
   getOrderPlanningBadge,
   isActionablePlanningState,
 } from '../../utils/deliveryPlanning';
 import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../utils/missionDraftStorage';
-import {
-  calculatePackageReceiveDeadline,
-  calculateRouteTiming,
-  formatMissionTime,
-} from '../../utils/missionTiming';
-import { loadOperatorMissions, prependMission } from '../../utils/operatorMissionStorage';
-import { clearOrderReplanning } from '../../utils/operatorOrderStorage';
+import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 
 import { MissionPageShell } from './MissionPageShell';
 
 const STEPS = ['Order info', 'Hub route & drone', 'Route & Energy Planning', 'Review & assign'] as const;
 
-function hubName(hubId: string) {
-  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
-}
-
-function getRouteRelayHubIds(routeId: string, originHubId: string, destinationHubId: string) {
-  const route = routeOptions.find((item) => item.id === routeId);
-  return (route?.relayHubIds ?? []).filter(
+function getRouteRelayHubIds(
+  route: RouteOption,
+  originHubId: string,
+  destinationHubId: string,
+) {
+  return (route.relayHubIds ?? []).filter(
     (hubId) => hubId !== originHubId && hubId !== destinationHubId,
   );
-}
-
-function buildMissionLegs(originHubId: string, relayHubIds: string[], destinationHubId: string): MissionLeg[] {
-  const path = [originHubId, ...relayHubIds, destinationHubId];
-  return path.slice(0, -1).map((fromHubId, index) => ({
-    id: `LEG-${index + 1}`,
-    fromHubId,
-    toHubId: path[index + 1],
-    status: 'Pending',
-  }));
 }
 
 export function CreateMissionPage() {
@@ -60,7 +46,6 @@ export function CreateMissionPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId') ?? '';
 
-  const missions = useMemo(() => loadOperatorMissions(), []);
   const {
     data: order,
     error: orderError,
@@ -74,12 +59,24 @@ export function CreateMissionPage() {
     refetch: refetchEligibleDrones,
   } = useOperatorEligibleDronesQuery(orderId);
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
-  const existingMission = order ? getDeliveryMission(order.id, missions) : undefined;
 
   const [step, setStep] = useState(restoredDraft?.step ?? 1);
   const [toast, setToast] = useState('');
   const [selectedDroneId, setSelectedDroneId] = useState(restoredDraft?.selectedDroneId || '');
   const [selectedRouteId, setSelectedRouteId] = useState(restoredDraft?.selectedRouteId || '');
+
+  const { data: apiHubs } = useMissionHubsQuery();
+  const { data: apiMiniHubs } = useMissionMiniHubsQuery();
+  const {
+    data: planningAnalysis,
+    error: planningAnalysisError,
+    isFetching: isPlanningAnalysisFetching,
+  } = useMissionPlanningAnalysisQuery(
+    order?.id && selectedDroneId
+      ? { orderId: order.id, droneId: selectedDroneId }
+      : null,
+  );
+  const createMissionMutation = useCreateMissionMutation();
 
   if (isOrderLoading) {
     return (
@@ -118,31 +115,22 @@ export function CreateMissionPage() {
     );
   }
 
-  if (existingMission) {
-    return (
-      <MissionPageShell active="/operator/missions/all">
-        <OperatorPanel title="Delivery Mission already exists" eyebrow={order.id}>
-          <div className="linked-record">
-            <div><strong>{existingMission.id}</strong><small>{existingMission.drone} · {existingMission.route}</small></div>
-            <StatusBadge tone={existingMission.tone}>{existingMission.status}</StatusBadge>
-            <button type="button" className="row-action" onClick={() => navigate(`/operator/missions/${existingMission.id}`)}>View mission</button>
-          </div>
-        </OperatorPanel>
-      </MissionPageShell>
-    );
-  }
-
-  const planningState = getOrderPlanningBadge(order, missions);
-  const originHub = operatorHubs.find((hub) => hub.id === order.originHubId);
-  const destinationHub = operatorHubs.find((hub) => hub.id === order.destinationHubId);
+  const planningState = getOrderPlanningBadge(order, []);
+  const apiNetworkHubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])];
+  const networkHubs = apiNetworkHubs;
+  const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
+  const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
   const eligibleDronesAtOrigin = eligibleDronesData?.drones ?? [];
   const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
+  const routeOptions = planningAnalysis?.routes ?? [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
   const originHubLabel = originHub?.name || eligibleDronesData?.hub.name || order.originHubId || 'Origin Hub';
   const destinationHubLabel = destinationHub?.name || order.destinationHubId || 'Destination Hub';
+  const hubName = (hubId: string) =>
+    networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const selectedTiming = selectedRoute ? calculateRouteTiming(order, selectedRoute) : undefined;
   const selectedRelayHubIds = selectedRoute
-    ? getRouteRelayHubIds(selectedRoute.id, order.originHubId, order.destinationHubId)
+    ? getRouteRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)
     : [];
 
   const canContinueStep1 = isActionablePlanningState(planningState);
@@ -173,7 +161,7 @@ export function CreateMissionPage() {
     navigate(`/operator/ai/mission-analysis?orderId=${order.id}&droneId=${selectedDroneId}&routeId=${routeId}&returnTo=mission-create`);
   };
 
-  const handleAssignMission = () => {
+  const handleAssignMission = async () => {
     if (!originHub || !destinationHub || !selectedDrone || !selectedRoute || !selectedTiming) return;
 
     const energy = getEnergyFeasibility(selectedRoute);
@@ -182,43 +170,23 @@ export function CreateMissionPage() {
       return;
     }
 
-    const createdAt = new Date();
-    const relayHubIds = getRouteRelayHubIds(selectedRoute.id, originHub.id, destinationHub.id);
-    const routePath = [originHub.name, ...relayHubIds.map(hubName), destinationHub.name].join(' → ');
-    const missionId = `MSN-${String(Date.now()).slice(-6)}`;
-    const mission: Mission = {
-      id: missionId,
-      orderId: order.id,
-      type: 'Delivery',
-      name: `Delivery ${order.id}`,
-      droneId: selectedDrone.id,
-      drone: getDroneDisplayCode(selectedDrone),
-      originHubId: originHub.id,
-      destinationHubId: destinationHub.id,
-      relayHubIds,
-      legs: buildMissionLegs(originHub.id, relayHubIds, destinationHub.id),
-      routeId: selectedRoute.id,
-      route: `${selectedRoute.id} ${selectedRoute.name} · ${routePath}`,
-      status: 'Scheduled',
-      tone: 'info',
-      eta: selectedTiming.estimatedArrivalAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      battery: energy.remainingBattery,
-      plannedStartAt: selectedTiming.plannedStartAt.toISOString(),
-      packageReceiveDeadlineAt: calculatePackageReceiveDeadline(createdAt).toISOString(),
-      estimatedArrivalAt: selectedTiming.estimatedArrivalAt.toISOString(),
-      predictedDurationMin: selectedRoute.predictedDurationMin,
-      estimatedEnergyWh: selectedRoute.predictedEnergyWh,
-      batteryConsumptionPct: selectedRoute.batteryConsumptionPct,
-      confidencePct: selectedRoute.confidencePct,
-      risk: selectedRoute.risk,
-      createdAt: createdAt.toISOString(),
-    };
+    try {
+      const mission = await createMissionMutation.mutateAsync({
+        orderId: order.id,
+        droneId: selectedDrone.id,
+        routeId: selectedRoute.id,
+      });
 
-    clearOrderReplanning(order.id);
-    prependMission(mission);
-    clearMissionDraft(order.id);
-    showToast('Mission assigned successfully');
-    window.setTimeout(() => navigate(`/operator/missions/${missionId}`), 500);
+      clearMissionDraft(order.id);
+      showToast('Mission assigned successfully');
+      window.setTimeout(() => navigate(`/operator/missions/${mission.id}`), 500);
+    } catch (reason) {
+      showToast(
+        reason instanceof Error
+          ? reason.message
+          : 'Unable to create Mission.',
+      );
+    }
   };
 
   return (
@@ -350,6 +318,15 @@ export function CreateMissionPage() {
         {step === 3 && selectedDrone && (
           <div className="mission-step-stack">
             <OperatorPanel title="Route, energy & timing">
+              {isPlanningAnalysisFetching && (
+                <p className="section-note">Analyzing route, weather and energy with Backend…</p>
+              )}
+              {planningAnalysisError && (
+                <p className="section-note danger-note">{planningAnalysisError instanceof Error ? planningAnalysisError.message : 'Unable to analyze mission planning.'}</p>
+              )}
+              {!isPlanningAnalysisFetching && !planningAnalysisError && routeOptions.length === 0 && (
+                <div className="operator-empty-state">No route options were returned by the Backend.</div>
+              )}
               <div className="route-option-list">
                 {routeOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
@@ -426,7 +403,7 @@ export function CreateMissionPage() {
           {step === 1 && <ActionButton disabled={!canContinueStep1} onClick={() => { setStep(2); persistDraft(2); }}>Continue</ActionButton>}
           {step === 2 && <ActionButton disabled={!canContinueStep2} onClick={() => { setStep(3); persistDraft(3); }}>Continue</ActionButton>}
           {step === 3 && <ActionButton disabled={!canContinueStep3} onClick={() => { setStep(4); persistDraft(4); }}>Review mission</ActionButton>}
-          {step === 4 && <ActionButton icon="check" onClick={handleAssignMission}>Assign mission</ActionButton>}
+          {step === 4 && <ActionButton icon="check" disabled={createMissionMutation.isPending} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
         </div>
       </div>
       {toast && <div className="operator-toast">{toast}</div>}

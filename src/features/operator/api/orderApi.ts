@@ -140,18 +140,27 @@ function getApiErrorMessage(payload: unknown, status: number) {
   return `Operator API request failed (${status}).`;
 }
 
-async function operatorApiRequest<T>(path: string): Promise<T> {
+export async function operatorApiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const withCredentials = viteEnv?.VITE_API_WITH_CREDENTIALS === 'true';
 
   const execute = async (accessToken?: string | null) => {
-    const headers = new Headers({ Accept: 'application/json' });
+    const headers = new Headers(init.headers);
+    headers.set('Accept', 'application/json');
+
+    if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     if (accessToken) {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
     return fetch(`${OPERATOR_API_BASE_URL}${path}`, {
-      method: 'GET',
+      ...init,
+      method: init.method ?? 'GET',
       headers,
       credentials: withCredentials ? 'include' : 'omit',
     });
