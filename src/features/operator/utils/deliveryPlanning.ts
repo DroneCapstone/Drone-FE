@@ -46,6 +46,9 @@ export function getPlanningState(
   missions: Mission[],
   now = new Date(),
 ): PlanningState {
+  // API-backed Orders already receive the authoritative Planning State from BE.
+  if (order.planningState) return order.planningState;
+
   const orderMissions = getMissionsForOrder(order.id, missions);
   if (order.replanRequiredAt) return 'Needs Replanning';
 

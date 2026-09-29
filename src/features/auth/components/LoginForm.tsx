@@ -27,6 +27,7 @@ const viteEnv = (import.meta as ImportMeta & {
 }).env;
 
 const ENABLE_DEMO_ACCESS =
+  import.meta.env.DEV ||
   viteEnv?.VITE_ENABLE_DEMO_AUTH ===
   "true";
 
