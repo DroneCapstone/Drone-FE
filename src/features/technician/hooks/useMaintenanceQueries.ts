@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-query";
 
 import {
-  loadMaintenanceAlerts,
   refreshMaintenanceAlertsFromApi,
   syncMaintenanceAlertsOnServer,
 } from "../utils/maintenanceAlertStorage";
@@ -13,12 +12,22 @@ import {
 import {
   createMaintenanceRecordOnServer,
   createWorkOrderOnServer,
+  deleteWorkOrderOnServer,
   fetchWorkOrderFromApi,
-  loadWorkOrders,
+  fetchWorkOrderLogsFromApi,
+  refreshMaintenanceRecordsFromApi,
   refreshWorkOrdersFromApi,
   updateWorkOrderInspectionOnServer,
   updateWorkOrderOnServer,
 } from "../utils/maintenanceStorage";
+
+import {
+  createMaintenanceScheduleApi,
+  getDroneMaintenanceSchedulesApi,
+  getMaintenanceAlertApi,
+  getMaintenanceSchedulesApi,
+  syncBatteryOverdueAlertsApi,
+} from "../api/maintenanceApi";
 
 import {
   technicianQueryKeys,
@@ -30,8 +39,6 @@ export function useMaintenanceAlertsQuery() {
       technicianQueryKeys.maintenanceAlerts(),
     queryFn:
       refreshMaintenanceAlertsFromApi,
-    placeholderData: () =>
-      loadMaintenanceAlerts(),
   });
 }
 
@@ -54,8 +61,6 @@ export function useWorkOrdersQuery() {
     queryKey:
       technicianQueryKeys.workOrders(),
     queryFn: refreshWorkOrdersFromApi,
-    placeholderData: () =>
-      loadWorkOrders(),
   });
 }
 
@@ -72,11 +77,131 @@ export function useWorkOrderQuery(
         workOrderId as string,
       ),
     enabled: Boolean(workOrderId),
-    placeholderData: () =>
-      loadWorkOrders().find(
-        (item) =>
-          item.id === workOrderId,
+  });
+}
+
+
+export function useMaintenanceAlertQuery(
+  alertId?: string,
+) {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.maintenanceAlert(
+        alertId ?? "missing",
       ),
+    queryFn: () =>
+      getMaintenanceAlertApi(
+        alertId as string,
+      ),
+    enabled: Boolean(alertId),
+  });
+}
+
+export function useWorkOrderLogsQuery(
+  workOrderId?: string,
+) {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.workOrderLogs(
+        workOrderId ?? "missing",
+      ),
+    queryFn: () =>
+      fetchWorkOrderLogsFromApi(
+        workOrderId as string,
+      ),
+    enabled: Boolean(workOrderId),
+  });
+}
+
+export function useMaintenanceRecordsQuery(
+  droneId?: string,
+) {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.maintenanceRecords(
+        droneId ?? "missing",
+      ),
+    queryFn: () =>
+      refreshMaintenanceRecordsFromApi(
+        droneId as string,
+      ),
+    enabled: Boolean(droneId),
+  });
+}
+
+export function useMaintenanceSchedulesQuery() {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.maintenanceSchedules(),
+    queryFn: getMaintenanceSchedulesApi,
+    staleTime: 60_000,
+  });
+}
+
+export function useDroneMaintenanceSchedulesQuery(
+  droneId?: string,
+) {
+  return useQuery({
+    queryKey:
+      technicianQueryKeys.droneMaintenanceSchedules(
+        droneId ?? "missing",
+      ),
+    queryFn: () =>
+      getDroneMaintenanceSchedulesApi(
+        droneId as string,
+      ),
+    enabled: Boolean(droneId),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateMaintenanceScheduleMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (
+      payload: Record<string, unknown>,
+    ) => createMaintenanceScheduleApi(payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey:
+          technicianQueryKeys.maintenanceSchedules(),
+      }),
+  });
+}
+
+export function useDeleteWorkOrderMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workOrderId: string) =>
+      deleteWorkOrderOnServer(workOrderId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey:
+          technicianQueryKeys.workOrders(),
+      });
+    },
+  });
+}
+
+export function useSyncBatteryOverdueAlertsMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: syncBatteryOverdueAlertsApi,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey:
+            technicianQueryKeys.maintenanceAlerts(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey:
+            technicianQueryKeys.batteries(),
+        }),
+      ]);
+    },
   });
 }
 

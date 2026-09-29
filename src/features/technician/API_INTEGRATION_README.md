@@ -1,47 +1,105 @@
-# Technician API integration
+# Technician Backend API integration
 
-## Base URL
+## Runtime configuration
 
-The client reads:
+Use the project-root `.env`:
 
 ```env
-VITE_API_BASE_URL=https://execute-blind-pitch-frequently.trycloudflare.com
+VITE_API_BASE_URL=https://execute-blind-pitch-frequently.trycloudflare.com/api/v1
+VITE_API_WITH_CREDENTIALS=false
+VITE_ENABLE_DEMO_AUTH=false
 ```
 
-`utils/technicianApi.ts` also contains the URL above as a fallback, but using `.env` is recommended because Cloudflare tunnel URLs can change.
+Restart Vite after editing `.env`.
+
+`utils/technicianApi.ts` also normalizes a host-only URL by appending `/api/v1`, but using the full `/api/v1` base in `.env` is recommended so Auth and Technician use the same convention.
 
 ## Authentication
 
-The API client sends a Bearer token when one is found in common frontend storage keys (`access_token`, `accessToken`, `auth_token`, `authToken`, `token`). By default `credentials` is omitted to avoid unnecessary credentialed-CORS restrictions. Set `VITE_API_WITH_CREDENTIALS=true` only if Backend authentication explicitly uses cookies/session. If the main Auth module uses another token key, update `getStoredAccessToken()` in `utils/technicianApi.ts`.
+All Technician requests read the real Backend access token from `authService.getAccessToken()` and send:
 
-## Connected endpoints
+```http
+Authorization: Bearer <access_token>
+```
 
-- Hub Fleet: list drones, drone detail, patch status, maintenance history.
-- Transit Missions: incoming missions, confirm arrival.
-- Battery Management: list batteries, use battery, mark charged API helper.
-- Outbound Deliveries: list, receive, prepare battery.
-- Delivery Confirmations: list, confirm pickup.
-- Maintenance Alerts: list, optional sync/cron API helper.
-- Work Orders: list, create, detail, update, inspection update.
-- Maintenance Records: create.
-- Notifications: list, unread count, mark all read.
-- Profile: get current user, update supported profile fields.
+On `401`, the client attempts `authService.refreshAccessToken()` once and retries the original request once.
 
-## Backend endpoints not present in the supplied API document
+## Important fixes in this bundle
 
-The existing UI has business actions for which the supplied Backend document does not define an API endpoint:
+1. Successful list responses are no longer assumed to use only `data/items/results/rows`. The client also understands envelopes such as `drones`, `missions`, `batteries`, `deliveries`, `confirmations`, `maintenance_alerts`, `work_orders`, `records`, `logs`, `schedules`, and `notifications`.
+2. Battery Management no longer calls Outbound Deliveries just to render the battery inventory. It now depends only on `GET /technician/fleet/batteries`.
+3. Battery Management no longer filters a valid Backend response by the hard-coded string `Hub HCM-02`.
+4. Transit Missions no longer renders mock incoming missions when the Backend request fails. This prevents `Confirm arrival` from POSTing fake IDs and producing the previous `404 -> 422` pair.
+5. Transit/Outbound data is no longer filtered again by the hard-coded hub name. The Backend endpoints are already scoped to the authenticated Technician.
+6. Fleet/Drone Detail no longer fall back to demo battery assignments when Backend drone data says no battery is installed.
+7. TanStack Query `refetchOnWindowFocus` is disabled and battery polling is reduced to 30 seconds.
+8. Technician page routes now use one shared Query provider boundary instead of wrapping every page separately.
+9. FastAPI `422` validation details are surfaced as readable field errors.
+10. Network/CORS failures now return a clearer frontend error instead of only `Failed to fetch`.
 
-- Outbound `Dispatch`.
-- Transit `Dispatch / Continue`.
-- Transit `Cannot Continue` / replacement request / replacement-drone confirmation.
-- Outbound history / Transit history APIs.
-- Battery history API.
-- Single-notification `mark as read` endpoint.
-- Delivery confirmation history / explicit 48-hour cancellation endpoint.
+## Swagger endpoint coverage
 
-Those existing frontend interactions were preserved where needed so the current UI flow does not break. They are marked in code as frontend-only/TODO until Backend exposes the corresponding endpoint. Do not invent a URL for them; add the actual Backend endpoint when it is available.
+The API client now contains helpers for the complete Technician list supplied on 29 Sep 2026:
 
+### Missions
+- `GET /technician/missions/`
 
-## TanStack Query
+### Deliveries
+- `GET /technician/deliveries/outbound`
+- `POST /technician/deliveries/outbound/{orderId}/receive`
+- `POST /technician/deliveries/outbound/{orderId}/prepare-battery`
+- `GET /technician/deliveries/confirmations`
+- `POST /technician/deliveries/confirmations/{orderId}/confirm-pickup`
 
-All Technician pages now consume backend data through TanStack Query hooks under `technician/hooks/`. The page layer no longer manually calls backend refresh functions with `useEffect`. Install the dependency with `npm install @tanstack/react-query`. See `TANSTACK_QUERY_SETUP.md`.
+### Fleet
+- `GET /technician/fleet/incoming`
+- `POST /technician/fleet/missions/{mission_id}/confirm-arrival`
+- `GET /technician/fleet/drones`
+- `GET /technician/fleet/drones/{drone_id}`
+- `PATCH /technician/fleet/drones/{drone_id}/status`
+- `GET /technician/fleet/batteries`
+- `POST /technician/fleet/batteries/{battery_id}/use`
+- `POST /technician/fleet/batteries/{battery_id}/mark-charged`
+- `GET /technician/fleet/drones/{drone_id}/maintenance-history`
+- `GET /technician/fleet/maintenance-records/{drone_id}`
+- `POST /technician/fleet/maintenance-records`
+- `GET /technician/fleet/work-orders/{work_order_id}/logs`
+- `GET /technician/fleet/maintenance-schedules`
+- `POST /technician/fleet/maintenance-schedules`
+- `GET /technician/fleet/maintenance-schedules/drone/{drone_id}`
+- `GET /technician/fleet/maintenance-alerts`
+- `GET /technician/fleet/maintenance-alerts/{alert_id}`
+- `GET /technician/fleet/work-orders`
+- `POST /technician/fleet/work-orders`
+- `GET /technician/fleet/work-orders/{work_order_id}`
+- `PUT /technician/fleet/work-orders/{work_order_id}`
+- `DELETE /technician/fleet/work-orders/{work_order_id}`
+- `PATCH /technician/fleet/work-orders/{work_order_id}/inspection`
+- `POST /technician/fleet/cron/maintenance-alerts`
+- `POST /technician/fleet/cron/battery-overdue-alerts`
+
+Notification and `/users/me` helpers remain connected from the earlier Backend integration document.
+
+## UI actions still missing Backend endpoints
+
+Do not invent routes for these actions:
+
+- Outbound `Dispatch`
+- Transit `Dispatch / Continue`
+- Transit `Cannot Continue / replacement request`
+- Outbound / Transit / Battery history
+- Single notification `mark read`
+
+They remain frontend-only until Backend exposes official endpoints.
+
+## CORS note
+
+TanStack Query cannot fix CORS. In the screenshots supplied during integration:
+
+- `GET /technician/fleet/drones` returned `200`.
+- `GET /technician/fleet/batteries` returned `200`.
+- `GET /notifications/unread-count` returned `200`.
+- `GET /technician/fleet/incoming` was blocked as CORS/network.
+- `GET /technician/deliveries/outbound` was blocked as CORS/network.
+
+Because the same base URL and Bearer token work for other routes, route-specific failures on `incoming` and `outbound` must also be checked in Backend/Swagger. Test those two endpoints with Swagger `Try it out`; if they fail there as well, the route handler/server is the blocker. If they succeed in Swagger but fail only from `http://localhost:5173`, Backend must return the correct CORS headers for those responses too.

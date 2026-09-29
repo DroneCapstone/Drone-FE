@@ -1,196 +1,119 @@
 import {
   Navigate,
+  Outlet,
   type RouteObject,
 } from "react-router-dom";
 
 import {
   TechnicianDashboardPage,
 } from "./pages/TechnicianDashboardPage";
+import { FleetPage } from "./pages/FleetPage";
+import { TransitMissionsPage } from "./pages/TransitMissionsPage";
+import { BatteryManagementPage } from "./pages/BatteryManagementPage";
+import { DroneDetailPage } from "./pages/DroneDetailPage";
+import { OutboundDeliveriesPage } from "./pages/OutboundDeliveriesPage";
+import { DeliveryConfirmationsPage } from "./pages/DeliveryConfirmationsPage";
+import { MaintenancePage } from "./pages/MaintenancePage";
+import { MaintenanceAlertsPage } from "./pages/MaintenanceAlertsPage";
+import { WorkOrdersPage } from "./pages/WorkOrdersPage";
+import { WorkOrderDetailPage } from "./pages/WorkOrderDetailPage";
+import { TechnicianNotificationsPage } from "./pages/TechnicianNotificationsPage";
+import { TechnicianProfilePage } from "./pages/TechnicianProfilePage";
+import { TechnicianQueryProvider } from "./query/TechnicianQueryProvider";
 
-import {
-  FleetPage,
-} from "./pages/FleetPage";
+function TechnicianQueryBoundary() {
+  return (
+    <TechnicianQueryProvider>
+      <Outlet />
+    </TechnicianQueryProvider>
+  );
+}
 
-import {
-  TransitMissionsPage,
-} from "./pages/TransitMissionsPage";
-
-import {
-  BatteryManagementPage,
-} from "./pages/BatteryManagementPage";
-
-import {
-  DroneDetailPage,
-} from "./pages/DroneDetailPage";
-
-import {
-  OutboundDeliveriesPage,
-} from "./pages/OutboundDeliveriesPage";
-
-import {
-  DeliveryConfirmationsPage,
-} from "./pages/DeliveryConfirmationsPage";
-
-import {
-  MaintenancePage,
-} from "./pages/MaintenancePage";
-
-import {
-  MaintenanceAlertsPage,
-} from "./pages/MaintenanceAlertsPage";
-
-import {
-  WorkOrdersPage,
-} from "./pages/WorkOrdersPage";
-
-import {
-  WorkOrderDetailPage,
-} from "./pages/WorkOrderDetailPage";
-
-import {
-  TechnicianNotificationsPage,
-} from "./pages/TechnicianNotificationsPage";
-
-import {
-  TechnicianProfilePage,
-} from "./pages/TechnicianProfilePage";
-
-import {
-  TechnicianQueryProvider,
-} from "./query/TechnicianQueryProvider";
-
-export const technicianRoutes:
-  RouteObject[] = [
+/**
+ * One QueryClient boundary for all Technician route pages.
+ *
+ * Previously every page created its own QueryClientProvider wrapper. That was
+ * redundant and made request behaviour harder to reason about while moving
+ * between pages. The route boundary keeps a single Technician cache alive for
+ * the active Technician workspace.
+ */
+export const technicianRoutes: RouteObject[] = [
   {
-    index: true,
-    element: (
-      <Navigate
-        to="dashboard"
-        replace
-      />
-    ),
-  },
+    element: <TechnicianQueryBoundary />,
+    children: [
+      {
+        index: true,
+        element: <Navigate to="dashboard" replace />,
+      },
+      {
+        path: "dashboard",
+        element: <TechnicianDashboardPage />,
+      },
 
-  {
-    path: "dashboard",
-    element: (
-      <TechnicianQueryProvider>
-        <TechnicianDashboardPage />
-      </TechnicianQueryProvider>
-    ),
-  },
+      /* Fleet */
+      {
+        path: "fleet",
+        element: <FleetPage />,
+      },
+      {
+        path: "fleet/transit",
+        element: <TransitMissionsPage />,
+      },
+      {
+        path: "fleet/batteries",
+        element: <BatteryManagementPage />,
+      },
+      {
+        path: "fleet/:droneId",
+        element: <DroneDetailPage />,
+      },
 
-  /* Fleet */
-  {
-    path: "fleet",
-    element: (
-      <TechnicianQueryProvider>
-        <FleetPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "fleet/transit",
-    element: (
-      <TechnicianQueryProvider>
-        <TransitMissionsPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "fleet/batteries",
-    element: (
-      <TechnicianQueryProvider>
-        <BatteryManagementPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "fleet/:droneId",
-    element: (
-      <TechnicianQueryProvider>
-        <DroneDetailPage />
-      </TechnicianQueryProvider>
-    ),
-  },
+      /* Deliveries */
+      {
+        path: "deliveries/outbound",
+        element: <OutboundDeliveriesPage />,
+      },
+      {
+        path: "deliveries/confirmations",
+        element: <DeliveryConfirmationsPage />,
+      },
 
-  /* Deliveries */
-  {
-    path: "deliveries/outbound",
-    element: (
-      <TechnicianQueryProvider>
-        <OutboundDeliveriesPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "deliveries/confirmations",
-    element: (
-      <TechnicianQueryProvider>
-        <DeliveryConfirmationsPage />
-      </TechnicianQueryProvider>
-    ),
-  },
+      /* Maintenance */
+      {
+        path: "maintenance",
+        element: <MaintenancePage />,
+      },
+      {
+        path: "maintenance/alerts",
+        element: <MaintenanceAlertsPage />,
+      },
+      {
+        path: "maintenance/work-orders",
+        element: <WorkOrdersPage />,
+      },
+      {
+        path: "maintenance/work-orders/:workOrderId",
+        element: <WorkOrderDetailPage />,
+      },
 
-  /* Maintenance */
-  {
-    path: "maintenance",
-    element: (
-      <TechnicianQueryProvider>
-        <MaintenancePage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "maintenance/alerts",
-    element: (
-      <TechnicianQueryProvider>
-        <MaintenanceAlertsPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "maintenance/work-orders",
-    element: (
-      <TechnicianQueryProvider>
-        <WorkOrdersPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path:
-      "maintenance/work-orders/:workOrderId",
-    element: (
-      <TechnicianQueryProvider>
-        <WorkOrderDetailPage />
-      </TechnicianQueryProvider>
-    ),
-  },
+      {
+        path: "notifications",
+        element: <TechnicianNotificationsPage />,
+      },
+      {
+        path: "profile",
+        element: <TechnicianProfilePage />,
+      },
 
-  {
-    path: "notifications",
-    element: (
-      <TechnicianQueryProvider>
-        <TechnicianNotificationsPage />
-      </TechnicianQueryProvider>
-    ),
-  },
-  {
-    path: "profile",
-    element: (
-      <TechnicianQueryProvider>
-        <TechnicianProfilePage />
-      </TechnicianQueryProvider>
-    ),
-  },
-
-  {
-    path: "*",
-    element: (
-      <Navigate
-        to="/technician/dashboard"
-        replace
-      />
-    ),
+      {
+        path: "*",
+        element: (
+          <Navigate
+            to="/technician/dashboard"
+            replace
+          />
+        ),
+      },
+    ],
   },
 ];

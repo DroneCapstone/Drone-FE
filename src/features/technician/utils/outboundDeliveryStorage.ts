@@ -228,41 +228,7 @@ let demoOutboundDeliveries: OutboundDelivery[] = [
 
 ];
 
-let demoOutboundHistory: OutboundDeliveryHistory[] = [
-
-  {
-
-    id: "OUT-HIST-3098",
-
-    orderId: "ORD-3098",
-
-    customerName: "Customer Demo 4",
-
-    packageName: "General parcel",
-
-    weightKg: 1.3,
-
-    hub: TECHNICIAN_HUB,
-
-    destination: "Hub HCM-03",
-
-    missionId: "MS-1098",
-
-    legId: "LEG-1098-01",
-
-    droneId: "DR-001",
-
-    droneCode: "CX-01",
-
-    batteryId: "BAT-006",
-
-    departedAt: "24 Sep 2026 · 08:42",
-
-    result: "Departed",
-
-  },
-
-];
+let demoOutboundHistory: OutboundDeliveryHistory[] = [];
 
 function formatOutboundTime() {
 

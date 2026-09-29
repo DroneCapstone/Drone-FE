@@ -149,12 +149,14 @@ export function OutboundDeliveriesPage() {
   );
 
   const visibleHistory = useMemo(
-    () =>
-      history.filter(
-        (item) => item.hub === TECHNICIAN_HUB,
-      ),
+    () => history,
     [history],
   );
+
+  const hubLabel =
+    deliveries[0]?.hub ??
+    history[0]?.hub ??
+    TECHNICIAN_HUB;
 
   const handleReceiveAtHub = async (orderId: string) => {
     try {
@@ -245,7 +247,7 @@ export function OutboundDeliveriesPage() {
   return (
     <TechnicianPageShell
       title="Outbound deliveries"
-      description={`Paid customer orders assigned to ${TECHNICIAN_HUB}. Destination indicates the hub where the recipient will collect the parcel.`}
+      description={`Paid customer orders assigned to ${hubLabel}. Destination indicates the hub where the recipient will collect the parcel.`}
     >
       {outboundQuery.error instanceof Error && (
         <div className="mb-4 rounded-lg border border-red-500/25 bg-[var(--tech-surface)] px-4 py-3 text-[13px] text-red-500">
@@ -437,7 +439,7 @@ export function OutboundDeliveriesPage() {
                 </h2>
 
                 <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                  Missions dispatched from {TECHNICIAN_HUB}.
+                  Missions dispatched from {hubLabel}.
                 </p>
               </div>
 

@@ -15,10 +15,15 @@ const viteEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 }).env;
 
-export const TECHNICIAN_API_BASE_URL = (
+const configuredApiBaseUrl = (
   viteEnv?.VITE_API_BASE_URL ??
   DEFAULT_TECHNICIAN_API_BASE_URL
 ).replace(/\/+$/, "");
+
+export const TECHNICIAN_API_BASE_URL =
+  /\/api\/v1$/i.test(configuredApiBaseUrl)
+    ? configuredApiBaseUrl
+    : `${configuredApiBaseUrl}/api/v1`;
 
 export class TechnicianApiError extends Error {
   status: number;
@@ -106,8 +111,17 @@ export async function technicianApiRequest<T = unknown>(
   let accessToken =
     authService.getAccessToken();
 
-  let response =
-    await execute(accessToken);
+  let response: Response;
+
+  try {
+    response = await execute(accessToken);
+  } catch (error) {
+    throw new TechnicianApiError(
+      "Unable to reach Backend. Check the API URL, Backend availability, or CORS configuration for this endpoint.",
+      0,
+      error,
+    );
+  }
 
   if (
     response.status === 401 &&
@@ -118,8 +132,16 @@ export async function technicianApiRequest<T = unknown>(
 
     if (refreshedToken) {
       accessToken = refreshedToken;
-      response =
-        await execute(accessToken);
+
+      try {
+        response = await execute(accessToken);
+      } catch (error) {
+        throw new TechnicianApiError(
+          "Unable to reach Backend after refreshing the session. Check CORS or Backend availability.",
+          0,
+          error,
+        );
+      }
     }
   }
 
@@ -127,17 +149,11 @@ export async function technicianApiRequest<T = unknown>(
     await parseResponseBody(response);
 
   if (!response.ok) {
-    const message =
-      isRecord(payload) &&
-      typeof payload.detail === "string"
-        ? payload.detail
-        : isRecord(payload) &&
-            typeof payload.message === "string"
-          ? payload.message
-          : `API request failed (${response.status})`;
-
     throw new TechnicianApiError(
-      message,
+      getApiErrorMessage(
+        payload,
+        response.status,
+      ),
       response.status,
       payload,
     );
@@ -156,6 +172,72 @@ export function isRecord(
   );
 }
 
+function getApiErrorMessage(
+  payload: unknown,
+  status: number,
+) {
+  // HTTP response was received from Backend, so this is NOT a CORS/network error.
+  if (!isRecord(payload)) {
+    if (status >= 500) {
+      return `Backend internal error (${status}). The request reached the server, but the endpoint failed while processing it.`;
+    }
+
+    return `API request failed (${status})`;
+  }
+
+  if (typeof payload.detail === "string") {
+    return payload.detail;
+  }
+
+  if (Array.isArray(payload.detail)) {
+    const messages = payload.detail
+      .map((item) => {
+        if (!isRecord(item)) return null;
+
+        const msg =
+          typeof item.msg === "string"
+            ? item.msg
+            : "Invalid value";
+
+        const location =
+          Array.isArray(item.loc)
+            ? item.loc
+                .filter(
+                  (part) =>
+                    typeof part === "string" ||
+                    typeof part === "number",
+                )
+                .map(String)
+                .filter(
+                  (part) =>
+                    part !== "body" &&
+                    part !== "query",
+                )
+                .join(".")
+            : "";
+
+        return location
+          ? `${location}: ${msg}`
+          : msg;
+      })
+      .filter(Boolean);
+
+    if (messages.length > 0) {
+      return messages.join(" · ");
+    }
+  }
+
+  if (typeof payload.message === "string") {
+    return payload.message;
+  }
+
+  if (status >= 500) {
+    return `Backend internal error (${status}). The request reached the server, but the endpoint failed while processing it.`;
+  }
+
+  return `API request failed (${status})`;
+}
+
 export function unwrapList<T = unknown>(
   payload: unknown,
 ): T[] {
@@ -167,20 +249,52 @@ export function unwrapList<T = unknown>(
     return [];
   }
 
-  const candidates = [
-    payload.data,
-    payload.items,
-    payload.results,
-    payload.rows,
+  /*
+   * Backend endpoints do not all use the same envelope key.
+   * Support the common FastAPI response shapes used by Technician APIs
+   * instead of treating a successful 200 response as an empty list.
+   */
+  const candidateKeys = [
+    "data",
+    "items",
+    "results",
+    "rows",
+    "drones",
+    "missions",
+    "batteries",
+    "deliveries",
+    "orders",
+    "confirmations",
+    "alerts",
+    "maintenance_alerts",
+    "work_orders",
+    "records",
+    "maintenance_records",
+    "logs",
+    "schedules",
+    "notifications",
   ];
 
-  for (const candidate of candidates) {
+  for (const key of candidateKeys) {
+    const candidate = payload[key];
+
     if (Array.isArray(candidate)) {
       return candidate as T[];
     }
+
+    if (isRecord(candidate)) {
+      const nested = unwrapList<T>(candidate);
+      if (nested.length > 0) {
+        return nested;
+      }
+    }
   }
 
-  return [];
+  // Last-resort compatibility for a single list property with a custom name.
+  const firstArray = Object.values(payload).find(Array.isArray);
+  return Array.isArray(firstArray)
+    ? (firstArray as T[])
+    : [];
 }
 
 export function unwrapObject(
@@ -390,6 +504,13 @@ export const getDroneMaintenanceHistoryApi = (
   );
 
 // ---------------------------------------------------------------------------
+// Technician missions
+// ---------------------------------------------------------------------------
+
+export const getTechnicianMissionsApi = () =>
+  technicianApiRequest("/technician/missions/");
+
+// ---------------------------------------------------------------------------
 // Transit missions
 // ---------------------------------------------------------------------------
 
@@ -486,8 +607,21 @@ export const confirmDeliveryPickupApi = (
 export const getMaintenanceAlertsApi = () =>
   technicianApiRequest("/technician/fleet/maintenance-alerts");
 
+export const getMaintenanceAlertApi = (
+  alertId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/maintenance-alerts/${id}`,
+    alertId,
+  );
+
 export const syncMaintenanceAlertsApi = () =>
   technicianApiRequest("/technician/fleet/cron/maintenance-alerts", {
+    method: "POST",
+  });
+
+export const syncBatteryOverdueAlertsApi = () =>
+  technicianApiRequest("/technician/fleet/cron/battery-overdue-alerts", {
     method: "POST",
   });
 
@@ -542,6 +676,31 @@ export const updateWorkOrderInspectionApi = (
     },
   );
 
+export const deleteWorkOrderApi = (
+  workOrderId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/work-orders/${id}`,
+    workOrderId,
+    { method: "DELETE" },
+  );
+
+export const getWorkOrderLogsApi = (
+  workOrderId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/work-orders/${id}/logs`,
+    workOrderId,
+  );
+
+export const getMaintenanceRecordsApi = (
+  droneId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/maintenance-records/${id}`,
+    droneId,
+  );
+
 export const createMaintenanceRecordApi = (
   payload: Record<string, unknown>,
 ) =>
@@ -549,6 +708,25 @@ export const createMaintenanceRecordApi = (
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const getMaintenanceSchedulesApi = () =>
+  technicianApiRequest("/technician/fleet/maintenance-schedules");
+
+export const createMaintenanceScheduleApi = (
+  payload: Record<string, unknown>,
+) =>
+  technicianApiRequest("/technician/fleet/maintenance-schedules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const getDroneMaintenanceSchedulesApi = (
+  droneId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/maintenance-schedules/drone/${id}`,
+    droneId,
+  );
 
 // ---------------------------------------------------------------------------
 // Notifications

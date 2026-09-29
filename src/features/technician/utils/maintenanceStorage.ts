@@ -1,7 +1,10 @@
 import {
   createMaintenanceRecordApi,
   createWorkOrderApi,
+  deleteWorkOrderApi,
+  getMaintenanceRecordsApi,
   getWorkOrderApi,
+  getWorkOrderLogsApi,
   getWorkOrdersApi,
   updateWorkOrderApi,
   updateWorkOrderInspectionApi,
@@ -124,18 +127,7 @@ export const defaultWorkOrders: WorkOrder[] = [
   },
 ];
 
-const defaultWorkOrderLogs: WorkOrderLog[] = [
-  {
-    id: "WOL-001",
-    workOrderId: "WO-1054",
-    drone: "CX-09",
-    action:
-      "Work order moved to In Progress",
-    status: "In Progress",
-    changedAt: "20 Sep · 09:05",
-    changedBy: "Technician Demo",
-  },
-];
+const defaultWorkOrderLogs: WorkOrderLog[] = [];
 
 function normalizeStatus(
   status: unknown,
@@ -372,6 +364,33 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
   };
 }
 
+function mapApiWorkOrderLog(value: unknown): WorkOrderLog | null {
+  if (!isRecord(value)) return null;
+
+  const rawId = pickString(value, ["log_id", "id"]);
+  const rawWorkOrderId = pickString(value, ["work_order_id", "workOrderId"]);
+  if (!rawWorkOrderId) return null;
+
+  const status = normalizeApiWorkOrderStatus(
+    pickString(value, ["status", "work_order_status"], "NOT_STARTED"),
+  );
+
+  return {
+    id: rawId
+      ? maintenanceDisplayId("WOL", rawId, 4)
+      : `WOL-${rawWorkOrderId}`,
+    workOrderId: maintenanceDisplayId("WO", rawWorkOrderId, 4),
+    drone: pickString(value, ["drone_name", "drone_code", "drone"], "—"),
+    action: pickString(value, ["action", "message", "description", "event"], "Work order updated"),
+    status,
+    changedAt: formatApiDateTime(
+      pickString(value, ["changed_at", "created_at", "updated_at", "timestamp"], ""),
+      "—",
+    ),
+    changedBy: pickString(value, ["changed_by", "technician_name", "actor_name", "created_by"], "Technician"),
+  };
+}
+
 function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | null {
   if (!isRecord(value)) return null;
 
@@ -517,4 +536,44 @@ export async function refreshDroneMaintenanceHistoryFromApi(droneId: string) {
   saveMaintenanceRecords([...next, ...withoutDrone]);
   window.dispatchEvent(new Event("technician-maintenance-records-updated"));
   return next;
+}
+
+export async function fetchWorkOrderLogsFromApi(
+  workOrderId: string,
+) {
+  const payload = await getWorkOrderLogsApi(workOrderId);
+  const next = unwrapList(payload)
+    .map(mapApiWorkOrderLog)
+    .filter((item): item is WorkOrderLog => Boolean(item));
+
+  const current = loadWorkOrderLogs();
+  const withoutCurrent = current.filter(
+    (item) => item.workOrderId !== workOrderId,
+  );
+  saveWorkOrderLogs([...next, ...withoutCurrent]);
+  return next;
+}
+
+export async function refreshMaintenanceRecordsFromApi(
+  droneId: string,
+) {
+  const payload = await getMaintenanceRecordsApi(droneId);
+  const next = unwrapList(payload)
+    .map(mapApiMaintenanceRecord)
+    .filter((item): item is CompletedMaintenanceRecord => Boolean(item));
+
+  const current = loadMaintenanceRecords();
+  const withoutDrone = current.filter(
+    (record) => record.droneId !== droneId,
+  );
+  saveMaintenanceRecords([...next, ...withoutDrone]);
+  return next;
+}
+
+export async function deleteWorkOrderOnServer(
+  workOrderId: string,
+) {
+  const result = await deleteWorkOrderApi(workOrderId);
+  await refreshWorkOrdersFromApi();
+  return result;
 }

@@ -194,6 +194,14 @@ function mapApiDrone(value: unknown): FleetDrone | null {
   const hub = pickString(value, ["hub_name", "hub", "location"], TECHNICIAN_HUB);
   const battery = pickNumber(value, ["battery_level_pct", "battery_pct", "battery", "charge_level_pct"], 0);
 
+  const installedBatteryId = (() => {
+    const raw = pickString(value, ["installed_battery_id", "battery_id"], "");
+    if (!raw) return undefined;
+    if (/^BAT-/i.test(raw)) return raw.toUpperCase();
+    const match = raw.match(/(\d+)$/);
+    return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${raw}`;
+  })();
+
   return {
     id,
     name,
@@ -203,14 +211,8 @@ function mapApiDrone(value: unknown): FleetDrone | null {
     utilization: 0,
     lastFlight: pickString(value, ["last_flight", "last_mission_id"], "Not flown"),
     location: hub,
-    installedBatteryId: (() => {
-      const raw = pickString(value, ["installed_battery_id", "battery_id"], "");
-      if (!raw) return undefined;
-      if (/^BAT-/i.test(raw)) return raw.toUpperCase();
-      const match = raw.match(/(\d+)$/);
-      return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${raw}`;
-    })(),
-    installedBatteryPct: battery || undefined,
+    installedBatteryId,
+    installedBatteryPct: installedBatteryId ? battery : undefined,
     lastMaintenanceAt: pickString(value, ["last_maintenance", "last_maintenance_at"], "") || undefined,
     nextMaintenanceAt: pickString(value, ["next_maintenance", "next_maintenance_at"], "") || undefined,
   };
