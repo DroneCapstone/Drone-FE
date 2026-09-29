@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
-import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/OperatorPagination';
+import { OperatorPagination } from '../../components/OperatorPagination';
 import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
 import { FleetHubPageShell } from '../fleet/FleetHubPageShell';
+
+const HUBS_PER_PAGE = 9;
 
 export function HubNetworkPage() {
   const navigate = useNavigate();
@@ -24,11 +26,11 @@ export function HubNetworkPage() {
     availableDrones: hub.availableDrones ?? 0,
   }));
 
-  const totalPages = Math.max(1, Math.ceil(hubs.length / OPERATOR_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(hubs.length / HUBS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const paginatedHubs = hubs.slice(
-    (currentPage - 1) * OPERATOR_PAGE_SIZE,
-    currentPage * OPERATOR_PAGE_SIZE,
+    (currentPage - 1) * HUBS_PER_PAGE,
+    currentPage * HUBS_PER_PAGE,
   );
 
   const openHubDrones = (hubId: string) => {
@@ -75,6 +77,7 @@ export function HubNetworkPage() {
               currentPage={currentPage}
               totalItems={hubs.length}
               itemLabel="hubs"
+              pageSize={HUBS_PER_PAGE}
               className="operator-pagination--grid"
               onPageChange={setPage}
             />
