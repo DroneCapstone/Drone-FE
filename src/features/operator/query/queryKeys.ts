@@ -14,4 +14,10 @@ export const operatorQueryKeys = {
         status: params.status ?? null,
       },
     ] as const,
+
+  orderDetail: (orderId: string) =>
+    [...operatorQueryKeys.orders(), 'detail', orderId] as const,
+
+  eligibleDrones: (orderId: string) =>
+    [...operatorQueryKeys.orders(), 'detail', orderId, 'eligible-drones'] as const,
 };

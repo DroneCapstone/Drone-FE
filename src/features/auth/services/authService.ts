@@ -47,8 +47,8 @@ function isRecord(
 ): value is Record<string, unknown> {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      !Array.isArray(value),
+    typeof value === "object" &&
+    !Array.isArray(value),
   );
 }
 
@@ -140,18 +140,18 @@ function getFastApiValidationMessage(
           item.loc,
         )
           ? item.loc
-              .filter(
-                (part) =>
-                  typeof part === "string" ||
-                  typeof part === "number",
-              )
-              .map(String)
-              .filter(
-                (part) =>
-                  part !== "body" &&
-                  part !== "query",
-              )
-              .join(".")
+            .filter(
+              (part) =>
+                typeof part === "string" ||
+                typeof part === "number",
+            )
+            .map(String)
+            .filter(
+              (part) =>
+                part !== "body" &&
+                part !== "query",
+            )
+            .join(".")
           : "";
 
         return location
@@ -258,7 +258,7 @@ async function authRequest<T = unknown>(
       getFastApiValidationMessage(
         payload,
       ) ??
-        `Authentication request failed (${response.status}).`,
+      `Authentication request failed (${response.status}).`,
       response.status,
       payload,
     );
@@ -571,7 +571,7 @@ async function performRegisterRequest(
   payload: RegisterPayload,
 ) {
   const fullName = payload.name.trim();
-  const username = payload.username.trim();
+  // const username = payload.username.trim();
   const email = payload.email
     .trim()
     .toLowerCase();
@@ -593,7 +593,7 @@ async function performRegisterRequest(
       method: "POST",
       body: JSON.stringify({
         email,
-        username,
+        // username,
         full_name: fullName,
         password: payload.password,
       }),
@@ -799,7 +799,7 @@ export const authService = {
 
     return this.login({
       email: payload.email,
-      username: payload.username,
+      // username: payload.username,
       password: payload.password,
     });
   },

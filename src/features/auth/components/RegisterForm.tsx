@@ -26,26 +26,12 @@ export function RegisterForm({
   const navigate = useNavigate();
   const { register } = useAuth();
 
-  const [name, setName] =
-    useState("");
-
-  const [username, setUsername] =
-    useState("");
-
-  const [email, setEmail] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
-
-  const [error, setError] =
-    useState("");
-
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
@@ -54,18 +40,12 @@ export function RegisterForm({
     setError("");
 
     const normalizedName = name.trim();
-    const normalizedUsername = username.trim();
     const normalizedEmail = email
       .trim()
       .toLowerCase();
 
     if (!normalizedName) {
       setError("Full name is required.");
-      return;
-    }
-
-    if (!normalizedUsername) {
-      setError("Username is required.");
       return;
     }
 
@@ -93,7 +73,6 @@ export function RegisterForm({
     try {
       const user = await register({
         name: normalizedName,
-        username: normalizedUsername,
         email: normalizedEmail,
         password,
       });
@@ -144,27 +123,9 @@ export function RegisterForm({
               autoComplete="name"
               value={name}
               onChange={(event) =>
-                setName(
-                  event.target.value,
-                )
+                setName(event.target.value)
               }
               placeholder="Your name"
-              required
-            />
-          </label>
-
-          <label className="auth-field">
-            <span>Username</span>
-
-            <Input
-              autoComplete="username"
-              value={username}
-              onChange={(event) =>
-                setUsername(
-                  event.target.value,
-                )
-              }
-              placeholder="Choose a username"
               required
             />
           </label>
@@ -177,9 +138,7 @@ export function RegisterForm({
               autoComplete="email"
               value={email}
               onChange={(event) =>
-                setEmail(
-                  event.target.value,
-                )
+                setEmail(event.target.value)
               }
               placeholder="name@email.com"
               required
@@ -194,9 +153,7 @@ export function RegisterForm({
               autoComplete="new-password"
               value={password}
               onChange={(event) =>
-                setPassword(
-                  event.target.value,
-                )
+                setPassword(event.target.value)
               }
               placeholder="Minimum 8 characters"
               required
@@ -211,9 +168,7 @@ export function RegisterForm({
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(event) =>
-                setConfirmPassword(
-                  event.target.value,
-                )
+                setConfirmPassword(event.target.value)
               }
               placeholder="Repeat password"
               required
