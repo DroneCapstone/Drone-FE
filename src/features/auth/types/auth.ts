@@ -14,10 +14,15 @@ export interface AuthUser {
 export interface LoginPayload {
   email: string;
   password: string;
+
+  // Optional fallback for backends that authenticate with username.
+  // The normal Sign in form can continue to send only email + password.
+  username?: string;
 }
 
 export interface RegisterPayload {
   name: string;
+  username: string;
   email: string;
   password: string;
 }

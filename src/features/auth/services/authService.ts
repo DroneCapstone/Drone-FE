@@ -495,6 +495,9 @@ async function performLoginRequest(
     .trim()
     .toLowerCase();
 
+  const username =
+    payload.username?.trim() || email;
+
   try {
     return await authRequest<unknown>(
       "/auth/login",
@@ -533,7 +536,7 @@ async function performLoginRequest(
       {
         method: "POST",
         body: JSON.stringify({
-          username: email,
+          username,
           password: payload.password,
         }),
       },
@@ -548,7 +551,7 @@ async function performLoginRequest(
   }
 
   const body = new URLSearchParams();
-  body.set("username", email);
+  body.set("username", username);
   body.set("password", payload.password);
 
   return authRequest<unknown>(
@@ -567,48 +570,31 @@ async function performLoginRequest(
 async function performRegisterRequest(
   payload: RegisterPayload,
 ) {
-  const name = payload.name.trim();
+  const fullName = payload.name.trim();
+  const username = payload.username.trim();
   const email = payload.email
     .trim()
     .toLowerCase();
 
-  try {
-    return await authRequest<unknown>(
-      "/auth/register",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          email,
-          password: payload.password,
-        }),
-      },
-    );
-  } catch (reason) {
-    if (
-      !(reason instanceof AuthApiError) ||
-      reason.status !== 422
-    ) {
-      throw reason;
-    }
-
-    const missing =
-      getMissingValidationFields(
-        reason.payload,
-      );
-
-    if (!missing.has("full_name")) {
-      throw reason;
-    }
-  }
-
+  /*
+   * Swagger schema for POST /api/v1/auth/register:
+   * {
+   *   email,
+   *   username,
+   *   full_name,
+   *   password
+   * }
+   *
+   * Send exactly one request using the backend contract.
+   */
   return authRequest<unknown>(
     "/auth/register",
     {
       method: "POST",
       body: JSON.stringify({
-        full_name: name,
         email,
+        username,
+        full_name: fullName,
         password: payload.password,
       }),
     },
@@ -813,6 +799,7 @@ export const authService = {
 
     return this.login({
       email: payload.email,
+      username: payload.username,
       password: payload.password,
     });
   },
