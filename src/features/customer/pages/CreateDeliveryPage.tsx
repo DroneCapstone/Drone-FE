@@ -177,7 +177,7 @@ export function CreateDeliveryPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-72px)] bg-[#070707] font-sans">
+    <div className="min-h-[calc(100vh-72px)] bg-transparent font-sans">
       <div className="mx-auto max-w-[1500px] px-6 py-10 lg:px-10 lg:py-12">
         <header>
           <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-orange-500">
@@ -188,13 +188,13 @@ export function CreateDeliveryPage() {
             Create delivery
           </h1>
 
-          <p className="mt-3 max-w-[680px] text-[15px] leading-7 text-white/45">
+          <p className="mt-3 max-w-[680px] text-[15px] leading-7 text-white/[0.58]">
             Enter package information, choose your delivery areas and schedule
             a hub-to-hub delivery.
           </p>
         </header>
 
-        <div className="mt-9 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0a0a]">
+        <div className="mt-9 overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-sm">
           <div className="grid grid-cols-2 md:grid-cols-4">
             {steps.map((label, index) => {
               const active = index === step;
@@ -221,7 +221,7 @@ export function CreateDeliveryPage() {
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition ${
                         active || completed
                           ? "bg-orange-500 text-black"
-                          : "border border-white/[0.12] text-white/35"
+                          : "border border-white/[0.12] text-white/[0.48]"
                       }`}
                     >
                       {completed ? "✓" : index + 1}
@@ -233,14 +233,14 @@ export function CreateDeliveryPage() {
                           active
                             ? "text-white"
                             : completed
-                              ? "text-white/65"
-                              : "text-white/35"
+                              ? "text-white/[0.76]"
+                              : "text-white/[0.48]"
                         }`}
                       >
                         {label}
                       </p>
 
-                      <p className="mt-0.5 hidden text-[11px] text-white/25 lg:block">
+                      <p className="mt-0.5 hidden text-[11px] text-white/[0.25] lg:block">
                         {getStepCaption(index)}
                       </p>
                     </div>
@@ -256,7 +256,7 @@ export function CreateDeliveryPage() {
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] p-6 lg:p-8">
+          <section className="rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 p-6 shadow-[0_14px_34px_rgba(0,0,0,0.30)] backdrop-blur-sm lg:p-8">
             {step === 0 && <ContactStep form={form} update={update} />}
             {step === 1 && <PackageStep form={form} update={update} />}
             {step === 2 && <RouteStep form={form} update={update} />}
@@ -279,7 +279,7 @@ export function CreateDeliveryPage() {
                   setStep((current) => Math.max(0, current - 1));
                   setError("");
                 }}
-                className="inline-flex h-12 items-center gap-2 rounded-lg px-5 text-[14px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white disabled:pointer-events-none disabled:opacity-0"
+                className="inline-flex h-12 items-center gap-2 rounded-lg px-5 text-[14px] font-medium text-white/[0.62] transition hover:bg-white/[0.04] hover:text-white disabled:pointer-events-none disabled:opacity-0"
               >
                 <ArrowLeft size={16} />
                 Back
@@ -300,13 +300,13 @@ export function CreateDeliveryPage() {
             </div>
           </section>
 
-          <aside className="h-fit rounded-xl border border-white/[0.08] bg-[#0a0a0a] p-6 lg:sticky lg:top-[96px]">
+          <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 p-6 shadow-[0_14px_34px_rgba(0,0,0,0.30)] backdrop-blur-sm lg:sticky lg:top-[96px]">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.15em] text-white/45">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.15em] text-white/[0.58]">
                 Delivery summary
               </p>
 
-              <span className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white/40">
+              <span className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white/[0.54]">
                 Draft
               </span>
             </div>
@@ -423,7 +423,7 @@ function PackageStep({ form, update }: StepProps) {
                 event.target.value as DeliveryDraft["packageCategory"],
               )
             }
-            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#0d0d0d] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
+            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
           >
             {PACKAGE_CATEGORIES.map((item) => (
               <option key={item.value} value={item.value}>
@@ -447,7 +447,7 @@ function PackageStep({ form, update }: StepProps) {
         <div className="mt-7">
           <FieldLabel>Package weight</FieldLabel>
 
-          <div className="mt-2.5 flex h-[54px] overflow-hidden rounded-lg border border-white/[0.1] bg-[#0d0d0d] transition hover:border-white/[0.17] focus-within:border-orange-500">
+          <div className="mt-2.5 flex h-[54px] overflow-hidden rounded-lg border border-white/[0.1] bg-[#111116] transition hover:border-white/[0.17] focus-within:border-orange-500">
             <input
               type="number"
               min="0.1"
@@ -458,17 +458,17 @@ function PackageStep({ form, update }: StepProps) {
               className="min-w-0 flex-1 bg-transparent px-4 text-[15px] text-white outline-none"
             />
 
-            <div className="flex items-center border-l border-white/[0.08] px-4 text-[13px] text-white/40">
+            <div className="flex items-center border-l border-white/[0.08] px-4 text-[13px] text-white/[0.54]">
               kg
             </div>
           </div>
 
           <div className="mt-2 flex items-center justify-between">
-            <p className="text-[11px] text-white/30">Maximum aircraft payload</p>
+            <p className="text-[11px] text-white/[0.42]">Maximum aircraft payload</p>
 
             <p
               className={`text-[11px] font-medium ${
-                form.weightKg > 12 ? "text-red-400" : "text-white/40"
+                form.weightKg > 12 ? "text-red-400" : "text-white/[0.54]"
               }`}
             >
               {form.weightKg || 0}/12 kg
@@ -491,13 +491,13 @@ function PackageStep({ form, update }: StepProps) {
                   className={`rounded-lg border p-4 text-left transition ${
                     active
                       ? "border-orange-500 bg-orange-500/[0.055]"
-                      : "border-white/[0.08] bg-[#0d0d0d] hover:border-white/[0.18]"
+                      : "border-white/[0.08] bg-[#111116] hover:border-white/[0.18]"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <p
                       className={`text-[20px] font-semibold ${
-                        active ? "text-orange-400" : "text-white/80"
+                        active ? "text-orange-400" : "text-white/[0.80]"
                       }`}
                     >
                       {size}
@@ -510,7 +510,7 @@ function PackageStep({ form, update }: StepProps) {
                     />
                   </div>
 
-                  <p className="mt-3 text-[11px] leading-5 text-white/35">
+                  <p className="mt-3 text-[11px] leading-5 text-white/[0.48]">
                     {PACKAGE_SIZE_RULES[size].dimensions}
                   </p>
                 </button>
@@ -518,24 +518,24 @@ function PackageStep({ form, update }: StepProps) {
             })}
           </div>
 
-          <div className="mt-5 rounded-lg border border-white/[0.07] bg-[#0d0d0d] p-5">
+          <div className="mt-5 rounded-lg border border-white/[0.07] bg-[#111116] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] text-white/35">Selected size</p>
-                <p className="mt-1 text-[14px] font-medium text-white/80">
+                <p className="text-[11px] text-white/[0.48]">Selected size</p>
+                <p className="mt-1 text-[14px] font-medium text-white/[0.80]">
                   Size {form.packageSize}
                 </p>
               </div>
 
               <div className="text-right">
-                <p className="text-[11px] text-white/35">Maximum dimensions</p>
-                <p className="mt-1 text-[13px] text-white/70">
+                <p className="text-[11px] text-white/[0.48]">Maximum dimensions</p>
+                <p className="mt-1 text-[13px] text-white/[0.70]">
                   {PACKAGE_SIZE_RULES[form.packageSize].dimensions}
                 </p>
               </div>
             </div>
 
-            <p className="mt-4 border-t border-white/[0.06] pt-4 text-[11px] leading-5 text-white/35">
+            <p className="mt-4 border-t border-white/[0.06] pt-4 text-[11px] leading-5 text-white/[0.48]">
               {PACKAGE_SIZE_RULES[form.packageSize].description}
             </p>
           </div>
@@ -582,7 +582,7 @@ function RouteStep({ form, update }: StepProps) {
 
       {!preview && (
         <div className="mt-7 rounded-lg border border-dashed border-white/[0.08] px-5 py-8 text-center">
-          <p className="text-[13px] text-white/40">
+          <p className="text-[13px] text-white/[0.54]">
             Enter both locations to see the recommended hub route.
           </p>
         </div>
@@ -606,7 +606,7 @@ function RouteStep({ form, update }: StepProps) {
             />
 
             <div className="hidden items-center justify-center md:flex">
-              <ArrowRight size={18} className="text-white/25" />
+              <ArrowRight size={18} className="text-white/[0.25]" />
             </div>
 
             <HubBlock
@@ -658,10 +658,10 @@ function ScheduleStep({ form, update }: StepProps) {
             onChange={(event) =>
               update("requestedDepartureAt", event.target.value)
             }
-            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#0d0d0d] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
+            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
           />
 
-          <p className="mt-2 text-[11px] leading-5 text-white/30">
+          <p className="mt-2 text-[11px] leading-5 text-white/[0.42]">
             Scheduled departure must be at least 3 hours from the current time.
           </p>
         </div>
@@ -674,7 +674,7 @@ function ScheduleStep({ form, update }: StepProps) {
           </div>
 
           <div>
-            <p className="text-[14px] font-semibold text-white/85">
+            <p className="text-[14px] font-semibold text-white/[0.85]">
               Package handover policy
             </p>
 
@@ -721,11 +721,11 @@ function ContactGroup({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#0d0d0d] p-6">
+    <div className="rounded-2xl border border-white/[0.10] bg-[#111116] p-6 shadow-[0_8px_22px_rgba(0,0,0,0.18)]">
       <div className="border-b border-white/[0.07] pb-5">
-        <p className="text-[16px] font-semibold text-white/85">{title}</p>
+        <p className="text-[16px] font-semibold text-white/[0.85]">{title}</p>
 
-        <p className="mt-2 text-[12px] leading-5 text-white/35">
+        <p className="mt-2 text-[12px] leading-5 text-white/[0.48]">
           {description}
         </p>
       </div>
@@ -737,7 +737,7 @@ function ContactGroup({
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[13px] font-medium text-white/55">{children}</span>
+    <span className="text-[13px] font-medium text-white/[0.68]">{children}</span>
   );
 }
 
@@ -778,8 +778,8 @@ function Field({
         onChange={(event) => onChange?.(event.target.value)}
         className={`mt-2.5 h-[54px] w-full rounded-lg border px-4 text-[15px] outline-none transition ${
           readOnly
-            ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/50"
-            : "border-white/[0.1] bg-[#101010] text-white placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
+            ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.62]"
+            : "border-white/[0.1] bg-[#15151b] text-white placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
         }`}
       />
     </label>
@@ -806,7 +806,7 @@ function LocationField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#0d0d0d] px-4 text-[15px] text-white outline-none transition placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
+        className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
       />
     </label>
   );
@@ -822,14 +822,14 @@ function HubBlock({
   address: string;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#101010] p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
+    <div className="rounded-lg border border-white/[0.07] bg-[#15151b] p-5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.42]">
         {label}
       </p>
 
-      <p className="mt-2 text-[15px] font-semibold text-white/85">{name}</p>
+      <p className="mt-2 text-[15px] font-semibold text-white/[0.85]">{name}</p>
 
-      <p className="mt-2 text-[11px] leading-5 text-white/35">{address}</p>
+      <p className="mt-2 text-[11px] leading-5 text-white/[0.48]">{address}</p>
     </div>
   );
 }
@@ -852,17 +852,17 @@ function ModeButton({
       className={`rounded-lg border p-5 text-left transition ${
         active
           ? "border-orange-500 bg-orange-500/[0.05]"
-          : "border-white/[0.09] bg-[#0d0d0d] hover:border-white/[0.18]"
+          : "border-white/[0.09] bg-[#111116] hover:border-white/[0.18]"
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <p className="text-[15px] font-semibold text-white/85">{title}</p>
+        <p className="text-[15px] font-semibold text-white/[0.85]">{title}</p>
 
         <span
           className={`h-2.5 w-2.5 rounded-full border ${
             active
               ? "border-orange-500 bg-orange-500"
-              : "border-white/20 bg-transparent"
+              : "border-white/[0.20] bg-transparent"
           }`}
         />
       </div>
