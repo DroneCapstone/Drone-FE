@@ -312,13 +312,7 @@ export function CreateDeliveryPage() {
 
           </h1>
 
-          <p className="mt-3 max-w-[680px] text-[15px] leading-7 text-white/[0.82]">
-
-            Enter package information, choose your delivery areas and schedule
-
-            a hub-to-hub delivery.
-
-          </p>
+         
 
         </header>
 
