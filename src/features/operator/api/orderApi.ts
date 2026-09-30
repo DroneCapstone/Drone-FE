@@ -4,12 +4,11 @@ import type {
   Order,
   OrderStatus,
   PlanningState,
+  OperatorDrone,
 } from '../types/operator';
 
 const DEFAULT_OPERATOR_API_BASE_URL =
   'https://execute-blind-pitch-frequently.trycloudflare.com/api/v1';
-
-console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
 
 const viteEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
@@ -85,6 +84,34 @@ export interface ListOperatorOrdersParams {
   status?: BackendOrderStatus;
 }
 
+interface BackendEligibleDronesHub {
+  id: string | number;
+  name: string;
+  totalDrones: number;
+  availableDrones: number;
+}
+
+interface BackendEligibleDrone {
+  id: string | number;
+  model: string;
+  maxPayloadKg: number;
+}
+
+interface BackendEligibleDronesResponse {
+  hub: BackendEligibleDronesHub;
+  drones: BackendEligibleDrone[];
+}
+
+export interface EligibleDronesResult {
+  hub: {
+    id: string;
+    name: string;
+    totalDrones: number;
+    availableDrones: number;
+  };
+  drones: OperatorDrone[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -113,18 +140,27 @@ function getApiErrorMessage(payload: unknown, status: number) {
   return `Operator API request failed (${status}).`;
 }
 
-async function operatorApiRequest<T>(path: string): Promise<T> {
+export async function operatorApiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const withCredentials = viteEnv?.VITE_API_WITH_CREDENTIALS === 'true';
 
   const execute = async (accessToken?: string | null) => {
-    const headers = new Headers({ Accept: 'application/json' });
+    const headers = new Headers(init.headers);
+    headers.set('Accept', 'application/json');
+
+    if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     if (accessToken) {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
     return fetch(`${OPERATOR_API_BASE_URL}${path}`, {
-      method: 'GET',
+      ...init,
+      method: init.method ?? 'GET',
       headers,
       credentials: withCredentials ? 'include' : 'omit',
     });
@@ -251,6 +287,21 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
   };
 }
 
+
+export async function getOperatorOrderApi(orderId: string): Promise<Order> {
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    throw new OperatorApiError('Order ID is required.', 400);
+  }
+
+  const payload = await operatorApiRequest<BackendOperatorOrder>(
+    `/operator/orders/${encodeURIComponent(normalizedOrderId)}`,
+  );
+
+  return toOperatorOrder(payload);
+}
+
 export async function listOperatorOrdersApi(
   params: ListOperatorOrdersParams = {},
 ): Promise<Order[]> {
@@ -263,4 +314,39 @@ export async function listOperatorOrdersApi(
   const payload = await operatorApiRequest<unknown>(`/operator/orders${suffix}`);
 
   return unwrapOrderList(payload).map(toOperatorOrder);
+}
+
+
+export async function getEligibleDronesApi(
+  orderId: string,
+): Promise<EligibleDronesResult> {
+  const normalizedOrderId = orderId.trim();
+
+  if (!normalizedOrderId) {
+    throw new OperatorApiError('Order ID is required.', 400);
+  }
+
+  const payload = await operatorApiRequest<BackendEligibleDronesResponse>(
+    `/operator/orders/${encodeURIComponent(normalizedOrderId)}/eligible-drones`,
+  );
+
+  const hubId = String(payload.hub.id);
+
+  return {
+    hub: {
+      id: hubId,
+      name: payload.hub.name,
+      totalDrones: Number(payload.hub.totalDrones ?? 0),
+      availableDrones: Number(payload.hub.availableDrones ?? 0),
+    },
+    drones: (payload.drones ?? []).map((drone) => ({
+      id: String(drone.id),
+      name: `DR-${String(drone.id)}`,
+      displayId: String(drone.id),
+      model: drone.model || '—',
+      hubId,
+      technicalStatus: 'Available',
+      maxPayloadKg: Number(drone.maxPayloadKg ?? 0),
+    })),
+  };
 }

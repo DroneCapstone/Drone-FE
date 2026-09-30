@@ -4,6 +4,7 @@ import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { operatorHubs } from '../../data/hubMockData';
+import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { Tone } from '../../types/operator';
 import {
   formatDeliveryWindow,
@@ -13,7 +14,6 @@ import {
 } from '../../utils/deliveryPlanning';
 import { formatMissionTime } from '../../utils/missionTiming';
 import { loadOperatorMissions } from '../../utils/operatorMissionStorage';
-import { getOperatorOrder } from '../../utils/operatorOrderStorage';
 import { OrderPageShell } from './OrderPageShell';
 
 function hubName(hubId: string) {
@@ -30,11 +30,48 @@ function orderTone(status: string): Tone {
 export function OrderDetailPage() {
   const { orderId = '' } = useParams();
   const navigate = useNavigate();
-  const order = useMemo(() => getOperatorOrder(orderId), [orderId]);
   const missions = useMemo(() => loadOperatorMissions(), []);
+  const {
+    data: order,
+    error,
+    isLoading,
+    refetch,
+  } = useOperatorOrderQuery(orderId);
+
+  if (isLoading) {
+    return (
+      <OrderPageShell active="/operator/orders/all">
+        <OperatorPanel>
+          <div className="operator-empty-state">Loading Order…</div>
+        </OperatorPanel>
+      </OrderPageShell>
+    );
+  }
+
+  if (error) {
+    return (
+      <OrderPageShell active="/operator/orders/all">
+        <OperatorPanel>
+          <div className="operator-empty-state">
+            <strong>Unable to load Order</strong>
+            <span>{error instanceof Error ? error.message : 'Could not load order.'}</span>
+            <button type="button" className="row-action" onClick={() => void refetch()}>
+              Retry
+            </button>
+          </div>
+        </OperatorPanel>
+      </OrderPageShell>
+    );
+  }
 
   if (!order) {
-    return <OrderPageShell active="/operator/orders/all"><OperatorPanel><div className="operator-empty-state">Order not found.</div></OperatorPanel></OrderPageShell>;
+    return (
+      <OrderPageShell active="/operator/orders/all">
+        <OperatorPanel>
+          <div className="operator-empty-state">Order not found.</div>
+        </OperatorPanel>
+      </OrderPageShell>
+    );
   }
 
   const deliveryMission = getDeliveryMission(order.id, missions);
