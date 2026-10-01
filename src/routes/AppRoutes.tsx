@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { Navigate, useRoutes } from "react-router-dom";
 
+import { DroneAssistantWidget } from "../components/DroneAssistantWidget";
 import { useAuth } from "../features/auth/hooks/useAuth";
 
 import { technicianRoutes } from "../features/technician/technicianRoutes";
@@ -50,6 +51,10 @@ export function AppRoutes() {
     isRestoring,
   } = useAuth();
 
+  /* =======================================================
+     CURRENT USER HOME
+  ======================================================== */
+
   function getCurrentHome() {
     switch (user?.role) {
       case "operator":
@@ -69,6 +74,10 @@ export function AppRoutes() {
     }
   }
 
+  /* =======================================================
+     AUTH PAGE
+  ======================================================== */
+
   const authPageElement = isRestoring ? null : isAuthenticated ? (
     <Navigate
       to={getCurrentHome()}
@@ -78,11 +87,23 @@ export function AppRoutes() {
     <AuthPage />
   );
 
-  return useRoutes([
+  /* =======================================================
+     ROUTES
+  ======================================================== */
+
+  const routes = useRoutes([
+    /* -----------------------------------------------------
+       PUBLIC
+    ----------------------------------------------------- */
+
     {
       path: "/",
       element: <HomePage />,
     },
+
+    /* -----------------------------------------------------
+       AUTH
+    ----------------------------------------------------- */
 
     {
       path: "/login",
@@ -104,6 +125,10 @@ export function AppRoutes() {
       element: authPageElement,
     },
 
+    /* -----------------------------------------------------
+       OPERATOR
+    ----------------------------------------------------- */
+
     {
       element: (
         <ProtectedRoute
@@ -118,6 +143,10 @@ export function AppRoutes() {
         },
       ],
     },
+
+    /* -----------------------------------------------------
+       TECHNICIAN
+    ----------------------------------------------------- */
 
     {
       element: (
@@ -134,6 +163,10 @@ export function AppRoutes() {
       ],
     },
 
+    /* -----------------------------------------------------
+       CUSTOMER
+    ----------------------------------------------------- */
+
     {
       element: (
         <ProtectedRoute
@@ -149,6 +182,10 @@ export function AppRoutes() {
       ],
     },
 
+    /* -----------------------------------------------------
+       FALLBACK
+    ----------------------------------------------------- */
+
     {
       path: "*",
       element: (
@@ -159,4 +196,16 @@ export function AppRoutes() {
       ),
     },
   ]);
+
+  /* =======================================================
+     APP CONTENT
+  ======================================================== */
+
+  return (
+    <>
+      {routes}
+
+      <DroneAssistantWidget />
+    </>
+  );
 }
