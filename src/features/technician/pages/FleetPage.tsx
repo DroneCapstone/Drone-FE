@@ -560,49 +560,23 @@ export function FleetPage() {
                     />
                   </Field>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Status">
-                      <DropdownSelect
-                        value={
-                          form.status
-                        }
-                        onChange={(
-                          value,
-                        ) =>
-                          setForm(
-                            (
-                              current,
-                            ) => ({
-                              ...current,
-                              status:
-                                value as DroneStatus,
-                            }),
-                          )
-                        }
-                        options={[
-                          "Available",
-                          "Maintenance",
-                        ]}
-                        ariaLabel="Drone status"
-                        className="w-full min-w-0"
-                      />
-                    </Field>
-
-                    <Field label="Installed battery">
-                      <input
-                        disabled
-                        value={
-                          editingDrone.installedBatteryId ??
-                          "Not installed"
-                        }
-                        className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
-                      />
-                    </Field>
-                  </div>
-
-                  <p className="-mt-1 text-[11px] leading-5 text-[var(--tech-muted)]">
-                    Hub-stored drones normally have no battery installed. Batteries are managed separately in Battery management.
-                  </p>
+                  <Field label="Technical status">
+                    <DropdownSelect
+                      value={form.status}
+                      onChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          status: value as DroneStatus,
+                        }))
+                      }
+                      options={[
+                        "Available",
+                        "Maintenance",
+                      ]}
+                      ariaLabel="Drone technical status"
+                      className="w-full min-w-0"
+                    />
+                  </Field>
 
                   <Field label="Assigned hub">
                     <input

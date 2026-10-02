@@ -1,5 +1,6 @@
 import {
   getBatteriesApi,
+  getBatteryDetailApi,
   markBatteryChargedApi,
   useBatteryApi,
 } from "../api/batteryApi";
@@ -10,6 +11,7 @@ import {
   pickNumber,
   pickString,
   unwrapList,
+  unwrapObject,
 } from "../api/httpClient";
 
 export type BatteryStatus =
@@ -17,12 +19,23 @@ export type BatteryStatus =
   | "Charging";
 
 export type HubBattery = {
+  /** Human-readable battery code/serial shown in the UI (for example BAT-001). */
   id: string;
+
+  /** Real database id used by mutation endpoints such as /batteries/{battery_id}/use. */
+  backendId?: string;
+
+  serialNumber?: string;
+  model?: string;
+  capacityWh?: number;
+  droneId?: string;
+  hubId?: string;
   hub: string;
 
   chargeLevelPct: number;
   status: BatteryStatus;
 
+  createdAt?: string;
   updatedAt: string;
 
   /*
@@ -823,7 +836,10 @@ export function replaceBatteryForTransitStop({
 // ---------------------------------------------------------------------------
 
 
-function normalizeApiBatteryStatus(value: string): BatteryStatus {
+function normalizeApiBatteryStatus(
+  value: string,
+  chargeLevelPct: number,
+): BatteryStatus {
   const key = value.trim().toUpperCase();
 
   if (
@@ -835,7 +851,24 @@ function normalizeApiBatteryStatus(value: string): BatteryStatus {
     return "Ready";
   }
 
-  return "Charging";
+  if (
+    key === "CHARGING" ||
+    key === "LOW" ||
+    key === "DEPLETED"
+  ) {
+    return "Charging";
+  }
+
+  /*
+   * Current Backend/DB screenshots use the generic lifecycle value
+   * `Active`. Battery Management needs an operational state instead.
+   * Until Backend exposes Ready/Charging explicitly, derive it from SOC.
+   */
+  if (key === "ACTIVE" || key === "IN_USE" || key === "INSTALLED") {
+    return chargeLevelPct >= 100 ? "Ready" : "Charging";
+  }
+
+  return chargeLevelPct >= 100 ? "Ready" : "Charging";
 }
 
 function toBatteryDisplayId(value: string) {
@@ -847,37 +880,69 @@ function toBatteryDisplayId(value: string) {
 function mapApiBattery(value: unknown): HubBattery | null {
   if (!isRecord(value)) return null;
 
-  const rawId = pickString(value, [
-    "battery_id",
-    "id",
-    "batteryId",
-    "battery_code",
-    "code",
-    "serial_number",
-  ]);
-  if (!rawId) return null;
+  /*
+   * Swagger currently returns both a numeric database `id` and a
+   * human-readable `serial_number` such as BAT-001. Keep them separate:
+   * - id          -> UI/display code
+   * - backendId   -> path parameter for mutation APIs
+   *
+   * The previous mapper preferred numeric `id`, which could display the
+   * wrong BAT-xxx code whenever database id and serial number diverged.
+   */
+  const serialNumber = pickString(
+    value,
+    ["serial_number", "battery_code", "code"],
+    "",
+  );
 
-  const status = normalizeApiBatteryStatus(
-    pickString(
-      value,
-      ["status", "battery_status", "state"],
-      "CHARGING",
+  const backendId = pickString(
+    value,
+    ["id", "battery_id", "batteryId"],
+    "",
+  );
+
+  const displayId =
+    serialNumber ||
+    (backendId ? toBatteryDisplayId(backendId) : "");
+
+  if (!displayId) return null;
+
+  const rawStatus = pickString(
+    value,
+    ["status", "battery_status", "state"],
+    "",
+  );
+
+  const statusKey = rawStatus.trim().toUpperCase();
+
+  const chargeLevelPct = Math.max(
+    0,
+    Math.min(
+      100,
+      pickNumber(
+        value,
+        [
+          "charge_level_pct",
+          "battery_level_pct",
+          "charge_pct",
+          "charge_level",
+          "level",
+          "soc",
+          "state_of_charge",
+          "percentage",
+        ],
+        ["READY", "FULL", "CHARGED", "AVAILABLE"].includes(statusKey)
+          ? 100
+          : 0,
+      ),
     ),
   );
-  const chargeLevelPct = pickNumber(
-    value,
-    [
-      "charge_level_pct",
-      "battery_level_pct",
-      "charge_pct",
-      "charge_level",
-      "level",
-      "soc",
-      "state_of_charge",
-      "percentage",
-    ],
-    status === "Ready" ? 100 : 0,
+
+  const status = normalizeApiBatteryStatus(
+    rawStatus,
+    chargeLevelPct,
   );
+
   const remainingMinutes = pickNumber(
     value,
     [
@@ -888,6 +953,7 @@ function mapApiBattery(value: unknown): HubBattery | null {
     ],
     0,
   );
+
   const estimatedReadyAtRaw = pickString(
     value,
     [
@@ -898,27 +964,68 @@ function mapApiBattery(value: unknown): HubBattery | null {
     ],
     "",
   );
-  const estimatedReadyAt = estimatedReadyAtRaw
-    ? new Date(estimatedReadyAtRaw).toISOString()
-    : status === "Charging" && remainingMinutes > 0
-      ? new Date(Date.now() + remainingMinutes * 60_000).toISOString()
-      : undefined;
+
+  let estimatedReadyAt: string | undefined;
+
+  if (estimatedReadyAtRaw) {
+    const parsed = new Date(estimatedReadyAtRaw);
+    if (!Number.isNaN(parsed.getTime())) {
+      estimatedReadyAt = parsed.toISOString();
+    }
+  } else if (status === "Charging" && remainingMinutes > 0) {
+    estimatedReadyAt = new Date(
+      Date.now() + remainingMinutes * 60_000,
+    ).toISOString();
+  }
+
+  const hubId = pickString(
+    value,
+    ["current_hub_id", "hub_id"],
+    "",
+  );
+
+  const hubName = pickString(
+    value,
+    ["hub_name", "hub", "hub_code"],
+    "",
+  );
 
   return {
-    id: toBatteryDisplayId(rawId),
-    hub: pickString(
-      value,
-      ["hub_name", "hub", "hub_code", "hub_id"],
-      TECHNICIAN_HUB,
-    ),
+    id: displayId,
+    backendId: backendId || undefined,
+    serialNumber: serialNumber || undefined,
+    model:
+      pickString(
+        value,
+        ["model", "battery_model", "model_code", "battery_model_code"],
+        "",
+      ) || undefined,
+    capacityWh: pickNumber(value, ["capacity_wh", "energy_capacity_wh"], 0),
+    droneId:
+      pickString(value, ["drone_id", "installed_drone_id"], "") ||
+      undefined,
+    hubId: hubId || undefined,
+    hub: hubName || (hubId ? `Hub #${hubId}` : TECHNICIAN_HUB),
     chargeLevelPct,
     status,
+    createdAt: formatApiDateTime(
+      pickString(value, ["created_at"], ""),
+      "—",
+    ),
     updatedAt: formatApiDateTime(
       pickString(value, ["updated_at", "charged_at", "created_at"], ""),
       "—",
     ),
     estimatedReadyAt,
   };
+}
+
+function resolveBackendBatteryId(batteryId: string) {
+  const battery = demoBatteries.find(
+    (item) => item.id === batteryId,
+  );
+
+  return battery?.backendId || batteryId;
 }
 
 export async function refreshBatteriesFromApi() {
@@ -931,11 +1038,47 @@ export async function refreshBatteriesFromApi() {
   return loadBatteries();
 }
 
+export async function getBatteryDetailFromApi(
+  batteryId: string,
+) {
+  /*
+   * Prefer a dedicated detail endpoint when Backend exposes it.
+   * Until then, gracefully fall back to the existing battery-list endpoint.
+   * This lets the detail page work immediately once `model`, `created_at`,
+   * and `updated_at` are included in the list response as well.
+   */
+  try {
+    const payload = await getBatteryDetailApi(batteryId);
+    const candidate = unwrapObject(payload);
+    const mapped = mapApiBattery(candidate);
+
+    if (mapped) {
+      return mapped;
+    }
+  } catch {
+    // Fall through to the list endpoint below.
+  }
+
+  const batteries = await refreshBatteriesFromApi();
+
+  return (
+    batteries.find(
+      (battery) =>
+        battery.backendId === batteryId ||
+        battery.id === batteryId ||
+        battery.serialNumber === batteryId,
+    ) ?? null
+  );
+}
+
 export async function useBatteryOnServer(
   batteryId: string,
   missionId: string,
 ) {
-  const result = await useBatteryApi(batteryId, missionId);
+  const result = await useBatteryApi(
+    resolveBackendBatteryId(batteryId),
+    missionId,
+  );
   await refreshBatteriesFromApi();
   return result;
 }
@@ -943,7 +1086,9 @@ export async function useBatteryOnServer(
 export async function markBatteryChargedOnServer(
   batteryId: string,
 ) {
-  const result = await markBatteryChargedApi(batteryId);
+  const result = await markBatteryChargedApi(
+    resolveBackendBatteryId(batteryId),
+  );
   await refreshBatteriesFromApi();
   return result;
 }

@@ -316,13 +316,9 @@ export function autoCancelExpiredDeliveries(
 export function loadDeliveryConfirmations():
   DeliveryConfirmation[] {
   /*
-   * Mock convenience:
-   * production backend would already return correct status.
+   * Backend is the source of truth for delivery/order status.
+   * Do not auto-cancel API data in the browser.
    */
-  autoCancelExpiredDeliveries(
-    false,
-  );
-
   return demoDeliveries.map(
     (item) => ({
       ...item,
@@ -336,13 +332,6 @@ export function loadDeliveryConfirmations():
 export function confirmOrderReceived(
   orderId: string,
 ) {
-  /*
-   * Do not allow confirmation after the 48-hour timeout.
-   */
-  autoCancelExpiredDeliveries(
-    false,
-  );
-
   const current =
     demoDeliveries.find(
       (item) =>
@@ -442,6 +431,34 @@ function confirmationDisplayId(prefix: string, value: string, width = 4) {
   return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
 }
 
+function normalizeApiDeliveryStatus(
+  rawStatus: string,
+  confirmedAt: string,
+): DeliveryStatus {
+  const key = rawStatus
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (
+    key === "CANCELLED" ||
+    key === "CANCELED"
+  ) {
+    return "Cancelled";
+  }
+
+  if (
+    confirmedAt ||
+    key === "COMPLETED" ||
+    key === "RECEIVED" ||
+    key === "PICKED_UP"
+  ) {
+    return "Completed";
+  }
+
+  return "Delivered";
+}
+
 function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation | null {
   if (!isRecord(value)) return null;
 
@@ -455,6 +472,14 @@ function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation | null
     : deliveredDate.toISOString();
   const deadline = buildPickupDeadline(deliveredIso);
   const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at", "received_confirmed_at"], "");
+  const rawStatus = pickString(
+    value,
+    ["status", "order_status", "delivery_status", "package_status"],
+    "Delivered",
+  );
+  const status = normalizeApiDeliveryStatus(rawStatus, confirmedAt);
+  const cancelledAt = pickString(value, ["cancelled_at", "canceled_at"], "");
+  const cancelReason = pickString(value, ["cancel_reason", "cancellation_reason", "reason"], "");
 
   return {
     orderId: confirmationDisplayId("ORD", rawOrderId),
@@ -469,12 +494,16 @@ function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation | null
     ),
     recipient: pickString(value, ["recipient_name", "customer_name", "recipient"], "Customer"),
     destination: pickString(value, ["destination_hub_name", "hub_name", "destination"], "—"),
-    status: confirmedAt ? "Completed" : "Delivered",
+    status,
     deliveredAt: formatApiDateTime(deliveredAtRaw, "—"),
     deliveredAtIso: deliveredIso,
     ...deadline,
     receivedConfirmedAt: confirmedAt ? formatApiDateTime(confirmedAt, confirmedAt) : undefined,
     confirmedBy: pickString(value, ["confirmed_by", "technician_name"], "") || undefined,
+    cancelledAt: cancelledAt
+      ? formatApiDateTime(cancelledAt, cancelledAt)
+      : undefined,
+    cancelReason: cancelReason || undefined,
   };
 }
 

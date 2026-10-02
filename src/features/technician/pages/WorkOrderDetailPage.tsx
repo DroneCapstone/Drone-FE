@@ -7,7 +7,11 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   useNavigate,
@@ -52,7 +56,7 @@ const inspectionItems = [
   "Visual inspection of drone body",
   "Propeller and motor condition",
   "Landing gear condition",
-  "Battery level and connector check",
+  "Power connector and test battery check",
   "Power-on and operational test",
 ];
 
@@ -96,7 +100,7 @@ export function WorkOrderDetailPage() {
     setWorkOrderStatus,
   ] = useState<WorkOrderStatus>(
     order?.status ??
-      "Not Started",
+      "Pending",
   );
 
   const [
@@ -178,12 +182,7 @@ export function WorkOrderDetailPage() {
       await updateWorkOrderMutation.mutateAsync({
         workOrderId: order.id,
         payload: {
-          status:
-            nextStatus === "In Progress"
-              ? "IN_PROGRESS"
-              : nextStatus === "Completed"
-                ? "COMPLETED"
-                : "NOT_STARTED",
+          status: nextStatus,
         },
       });
 
@@ -220,7 +219,7 @@ export function WorkOrderDetailPage() {
 
     if (
       workOrderStatus ===
-      "Not Started"
+      "Pending"
     ) {
       void persistStatus(
         "In Progress",
@@ -247,13 +246,16 @@ export function WorkOrderDetailPage() {
 
       await updateInspectionMutation.mutateAsync({
         workOrderId: order.id,
-        payload: { status: "COMPLETED" },
+        payload: {
+          status: "Completed",
+          action_taken: correctiveAction.trim(),
+        },
       });
 
       await updateWorkOrderMutation.mutateAsync({
         workOrderId: order.id,
         payload: {
-          status: "COMPLETED",
+          status: "Completed",
           diagnosis: diagnosis.trim(),
           corrective_action: correctiveAction.trim(),
         },
@@ -392,6 +394,17 @@ export function WorkOrderDetailPage() {
               work order.
             </p>
 
+            {order.batteryId && (
+              <div className="mb-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 py-2.5">
+                <p className="text-[12px] font-medium text-[var(--tech-text-secondary)]">
+                  Test battery: {order.batteryId}
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-[var(--tech-muted)]">
+                  Used temporarily for power-on and diagnostic testing. Battery inventory remains managed in Battery Management.
+                </p>
+              </div>
+            )}
+
             {inspectionItems.map(
               (item) => (
                 <div key={item}>
@@ -495,7 +508,7 @@ export function WorkOrderDetailPage() {
           >
             <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
               Select the resulting
-              operational status after
+              technical status after
               maintenance.
             </p>
 
@@ -546,6 +559,14 @@ export function WorkOrderDetailPage() {
                   value={
                     fleetDrone?.model ??
                     "—"
+                  }
+                />
+
+                <Meta
+                  label="Test battery"
+                  value={
+                    order.batteryId ??
+                    "Not specified"
                   }
                 />
 
@@ -672,7 +693,7 @@ function Section({
 }: {
   icon: typeof Wrench;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">

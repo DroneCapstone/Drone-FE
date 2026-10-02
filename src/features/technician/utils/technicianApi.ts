@@ -322,6 +322,7 @@ export function unwrapObject(
 
   const objectKeys = [
     "data",
+    "battery",
     "user",
     "profile",
     "technician",
@@ -482,7 +483,7 @@ async function requestWithFlexibleId<T = unknown>(
       lastError = error;
       if (
         error instanceof TechnicianApiError &&
-        (error.status === 404 || error.status === 422)
+        error.status === 404
       ) {
         continue;
       }
@@ -582,6 +583,14 @@ export const confirmMissionArrivalApi = (
 
 export const getBatteriesApi = () =>
   technicianApiRequest("/technician/fleet/batteries");
+
+export const getBatteryDetailApi = (
+  batteryId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/batteries/${id}`,
+    batteryId,
+  );
 
 export const useBatteryApi = (
   batteryId: string | number,
