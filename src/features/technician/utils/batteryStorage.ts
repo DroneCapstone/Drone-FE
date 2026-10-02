@@ -824,7 +824,18 @@ export function replaceBatteryForTransitStop({
 
 
 function normalizeApiBatteryStatus(value: string): BatteryStatus {
-  return value.trim().toUpperCase() === "READY" ? "Ready" : "Charging";
+  const key = value.trim().toUpperCase();
+
+  if (
+    key === "READY" ||
+    key === "FULL" ||
+    key === "CHARGED" ||
+    key === "AVAILABLE"
+  ) {
+    return "Ready";
+  }
+
+  return "Charging";
 }
 
 function toBatteryDisplayId(value: string) {
@@ -836,25 +847,55 @@ function toBatteryDisplayId(value: string) {
 function mapApiBattery(value: unknown): HubBattery | null {
   if (!isRecord(value)) return null;
 
-  const rawId = pickString(value, ["battery_id", "id", "batteryId"]);
+  const rawId = pickString(value, [
+    "battery_id",
+    "id",
+    "batteryId",
+    "battery_code",
+    "code",
+    "serial_number",
+  ]);
   if (!rawId) return null;
 
   const status = normalizeApiBatteryStatus(
-    pickString(value, ["status"], "CHARGING"),
+    pickString(
+      value,
+      ["status", "battery_status", "state"],
+      "CHARGING",
+    ),
   );
   const chargeLevelPct = pickNumber(
     value,
-    ["charge_level_pct", "battery_level_pct", "charge_pct", "level"],
+    [
+      "charge_level_pct",
+      "battery_level_pct",
+      "charge_pct",
+      "charge_level",
+      "level",
+      "soc",
+      "state_of_charge",
+      "percentage",
+    ],
     status === "Ready" ? 100 : 0,
   );
   const remainingMinutes = pickNumber(
     value,
-    ["estimated_minutes_remaining", "minutes_remaining"],
+    [
+      "estimated_minutes_remaining",
+      "minutes_remaining",
+      "estimated_charge_minutes",
+      "estimated_minutes",
+    ],
     0,
   );
   const estimatedReadyAtRaw = pickString(
     value,
-    ["estimated_ready_at", "ready_at"],
+    [
+      "estimated_ready_at",
+      "ready_at",
+      "estimated_full_at",
+      "fully_charged_at",
+    ],
     "",
   );
   const estimatedReadyAt = estimatedReadyAtRaw
@@ -865,7 +906,11 @@ function mapApiBattery(value: unknown): HubBattery | null {
 
   return {
     id: toBatteryDisplayId(rawId),
-    hub: pickString(value, ["hub_name", "hub"], TECHNICIAN_HUB),
+    hub: pickString(
+      value,
+      ["hub_name", "hub", "hub_code", "hub_id"],
+      TECHNICIAN_HUB,
+    ),
     chargeLevelPct,
     status,
     updatedAt: formatApiDateTime(
