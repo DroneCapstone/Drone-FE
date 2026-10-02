@@ -9,7 +9,7 @@ npm install @tanstack/react-query
 ## Environment
 
 ```env
-VITE_API_BASE_URL=https://execute-blind-pitch-frequently.trycloudflare.com/api/v1
+VITE_API_BASE_URL=https://collectibles-anderson-fits-portfolio.trycloudflare.com/api/v1
 VITE_API_WITH_CREDENTIALS=false
 VITE_ENABLE_DEMO_AUTH=false
 ```
