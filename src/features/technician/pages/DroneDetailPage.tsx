@@ -34,6 +34,7 @@ import {
 
 import {
   useDroneDetailQuery,
+  useFleetQuery,
 } from "../hooks/useFleetQueries";
 
 import {
@@ -287,28 +288,59 @@ export function DroneDetailPage() {
       droneId,
     );
 
+  /*
+   * GET /technician/fleet/drones/{drone_id} currently returns 500
+   * for some Backend records. Keep the detail call, but fall back to
+   * the already-working fleet list so the detail screen remains usable.
+   */
+  const fleetQuery =
+    useFleetQuery();
+
   const maintenanceQuery =
     useMaintenanceRecordsQuery(
       droneId,
     );
 
+  const fleetFallbackDrone =
+    useMemo(
+      () =>
+        (fleetQuery.data ?? []).find(
+          (item) =>
+            item.id === droneId ||
+            getDroneDisplayCode(item) === droneId,
+        ),
+      [fleetQuery.data, droneId],
+    );
+
   const drone =
-    droneQuery.data;
+    droneQuery.data ??
+    fleetFallbackDrone;
 
   const maintenanceRecords:
     CompletedMaintenanceRecord[] =
     maintenanceQuery.data ?? [];
 
   const loading =
-    droneQuery.isPending &&
-    !drone;
+    !drone &&
+    (droneQuery.isPending ||
+      fleetQuery.isPending);
+
+  const detailWarning =
+    drone &&
+    droneQuery.error instanceof Error
+      ? `Drone detail API is unavailable; showing data from Hub Fleet. ${droneQuery.error.message}`
+      : "";
 
   const apiError =
+    !drone &&
     droneQuery.error instanceof Error
       ? droneQuery.error.message
-      : maintenanceQuery.error instanceof Error
-        ? maintenanceQuery.error.message
-        : "";
+      : !drone &&
+          fleetQuery.error instanceof Error
+        ? fleetQuery.error.message
+        : maintenanceQuery.error instanceof Error
+          ? maintenanceQuery.error.message
+          : "";
 
   const [
     activeTab,
@@ -440,6 +472,12 @@ export function DroneDetailPage() {
 
   return (
     <div className="px-6 py-5 md:px-8">
+      {detailWarning && (
+        <div className="mb-4 rounded-md border border-amber-500/25 px-4 py-3 text-[13px] text-amber-500">
+          {detailWarning}
+        </div>
+      )}
+
       {apiError && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError}
