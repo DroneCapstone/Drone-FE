@@ -39,10 +39,14 @@ import {
   useWorkOrdersQuery,
 } from "../hooks/useMaintenanceQueries";
 
+import {
+  useBatteriesQuery,
+} from "../hooks/useBatteryQueries";
+
 type AlertSource =
   | "Schedule"
-  | "Flight event"
-  | "Incident";
+  | "Incident"
+  | "Hub inspection";
 
 type DashboardAlert = {
   id: string;
@@ -53,7 +57,7 @@ type DashboardAlert = {
 };
 
 type WorkOrderStatus =
-  | "Not Started"
+  | "Pending"
   | "In Progress"
   | "Completed";
 
@@ -108,6 +112,9 @@ export function TechnicianDashboardPage() {
   const workOrdersQuery =
     useWorkOrdersQuery();
 
+  const batteriesQuery =
+    useBatteriesQuery();
+
   const fleet: FleetDrone[] =
     fleetQuery.data ?? [];
 
@@ -122,10 +129,7 @@ export function TechnicianDashboardPage() {
         id: alert.id,
         drone: alert.drone,
         title: alert.title,
-        source:
-          alert.source === "Incident"
-            ? "Incident"
-            : "Schedule",
+        source: alert.source,
         createdAt: alert.createdAt,
       }),
     );
@@ -182,14 +186,12 @@ export function TechnicianDashboardPage() {
     [hubDrones],
   );
 
-  const lowBatteryDrones = useMemo(
+  const chargingBatteries = useMemo(
     () =>
-      hubDrones.filter(
-        (drone) =>
-          Boolean(drone.installedBatteryId) &&
-          (drone.installedBatteryPct ?? drone.battery) < 40,
+      (batteriesQuery.data ?? []).filter(
+        (battery) => battery.status === "Charging",
       ),
-    [hubDrones],
+    [batteriesQuery.data],
   );
 
   const activeAlerts = useMemo(
@@ -224,6 +226,11 @@ export function TechnicianDashboardPage() {
         "In Progress",
     ).length;
 
+  const hubLabel =
+    hubDrones[0]?.location ||
+    (batteriesQuery.data ?? [])[0]?.hub ||
+    TECHNICIAN_HUB;
+
   const availablePercent =
     hubDrones.length > 0
       ? Math.round(
@@ -245,7 +252,7 @@ export function TechnicianDashboardPage() {
           value={String(
             hubDrones.length,
           )}
-          description={`Drones assigned to ${TECHNICIAN_HUB}`}
+          description={`Drones physically stored at ${hubLabel}`}
           icon={Plane}
         />
 
@@ -259,11 +266,11 @@ export function TechnicianDashboardPage() {
         />
 
         <TechnicianStatCard
-          label="Battery attention"
+          label="Charging batteries"
           value={String(
-            lowBatteryDrones.length,
+            chargingBatteries.length,
           )}
-          description="Drones below 40% battery"
+          description="Batteries currently charging at the hub"
           icon={BatteryMedium}
         />
 
@@ -306,89 +313,52 @@ export function TechnicianDashboardPage() {
           <CardContent className="p-0">
             {attentionDrones
               .slice(0, 5)
-              .map((drone) => {
-                const lowBattery =
-                  drone.battery < 40;
+              .map((drone) => (
+                <button
+                  key={drone.id}
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      `/technician/fleet/${drone.id}`,
+                    )
+                  }
+                  className="
+                    grid w-full
+                    grid-cols-[1fr_220px_150px]
+                    items-center gap-5
+                    border-b
+                    border-[var(--tech-border)]
+                    px-5 py-4
+                    text-left
+                    transition-colors
+                    last:border-b-0
+                    hover:bg-[var(--tech-surface-2)]
+                  "
+                >
+                  <div>
+                    <p className="text-[15px] font-medium text-[var(--tech-text)]">
+                      {drone.name}
+                    </p>
 
-                return (
-                  <button
-                    key={drone.id}
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        `/technician/fleet/${drone.id}`,
-                      )
-                    }
-                    className="
-                      grid w-full
-                      grid-cols-[1fr_180px_170px]
-                      items-center gap-5
-                      border-b
-                      border-[var(--tech-border)]
-                      px-5 py-4
-                      text-left
-                      transition-colors
-                      last:border-b-0
-                      hover:bg-[var(--tech-surface-2)]
-                    "
-                  >
-                    <div>
-                      <p className="text-[15px] font-medium text-[var(--tech-text)]">
-                        {drone.name}
-                      </p>
+                    <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
+                      {drone.model}
+                    </p>
+                  </div>
 
-                      <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                        {drone.model}
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-[12px] uppercase tracking-[0.06em] text-[var(--tech-subtle)]">
+                      Hub
+                    </p>
+                    <p className="mt-1 text-[13px] text-[var(--tech-text-secondary)]">
+                      {drone.location}
+                    </p>
+                  </div>
 
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between text-[12px]">
-                        <span className="text-[var(--tech-muted)]">
-                          Battery
-                        </span>
-
-                        <span
-                          className={
-                            lowBattery
-                              ? "font-semibold text-red-500"
-                              : "font-medium text-orange-500"
-                          }
-                        >
-                          {drone.battery}%
-                        </span>
-                      </div>
-
-                      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--tech-border)]">
-                        <div
-                          className={`h-full rounded-full ${
-                            lowBattery
-                              ? "bg-red-500"
-                              : "bg-orange-500"
-                          }`}
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(
-                                0,
-                                drone.battery,
-                              ),
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <DroneStatusText
-                        status={
-                          drone.status
-                        }
-                      />
-                    </div>
-                  </button>
-                );
-              })}
+                  <div className="text-right">
+                    <DroneStatusText status={drone.status} />
+                  </div>
+                </button>
+              ))}
 
             {attentionDrones.length ===
               0 && (
@@ -589,8 +559,7 @@ function SourceText({
   const style =
     source === "Schedule"
       ? "text-blue-500"
-      : source ===
-          "Flight event"
+      : source === "Hub inspection"
         ? "text-orange-500"
         : "text-violet-500";
 
@@ -611,10 +580,7 @@ function DroneStatusText({
   const style =
     status === "Maintenance"
       ? "text-orange-500"
-      : status ===
-          "Battery Replacement"
-        ? "text-red-500"
-        : "text-[var(--tech-muted)]";
+      : "text-[var(--tech-muted)]";
 
   return (
     <span
