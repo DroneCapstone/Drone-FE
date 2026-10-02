@@ -1,3 +1,7 @@
+import {
+  API_BASE_URL,
+  API_WITH_CREDENTIALS,
+} from '../../../config/api';
 import { authService } from '../../auth/services/authService';
 import type {
   DeliveryMode,
@@ -6,17 +10,6 @@ import type {
   PlanningState,
   OperatorDrone,
 } from '../types/operator';
-
-const DEFAULT_OPERATOR_API_BASE_URL =
-  'https://execute-blind-pitch-frequently.trycloudflare.com/api/v1';
-
-const viteEnv = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>;
-}).env;
-
-const OPERATOR_API_BASE_URL = (
-  viteEnv?.VITE_API_BASE_URL ?? DEFAULT_OPERATOR_API_BASE_URL
-).replace(/\/+$/, '');
 
 export class OperatorApiError extends Error {
   status: number;
@@ -144,8 +137,6 @@ export async function operatorApiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const withCredentials = viteEnv?.VITE_API_WITH_CREDENTIALS === 'true';
-
   const execute = async (accessToken?: string | null) => {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
@@ -158,11 +149,11 @@ export async function operatorApiRequest<T>(
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
-    return fetch(`${OPERATOR_API_BASE_URL}${path}`, {
+    return fetch(`${API_BASE_URL}${path}`, {
       ...init,
       method: init.method ?? 'GET',
       headers,
-      credentials: withCredentials ? 'include' : 'omit',
+      credentials: API_WITH_CREDENTIALS ? 'include' : 'omit',
     });
   };
 

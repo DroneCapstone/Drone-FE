@@ -22,6 +22,16 @@ const AuthPage = lazy(() =>
   })),
 );
 
+const GoogleCallbackPage =
+  lazy(() =>
+    import(
+      "../features/auth/pages/GoogleCallbackPage"
+    ).then((module) => ({
+      default:
+        module.GoogleCallbackPage,
+    })),
+  );
+
 const OperatorLayout = lazy(() =>
   import("../layouts/OperatorLayout").then((module) => ({
     default: module.OperatorLayout,
@@ -128,6 +138,11 @@ export function AppRoutes() {
     /* -----------------------------------------------------
        OPERATOR
     ----------------------------------------------------- */
+
+    {
+      path: "/auth/google/callback",
+      element: <GoogleCallbackPage />,
+    },
 
     {
       element: (
