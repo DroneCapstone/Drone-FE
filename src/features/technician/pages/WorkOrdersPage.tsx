@@ -34,6 +34,16 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
+  isRecord,
+  pickString,
+  unwrapList,
+} from "../api/httpClient";
+
+import {
+  useTechnicianUsersQuery,
+} from "../hooks/useTechnicianMetaQueries";
+
+import {
   loadWorkOrders,
   loadWorkOrderLogs,
   loadMaintenanceRecords,
@@ -148,6 +158,55 @@ export function WorkOrdersPage() {
 
   const updateWorkOrderMutation =
     useUpdateWorkOrderMutation();
+
+  const technicianUsersQuery =
+    useTechnicianUsersQuery();
+
+  const technicianOptions =
+    useMemo(
+      () =>
+        unwrapList(
+          technicianUsersQuery.data,
+        )
+          .filter(isRecord)
+          .map((user) => {
+            const name =
+              pickString(
+                user,
+                [
+                  "full_name",
+                  "name",
+                  "username",
+                  "email",
+                ],
+                "",
+              );
+
+            const email =
+              pickString(
+                user,
+                ["email"],
+                "",
+              );
+
+            return {
+              value:
+                name ||
+                email,
+              label:
+                email &&
+                name &&
+                email !== name
+                  ? `${name} (${email})`
+                  : name || email,
+            };
+          })
+          .filter(
+            (item) =>
+              Boolean(item.value),
+          ),
+      [technicianUsersQuery.data],
+    );
 
   const workOrders: WorkOrder[] =
     workOrdersQuery.data ?? [];
@@ -1079,6 +1138,7 @@ export function WorkOrdersPage() {
 
                   <Field label="Assigned technician">
                     <input
+                      list="technician-user-options"
                       value={
                         form.assignedTo
                       }
@@ -1096,6 +1156,25 @@ export function WorkOrdersPage() {
                       }
                       className="tech-control h-10 w-full px-3 !text-[14px]"
                     />
+
+                    <datalist id="technician-user-options">
+                      {technicianOptions.map(
+                        (technician) => (
+                          <option
+                            key={
+                              technician.label
+                            }
+                            value={
+                              technician.value
+                            }
+                          >
+                            {
+                              technician.label
+                            }
+                          </option>
+                        ),
+                      )}
+                    </datalist>
                   </Field>
                 </div>
               </div>
