@@ -1,3 +1,8 @@
+import {
+  API_BASE_URL,
+  API_WITH_CREDENTIALS,
+  DEFAULT_API_BASE_URL,
+} from "../../../config/api";
 import { authService } from "../../auth/services/authService";
 
 /**
@@ -9,21 +14,10 @@ import { authService } from "../../auth/services/authService";
  */
 
 export const DEFAULT_TECHNICIAN_API_BASE_URL =
-  "https://execute-blind-pitch-frequently.trycloudflare.com/api/v1";
-
-const viteEnv = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>;
-}).env;
-
-const configuredApiBaseUrl = (
-  viteEnv?.VITE_API_BASE_URL ??
-  DEFAULT_TECHNICIAN_API_BASE_URL
-).replace(/\/+$/, "");
+  DEFAULT_API_BASE_URL;
 
 export const TECHNICIAN_API_BASE_URL =
-  /\/api\/v1$/i.test(configuredApiBaseUrl)
-    ? configuredApiBaseUrl
-    : `${configuredApiBaseUrl}/api/v1`;
+  API_BASE_URL;
 
 export class TechnicianApiError extends Error {
   status: number;
@@ -60,10 +54,6 @@ export async function technicianApiRequest<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const withCredentials =
-    viteEnv?.VITE_API_WITH_CREDENTIALS ===
-    "true";
-
   const execute = async (
     accessToken?: string | null,
   ) => {
@@ -101,7 +91,7 @@ export async function technicianApiRequest<T = unknown>(
       {
         ...init,
         headers,
-        credentials: withCredentials
+        credentials: API_WITH_CREDENTIALS
           ? "include"
           : "omit",
       },
@@ -394,7 +384,7 @@ export function toBackendNumericId(
 
   const match = value.match(/(\d+)$/);
   if (!match) {
-    throw new Error(`Cannot derive numeric backend id from \"${value}\".`);
+    throw new Error(`Cannot derive numeric backend id from "${value}".`);
   }
 
   return Number(match[1]);

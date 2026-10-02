@@ -14,6 +14,7 @@ import {
 import { authService } from "../services/authService";
 
 import type {
+  AuthTokens,
   AuthUser,
   ForgotPasswordPayload,
   LoginPayload,
@@ -36,7 +37,7 @@ export function AuthProvider({
   const [user, setUser] =
     useState<AuthUser | null>(() =>
       hasStoredAccessToken ||
-      hasStoredDemoSession
+        hasStoredDemoSession
         ? authService.getCurrentUser()
         : null,
     );
@@ -140,6 +141,24 @@ export function AuthProvider({
       authService.loginWithGoogle();
     }, []);
 
+  const completeGoogleLogin =
+    useCallback(
+      async (
+        tokens: AuthTokens,
+      ): Promise<AuthUser> => {
+        const nextUser =
+          await authService
+            .completeGoogleLogin(
+              tokens,
+            );
+
+        setUser(nextUser);
+
+        return nextUser;
+      },
+      [],
+    );
+
   const logout = useCallback(
     async () => {
       await authService.logout();
@@ -159,6 +178,7 @@ export function AuthProvider({
       resetPassword,
       loginAsRole,
       loginWithGoogle,
+      completeGoogleLogin,
       logout,
     }),
     [
@@ -170,6 +190,7 @@ export function AuthProvider({
       resetPassword,
       loginAsRole,
       loginWithGoogle,
+      completeGoogleLogin,
       logout,
     ],
   );

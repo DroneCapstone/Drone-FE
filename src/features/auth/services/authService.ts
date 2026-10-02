@@ -1,3 +1,8 @@
+import {
+  API_BASE_URL,
+  API_WITH_CREDENTIALS,
+} from "../../../config/api";
+
 import type {
   AuthTokens,
   AuthUser,
@@ -7,18 +12,6 @@ import type {
   ResetPasswordPayload,
   UserRole,
 } from "../types/auth";
-
-const viteEnv = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>;
-}).env;
-
-const DEFAULT_API_BASE_URL =
-  "https://execute-blind-pitch-frequently.trycloudflare.com/api/v1";
-
-export const API_BASE_URL = (
-  viteEnv?.VITE_API_BASE_URL ??
-  DEFAULT_API_BASE_URL
-).replace(/\/+$/, "");
 
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -235,16 +228,12 @@ async function authRequest<T = unknown>(
     );
   }
 
-  const withCredentials =
-    viteEnv?.VITE_API_WITH_CREDENTIALS ===
-    "true";
-
   const response = await fetch(
     `${API_BASE_URL}${path}`,
     {
       ...init,
       headers,
-      credentials: withCredentials
+      credentials: API_WITH_CREDENTIALS
         ? "include"
         : "omit",
     },
@@ -645,38 +634,54 @@ async function performResetPasswordRequest(
   throw lastError;
 }
 
+// async function performRefreshRequest(
+//   refreshToken: string,
+// ) {
+//   const variants = [
+//     { refresh_token: refreshToken },
+//     { refreshToken },
+//   ];
+
+//   let lastError: unknown;
+
+//   for (const body of variants) {
+//     try {
+//       return await authRequest<unknown>(
+//         "/auth/refresh",
+//         {
+//           method: "POST",
+//           body: JSON.stringify(body),
+//         },
+//       );
+//     } catch (reason) {
+//       lastError = reason;
+
+//       if (
+//         !(reason instanceof AuthApiError) ||
+//         reason.status !== 422
+//       ) {
+//         throw reason;
+//       }
+//     }
+//   }
+
+//   throw lastError;
+// }
+
 async function performRefreshRequest(
   refreshToken: string,
 ) {
-  const variants = [
-    { refresh_token: refreshToken },
-    { refreshToken },
-  ];
+  const query =
+    new URLSearchParams({
+      refresh_token: refreshToken,
+    });
 
-  let lastError: unknown;
-
-  for (const body of variants) {
-    try {
-      return await authRequest<unknown>(
-        "/auth/refresh",
-        {
-          method: "POST",
-          body: JSON.stringify(body),
-        },
-      );
-    } catch (reason) {
-      lastError = reason;
-
-      if (
-        !(reason instanceof AuthApiError) ||
-        reason.status !== 422
-      ) {
-        throw reason;
-      }
-    }
-  }
-
-  throw lastError;
+  return authRequest<unknown>(
+    `/auth/refresh?${query.toString()}`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 const MOCK_USERS: Record<
@@ -748,6 +753,8 @@ export const authService = {
       );
     }
 
+
+
     persistTokens(tokens);
 
     let user: AuthUser;
@@ -767,6 +774,26 @@ export const authService = {
 
     persistUser(user);
     return user;
+  },
+
+  async completeGoogleLogin(
+    tokens: AuthTokens,
+  ): Promise<AuthUser> {
+    persistTokens(tokens);
+
+    try {
+      const user =
+        await fetchCurrentUser(
+          tokens.accessToken,
+        );
+
+      persistUser(user);
+
+      return user;
+    } catch (reason) {
+      clearStoredSession();
+      throw reason;
+    }
   },
 
   async register(

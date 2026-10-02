@@ -3,6 +3,7 @@ import {
 } from "react";
 
 import type {
+  AuthTokens,
   AuthUser,
   ForgotPasswordPayload,
   LoginPayload,
@@ -41,6 +42,11 @@ export interface AuthContextValue {
   ) => AuthUser;
 
   loginWithGoogle: () => void;
+
+  completeGoogleLogin: (
+    tokens: AuthTokens,
+  ) => Promise<AuthUser>;
+
 
   logout: () => Promise<void>;
 }
