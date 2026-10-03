@@ -7,6 +7,7 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 import { technicianRoutes } from "../features/technician/technicianRoutes";
 import { customerRoutes } from "../features/customer/customerRoutes";
 import { operatorRoutes } from "./operatorRoutes";
+import { adminRoutes } from "../features/admin/adminRoutes";
 
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -47,6 +48,12 @@ const TechnicianLayout = lazy(() =>
 const CustomerLayout = lazy(() =>
   import("../layouts/CustomerLayout").then((module) => ({
     default: module.CustomerLayout,
+  })),
+);
+
+const AdminLayout = lazy(() =>
+  import("../layouts/AdminLayout").then((module) => ({
+    default: module.AdminLayout,
   })),
 );
 
@@ -193,6 +200,25 @@ export function AppRoutes() {
           path: "/customer",
           element: <CustomerLayout />,
           children: customerRoutes,
+        },
+      ],
+    },
+
+    /* -----------------------------------------------------
+       ADMIN
+    ----------------------------------------------------- */
+
+    {
+      element: (
+        <ProtectedRoute
+          allowedRoles={["admin"]}
+        />
+      ),
+      children: [
+        {
+          path: "/admin",
+          element: <AdminLayout />,
+          children: adminRoutes,
         },
       ],
     },

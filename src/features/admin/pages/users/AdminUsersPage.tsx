@@ -1,0 +1,21 @@
+import { Search, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { AdminPageShell } from "../../components/AdminPageShell";
+import { AdminStatusBadge } from "../../components/AdminStatusBadge";
+import { getAdminHubs, getAdminUsers } from "../../services/adminStore";
+
+export function AdminUsersPage() {
+  const [version, setVersion] = useState(0);
+  const [query, setQuery] = useState("");
+  const [role, setRole] = useState("all");
+  useEffect(() => { const listener = () => setVersion((v) => v + 1); window.addEventListener("admin-data-updated", listener); return () => window.removeEventListener("admin-data-updated", listener); }, []);
+  const users = useMemo(() => getAdminUsers(), [version]);
+  const hubs = getAdminHubs();
+  const visible = users.filter((user) => (role === "all" || user.role === role) && `${user.fullName} ${user.email} ${user.id}`.toLowerCase().includes(query.toLowerCase()));
+  const hubName = (id?: string) => hubs.find((hub) => hub.id === id)?.name ?? "—";
+  return <AdminPageShell title="User management" description="Manage platform identities for Admin, Operator, Technician and Customer. Technician accounts can be associated with a managed hub.">
+    <div className="grid gap-3 sm:grid-cols-4">{["admin", "operator", "technician", "customer"].map((item) => <div key={item} className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"><span className="text-[11px] capitalize text-[var(--admin-muted)]">{item}s</span><strong className="mt-1 block text-2xl">{users.filter((u) => u.role === item).length}</strong></div>)}</div>
+    <div className="mt-5 overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="flex flex-wrap gap-3 border-b border-[var(--admin-border)] p-4"><div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2"><Search size={15} className="text-[var(--admin-muted)]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search user..." className="w-full bg-transparent text-[12px] outline-none" /></div><select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 text-[12px]"><option value="all">All roles</option><option value="admin">Admin</option><option value="operator">Operator</option><option value="technician">Technician</option><option value="customer">Customer</option></select></div><div className="overflow-x-auto admin-scrollbar"><table className="w-full min-w-[1000px] text-left text-[12px]"><thead className="bg-[var(--admin-surface-2)] text-[10px] uppercase tracking-wide text-[var(--admin-muted)]"><tr><th className="px-4 py-3">User</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Managed hub</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Last login</th></tr></thead><tbody className="divide-y divide-[var(--admin-border)]">{visible.map((user) => <tr key={user.id} className="hover:bg-[var(--admin-surface-2)]/50"><td className="px-4 py-3"><Link to={`/admin/users/${user.id}`} className="flex items-center gap-2 hover:text-orange-500"><span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-500/10 text-orange-500"><UserRound size={15} /></span><div><strong className="block">{user.fullName}</strong><span className="text-[10px] text-[var(--admin-muted)]">{user.email}</span></div></Link></td><td className="px-4 py-3 capitalize">{user.role}</td><td className="px-4 py-3"><AdminStatusBadge tone={user.status === "Active" ? "success" : user.status === "Suspended" ? "danger" : "warning"}>{user.status}</AdminStatusBadge></td><td className="px-4 py-3">{user.role === "technician" ? hubName(user.hubId) : "—"}</td><td className="px-4 py-3 text-[11px] text-[var(--admin-muted)]">{new Date(user.createdAt).toLocaleDateString("en-GB")}</td><td className="px-4 py-3 text-[11px] text-[var(--admin-muted)]">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("en-GB") : "Never"}</td></tr>)}</tbody></table></div></div>
+  </AdminPageShell>;
+}
