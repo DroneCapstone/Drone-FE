@@ -1,0 +1,26 @@
+.admin-app[data-admin-theme="dark"] {
+  --admin-bg: #0a0b0d;
+  --admin-sidebar: #0d0f12;
+  --admin-header: #0a0b0d;
+  --admin-surface: #101216;
+  --admin-surface-2: #171a1f;
+  --admin-border: #242831;
+  --admin-text: #f5f6f7;
+  --admin-muted: #949ba6;
+}
+.admin-app[data-admin-theme="light"] {
+  --admin-bg: #f5f6f8;
+  --admin-sidebar: #ffffff;
+  --admin-header: #ffffff;
+  --admin-surface: #ffffff;
+  --admin-surface-2: #f0f2f5;
+  --admin-border: #e1e4e8;
+  --admin-text: #15171a;
+  --admin-muted: #69717c;
+}
+.admin-map-grid {
+  background-image: linear-gradient(to right, color-mix(in srgb, var(--admin-border) 65%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--admin-border) 65%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+.admin-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.admin-scrollbar::-webkit-scrollbar-thumb { background: #343941; border-radius: 999px; }

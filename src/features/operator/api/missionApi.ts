@@ -1,5 +1,5 @@
 import type { Mission, MissionLeg, MissionStatus, RouteOption, Tone } from '../types/operator';
-import { operatorApiRequest } from './orderApi';
+import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
   id: string;
@@ -76,6 +76,27 @@ export interface MissionPlanningAnalysis {
   raw: unknown;
 }
 
+export interface MissionDashboardKpi {
+  totalMissions?: number;
+  activeMissions?: number;
+  scheduledMissions?: number;
+  completedMissions?: number;
+  cancelledMissions?: number;
+  failedMissions?: number;
+  readyForPlanning?: number;
+  raw: unknown;
+}
+
+export interface MissionDashboardStatus {
+  scheduled?: number;
+  inProgress?: number;
+  completed?: number;
+  cancelled?: number;
+  failed?: number;
+  total?: number;
+  raw: unknown;
+}
+
 export interface CreateMissionInput {
   orderId: string;
   droneId: string;
@@ -130,6 +151,11 @@ function pickNumber(record: Record<string, unknown>, keys: string[], fallback = 
   return fallback;
 }
 
+function pickOptionalNumber(record: Record<string, unknown>, keys: string[]) {
+  const value = pickNumber(record, keys, Number.NaN);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function pickBoolean(record: Record<string, unknown>, keys: string[], fallback = false) {
   for (const key of keys) {
     const value = record[key];
@@ -150,17 +176,57 @@ function pickArray(record: Record<string, unknown>, keys: string[]): unknown[] {
   return [];
 }
 
+function parseJsonString(payload: unknown): unknown {
+  if (typeof payload !== 'string') return payload;
+  const value = payload.trim();
+  if (!value || (!value.startsWith('{') && !value.startsWith('['))) return payload;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return payload;
+  }
+}
+
 function unwrapArray(payload: unknown, keys: string[]): unknown[] {
-  if (Array.isArray(payload)) return payload;
-  if (!isRecord(payload)) return [];
-  return pickArray(payload, [...keys, 'data', 'items', 'results']);
+  const normalized = parseJsonString(payload);
+  if (Array.isArray(normalized)) return normalized;
+  if (!isRecord(normalized)) return [];
+
+  const candidateKeys = [
+    ...keys,
+    'data',
+    'items',
+    'results',
+    'rows',
+    'missions',
+    'flights',
+    'active_flights',
+    'activeFlights',
+  ];
+
+  for (const key of candidateKeys) {
+    const candidate = parseJsonString(normalized[key]);
+    if (Array.isArray(candidate)) return candidate;
+    if (isRecord(candidate)) {
+      const nested = unwrapArray(candidate, keys);
+      if (nested.length > 0) return nested;
+    }
+  }
+
+  const firstArray = Object.values(normalized).find(Array.isArray);
+  return Array.isArray(firstArray) ? firstArray : [];
 }
 
 function unwrapObject(payload: unknown): Record<string, unknown> {
-  if (!isRecord(payload)) return {};
-  if (isRecord(payload.data)) return payload.data;
-  if (isRecord(payload.result)) return payload.result;
-  return payload;
+  const normalized = parseJsonString(payload);
+  if (!isRecord(normalized)) return {};
+
+  for (const key of ['data', 'result', 'mission', 'kpi', 'status', 'summary']) {
+    const candidate = parseJsonString(normalized[key]);
+    if (isRecord(candidate)) return unwrapObject(candidate);
+  }
+
+  return normalized;
 }
 
 function normalizeIso(value: string | undefined) {
@@ -220,14 +286,16 @@ function mapHub(raw: unknown): MissionHubSummary {
   const record = asRecord(raw);
   const latitude = pickNumber(record, ['latitude', 'lat'], Number.NaN);
   const longitude = pickNumber(record, ['longitude', 'lng', 'lon'], Number.NaN);
+  const totalDrones = pickNumber(record, ['totalDrones', 'total_drones'], Number.NaN);
+  const availableDrones = pickNumber(record, ['availableDrones', 'available_drones'], Number.NaN);
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
     address: pickString(record, ['address', 'location']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
-    totalDrones: pickNumber(record, ['totalDrones', 'total_drones'], Number.NaN),
-    availableDrones: pickNumber(record, ['availableDrones', 'available_drones'], Number.NaN),
+    totalDrones: Number.isFinite(totalDrones) ? totalDrones : undefined,
+    availableDrones: Number.isFinite(availableDrones) ? availableDrones : undefined,
   };
 }
 
@@ -403,28 +471,115 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
   };
 }
 
+function mapMissionDashboardKpi(payload: unknown): MissionDashboardKpi {
+  const rows = unwrapArray(payload, ['kpi', 'metrics']);
+  const record = rows.length > 0 ? asRecord(rows[0]) : unwrapObject(payload);
+  return {
+    totalMissions: pickOptionalNumber(record, ['total_missions', 'totalMissions', 'total']),
+    activeMissions: pickOptionalNumber(record, ['active_missions', 'activeMissions', 'active', 'in_progress', 'inProgress']),
+    scheduledMissions: pickOptionalNumber(record, ['scheduled_missions', 'scheduledMissions', 'scheduled']),
+    completedMissions: pickOptionalNumber(record, ['completed_missions', 'completedMissions', 'completed']),
+    cancelledMissions: pickOptionalNumber(record, ['cancelled_missions', 'canceled_missions', 'cancelledMissions', 'canceledMissions', 'cancelled', 'canceled']),
+    failedMissions: pickOptionalNumber(record, ['failed_missions', 'failedMissions', 'failed']),
+    readyForPlanning: pickOptionalNumber(record, ['ready_for_planning', 'readyForPlanning', 'pending_requests', 'pendingRequests']),
+    raw: payload,
+  };
+}
+
+function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
+  const record = unwrapObject(payload);
+  const rows = unwrapArray(payload, ['statuses', 'status_counts', 'statusCounts']);
+  const result: MissionDashboardStatus = {
+    scheduled: pickOptionalNumber(record, ['scheduled', 'SCHEDULED']),
+    inProgress: pickOptionalNumber(record, ['in_progress', 'inProgress', 'IN_PROGRESS', 'active']),
+    completed: pickOptionalNumber(record, ['completed', 'COMPLETED']),
+    cancelled: pickOptionalNumber(record, ['cancelled', 'canceled', 'CANCELLED', 'CANCELED']),
+    failed: pickOptionalNumber(record, ['failed', 'FAILED']),
+    total: pickOptionalNumber(record, ['total', 'total_missions', 'totalMissions']),
+    raw: payload,
+  };
+
+  const applyStatusCount = (statusValue: string, count: number | undefined) => {
+    if (count === undefined) return;
+    const status = statusValue.trim().toUpperCase().replace(/[\s-]+/g, '_');
+    if (status === 'SCHEDULED') result.scheduled = count;
+    else if (status === 'IN_PROGRESS' || status === 'ACTIVE') result.inProgress = count;
+    else if (status === 'COMPLETED') result.completed = count;
+    else if (status === 'CANCELLED' || status === 'CANCELED') result.cancelled = count;
+    else if (status === 'FAILED') result.failed = count;
+  };
+
+  for (const [key, value] of Object.entries(record)) {
+    const count = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() && Number.isFinite(Number(value))
+        ? Number(value)
+        : undefined;
+    applyStatusCount(key, count);
+  }
+
+  for (const row of rows) {
+    const item = asRecord(row);
+    applyStatusCount(
+      pickString(item, ['status', 'name', 'key']),
+      pickOptionalNumber(item, ['count', 'value', 'total', 'missions']),
+    );
+  }
+
+  if (result.total === undefined) {
+    const values = [result.scheduled, result.inProgress, result.completed, result.cancelled, result.failed];
+    if (values.some((value) => value !== undefined)) {
+      result.total = values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+    }
+  }
+
+  return result;
+}
+
+export async function listMissionsApi(): Promise<Mission[]> {
+  const payload = await operatorApiRequest<unknown>('/missions/');
+  return unwrapArray(payload, ['missions']).map(mapMission).filter((mission) => mission.id);
+}
+
+export async function getMissionDashboardKpiApi(): Promise<MissionDashboardKpi> {
+  const payload = await operatorApiRequest<unknown>('/missions/dashboard/kpi');
+  return mapMissionDashboardKpi(payload);
+}
+
+export async function getMissionDashboardStatusApi(): Promise<MissionDashboardStatus> {
+  const payload = await operatorApiRequest<unknown>('/missions/dashboard/status');
+  return mapMissionDashboardStatus(payload);
+}
+
+export async function getMissionActiveFlightsApi(): Promise<Mission[]> {
+  const payload = await operatorApiRequest<unknown>('/missions/dashboard/active-flights');
+  return unwrapArray(payload, ['active_flights', 'activeFlights', 'flights', 'missions'])
+    .map(mapMission)
+    .filter((mission) => mission.id);
+}
+
 export async function listMissionHubsApi(): Promise<MissionHubSummary[]> {
   const payload = await operatorApiRequest<unknown>('/operator/missions/hubs');
   return unwrapArray(payload, ['hubs']).map(mapHub).filter((hub) => hub.id);
 }
 
-export async function listMissionMiniHubsApi(): Promise<MissionHubSummary[]> {
-  const payload = await operatorApiRequest<unknown>('/operator/missions/mini-hubs');
-  return unwrapArray(payload, ['mini_hubs', 'miniHubs', 'hubs']).map(mapHub).filter((hub) => hub.id);
-}
-
 export async function getLiveTrackingApi(): Promise<LiveTrackingDrone[]> {
-  const payload = await operatorApiRequest<unknown>('/operator/missions/live-tracking');
+  const payload = await operatorApiRequest<unknown>('/missions/dashboard/active-flights');
   return unwrapArray(payload, ['drones', 'aircraft', 'missions', 'live_tracking', 'liveTracking'])
     .map(mapLiveDrone);
 }
 
 export async function getMissionApi(missionId: string): Promise<Mission> {
-  if (!missionId.trim()) throw new Error('Mission ID is required.');
-  const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/${encodeURIComponent(missionId.trim())}`,
-  );
-  return mapMission(payload);
+  const normalizedMissionId = missionId.trim();
+  if (!normalizedMissionId) throw new Error('Mission ID is required.');
+
+  // Current Missions Swagger exposes GET /missions/ rather than a dedicated
+  // mission-detail endpoint. Reuse the authoritative list and resolve the row
+  // client-side so Mission Detail does not call an obsolete Operator route.
+  const missions = await listMissionsApi();
+  const mission = missions.find((item) => item.id === normalizedMissionId);
+  if (!mission) throw new Error(`Mission ${normalizedMissionId} was not found.`);
+  return mission;
 }
 
 /**
@@ -538,13 +693,29 @@ export async function analyzeMissionPlanningApi(
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
-  const payload = await operatorApiRequest<unknown>('/operator/missions', {
-    method: 'POST',
-    body: JSON.stringify({
+  const request = (body: Record<string, string>) =>
+    operatorApiRequest<unknown>('/missions/request', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+  try {
+    const payload = await request({
+      order_id: input.orderId,
+      drone_id: input.droneId,
+      route_id: input.routeId,
+    });
+    return mapMission(payload);
+  } catch (error) {
+    // Most FastAPI schemas use snake_case. If this deployment still exposes
+    // the older camelCase request model, retry only after a validation 422.
+    if (!(error instanceof OperatorApiError) || error.status !== 422) throw error;
+
+    const payload = await request({
       orderId: input.orderId,
       droneId: input.droneId,
       routeId: input.routeId,
-    }),
-  });
-  return mapMission(payload);
+    });
+    return mapMission(payload);
+  }
 }
