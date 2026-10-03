@@ -13,7 +13,6 @@ import { useOperatorEligibleDronesQuery, useOperatorOrderQuery } from '../../hoo
 import {
   useCreateMissionMutation,
   useMissionHubsQuery,
-  useMissionMiniHubsQuery,
   useMissionPlanningAnalysisQuery,
 } from '../../hooks/useMissionQueries';
 import type { OperatorDrone, RouteOption } from '../../types/operator';
@@ -66,7 +65,6 @@ export function CreateMissionPage() {
   const [selectedRouteId, setSelectedRouteId] = useState(restoredDraft?.selectedRouteId || '');
 
   const { data: apiHubs } = useMissionHubsQuery();
-  const { data: apiMiniHubs } = useMissionMiniHubsQuery();
   const {
     data: planningAnalysis,
     error: planningAnalysisError,
@@ -116,8 +114,7 @@ export function CreateMissionPage() {
   }
 
   const planningState = getOrderPlanningBadge(order, []);
-  const apiNetworkHubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])];
-  const networkHubs = apiNetworkHubs;
+  const networkHubs = apiHubs ?? [];
   const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
   const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
   const eligibleDronesAtOrigin = eligibleDronesData?.drones ?? [];

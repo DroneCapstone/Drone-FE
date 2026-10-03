@@ -23,9 +23,15 @@ export const operatorQueryKeys = {
 
   missions: () => [...operatorQueryKeys.all, 'missions'] as const,
 
-  missionHubs: () => [...operatorQueryKeys.missions(), 'hubs'] as const,
+  missionList: () => [...operatorQueryKeys.missions(), 'list'] as const,
 
-  missionMiniHubs: () => [...operatorQueryKeys.missions(), 'mini-hubs'] as const,
+  missionDashboardKpi: () => [...operatorQueryKeys.missions(), 'dashboard', 'kpi'] as const,
+
+  missionDashboardStatus: () => [...operatorQueryKeys.missions(), 'dashboard', 'status'] as const,
+
+  missionActiveFlights: () => [...operatorQueryKeys.missions(), 'dashboard', 'active-flights'] as const,
+
+  missionHubs: () => [...operatorQueryKeys.missions(), 'hubs'] as const,
 
   liveTracking: () => [...operatorQueryKeys.missions(), 'live-tracking'] as const,
 
@@ -45,4 +51,8 @@ export const operatorQueryKeys = {
 
   missionPlanning: (orderId: string, droneId: string) =>
     [...operatorQueryKeys.missions(), 'planning', orderId, droneId] as const,
+
+  fleet: () => [...operatorQueryKeys.all, 'fleet'] as const,
+
+  fleetDrones: () => [...operatorQueryKeys.fleet(), 'drones'] as const,
 };

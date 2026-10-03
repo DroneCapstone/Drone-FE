@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 // import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
+import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
+import { useMissionListQuery } from '../../hooks/useMissionQueries';
+import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import { routeAiAnalyses } from '../../data/aiMockData';
 import { routeOptions } from '../../data/routeMockData';
 import type { Tone } from '../../types/operator';
@@ -12,9 +15,6 @@ import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { updateMissionDraftRoute } from '../../utils/missionDraftStorage';
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
-import { loadOperatorFleet } from '../../utils/operatorFleetStorage';
-import { loadOperatorMissions } from '../../utils/operatorMissionStorage';
-import { getOperatorOrder } from '../../utils/operatorOrderStorage';
 import { AiPageShell } from './AiPageShell';
 
 const tabs = ['Prediction', 'Recommendation', 'Explainability', 'Weather / Risk'] as const;
@@ -29,8 +29,8 @@ function riskTone(level: 'Low' | 'Medium' | 'High'): Tone {
 export function MissionAnalysisPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const missions = useMemo(() => loadOperatorMissions(), []);
-  const fleet = useMemo(() => loadOperatorFleet(), []);
+  const { data: missions = [] } = useMissionListQuery();
+  const { data: fleet = [] } = useFleetDronesQuery();
   const returnToMission = searchParams.get('returnTo') === 'mission-create';
   const queryOrderId = searchParams.get('orderId') ?? '';
   const queryDroneId = searchParams.get('droneId') ?? '';
@@ -48,7 +48,7 @@ export function MissionAnalysisPage() {
   const selectedMission = missions.find((mission) => mission.id === selectedMissionId);
   const contextOrderId = hasQueryContext ? queryOrderId : selectedMission?.orderId ?? '';
   const contextDroneId = hasQueryContext ? queryDroneId : selectedMission?.droneId ?? '';
-  const order = getOperatorOrder(contextOrderId);
+  const { data: order } = useOperatorOrderQuery(contextOrderId);
   const drone = fleet.find((item) => item.id === contextDroneId);
 
   const initialRouteId = queryRouteId || selectedMission?.routeId || routeOptions.find((route) => route.recommended)?.id || routeOptions[0].id;
