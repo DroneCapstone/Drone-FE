@@ -46,6 +46,13 @@ export const technicianQueryKeys = {
   batteries: () =>
     [...technicianQueryKeys.all, "batteries"] as const,
 
+  battery: (batteryId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "battery",
+      batteryId,
+    ] as const,
+
   outbound: () =>
     [...technicianQueryKeys.all, "outbound"] as const,
 

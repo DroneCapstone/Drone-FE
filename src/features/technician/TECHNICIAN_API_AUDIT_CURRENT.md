@@ -65,6 +65,8 @@ Backend should still fix the 500 from:
 - GET `/technician/fleet/work-orders/{work_order_id}`
 - PUT `/technician/fleet/work-orders/{work_order_id}`
 - PATCH `/technician/fleet/work-orders/{work_order_id}/inspection`
+- GET `/technician/fleet/work-orders/{work_order_id}/logs`
+- GET `/technician/fleet/maintenance-schedules/drone/{drone_id}`
 - GET `/technician/fleet/maintenance-records/{drone_id}`
 - POST `/technician/fleet/maintenance-records`
 - GET `/notifications/`
@@ -77,10 +79,8 @@ Backend should still fix the 500 from:
 - GET `/technician/ai_predictions/`
 - POST `/technician/fleet/batteries/{battery_id}/mark-charged`
 - GET `/technician/fleet/drones/{drone_id}/maintenance-history`
-- GET `/technician/fleet/work-orders/{work_order_id}/logs`
 - GET `/technician/fleet/maintenance-schedules`
 - POST `/technician/fleet/maintenance-schedules`
-- GET `/technician/fleet/maintenance-schedules/drone/{drone_id}`
 - GET `/technician/fleet/maintenance-alerts/{alert_id}`
 - DELETE `/technician/fleet/work-orders/{work_order_id}`
 - POST `/technician/fleet/cron/maintenance-alerts`
@@ -90,8 +90,9 @@ Notes:
 - `mark-charged` is intentionally not exposed if charging completion is Backend-owned/automatic.
 - `cron/*` should normally be run by Backend workers, not by a normal Technician page.
 - `ai_predictions` has no dedicated Technician UI in the supplied source.
-- `maintenance schedules` are still represented by demo/monthly logic inside Drone Detail, so this is a real remaining integration gap.
-- Work-order history/log UI still uses local frontend storage, despite a Backend logs endpoint existing.
+- Drone Detail now consumes the per-drone maintenance schedule endpoint; the schedule list/create endpoints still have no dedicated management UI.
+- Work-order history now attempts to load the Backend work-order logs endpoint and falls back to local history only when no server log data is available.
+- Drone Detail now reads the per-drone maintenance-schedule endpoint when available; the list/create schedule endpoints still have no dedicated management UI.
 
 ## Current frontend-only functions because Swagger does not expose an official endpoint
 
