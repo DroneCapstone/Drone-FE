@@ -18,7 +18,7 @@ const particles: ParticleConfig[] = [
     delay: "-2s",
     color: "#fb923c",
     drift: "10px",
-    opacity: 0.5,
+    opacity: 0.62,
   },
   {
     left: "7%",
@@ -27,7 +27,7 @@ const particles: ParticleConfig[] = [
     delay: "-11s",
     color: "#f97316",
     drift: "-8px",
-    opacity: 0.72,
+    opacity: 0.82,
   },
   {
     left: "11%",
@@ -36,7 +36,7 @@ const particles: ParticleConfig[] = [
     delay: "-6s",
     color: "#fdba74",
     drift: "12px",
-    opacity: 0.58,
+    opacity: 0.68,
   },
   {
     left: "15%",
@@ -45,7 +45,7 @@ const particles: ParticleConfig[] = [
     delay: "-14s",
     color: "#ea580c",
     drift: "-10px",
-    opacity: 0.5,
+    opacity: 0.6,
   },
   {
     left: "19%",
@@ -54,7 +54,7 @@ const particles: ParticleConfig[] = [
     delay: "-8s",
     color: "#fb923c",
     drift: "14px",
-    opacity: 0.7,
+    opacity: 0.8,
   },
   {
     left: "23%",
@@ -63,7 +63,7 @@ const particles: ParticleConfig[] = [
     delay: "-4s",
     color: "#f97316",
     drift: "-12px",
-    opacity: 0.56,
+    opacity: 0.66,
   },
   {
     left: "27%",
@@ -72,7 +72,7 @@ const particles: ParticleConfig[] = [
     delay: "-12s",
     color: "#fdba74",
     drift: "8px",
-    opacity: 0.64,
+    opacity: 0.72,
   },
   {
     left: "31%",
@@ -81,7 +81,7 @@ const particles: ParticleConfig[] = [
     delay: "-7s",
     color: "#ea580c",
     drift: "-7px",
-    opacity: 0.48,
+    opacity: 0.58,
   },
   {
     left: "35%",
@@ -90,7 +90,7 @@ const particles: ParticleConfig[] = [
     delay: "-15s",
     color: "#f97316",
     drift: "11px",
-    opacity: 0.74,
+    opacity: 0.84,
   },
   {
     left: "39%",
@@ -99,7 +99,7 @@ const particles: ParticleConfig[] = [
     delay: "-10s",
     color: "#fb923c",
     drift: "-13px",
-    opacity: 0.58,
+    opacity: 0.68,
   },
   {
     left: "43%",
@@ -108,7 +108,7 @@ const particles: ParticleConfig[] = [
     delay: "-5s",
     color: "#fdba74",
     drift: "9px",
-    opacity: 0.5,
+    opacity: 0.6,
   },
   {
     left: "47%",
@@ -117,7 +117,7 @@ const particles: ParticleConfig[] = [
     delay: "-13s",
     color: "#f97316",
     drift: "-9px",
-    opacity: 0.68,
+    opacity: 0.78,
   },
   {
     left: "51%",
@@ -126,7 +126,7 @@ const particles: ParticleConfig[] = [
     delay: "-3s",
     color: "#ea580c",
     drift: "10px",
-    opacity: 0.52,
+    opacity: 0.62,
   },
   {
     left: "55%",
@@ -135,7 +135,7 @@ const particles: ParticleConfig[] = [
     delay: "-9s",
     color: "#fb923c",
     drift: "-14px",
-    opacity: 0.75,
+    opacity: 0.86,
   },
   {
     left: "59%",
@@ -144,7 +144,7 @@ const particles: ParticleConfig[] = [
     delay: "-6s",
     color: "#fdba74",
     drift: "7px",
-    opacity: 0.5,
+    opacity: 0.6,
   },
   {
     left: "63%",
@@ -153,7 +153,7 @@ const particles: ParticleConfig[] = [
     delay: "-16s",
     color: "#f97316",
     drift: "-11px",
-    opacity: 0.64,
+    opacity: 0.72,
   },
   {
     left: "67%",
@@ -162,7 +162,7 @@ const particles: ParticleConfig[] = [
     delay: "-8s",
     color: "#ea580c",
     drift: "12px",
-    opacity: 0.48,
+    opacity: 0.56,
   },
   {
     left: "71%",
@@ -171,7 +171,7 @@ const particles: ParticleConfig[] = [
     delay: "-4s",
     color: "#fb923c",
     drift: "-8px",
-    opacity: 0.72,
+    opacity: 0.82,
   },
   {
     left: "75%",
@@ -180,7 +180,7 @@ const particles: ParticleConfig[] = [
     delay: "-11s",
     color: "#f97316",
     drift: "13px",
-    opacity: 0.58,
+    opacity: 0.68,
   },
   {
     left: "79%",
@@ -189,7 +189,7 @@ const particles: ParticleConfig[] = [
     delay: "-14s",
     color: "#fdba74",
     drift: "-10px",
-    opacity: 0.66,
+    opacity: 0.76,
   },
   {
     left: "83%",
@@ -198,7 +198,7 @@ const particles: ParticleConfig[] = [
     delay: "-7s",
     color: "#ea580c",
     drift: "9px",
-    opacity: 0.48,
+    opacity: 0.56,
   },
   {
     left: "87%",
@@ -207,7 +207,7 @@ const particles: ParticleConfig[] = [
     delay: "-12s",
     color: "#fb923c",
     drift: "-12px",
-    opacity: 0.76,
+    opacity: 0.88,
   },
   {
     left: "91%",
@@ -216,7 +216,7 @@ const particles: ParticleConfig[] = [
     delay: "-5s",
     color: "#f97316",
     drift: "10px",
-    opacity: 0.58,
+    opacity: 0.68,
   },
   {
     left: "95%",
@@ -225,7 +225,7 @@ const particles: ParticleConfig[] = [
     delay: "-15s",
     color: "#fdba74",
     drift: "-9px",
-    opacity: 0.68,
+    opacity: 0.76,
   },
 
   {
@@ -235,7 +235,7 @@ const particles: ParticleConfig[] = [
     delay: "-18s",
     color: "#fb923c",
     drift: "6px",
-    opacity: 0.36,
+    opacity: 0.44,
   },
   {
     left: "13%",
@@ -244,7 +244,7 @@ const particles: ParticleConfig[] = [
     delay: "-9s",
     color: "#f97316",
     drift: "-6px",
-    opacity: 0.32,
+    opacity: 0.4,
   },
   {
     left: "21%",
@@ -253,7 +253,7 @@ const particles: ParticleConfig[] = [
     delay: "-13s",
     color: "#fdba74",
     drift: "5px",
-    opacity: 0.4,
+    opacity: 0.48,
   },
   {
     left: "29%",
@@ -262,7 +262,7 @@ const particles: ParticleConfig[] = [
     delay: "-4s",
     color: "#ea580c",
     drift: "-5px",
-    opacity: 0.3,
+    opacity: 0.38,
   },
   {
     left: "37%",
@@ -271,7 +271,7 @@ const particles: ParticleConfig[] = [
     delay: "-16s",
     color: "#fb923c",
     drift: "7px",
-    opacity: 0.36,
+    opacity: 0.44,
   },
   {
     left: "45%",
@@ -280,7 +280,7 @@ const particles: ParticleConfig[] = [
     delay: "-8s",
     color: "#f97316",
     drift: "-6px",
-    opacity: 0.32,
+    opacity: 0.4,
   },
   {
     left: "53%",
@@ -289,7 +289,7 @@ const particles: ParticleConfig[] = [
     delay: "-14s",
     color: "#fdba74",
     drift: "5px",
-    opacity: 0.38,
+    opacity: 0.48,
   },
   {
     left: "61%",
@@ -298,7 +298,7 @@ const particles: ParticleConfig[] = [
     delay: "-5s",
     color: "#ea580c",
     drift: "-7px",
-    opacity: 0.3,
+    opacity: 0.38,
   },
   {
     left: "69%",
@@ -307,7 +307,7 @@ const particles: ParticleConfig[] = [
     delay: "-19s",
     color: "#fb923c",
     drift: "6px",
-    opacity: 0.34,
+    opacity: 0.44,
   },
   {
     left: "77%",
@@ -316,7 +316,7 @@ const particles: ParticleConfig[] = [
     delay: "-10s",
     color: "#f97316",
     drift: "-5px",
-    opacity: 0.3,
+    opacity: 0.4,
   },
   {
     left: "85%",
@@ -325,7 +325,7 @@ const particles: ParticleConfig[] = [
     delay: "-7s",
     color: "#fdba74",
     drift: "6px",
-    opacity: 0.38,
+    opacity: 0.48,
   },
   {
     left: "93%",
@@ -334,7 +334,7 @@ const particles: ParticleConfig[] = [
     delay: "-15s",
     color: "#ea580c",
     drift: "-6px",
-    opacity: 0.3,
+    opacity: 0.38,
   },
 ];
 
@@ -342,14 +342,19 @@ export function CustomerAnimatedBackground() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-[#050505]"
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(circle at top left, rgba(180,72,18,0.22), transparent 30%), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 26%), radial-gradient(circle at bottom center, rgba(234,88,12,0.10), transparent 34%), linear-gradient(180deg, #120c09 0%, #0c0908 42%, #070606 100%)",
+      }}
     >
-      {/* soft glows */}
-      <div className="absolute -left-[180px] top-[12%] h-[520px] w-[520px] rounded-full bg-orange-600/[0.045] blur-[170px]" />
-      <div className="absolute right-[-200px] top-[40%] h-[560px] w-[560px] rounded-full bg-orange-400/[0.035] blur-[190px]" />
-      <div className="absolute bottom-[-240px] left-[34%] h-[560px] w-[560px] rounded-full bg-orange-500/[0.03] blur-[200px]" />
+      {/* warm glows */}
+      <div className="absolute -left-[120px] top-[8%] h-[560px] w-[560px] rounded-full bg-orange-500/[0.12] blur-[170px]" />
+      <div className="absolute right-[-180px] top-[18%] h-[540px] w-[540px] rounded-full bg-orange-400/[0.1] blur-[180px]" />
+      <div className="absolute bottom-[-220px] left-[28%] h-[620px] w-[620px] rounded-full bg-orange-600/[0.08] blur-[220px]" />
+      <div className="absolute left-[48%] top-[38%] h-[400px] w-[400px] rounded-full bg-amber-400/[0.05] blur-[160px]" />
 
-      {/* subtle grid / scan texture */}
+      {/* subtle grid */}
       <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:120px_120px]" />
 
       {/* particles */}
@@ -366,9 +371,9 @@ export function CustomerAnimatedBackground() {
           animationDelay: particle.delay,
           animationDuration: particle.duration,
           boxShadow: `
-            0 0 ${particle.size * 6}px ${particle.color},
-            0 0 ${particle.size * 12}px ${particle.color}88,
-            0 0 ${particle.size * 18}px ${particle.color}44
+            0 0 ${particle.size * 8}px ${particle.color},
+            0 0 ${particle.size * 16}px ${particle.color}cc,
+            0 0 ${particle.size * 24}px ${particle.color}88
           `,
           "--drift": particle.drift,
         };
@@ -382,9 +387,9 @@ export function CustomerAnimatedBackground() {
         );
       })}
 
-      {/* edge fade */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_24%,rgba(0,0,0,0.16)_62%,rgba(0,0,0,0.46)_100%)]" />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/[0.08] via-transparent to-black/[0.18]" />
+      {/* edge fade nhẹ hơn */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_18%,rgba(0,0,0,0.10)_58%,rgba(0,0,0,0.22)_100%)]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] via-transparent to-black/[0.08]" />
 
       <style>
         {`
@@ -393,7 +398,7 @@ export function CustomerAnimatedBackground() {
             animation-timing-function: linear, ease-in-out;
             animation-iteration-count: infinite, infinite;
             animation-direction: normal, alternate;
-            will-change: transform, opacity;
+            will-change: transform, opacity, filter;
             mix-blend-mode: screen;
           }
 
@@ -404,45 +409,45 @@ export function CustomerAnimatedBackground() {
             }
 
             8% {
-              opacity: 0.45;
+              opacity: 0.62;
             }
 
             18% {
-              opacity: 0.72;
+              opacity: 1;
             }
 
             70% {
-              opacity: 0.78;
+              opacity: 1;
             }
 
             92% {
-              opacity: 0.28;
+              opacity: 0.42;
             }
 
             100% {
-              transform: translate3d(var(--drift), -125vh, 0) scale(1.06);
+              transform: translate3d(var(--drift), -125vh, 0) scale(1.08);
               opacity: 0;
             }
           }
 
           @keyframes customerParticleGlow {
             0% {
-              filter: brightness(0.92);
+              filter: brightness(1.05);
             }
 
             50% {
-              filter: brightness(1.2);
+              filter: brightness(1.65);
             }
 
             100% {
-              filter: brightness(0.95);
+              filter: brightness(1.12);
             }
           }
 
           @media (prefers-reduced-motion: reduce) {
             .customer-particle {
               animation: none;
-              opacity: 0.5;
+              opacity: 0.6;
             }
           }
         `}

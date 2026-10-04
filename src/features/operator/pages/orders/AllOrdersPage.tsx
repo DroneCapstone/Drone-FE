@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/OperatorPagination';
 import { OrderTable } from '../../components/OrderTable';
+import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../../hooks/useOrderQueries';
 import type { OrderStatus } from '../../types/operator';
 import {
@@ -12,7 +13,6 @@ import {
   isActionablePlanningState,
   sortOrdersByPlanningPriority,
 } from '../../utils/deliveryPlanning';
-import { loadOperatorMissions } from '../../utils/operatorMissionStorage';
 import { OrderPageShell } from './OrderPageShell';
 
 const STATUS_TO_API: Record<
@@ -34,7 +34,7 @@ export function AllOrdersPage() {
   const [status, setStatus] = useState('All statuses');
   const [deliveryMode, setDeliveryMode] = useState('All delivery modes');
   const [page, setPage] = useState(1);
-  const missions = useMemo(() => loadOperatorMissions(), []);
+  const { data: missions = [] } = useMissionListQuery();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 300);

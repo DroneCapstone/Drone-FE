@@ -1,3 +1,8 @@
+import {
+  API_BASE_URL,
+  API_WITH_CREDENTIALS,
+  DEFAULT_API_BASE_URL,
+} from "../../../config/api";
 import { authService } from "../../auth/services/authService";
 
 /**
@@ -9,21 +14,10 @@ import { authService } from "../../auth/services/authService";
  */
 
 export const DEFAULT_TECHNICIAN_API_BASE_URL =
-  "https://execute-blind-pitch-frequently.trycloudflare.com/api/v1";
-
-const viteEnv = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>;
-}).env;
-
-const configuredApiBaseUrl = (
-  viteEnv?.VITE_API_BASE_URL ??
-  DEFAULT_TECHNICIAN_API_BASE_URL
-).replace(/\/+$/, "");
+  DEFAULT_API_BASE_URL;
 
 export const TECHNICIAN_API_BASE_URL =
-  /\/api\/v1$/i.test(configuredApiBaseUrl)
-    ? configuredApiBaseUrl
-    : `${configuredApiBaseUrl}/api/v1`;
+  API_BASE_URL;
 
 export class TechnicianApiError extends Error {
   status: number;
@@ -60,10 +54,6 @@ export async function technicianApiRequest<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const withCredentials =
-    viteEnv?.VITE_API_WITH_CREDENTIALS ===
-    "true";
-
   const execute = async (
     accessToken?: string | null,
   ) => {
@@ -101,7 +91,7 @@ export async function technicianApiRequest<T = unknown>(
       {
         ...init,
         headers,
-        credentials: withCredentials
+        credentials: API_WITH_CREDENTIALS
           ? "include"
           : "omit",
       },
@@ -262,6 +252,9 @@ export function unwrapList<T = unknown>(
     "drones",
     "missions",
     "batteries",
+    "hub_batteries",
+    "battery_inventory",
+    "inventory",
     "deliveries",
     "orders",
     "confirmations",
@@ -273,6 +266,11 @@ export function unwrapList<T = unknown>(
     "logs",
     "schedules",
     "notifications",
+    "users",
+    "technicians",
+    "auth",
+    "predictions",
+    "ai_predictions",
   ];
 
   for (const key of candidateKeys) {
@@ -286,6 +284,14 @@ export function unwrapList<T = unknown>(
       const nested = unwrapList<T>(candidate);
       if (nested.length > 0) {
         return nested;
+      }
+
+      const mappedValues = Object.values(candidate);
+      if (
+        mappedValues.length > 0 &&
+        mappedValues.every(isRecord)
+      ) {
+        return mappedValues as T[];
       }
     }
   }
@@ -304,8 +310,21 @@ export function unwrapObject(
     return {};
   }
 
-  if (isRecord(payload.data)) {
-    return payload.data;
+  const objectKeys = [
+    "data",
+    "battery",
+    "user",
+    "profile",
+    "technician",
+    "auth",
+  ];
+
+  for (const key of objectKeys) {
+    const candidate = payload[key];
+
+    if (isRecord(candidate)) {
+      return unwrapObject(candidate);
+    }
   }
 
   return payload;
@@ -394,7 +413,7 @@ export function toBackendNumericId(
 
   const match = value.match(/(\d+)$/);
   if (!match) {
-    throw new Error(`Cannot derive numeric backend id from \"${value}\".`);
+    throw new Error(`Cannot derive numeric backend id from "${value}".`);
   }
 
   return Number(match[1]);
@@ -454,7 +473,7 @@ async function requestWithFlexibleId<T = unknown>(
       lastError = error;
       if (
         error instanceof TechnicianApiError &&
-        (error.status === 404 || error.status === 422)
+        error.status === 404
       ) {
         continue;
       }
@@ -466,6 +485,19 @@ async function requestWithFlexibleId<T = unknown>(
     ? lastError
     : new Error("API resource was not found.");
 }
+
+// ---------------------------------------------------------------------------
+// Technician auth / users
+// Current Swagger (02 Oct 2026):
+//   GET /api/v1/technician/auth/
+//   GET /api/v1/technician/users/
+// ---------------------------------------------------------------------------
+
+export const getTechnicianAuthApi = () =>
+  technicianApiRequest("/technician/auth/");
+
+export const getTechnicianUsersApi = () =>
+  technicianApiRequest("/technician/users/");
 
 // ---------------------------------------------------------------------------
 // Fleet
@@ -511,6 +543,15 @@ export const getTechnicianMissionsApi = () =>
   technicianApiRequest("/technician/missions/");
 
 // ---------------------------------------------------------------------------
+// Technician AI predictions
+// Current Swagger:
+//   GET /api/v1/technician/ai_predictions/
+// ---------------------------------------------------------------------------
+
+export const getTechnicianAiPredictionsApi = () =>
+  technicianApiRequest("/technician/ai_predictions/");
+
+// ---------------------------------------------------------------------------
 // Transit missions
 // ---------------------------------------------------------------------------
 
@@ -532,6 +573,14 @@ export const confirmMissionArrivalApi = (
 
 export const getBatteriesApi = () =>
   technicianApiRequest("/technician/fleet/batteries");
+
+export const getBatteryDetailApi = (
+  batteryId: string | number,
+) =>
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/batteries/${id}`,
+    batteryId,
+  );
 
 export const useBatteryApi = (
   batteryId: string | number,
@@ -744,12 +793,160 @@ export const markAllNotificationsReadApi = () =>
   });
 
 // ---------------------------------------------------------------------------
-// Profile
+// Profile / technician identity
 // ---------------------------------------------------------------------------
 
-export const getMyProfileApi = () =>
-  technicianApiRequest("/users/me");
+function hasProfileIdentity(
+  payload: unknown,
+) {
+  const object = unwrapObject(payload);
 
+  return Boolean(
+    pickString(
+      object,
+      [
+        "email",
+        "name",
+        "full_name",
+        "username",
+        "technician_id",
+        "user_id",
+        "id",
+      ],
+      "",
+    ),
+  );
+}
+
+function resolveCurrentTechnicianFromUsers(
+  payload: unknown,
+) {
+  const users =
+    unwrapList<Record<string, unknown>>(
+      payload,
+    );
+
+  if (users.length === 0) {
+    return null;
+  }
+
+  const currentUser =
+    authService.getCurrentUser();
+
+  const currentEmail =
+    currentUser?.email
+      ?.trim()
+      .toLowerCase();
+
+  const currentId =
+    currentUser?.id != null
+      ? String(currentUser.id)
+      : "";
+
+  const match = users.find(
+    (user) => {
+      const email = pickString(
+        user,
+        ["email"],
+        "",
+      )
+        .trim()
+        .toLowerCase();
+
+      const id = pickString(
+        user,
+        [
+          "user_id",
+          "technician_id",
+          "id",
+        ],
+        "",
+      );
+
+      return Boolean(
+        (currentEmail &&
+          email === currentEmail) ||
+          (currentId &&
+            id === currentId),
+      );
+    },
+  );
+
+  return match ?? users[0] ?? null;
+}
+
+/**
+ * Current Technician Swagger now exposes:
+ *   GET /technician/auth/
+ *   GET /technician/users/
+ *
+ * Prefer these Technician-scoped endpoints. Keep /users/me only as a
+ * compatibility fallback because older backend builds exposed the profile
+ * there and the current screenshots do not show a Technician PATCH endpoint.
+ */
+export const getMyProfileApi =
+  async () => {
+    try {
+      const authPayload =
+        await getTechnicianAuthApi();
+
+      if (
+        hasProfileIdentity(
+          authPayload,
+        )
+      ) {
+        return authPayload;
+      }
+    } catch (error) {
+      if (
+        !(
+          error instanceof
+            TechnicianApiError
+        ) ||
+        ![404, 405].includes(
+          error.status,
+        )
+      ) {
+        throw error;
+      }
+    }
+
+    try {
+      const usersPayload =
+        await getTechnicianUsersApi();
+
+      const currentTechnician =
+        resolveCurrentTechnicianFromUsers(
+          usersPayload,
+        );
+
+      if (currentTechnician) {
+        return currentTechnician;
+      }
+    } catch (error) {
+      if (
+        !(
+          error instanceof
+            TechnicianApiError
+        ) ||
+        ![404, 405].includes(
+          error.status,
+        )
+      ) {
+        throw error;
+      }
+    }
+
+    return technicianApiRequest(
+      "/users/me",
+    );
+  };
+
+/**
+ * The new Technician Swagger shown by Backend exposes GET-only Technician
+ * auth/users endpoints. Keep this compatibility call for deployments where
+ * the shared Users router still supports PATCH /users/me.
+ */
 export const updateMyProfileApi = (
   payload: Record<string, unknown>,
 ) =>

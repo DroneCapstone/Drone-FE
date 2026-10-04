@@ -28,7 +28,7 @@ import type {
 } from "./fleetStorage";
 
 export type WorkOrderStatus =
-  | "Not Started"
+  | "Pending"
   | "In Progress"
   | "Completed";
 
@@ -41,6 +41,7 @@ export type WorkOrder = {
   id: string;
   drone: string;
   droneId: string;
+  batteryId?: string;
   title: string;
   priority: WorkOrderPriority;
   status: WorkOrderStatus;
@@ -106,7 +107,7 @@ export const defaultWorkOrders: WorkOrder[] = [
     title:
       "Inspect after abnormal landing",
     priority: "High",
-    status: "Not Started",
+    status: "Pending",
     assignedTo: "Technician Demo",
     createdAt: "20 Sep · 07:55",
     scheduledAt: "20 Sep 2026 · 10:00",
@@ -119,7 +120,7 @@ export const defaultWorkOrders: WorkOrder[] = [
     title:
       "Technical inspection after incident",
     priority: "Medium",
-    status: "Not Started",
+    status: "Pending",
     assignedTo: "Technician Demo",
     createdAt: "19 Sep · 16:20",
     scheduledAt: "20 Sep 2026 · 13:00",
@@ -132,15 +133,21 @@ const defaultWorkOrderLogs: WorkOrderLog[] = [];
 function normalizeStatus(
   status: unknown,
 ): WorkOrderStatus {
-  if (status === "In Progress") {
+  const key = String(status ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (key === "IN_PROGRESS") {
     return "In Progress";
   }
 
-  if (status === "Completed") {
+  if (key === "COMPLETED") {
     return "Completed";
   }
 
-  return "Not Started";
+  // Backward-compatible with the previous local UI label.
+  return "Pending";
 }
 
 export function formatMaintenanceTime() {
@@ -318,7 +325,7 @@ function normalizeApiWorkOrderStatus(value: string): WorkOrderStatus {
   const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (key === "COMPLETED") return "Completed";
   if (key === "IN_PROGRESS") return "In Progress";
-  return "Not Started";
+  return "Pending";
 }
 
 function normalizeApiPriority(value: string): WorkOrderPriority {
@@ -341,12 +348,23 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
     id: maintenanceDisplayId("WO", rawId, 4),
     drone: pickString(value, ["drone_name", "drone_code", "drone"], droneId),
     droneId,
+    batteryId: (() => {
+      const rawBatteryId = pickString(
+        value,
+        ["battery_id", "test_battery_id", "batteryId"],
+        "",
+      );
+
+      return rawBatteryId
+        ? maintenanceDisplayId("BAT", rawBatteryId, 3)
+        : undefined;
+    })(),
     title: pickString(value, ["title", "issue_description", "task", "description"], "Maintenance work order"),
     priority: normalizeApiPriority(
       pickString(value, ["priority"], "Medium"),
     ),
     status: normalizeApiWorkOrderStatus(
-      pickString(value, ["status"], "NOT_STARTED"),
+      pickString(value, ["status"], "Pending"),
     ),
     assignedTo: pickString(value, ["assigned_to", "technician_name", "assignee"], "Technician"),
     createdAt: formatApiDateTime(
@@ -372,7 +390,7 @@ function mapApiWorkOrderLog(value: unknown): WorkOrderLog | null {
   if (!rawWorkOrderId) return null;
 
   const status = normalizeApiWorkOrderStatus(
-    pickString(value, ["status", "work_order_status"], "NOT_STARTED"),
+    pickString(value, ["status", "work_order_status"], "Pending"),
   );
 
   return {

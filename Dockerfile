@@ -7,8 +7,7 @@ RUN npm ci
 
 COPY . .
 # VITE_API_BASE_URL is baked into the static bundle at build time.
-# ARG VITE_API_BASE_URL=http://localhost:8000
-ARG VITE_API_BASE_URL=https://execute-blind-pitch-frequently.trycloudflare.com/api/v1
+ARG VITE_API_BASE_URL=https://collectibles-anderson-fits-portfolio.trycloudflare.com/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 

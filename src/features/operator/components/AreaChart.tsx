@@ -6,6 +6,7 @@ interface AreaChartProps {
   yLabels?: string[];
   pointLabel?: string;
   variant?: 'throughput' | 'energy' | 'performance' | 'simulation';
+  values?: readonly number[];
 }
 
 const chartPaths = {
@@ -27,16 +28,60 @@ const chartPaths = {
   },
 } as const;
 
-export function AreaChart({ orange = false, unit = '', yLabels = ['100', '75', '50', '25'], pointLabel = 'Current selected value', variant = 'performance' }: AreaChartProps) {
+function createDataPath(values: readonly number[]) {
+  if (values.length === 0) return null;
+
+  const width = 800;
+  const top = 28;
+  const bottom = 178;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = Math.max(max - min, max * 0.15, 1);
+  const paddedMin = Math.max(0, min - range * 0.15);
+  const paddedMax = max + range * 0.15;
+  const paddedRange = Math.max(paddedMax - paddedMin, 1);
+
+  const points = values.map((value, index) => {
+    const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
+    const normalized = (value - paddedMin) / paddedRange;
+    const y = bottom - normalized * (bottom - top);
+    return [Number(x.toFixed(2)), Number(y.toFixed(2))] as const;
+  });
+
+  const line = points
+    .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x} ${y}`)
+    .join(' ');
+
+  return {
+    line,
+    dot: points[points.length - 1],
+  };
+}
+
+export function AreaChart({
+  orange = false,
+  unit = '',
+  yLabels = ['100', '75', '50', '25'],
+  pointLabel = 'Current selected value',
+  variant = 'performance',
+  values,
+}: AreaChartProps) {
   const chartId = useId().replace(/:/g, '');
   const gradientId = orange ? 'fill-orange' : 'fill-blue';
-  const path = chartPaths[variant];
+  const dataPath = values ? createDataPath(values) : null;
+  const path = dataPath ?? chartPaths[variant];
+
   return (
     <div className="area-chart-frame">
       {unit && <span className="chart-unit">{unit}</span>}
       <div className="chart-y-axis">{yLabels.map((label) => <span key={label}>{label}</span>)}</div>
       <svg className="area-chart" viewBox="0 0 800 220" preserveAspectRatio="none" role="img" aria-label={`Operational trend, measured in ${unit || 'units'}`}>
-        <defs><linearGradient id={`${gradientId}-${chartId}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={orange ? '#ff6b00' : '#4aa3ff'} stopOpacity=".18"/><stop offset="1" stopColor={orange ? '#ff6b00' : '#4aa3ff'} stopOpacity="0"/></linearGradient></defs>
+        <defs>
+          <linearGradient id={`${gradientId}-${chartId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={orange ? '#ff6b00' : '#4aa3ff'} stopOpacity=".18" />
+            <stop offset="1" stopColor={orange ? '#ff6b00' : '#4aa3ff'} stopOpacity="0" />
+          </linearGradient>
+        </defs>
         {[35, 80, 125, 170].map((y) => <line key={y} x1="0" x2="800" y1={y} y2={y} className="chart-grid" />)}
         <path d={`${path.line} L800 220 L0 220Z`} fill={`url(#${gradientId}-${chartId})`} />
         <path d={path.line} className={orange ? 'chart-line orange' : 'chart-line'} />

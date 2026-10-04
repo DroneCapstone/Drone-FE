@@ -1,36 +1,39 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ActionButton } from '../../../components/ui/ActionButton';
 import { Switch } from '../../../components/ui/Switch';
 import { OperatorPanel } from '../components/OperatorPanel';
 import { PageHeader } from '../components/PageHeader';
+import { useFleetDronesQuery } from '../hooks/useFleetQueries';
+import { useMissionListQuery } from '../hooks/useMissionQueries';
+import { useOperatorOrdersQuery } from '../hooks/useOrderQueries';
 import type { Tone } from '../types/operator';
 import { formatDeliveryWindow, getOrderPlanningBadge, isActionablePlanningState } from '../utils/deliveryPlanning';
 import { getMissionPreflight } from '../utils/missionPreflight';
-import { loadOperatorFleet } from '../utils/operatorFleetStorage';
-import { loadOperatorMissions } from '../utils/operatorMissionStorage';
-import { loadOperatorOrders } from '../utils/operatorOrderStorage';
 
 export function NotificationsPage() {
   const navigate = useNavigate();
-  const orders = useMemo(() => loadOperatorOrders(), []);
-  const missions = useMemo(() => loadOperatorMissions(), []);
-  const fleet = useMemo(() => loadOperatorFleet(), []);
+  const { data: orders = [] } = useOperatorOrdersQuery();
+  const { data: missions = [] } = useMissionListQuery();
+  const { data: fleet = [] } = useFleetDronesQuery();
 
   const planningOrder = orders.find((order) => isActionablePlanningState(getOrderPlanningBadge(order, missions)));
   const replanOrder = orders.find((order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning');
-  const departureItem = missions
-    .filter((mission) => mission.status === 'Scheduled')
-    .map((mission) => ({
-      mission,
-      evaluation: getMissionPreflight(
+  const departureItem = useMemo(
+    () => missions
+      .filter((mission) => mission.status === 'Scheduled')
+      .map((mission) => ({
         mission,
-        orders.find((order) => order.id === mission.orderId),
-        fleet.find((drone) => drone.id === mission.droneId),
-        missions,
-      ),
-    }))
-    .find((item) => item.evaluation.state !== 'Scheduled');
+        evaluation: getMissionPreflight(
+          mission,
+          orders.find((order) => order.id === mission.orderId),
+          fleet.find((drone) => drone.id === mission.droneId),
+          missions,
+        ),
+      }))
+      .find((item) => item.evaluation.state !== 'Scheduled'),
+    [fleet, missions, orders],
+  );
 
   const initial = useMemo(() => {
     const values: Array<{ title: string; body: string; time: string; tone: Tone; category: string; read: boolean; target?: string }> = [];
@@ -45,6 +48,16 @@ export function NotificationsPage() {
   }, [departureItem, planningOrder, replanOrder]);
 
   const [items, setItems] = useState(initial);
+
+  useEffect(() => {
+    setItems((current) =>
+      initial.map((next) => ({
+        ...next,
+        read: current.find((item) => item.title === next.title)?.read ?? next.read,
+      })),
+    );
+  }, [initial]);
+
   const [filter, setFilter] = useState('All');
   const visibleItems = filter === 'All' ? items : items.filter((item) => item.category === filter);
 

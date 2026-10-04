@@ -1,11 +1,13 @@
 import { lazy } from "react";
 import { Navigate, useRoutes } from "react-router-dom";
 
+import { DroneAssistantWidget } from "../components/DroneAssistantWidget";
 import { useAuth } from "../features/auth/hooks/useAuth";
 
 import { technicianRoutes } from "../features/technician/technicianRoutes";
 import { customerRoutes } from "../features/customer/customerRoutes";
 import { operatorRoutes } from "./operatorRoutes";
+import { adminRoutes } from "../features/admin/adminRoutes";
 
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -20,6 +22,16 @@ const AuthPage = lazy(() =>
     default: module.AuthPage,
   })),
 );
+
+const GoogleCallbackPage =
+  lazy(() =>
+    import(
+      "../features/auth/pages/GoogleCallbackPage"
+    ).then((module) => ({
+      default:
+        module.GoogleCallbackPage,
+    })),
+  );
 
 const OperatorLayout = lazy(() =>
   import("../layouts/OperatorLayout").then((module) => ({
@@ -39,6 +51,12 @@ const CustomerLayout = lazy(() =>
   })),
 );
 
+const AdminLayout = lazy(() =>
+  import("../layouts/AdminLayout").then((module) => ({
+    default: module.AdminLayout,
+  })),
+);
+
 /* =========================================================
    APP ROUTES
 ========================================================= */
@@ -49,6 +67,10 @@ export function AppRoutes() {
     isAuthenticated,
     isRestoring,
   } = useAuth();
+
+  /* =======================================================
+     CURRENT USER HOME
+  ======================================================== */
 
   function getCurrentHome() {
     switch (user?.role) {
@@ -69,6 +91,10 @@ export function AppRoutes() {
     }
   }
 
+  /* =======================================================
+     AUTH PAGE
+  ======================================================== */
+
   const authPageElement = isRestoring ? null : isAuthenticated ? (
     <Navigate
       to={getCurrentHome()}
@@ -78,11 +104,23 @@ export function AppRoutes() {
     <AuthPage />
   );
 
-  return useRoutes([
+  /* =======================================================
+     ROUTES
+  ======================================================== */
+
+  const routes = useRoutes([
+    /* -----------------------------------------------------
+       PUBLIC
+    ----------------------------------------------------- */
+
     {
       path: "/",
       element: <HomePage />,
     },
+
+    /* -----------------------------------------------------
+       AUTH
+    ----------------------------------------------------- */
 
     {
       path: "/login",
@@ -104,6 +142,15 @@ export function AppRoutes() {
       element: authPageElement,
     },
 
+    /* -----------------------------------------------------
+       OPERATOR
+    ----------------------------------------------------- */
+
+    {
+      path: "/auth/google/callback",
+      element: <GoogleCallbackPage />,
+    },
+
     {
       element: (
         <ProtectedRoute
@@ -118,6 +165,10 @@ export function AppRoutes() {
         },
       ],
     },
+
+    /* -----------------------------------------------------
+       TECHNICIAN
+    ----------------------------------------------------- */
 
     {
       element: (
@@ -134,6 +185,10 @@ export function AppRoutes() {
       ],
     },
 
+    /* -----------------------------------------------------
+       CUSTOMER
+    ----------------------------------------------------- */
+
     {
       element: (
         <ProtectedRoute
@@ -149,6 +204,29 @@ export function AppRoutes() {
       ],
     },
 
+    /* -----------------------------------------------------
+       ADMIN
+    ----------------------------------------------------- */
+
+    {
+      element: (
+        <ProtectedRoute
+          allowedRoles={["admin"]}
+        />
+      ),
+      children: [
+        {
+          path: "/admin",
+          element: <AdminLayout />,
+          children: adminRoutes,
+        },
+      ],
+    },
+
+    /* -----------------------------------------------------
+       FALLBACK
+    ----------------------------------------------------- */
+
     {
       path: "*",
       element: (
@@ -159,4 +237,16 @@ export function AppRoutes() {
       ),
     },
   ]);
+
+  /* =======================================================
+     APP CONTENT
+  ======================================================== */
+
+  return (
+    <>
+      {routes}
+
+      <DroneAssistantWidget />
+    </>
+  );
 }

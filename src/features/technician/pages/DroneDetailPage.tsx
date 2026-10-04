@@ -34,15 +34,24 @@ import {
 
 import {
   useDroneDetailQuery,
+  useFleetQuery,
 } from "../hooks/useFleetQueries";
 
 import {
+  useDroneMaintenanceSchedulesQuery,
   useMaintenanceRecordsQuery,
 } from "../hooks/useMaintenanceQueries";
 
 import {
   type CompletedMaintenanceRecord,
 } from "../utils/maintenanceStorage";
+
+import {
+  isRecord,
+  pickString,
+  unwrapList,
+  unwrapObject,
+} from "../api/httpClient";
 
 type DetailTab =
   | "overview"
@@ -223,6 +232,57 @@ function getMockLastMaintenance(
   return fallback;
 }
 
+function parseApiMaintenanceDate(value: string) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
+}
+
+function getBackendMaintenanceSchedule(payload: unknown) {
+  const list = unwrapList(payload);
+  const candidate =
+    list.find(isRecord) ??
+    unwrapObject(payload);
+
+  if (!isRecord(candidate)) {
+    return {
+      lastMaintenanceAt: null as Date | null,
+      nextMaintenanceAt: null as Date | null,
+    };
+  }
+
+  const lastRaw = pickString(
+    candidate,
+    [
+      "last_maintenance_at",
+      "last_maintenance",
+      "completed_at",
+      "performed_at",
+    ],
+    "",
+  );
+
+  const nextRaw = pickString(
+    candidate,
+    [
+      "next_maintenance_at",
+      "next_maintenance",
+      "scheduled_at",
+      "due_at",
+      "next_due_at",
+    ],
+    "",
+  );
+
+  return {
+    lastMaintenanceAt: parseApiMaintenanceDate(lastRaw),
+    nextMaintenanceAt: parseApiMaintenanceDate(nextRaw),
+  };
+}
+
 function getScheduleState(
   nextMaintenanceAt: Date,
 ) {
@@ -287,28 +347,69 @@ export function DroneDetailPage() {
       droneId,
     );
 
+  /*
+   * GET /technician/fleet/drones/{drone_id} currently returns 500
+   * for some Backend records. Keep the detail call, but fall back to
+   * the already-working fleet list so the detail screen remains usable.
+   */
+  const fleetQuery =
+    useFleetQuery();
+
   const maintenanceQuery =
     useMaintenanceRecordsQuery(
       droneId,
     );
 
+  const maintenanceScheduleQuery =
+    useDroneMaintenanceSchedulesQuery(
+      droneId,
+    );
+
+  const fleetFallbackDrone =
+    useMemo(
+      () =>
+        (fleetQuery.data ?? []).find(
+          (item) =>
+            item.id === droneId ||
+            getDroneDisplayCode(item) === droneId,
+        ),
+      [fleetQuery.data, droneId],
+    );
+
   const drone =
-    droneQuery.data;
+    droneQuery.data ??
+    fleetFallbackDrone;
 
   const maintenanceRecords:
     CompletedMaintenanceRecord[] =
     maintenanceQuery.data ?? [];
 
+  const backendSchedule =
+    getBackendMaintenanceSchedule(
+      maintenanceScheduleQuery.data,
+    );
+
   const loading =
-    droneQuery.isPending &&
-    !drone;
+    !drone &&
+    (droneQuery.isPending ||
+      fleetQuery.isPending);
+
+  const detailWarning =
+    drone &&
+    droneQuery.error instanceof Error
+      ? `Drone detail API is unavailable; showing data from Hub Fleet. ${droneQuery.error.message}`
+      : "";
 
   const apiError =
+    !drone &&
     droneQuery.error instanceof Error
       ? droneQuery.error.message
-      : maintenanceQuery.error instanceof Error
-        ? maintenanceQuery.error.message
-        : "";
+      : !drone &&
+          fleetQuery.error instanceof Error
+        ? fleetQuery.error.message
+        : maintenanceQuery.error instanceof Error
+          ? maintenanceQuery.error.message
+          : "";
 
   const [
     activeTab,
@@ -410,11 +511,12 @@ export function DroneDetailPage() {
       : null;
 
   const lastMaintenanceAt =
-    apiLastMaintenanceAt &&
+    backendSchedule.lastMaintenanceAt ??
+    (apiLastMaintenanceAt &&
     !Number.isNaN(apiLastMaintenanceAt.getTime())
       ? apiLastMaintenanceAt
       : latestCompletedMaintenance?.date ??
-        getMockLastMaintenance(drone.id);
+        getMockLastMaintenance(drone.id));
 
   const apiNextMaintenanceAt =
     drone.nextMaintenanceAt
@@ -422,10 +524,11 @@ export function DroneDetailPage() {
       : null;
 
   const nextMaintenanceAt =
-    apiNextMaintenanceAt &&
+    backendSchedule.nextMaintenanceAt ??
+    (apiNextMaintenanceAt &&
     !Number.isNaN(apiNextMaintenanceAt.getTime())
       ? apiNextMaintenanceAt
-      : addOneMonth(lastMaintenanceAt);
+      : addOneMonth(lastMaintenanceAt));
 
   const scheduleState =
     getScheduleState(
@@ -440,6 +543,12 @@ export function DroneDetailPage() {
 
   return (
     <div className="px-6 py-5 md:px-8">
+      {detailWarning && (
+        <div className="mb-4 rounded-md border border-amber-500/25 px-4 py-3 text-[13px] text-amber-500">
+          {detailWarning}
+        </div>
+      )}
+
       {apiError && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError}
@@ -773,7 +882,9 @@ export function DroneDetailPage() {
                   helper={
                     latestCompletedMaintenance
                       ? `Completed via ${latestCompletedMaintenance.record.workOrderId}`
-                      : "Demo schedule record"
+                      : backendSchedule.lastMaintenanceAt || backendSchedule.nextMaintenanceAt
+                        ? "Backend maintenance schedule"
+                        : "Fallback schedule record"
                   }
                 />
 

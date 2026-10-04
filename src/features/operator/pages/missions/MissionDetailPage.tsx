@@ -8,7 +8,6 @@ import {
   useMissionDetailQuery,
   useMissionHubCheckpointsQuery,
   useMissionHubsQuery,
-  useMissionMiniHubsQuery,
 } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { MissionStatus } from '../../types/operator';
@@ -30,7 +29,6 @@ export function MissionDetailPage() {
 
   const { data: order } = useOperatorOrderQuery(mission?.orderId ?? '');
   const { data: apiHubs } = useMissionHubsQuery();
-  const { data: apiMiniHubs } = useMissionMiniHubsQuery();
   const { data: hubCheckpoints } = useMissionHubCheckpointsQuery(missionKey);
 
   if (isMissionLoading) {
@@ -55,7 +53,7 @@ export function MissionDetailPage() {
     );
   }
 
-  const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])];
+  const hubs = apiHubs ?? [];
   const originHub = hubs.find((hub) => hub.id === mission.originHubId);
   const destinationHub = hubs.find((hub) => hub.id === mission.destinationHubId);
   const relayHubs = (mission.relayHubIds ?? [])
