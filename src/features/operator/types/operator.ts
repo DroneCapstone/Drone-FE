@@ -1,6 +1,6 @@
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-export type TechnicalStatus = 'Available' | 'Maintenance';
+export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance';
 
 export type MissionStatus =
   | 'Scheduled'
@@ -14,6 +14,15 @@ export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
 export type MissionType = 'Delivery';
 
 export type DeliveryMode = 'Express' | 'Scheduled';
+
+export type CustomerContactChannel = 'Phone' | 'SMS';
+
+export type CustomerContactOutcome =
+  | 'Reached'
+  | 'No Answer'
+  | 'Will Pick Up'
+  | 'Sent'
+  | 'Failed';
 
 /**
  * Operator-facing Order lifecycle.
@@ -137,6 +146,31 @@ export interface OperatorDrone {
   hubId: string;
   technicalStatus: TechnicalStatus;
   maxPayloadKg: number;
+  maxSpeed?: number;
+  batteryLevelPct?: number;
+  utilizationPct?: number;
+  hubName?: string;
+  /** Optional compatibility key when Backend exposes it. */
+  batteryModel?: string;
+}
+
+export interface OperatorBattery {
+  id: string;
+  serialNumber: string;
+  capacityWh: number;
+  status: string;
+  /** Current API exposes drone_id; FE uses it as the only available compatibility link. */
+  droneId?: string;
+  currentHubId: string;
+  hubName: string;
+  chargeLevelPct: number;
+  /** Future-proof: mapper reads this if Backend later exposes battery model/type. */
+  model?: string;
+}
+
+export interface RelayBatterySelection {
+  hubId: string;
+  batteryId: string;
 }
 
 export interface WeatherSnapshot {
@@ -195,7 +229,9 @@ export interface MissionDraft {
   orderId: string;
   step: number;
   selectedDroneId: string;
+  selectedBatteryId: string;
   selectedRouteId: string;
+  relayBatterySelections?: RelayBatterySelection[];
   updatedAt: string;
 }
 
