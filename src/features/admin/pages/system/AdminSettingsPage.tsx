@@ -1,12 +1,64 @@
-import { Save } from "lucide-react";
 import { useState } from "react";
+import { ActionButton } from "../../../../components/ui/ActionButton";
+import { Switch } from "../../../../components/ui/Switch";
+import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
+import { getAdminSettings, saveAdminSettings } from "../../services/adminStore";
 
 export function AdminSettingsPage() {
-  const [settings, setSettings] = useState({ maintenanceMode: false, autoSuspendHub: true, auditRetentionDays: 365, missionTimeoutHours: 3, lowBatteryPct: 30, notificationEmail: true });
+  const [settings, setSettings] = useState(getAdminSettings());
   const [saved, setSaved] = useState(false);
-  const save = () => { localStorage.setItem("droneoptai.admin.settings", JSON.stringify(settings)); setSaved(true); setTimeout(() => setSaved(false), 1600); };
-  return <AdminPageShell title="System settings" description="Administrative configuration only. Operational thresholds should be persisted and enforced by Backend before production use." actions={<button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-[12px] font-semibold text-white"><Save size={14} />Save settings</button>}>
-    <div className="grid gap-5 xl:grid-cols-2"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Operations policy</h3><div className="mt-5 space-y-5">{[["Auto-suspend unavailable hub", "Remove inactive/maintenance hubs from new route allocation.", "autoSuspendHub"], ["Maintenance mode", "Block new operational writes while keeping read-only views available.", "maintenanceMode"]].map(([label, detail, key]) => <label key={key} className="flex items-center justify-between gap-4"><div><strong className="text-[12px]">{label}</strong><p className="mt-1 text-[11px] text-[var(--admin-muted)]">{detail}</p></div><input type="checkbox" checked={Boolean(settings[key as keyof typeof settings])} onChange={(e) => setSettings({ ...settings, [key]: e.target.checked })} className="h-4 w-4 accent-orange-500" /></label>)}<label className="block"><span className="text-[11px] text-[var(--admin-muted)]">Mission planning timeout (hours)</span><input type="number" min="1" value={settings.missionTimeoutHours} onChange={(e) => setSettings({ ...settings, missionTimeoutHours: Number(e.target.value) })} className="mt-1.5 w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label><label className="block"><span className="text-[11px] text-[var(--admin-muted)]">Low battery alert (%)</span><input type="number" min="5" max="80" value={settings.lowBatteryPct} onChange={(e) => setSettings({ ...settings, lowBatteryPct: Number(e.target.value) })} className="mt-1.5 w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label></div></div><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Governance & notification</h3><div className="mt-5 space-y-5"><label className="block"><span className="text-[11px] text-[var(--admin-muted)]">Audit retention (days)</span><input type="number" min="30" value={settings.auditRetentionDays} onChange={(e) => setSettings({ ...settings, auditRetentionDays: Number(e.target.value) })} className="mt-1.5 w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label><label className="flex items-center justify-between gap-4"><div><strong className="text-[12px]">Admin email alerts</strong><p className="mt-1 text-[11px] text-[var(--admin-muted)]">Critical platform and payment reconciliation alerts.</p></div><input type="checkbox" checked={settings.notificationEmail} onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.checked })} className="h-4 w-4 accent-orange-500" /></label>{saved && <p className="text-[12px] font-medium text-emerald-500">Settings saved locally.</p>}</div></div></div>
-  </AdminPageShell>;
+
+  const save = () => {
+    saveAdminSettings(settings);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  };
+
+  return (
+    <AdminPageShell title="System Settings" description="Configure cross-system operational thresholds and notification policies. Backend remains the final enforcement point." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
+      <div className="settings-grid">
+        <OperatorPanel title="Mission & fleet" eyebrow="OPERATIONAL THRESHOLDS">
+          <div className="fields two">
+            <label><span>Mission timeout (minutes)</span><input type="number" min={30} max={720} value={settings.missionTimeoutMinutes} onChange={(e) => setSettings({ ...settings, missionTimeoutMinutes: Number(e.target.value) })} /></label>
+            <label><span>Planning lead time (minutes)</span><input type="number" min={0} value={settings.planningLeadTimeMinutes} onChange={(e) => setSettings({ ...settings, planningLeadTimeMinutes: Number(e.target.value) })} /></label>
+            <label><span>Minimum mission battery (%)</span><input type="number" min={1} max={100} value={settings.minimumMissionBatteryPct} onChange={(e) => setSettings({ ...settings, minimumMissionBatteryPct: Number(e.target.value) })} /></label>
+            <label><span>Low battery warning (%)</span><input type="number" min={1} max={100} value={settings.lowBatteryWarningPct} onChange={(e) => setSettings({ ...settings, lowBatteryWarningPct: Number(e.target.value) })} /></label>
+            <label><span>Telemetry timeout (seconds)</span><input type="number" min={1} value={settings.telemetryTimeoutSeconds} onChange={(e) => setSettings({ ...settings, telemetryTimeoutSeconds: Number(e.target.value) })} /></label>
+          </div>
+          {settings.lowBatteryWarningPct >= settings.minimumMissionBatteryPct ? <p className="mt-4 text-sm text-[var(--red)]">Low battery warning must be lower than minimum mission battery.</p> : null}
+        </OperatorPanel>
+
+        <OperatorPanel title="Battery health" eyebrow="LIFECYCLE POLICY">
+          <div className="fields two">
+            <label><span>Minimum SOH (%)</span><input type="number" min={1} max={100} value={settings.minimumBatterySohPct} onChange={(e) => setSettings({ ...settings, minimumBatterySohPct: Number(e.target.value) })} /></label>
+            <label><span>Maximum cell delta (V)</span><input type="number" min={0.01} step="0.01" value={settings.maximumCellVoltageDelta} onChange={(e) => setSettings({ ...settings, maximumCellVoltageDelta: Number(e.target.value) })} /></label>
+            <label><span>Energy safety reserve (%)</span><input type="number" min={0} max={50} value={settings.batterySafetyReservePct} onChange={(e) => setSettings({ ...settings, batterySafetyReservePct: Number(e.target.value) })} /></label>
+          </div>
+          <p className="mt-4 text-sm text-[var(--muted)]">SOH below the configured minimum creates a retirement recommendation; it does not automatically retire the battery.</p>
+        </OperatorPanel>
+      </div>
+
+      <OperatorPanel title="Notification settings" eyebrow="CHANNEL & EVENT POLICY" className="mt-3" >
+        <div id="notifications" className="toggle-list">
+          {[
+            ["Payment notifications", "Payment success, failure and reconciliation events", "paymentNotifications"],
+            ["Order status notifications", "Customer order lifecycle changes", "orderStatusNotifications"],
+            ["Mission incident notifications", "Important mission incident events", "missionIncidentNotifications"],
+            ["Maintenance notifications", "Drone and battery maintenance changes", "maintenanceNotifications"],
+            ["Battery health notifications", "SOH, cycle and cell-health warnings", "batteryHealthNotifications"],
+            ["Retirement recommendations", "Notify Admin when a battery requires lifecycle review", "retirementRecommendationNotifications"],
+            ["System notifications", "Critical administrative platform notices", "systemNotifications"],
+            ["Email channel", "Send supported Admin notifications by email", "emailNotifications"],
+          ].map(([label, detail, key]) => (
+            <div className="toggle-row" key={key}>
+              <span><strong>{label}</strong><small>{detail}</small></span>
+              <Switch checked={Boolean(settings[key as keyof typeof settings])} onCheckedChange={(checked) => setSettings({ ...settings, [key]: checked })} aria-label={label} />
+            </div>
+          ))}
+        </div>
+        {saved ? <div className="operator-toast">Settings saved successfully.</div> : null}
+      </OperatorPanel>
+    </AdminPageShell>
+  );
 }

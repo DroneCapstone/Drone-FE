@@ -1,18 +1,63 @@
-import { ArrowLeft, Battery, CalendarClock, MapPin, Plane, Wrench } from "lucide-react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Navigate, useParams } from "react-router-dom";
+import { ActionButton } from "../../../../components/ui/ActionButton";
+import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
-import { defaultAdminBatteries } from "../../data/adminData";
-import { getAdminDrones, getAdminHubs } from "../../services/adminStore";
+import { getAdminDrones, getAdminHubs, upsertAdminDrone } from "../../services/adminStore";
+import { droneTone } from "../../utils/adminDisplay";
 
 export function DroneDetailPage() {
   const { droneId } = useParams();
-  const drone = getAdminDrones().find((item) => item.id === droneId);
+  const initial = getAdminDrones().find((item) => item.id === droneId);
+  const [drone, setDrone] = useState(initial);
+  const [saved, setSaved] = useState(false);
   if (!drone) return <Navigate to="/admin/network/drones" replace />;
-  const hub = getAdminHubs().find((item) => item.id === drone.hubId);
-  const battery = defaultAdminBatteries.find((item) => item.id === drone.installedBatteryId);
-  const fmt = (value?: string) => value ? new Date(value).toLocaleString("en-GB") : "—";
-  return <AdminPageShell title={`${drone.id} · ${drone.model}`} description="Read-through view combining Operator availability fields and Technician maintenance/battery context." actions={<Link to="/admin/network/drones" className="inline-flex items-center gap-2 rounded-lg border border-[var(--admin-border)] px-3 py-2 text-[12px]"><ArrowLeft size={14} />Back to drones</Link>}>
-    <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-orange-500/10 text-orange-500"><Plane size={22} /></span><div><h2 className="text-xl font-semibold">{drone.name}-{drone.displayId}</h2><p className="mt-1 text-[12px] text-[var(--admin-muted)]">{drone.serialNumber}</p><div className="mt-3 flex flex-wrap gap-2"><AdminStatusBadge tone={drone.technicalStatus === "Serviceable" ? "success" : "danger"}>{drone.technicalStatus}</AdminStatusBadge><AdminStatusBadge tone={drone.operationalStatus === "In Flight" ? "info" : "neutral"}>{drone.operationalStatus}</AdminStatusBadge></div></div></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{[[MapPin, "Current hub", hub?.name ?? drone.hubId], [Battery, "Battery", `${drone.installedBatteryId ?? "—"} · ${drone.batteryPct}%`], [Wrench, "Last maintenance", fmt(drone.lastMaintenanceAt)], [CalendarClock, "Next maintenance", fmt(drone.nextMaintenanceAt)]].map(([Icon, label, value], i) => { const I = Icon as typeof MapPin; return <div key={i} className="rounded-lg bg-[var(--admin-surface-2)] p-4"><I size={16} className="text-orange-500" /><span className="mt-3 block text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">{String(label)}</span><strong className="mt-1 block text-[13px]">{String(value)}</strong></div>; })}</div></div><div className="space-y-5"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Capability</h3><dl className="mt-4 space-y-3 text-[12px]"><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Max payload</dt><dd>{drone.maxPayloadKg} kg</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Utilization</dt><dd>{drone.utilizationPct}%</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Last flight</dt><dd>{fmt(drone.lastFlightAt)}</dd></div></dl></div><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Installed battery</h3>{battery ? <dl className="mt-4 space-y-3 text-[12px]"><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Model</dt><dd>{battery.model}</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Health</dt><dd>{battery.healthPct}%</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Cycle count</dt><dd>{battery.cycleCount}</dd></div></dl> : <p className="mt-3 text-[12px] text-[var(--admin-muted)]">No battery record linked.</p>}</div></div></div>
-  </AdminPageShell>;
+  const hubs = getAdminHubs();
+  const hubName = hubs.find((hub) => hub.id === drone.hubId)?.name ?? "—";
+
+  const save = () => {
+    upsertAdminDrone({ ...drone, updatedAt: new Date().toISOString() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  };
+
+  const toggleActive = () => {
+    if (drone.status === "IN_FLIGHT" && drone.isActive) return;
+    const next = { ...drone, isActive: !drone.isActive, updatedAt: new Date().toISOString() };
+    setDrone(next);
+    upsertAdminDrone(next);
+  };
+
+  return (
+    <AdminPageShell title={drone.id} description={`${drone.model} · ${hubName}`} actions={<ActionButton variant={drone.isActive ? "danger" : "secondary"} onClick={toggleActive} disabled={drone.status === "IN_FLIGHT" && drone.isActive}>{drone.isActive ? "Deactivate" : "Activate"}</ActionButton>}>
+      <div className="detail-grid">
+        <OperatorPanel title="Current state" eyebrow="READ ONLY STATUS">
+          <div className="detail-list">
+            <span><small>Operational status</small><StatusBadge tone={droneTone(drone.status)}>{drone.status.replace("_", " ")}</StatusBadge></span>
+            <span><small>Administrative state</small><StatusBadge tone={drone.isActive ? "success" : "neutral"}>{drone.isActive ? "ACTIVE" : "INACTIVE"}</StatusBadge></span>
+            <span><small>Battery level</small><strong>{drone.batteryPct}%</strong></span>
+            <span><small>Installed battery</small><strong>{drone.installedBatteryId ?? "—"}</strong></span>
+          </div>
+        </OperatorPanel>
+        <OperatorPanel title="Maintenance" eyebrow="TECHNICIAN OWNED">
+          <div className="detail-list">
+            <span><small>Last maintenance</small><strong>{drone.lastMaintenanceAt ? new Date(drone.lastMaintenanceAt).toLocaleString("en-GB") : "—"}</strong></span>
+            <span><small>Next maintenance</small><strong>{drone.nextMaintenanceAt ? new Date(drone.nextMaintenanceAt).toLocaleString("en-GB") : "—"}</strong></span>
+          </div>
+        </OperatorPanel>
+      </div>
+
+      <OperatorPanel title="Drone master data" eyebrow="ADMIN EDITABLE">
+        <div className="fields two">
+          <label><span>Drone name</span><input value={drone.name} onChange={(e) => setDrone({ ...drone, name: e.target.value })} /></label>
+          <label><span>Model</span><input value={drone.model} onChange={(e) => setDrone({ ...drone, model: e.target.value })} /></label>
+          <label><span>Serial number</span><input value={drone.serialNumber} onChange={(e) => setDrone({ ...drone, serialNumber: e.target.value })} /></label>
+          <label><span>Maximum payload (kg)</span><input type="number" min={0} step="0.1" value={drone.maxPayloadKg} onChange={(e) => setDrone({ ...drone, maxPayloadKg: Number(e.target.value) })} /></label>
+          <label><span>Assigned hub</span><select value={drone.hubId} onChange={(e) => setDrone({ ...drone, hubId: e.target.value })} disabled={drone.status === "IN_FLIGHT"}>{hubs.map((hub) => <option value={hub.id} key={hub.id}>{hub.name}</option>)}</select></label>
+        </div>
+        <div className="form-actions"><span className="text-sm text-[var(--green)]">{saved ? "Changes saved." : ""}</span><ActionButton onClick={save}>Save changes</ActionButton></div>
+      </OperatorPanel>
+    </AdminPageShell>
+  );
 }
