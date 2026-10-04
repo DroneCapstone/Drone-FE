@@ -1,10 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Database,
+  CreditCard,
   Gauge,
   MapPinned,
+  ScrollText,
   Settings,
-  ShieldCheck,
   UserRound,
   Users,
 } from "lucide-react";
@@ -19,7 +19,7 @@ export type AdminNavigationItem = {
 export const adminNavigation: AdminNavigationItem[] = [
   { label: "Dashboard", path: "/admin/dashboard", icon: Gauge },
   {
-    label: "Hub & Fleet",
+    label: "Network & Assets",
     path: "/admin/network/hubs",
     icon: MapPinned,
     children: [
@@ -28,36 +28,17 @@ export const adminNavigation: AdminNavigationItem[] = [
       { label: "Batteries", path: "/admin/network/batteries" },
     ],
   },
+  { label: "Users", path: "/admin/users", icon: Users },
   {
-    label: "Users",
-    path: "/admin/users",
-    icon: Users,
+    label: "Payments",
+    path: "/admin/payments/transactions",
+    icon: CreditCard,
     children: [
-      { label: "User list", path: "/admin/users" },
-      { label: "Roles & permissions", path: "/admin/users/roles" },
+      { label: "Transactions", path: "/admin/payments/transactions" },
+      { label: "Refunds", path: "/admin/payments/refunds" },
     ],
   },
-  { label: "Audit", path: "/admin/audit/logs", icon: ShieldCheck },
-  {
-    label: "Data Governance",
-    path: "/admin/data/overview",
-    icon: Database,
-    children: [
-      { label: "Overview", path: "/admin/data/overview" },
-      { label: "Data quality", path: "/admin/data/quality" },
-    ],
-  },
-  {
-    label: "System",
-    path: "/admin/system/logs",
-    icon: Settings,
-    children: [
-      { label: "System logs", path: "/admin/system/logs" },
-      { label: "Activity log", path: "/admin/system/activity" },
-      { label: "Settings", path: "/admin/system/settings" },
-      { label: "Notifications", path: "/admin/system/notifications" },
-      { label: "Backup", path: "/admin/system/backup" },
-    ],
-  },
+  { label: "Audit Logs", path: "/admin/audit", icon: ScrollText },
+  { label: "System Settings", path: "/admin/settings", icon: Settings },
   { label: "Profile", path: "/admin/profile", icon: UserRound },
 ];

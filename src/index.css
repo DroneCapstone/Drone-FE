@@ -9928,3 +9928,120 @@ button.alert-row:last-child {
     text-align: left;
   }
 }
+
+/* =========================================================
+   ADMIN — shared Operator visual system extensions
+   Only admin-specific compositions live here. Core shell,
+   header, sidebar, panels, metrics, tables and controls reuse
+   the Operator styles above.
+========================================================= */
+.admin-detail-grid,
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 13px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-list > span {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-list > span:last-child {
+  border-bottom: 0;
+}
+
+.detail-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-list strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.list-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-stack > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-stack > span:last-child {
+  border-bottom: 0;
+}
+
+.list-stack strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.list-stack small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.toggle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+
+.admin-quick-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-quick-links a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.admin-quick-links a:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .detail-grid,
+  .settings-grid,
+  .toggle-list {
+    grid-template-columns: 1fr;
+  }
+}

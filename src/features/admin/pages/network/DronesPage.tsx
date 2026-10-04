@@ -1,27 +1,112 @@
-import { Battery, Edit3, Plane, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { ActionButton } from "../../../../components/ui/ActionButton";
+import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
+import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { MetricCard } from "../../../operator/components/MetricCard";
+import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
+import { AdminToolbar } from "../../components/AdminToolbar";
 import { getAdminDrones, getAdminHubs, upsertAdminDrone } from "../../services/adminStore";
 import type { AdminDrone } from "../../types";
+import { droneTone } from "../../utils/adminDisplay";
+
+function newDrone(hubId = ""): AdminDrone {
+  const now = new Date().toISOString();
+  return {
+    id: "",
+    name: "",
+    displayId: "",
+    model: "",
+    serialNumber: "",
+    hubId,
+    status: "AVAILABLE",
+    isActive: true,
+    batteryPct: 100,
+    maxPayloadKg: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 export function DronesPage() {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
-  const [hubFilter, setHubFilter] = useState("all");
-  const [editing, setEditing] = useState<AdminDrone | null>(null);
-  useEffect(() => { const listener = () => setVersion((v) => v + 1); window.addEventListener("admin-data-updated", listener); return () => window.removeEventListener("admin-data-updated", listener); }, []);
-  const drones = useMemo(() => getAdminDrones(), [version]);
-  const hubs = useMemo(() => getAdminHubs(), [version]);
-  const visible = drones.filter((drone) => (hubFilter === "all" || drone.hubId === hubFilter) && `${drone.id} ${drone.model} ${drone.serialNumber}`.toLowerCase().includes(query.toLowerCase()));
-  const save = (e: FormEvent) => { e.preventDefault(); if (!editing) return; upsertAdminDrone(editing); setEditing(null); };
-  const hubName = (id: string) => hubs.find((hub) => hub.id === id)?.name ?? id;
+  const [status, setStatus] = useState("all");
+  const [active, setActive] = useState("all");
+  const [hub, setHub] = useState("all");
+  const [creating, setCreating] = useState<AdminDrone | null>(null);
 
-  return <AdminPageShell title="Drone management" description="Global fleet inventory. Admin can edit drone master data and hub assignment. Mission assignment, takeoff, receiving, battery swap and maintenance work orders remain owned by Operator/Technician.">
-    <div className="mb-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"><span className="text-[11px] text-[var(--admin-muted)]">Total drones</span><strong className="mt-1 block text-2xl">{drones.length}</strong></div><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"><span className="text-[11px] text-[var(--admin-muted)]">Serviceable</span><strong className="mt-1 block text-2xl text-emerald-500">{drones.filter((d) => d.technicalStatus === "Serviceable").length}</strong></div><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"><span className="text-[11px] text-[var(--admin-muted)]">Maintenance</span><strong className="mt-1 block text-2xl text-red-500">{drones.filter((d) => d.technicalStatus === "Maintenance").length}</strong></div></div>
-    <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="flex flex-wrap gap-3 border-b border-[var(--admin-border)] p-4"><div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2"><Search size={15} className="text-[var(--admin-muted)]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search drone..." className="w-full bg-transparent text-[12px] outline-none" /></div><select value={hubFilter} onChange={(e) => setHubFilter(e.target.value)} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 text-[12px]"><option value="all">All hubs</option>{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}</select></div><div className="overflow-x-auto admin-scrollbar"><table className="w-full min-w-[1180px] text-left text-[12px]"><thead className="bg-[var(--admin-surface-2)] text-[10px] uppercase tracking-wide text-[var(--admin-muted)]"><tr><th className="px-4 py-3">Drone</th><th className="px-4 py-3">Hub</th><th className="px-4 py-3">Technical</th><th className="px-4 py-3">Operational</th><th className="px-4 py-3">Battery</th><th className="px-4 py-3">Payload</th><th className="px-4 py-3">Utilization</th><th className="px-4 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-[var(--admin-border)]">{visible.map((drone) => <tr key={drone.id} className="hover:bg-[var(--admin-surface-2)]/50"><td className="px-4 py-3"><Link to={`/admin/network/drones/${drone.id}`} className="flex items-center gap-2 hover:text-orange-500"><span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-500/10 text-orange-500"><Plane size={15} /></span><div><strong className="block">{drone.id} · {drone.name}-{drone.displayId}</strong><span className="text-[10px] text-[var(--admin-muted)]">{drone.model}</span></div></Link></td><td className="px-4 py-3">{hubName(drone.hubId)}</td><td className="px-4 py-3"><AdminStatusBadge tone={drone.technicalStatus === "Serviceable" ? "success" : "danger"}>{drone.technicalStatus}</AdminStatusBadge></td><td className="px-4 py-3"><AdminStatusBadge tone={drone.operationalStatus === "In Flight" ? "info" : drone.operationalStatus === "Assigned" ? "warning" : "neutral"}>{drone.operationalStatus}</AdminStatusBadge></td><td className="px-4 py-3"><div className="flex items-center gap-1.5"><Battery size={14} className={drone.batteryPct < 35 ? "text-red-500" : "text-orange-500"} /><span>{drone.batteryPct}%</span></div><span className="text-[10px] text-[var(--admin-muted)]">{drone.installedBatteryId ?? "No battery"}</span></td><td className="px-4 py-3">{drone.maxPayloadKg} kg</td><td className="px-4 py-3">{drone.utilizationPct}%</td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setEditing({ ...drone })} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--admin-border)] px-2.5 py-1.5 text-[11px] hover:border-orange-500/50 hover:text-orange-500"><Edit3 size={13} />Edit</button></td></tr>)}</tbody></table></div></div>
-    {editing && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4"><form onSubmit={save} className="w-full max-w-[650px] rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="flex items-center justify-between border-b border-[var(--admin-border)] px-5 py-4"><div><h2 className="text-[17px] font-semibold">Edit {editing.id}</h2><p className="text-[11px] text-[var(--admin-muted)]">Do not use this screen to change a live mission state.</p></div><button type="button" onClick={() => setEditing(null)}><X size={18} /></button></div><div className="grid gap-4 p-5 sm:grid-cols-2"><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Model</span><input value={editing.model} onChange={(e) => setEditing({ ...editing, model: e.target.value })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Serial number</span><input value={editing.serialNumber} onChange={(e) => setEditing({ ...editing, serialNumber: e.target.value })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Hub assignment</span><select value={editing.hubId} disabled={editing.operationalStatus === "In Flight"} onChange={(e) => setEditing({ ...editing, hubId: e.target.value })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px] disabled:opacity-50">{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}</select>{editing.operationalStatus === "In Flight" && <span className="mt-1 block text-[10px] text-amber-500">Hub cannot be reassigned while in flight.</span>}</label><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Technical status</span><select value={editing.technicalStatus} onChange={(e) => setEditing({ ...editing, technicalStatus: e.target.value as AdminDrone["technicalStatus"] })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]"><option>Serviceable</option><option>Maintenance</option></select></label><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Max payload (kg)</span><input type="number" step="0.1" value={editing.maxPayloadKg} onChange={(e) => setEditing({ ...editing, maxPayloadKg: Number(e.target.value) })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label><label><span className="mb-1 block text-[11px] text-[var(--admin-muted)]">Battery %</span><input type="number" min="0" max="100" value={editing.batteryPct} onChange={(e) => setEditing({ ...editing, batteryPct: Number(e.target.value) })} className="w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2.5 text-[12px]" /></label></div><div className="flex justify-end gap-2 border-t border-[var(--admin-border)] p-4"><button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-[var(--admin-border)] px-4 py-2 text-[12px]">Cancel</button><button type="submit" className="rounded-lg bg-orange-500 px-4 py-2 text-[12px] font-semibold text-white">Save drone</button></div></form></div>}
-  </AdminPageShell>;
+  useEffect(() => {
+    const listener = () => setVersion((value) => value + 1);
+    window.addEventListener("admin-data-updated", listener);
+    return () => window.removeEventListener("admin-data-updated", listener);
+  }, []);
+
+  const drones = useMemo(() => getAdminDrones(), [version]);
+  const hubs = getAdminHubs();
+  const visible = drones.filter((drone) => {
+    const matchesQuery = `${drone.id} ${drone.name} ${drone.model} ${drone.serialNumber}`.toLowerCase().includes(query.toLowerCase());
+    return matchesQuery && (status === "all" || drone.status === status) && (active === "all" || String(drone.isActive) === active) && (hub === "all" || drone.hubId === hub);
+  });
+  const hubName = (id: string) => hubs.find((item) => item.id === id)?.name ?? "—";
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (!creating) return;
+    const now = new Date().toISOString();
+    const id = creating.id.trim().toUpperCase();
+    upsertAdminDrone({ ...creating, id, name: creating.name.trim() || id, displayId: id.replace(/\D/g, "").slice(-2), status: "AVAILABLE", createdAt: now, updatedAt: now });
+    setCreating(null);
+  };
+
+  return (
+    <AdminPageShell title="Drones" description="Register drone master data and control administrative availability. Operational status remains read-only for Admin." actions={<ActionButton icon="plus" onClick={() => setCreating(newDrone(hubs[0]?.id))}>Register drone</ActionButton>}>
+      <div className="metric-grid">
+        <MetricCard label="Total drones" value={String(drones.length)} delta="Fleet" tone="info" note="Registered assets" />
+        <MetricCard label="Available" value={String(drones.filter((d) => d.status === "AVAILABLE" && d.isActive).length)} delta="Ready" tone="success" note="Before eligibility checks" />
+        <MetricCard label="Maintenance" value={String(drones.filter((d) => d.status === "MAINTENANCE").length)} delta="Technician" tone="warning" note="Unavailable for missions" />
+        <MetricCard label="In flight" value={String(drones.filter((d) => d.status === "IN_FLIGHT").length)} delta="Live" tone="info" note="Cannot be deactivated" />
+      </div>
+
+      <OperatorPanel className="flush-panel">
+        <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search drone, model or serial…" filters={<>
+          <select value={hub} onChange={(e) => setHub(e.target.value)}><option value="all">All hubs</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All status</option><option value="AVAILABLE">Available</option><option value="MAINTENANCE">Maintenance</option><option value="IN_FLIGHT">In flight</option></select>
+          <select value={active} onChange={(e) => setActive(e.target.value)}><option value="all">All admin state</option><option value="true">Active</option><option value="false">Inactive</option></select>
+        </>} meta={`${visible.length} of ${drones.length} drones`} />
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Drone</th><th>Model</th><th>Hub</th><th>Battery</th><th>Status</th><th>Admin state</th><th>Payload</th><th>Action</th></tr></thead>
+            <tbody>{visible.map((drone) => <tr key={drone.id}>
+              <td><strong>{drone.id}</strong><small>{drone.name}</small></td>
+              <td><strong>{drone.model}</strong><small>{drone.serialNumber}</small></td>
+              <td>{hubName(drone.hubId)}</td>
+              <td><div className="battery-cell"><span><i style={{ width: `${drone.batteryPct}%` }} /></span>{drone.batteryPct}%</div></td>
+              <td><StatusBadge tone={droneTone(drone.status)}>{drone.status.replace("_", " ")}</StatusBadge></td>
+              <td><StatusBadge tone={drone.isActive ? "success" : "neutral"}>{drone.isActive ? "ACTIVE" : "INACTIVE"}</StatusBadge></td>
+              <td>{drone.maxPayloadKg} kg</td>
+              <td><Link className="text-button" to={`/admin/network/drones/${drone.id}`}>View</Link></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </OperatorPanel>
+
+      <Dialog open={Boolean(creating)} onOpenChange={(open) => !open && setCreating(null)}>
+        {creating ? <DialogContent><form onSubmit={save}>
+          <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Register drone</DialogTitle><p className="mt-1 text-sm text-muted-foreground">New drones start as AVAILABLE and active.</p></div>
+          <div className="fields two p-5">
+            <label><span>Drone code</span><input required placeholder="DR-021" value={creating.id} onChange={(e) => setCreating({ ...creating, id: e.target.value })} /></label>
+            <label><span>Drone name</span><input placeholder="CX-21" value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} /></label>
+            <label><span>Model</span><input required value={creating.model} onChange={(e) => setCreating({ ...creating, model: e.target.value })} /></label>
+            <label><span>Serial number</span><input required value={creating.serialNumber} onChange={(e) => setCreating({ ...creating, serialNumber: e.target.value })} /></label>
+            <label><span>Maximum payload (kg)</span><input required min={0} step="0.1" type="number" value={creating.maxPayloadKg || ""} onChange={(e) => setCreating({ ...creating, maxPayloadKg: Number(e.target.value) })} /></label>
+            <label><span>Home hub</span><select required value={creating.hubId} onChange={(e) => setCreating({ ...creating, hubId: e.target.value })}>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+          </div>
+          <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton><ActionButton type="submit">Register drone</ActionButton></div>
+        </form></DialogContent> : null}
+      </Dialog>
+    </AdminPageShell>
+  );
 }

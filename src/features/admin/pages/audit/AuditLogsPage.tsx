@@ -1,14 +1,27 @@
-import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
+import { AdminToolbar } from "../../components/AdminToolbar";
 import { adminAuditLogs } from "../../data/adminData";
 
 export function AuditLogsPage() {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
-  const visible = useMemo(() => adminAuditLogs.filter((log) => (role === "all" || log.role === role) && `${log.actor} ${log.action} ${log.resource} ${log.detail} ${log.ipAddress}`.toLowerCase().includes(query.toLowerCase())), [query, role]);
-  return <AdminPageShell title="Audit logs" description="Immutable-style trace of security and business changes across Admin, Operator, Technician and Customer activity.">
-    <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="flex flex-wrap gap-3 border-b border-[var(--admin-border)] p-4"><div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2"><Search size={15} className="text-[var(--admin-muted)]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search actor, resource, IP..." className="w-full bg-transparent text-[12px] outline-none" /></div><select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 text-[12px]"><option value="all">All roles</option><option value="admin">Admin</option><option value="operator">Operator</option><option value="technician">Technician</option><option value="customer">Customer</option></select></div><div className="overflow-x-auto admin-scrollbar"><table className="w-full min-w-[1100px] text-left text-[12px]"><thead className="bg-[var(--admin-surface-2)] text-[10px] uppercase tracking-wide text-[var(--admin-muted)]"><tr><th className="px-4 py-3">Time</th><th className="px-4 py-3">Actor</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Action</th><th className="px-4 py-3">Resource</th><th className="px-4 py-3">Detail</th><th className="px-4 py-3">IP</th></tr></thead><tbody className="divide-y divide-[var(--admin-border)]">{visible.map((log) => <tr key={log.id}><td className="px-4 py-3 text-[11px] text-[var(--admin-muted)]">{new Date(log.occurredAt).toLocaleString("en-GB")}</td><td className="px-4 py-3 font-medium">{log.actor}</td><td className="px-4 py-3 capitalize">{log.role}</td><td className="px-4 py-3"><AdminStatusBadge tone={log.action === "CREATE" ? "success" : "info"}>{log.action}</AdminStatusBadge></td><td className="px-4 py-3">{log.resource}</td><td className="px-4 py-3 text-[11px] text-[var(--admin-muted)]">{log.detail}</td><td className="px-4 py-3 font-mono text-[11px] text-[var(--admin-muted)]">{log.ipAddress}</td></tr>)}</tbody></table></div></div>
-  </AdminPageShell>;
+  const [result, setResult] = useState("all");
+  const visible = useMemo(() => adminAuditLogs.filter((log) => `${log.actor} ${log.action} ${log.entityType} ${log.entityId}`.toLowerCase().includes(query.toLowerCase()) && (role === "all" || log.role === role) && (result === "all" || log.result === result)), [query, role, result]);
+
+  return (
+    <AdminPageShell title="Audit Logs" description="Read-only trace of significant user and system actions for accountability and troubleshooting.">
+      <OperatorPanel className="flush-panel">
+        <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search actor, action or entity…" filters={<>
+          <select value={role} onChange={(e) => setRole(e.target.value)}><option value="all">All roles</option><option value="admin">Admin</option><option value="operator">Operator</option><option value="technician">Technician</option><option value="customer">Customer</option></select>
+          <select value={result} onChange={(e) => setResult(e.target.value)}><option value="all">All results</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option></select>
+        </>} meta={`${visible.length} records`} />
+        <div className="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Entity</th><th>Result</th><th>Change</th></tr></thead><tbody>
+          {visible.map((log) => <tr key={log.id}><td>{new Date(log.occurredAt).toLocaleString("en-GB")}</td><td><strong>{log.actor}</strong><small>{log.id}</small></td><td className="capitalize">{log.role}</td><td>{log.action}</td><td><strong>{log.entityId}</strong><small>{log.entityType}</small></td><td><StatusBadge tone={log.result === "SUCCESS" ? "success" : "danger"}>{log.result}</StatusBadge></td><td><small>{log.beforeValue ?? "—"}</small><strong>{log.afterValue ?? "—"}</strong></td></tr>)}
+        </tbody></table></div>
+      </OperatorPanel>
+    </AdminPageShell>
+  );
 }

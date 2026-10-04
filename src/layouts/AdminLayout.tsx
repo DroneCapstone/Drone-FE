@@ -1,23 +1,56 @@
-import { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Outlet, useLocation } from "react-router-dom";
 import { AdminHeader } from "../features/admin/components/AdminHeader";
 import { AdminSidebar } from "../features/admin/components/AdminSidebar";
-import "../features/admin/admin-theme.css";
 
-type ThemeMode = "dark" | "light";
 const THEME_KEY = "droneoptai.admin.theme";
 
 export function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>(() => (localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"));
-  useEffect(() => localStorage.setItem(THEME_KEY, theme), [theme]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem(THEME_KEY) !== "light");
+  const { pathname } = useLocation();
+  const reduceMotion = useReducedMotion();
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+  }, [isDark]);
+
   return (
-    <div data-admin-theme={theme} className="admin-app min-h-screen bg-[var(--admin-bg)] text-[var(--admin-text)]">
-      <AdminSidebar collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} onToggleCollapsed={() => setCollapsed((value) => !value)} />
-      <div className={`min-h-screen transition-[margin] duration-200 ${collapsed ? "lg:ml-[78px]" : "lg:ml-[252px]"}`}>
-        <AdminHeader theme={theme} onToggleTheme={() => setTheme((value) => value === "dark" ? "light" : "dark")} onOpenMobile={() => setMobileOpen(true)} />
-        <main className="min-h-[calc(100vh-68px)]"><Outlet /></main>
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+      <AdminSidebar
+        collapsed={collapsed}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+        onToggleCollapsed={() => setCollapsed((value) => !value)}
+      />
+      <div className="main-column min-w-0 overflow-x-hidden">
+        <AdminHeader
+          isDark={isDark}
+          searchOpen={searchOpen}
+          onToggleTheme={() => setIsDark((value) => !value)}
+          onOpenMobile={() => setMobileOpen(true)}
+          onOpenSearch={openSearch}
+          onCloseSearch={closeSearch}
+        />
+        <main className="page-content min-w-0 overflow-x-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pathname}
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   );

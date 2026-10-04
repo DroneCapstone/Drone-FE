@@ -1,20 +1,17 @@
 import { Navigate, type RouteObject } from "react-router-dom";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { HubsPage } from "./pages/network/HubsPage";
+import { HubDetailPage } from "./pages/network/HubDetailPage";
 import { DronesPage } from "./pages/network/DronesPage";
 import { DroneDetailPage } from "./pages/network/DroneDetailPage";
 import { BatteriesPage } from "./pages/network/BatteriesPage";
+import { BatteryDetailPage } from "./pages/network/BatteryDetailPage";
 import { AdminUsersPage } from "./pages/users/AdminUsersPage";
 import { AdminUserDetailPage } from "./pages/users/AdminUserDetailPage";
-import { RolesPermissionsPage } from "./pages/users/RolesPermissionsPage";
+import { TransactionsPage } from "./pages/payments/TransactionsPage";
+import { RefundsPage } from "./pages/payments/RefundsPage";
 import { AuditLogsPage } from "./pages/audit/AuditLogsPage";
-import { DataGovernanceOverviewPage } from "./pages/data/DataGovernanceOverviewPage";
-import { DataQualityPage } from "./pages/data/DataQualityPage";
-import { SystemLogsPage } from "./pages/system/SystemLogsPage";
-import { ActivityLogPage } from "./pages/system/ActivityLogPage";
 import { AdminSettingsPage } from "./pages/system/AdminSettingsPage";
-import { AdminNotificationsPage } from "./pages/system/AdminNotificationsPage";
-import { BackupPage } from "./pages/system/BackupPage";
 import { AdminProfilePage } from "./pages/profile/AdminProfilePage";
 
 export const adminRoutes: RouteObject[] = [
@@ -22,20 +19,18 @@ export const adminRoutes: RouteObject[] = [
   { path: "dashboard", element: <AdminDashboardPage /> },
   { path: "network", element: <Navigate to="/admin/network/hubs" replace /> },
   { path: "network/hubs", element: <HubsPage /> },
+  { path: "network/hubs/:hubId", element: <HubDetailPage /> },
   { path: "network/drones", element: <DronesPage /> },
   { path: "network/drones/:droneId", element: <DroneDetailPage /> },
   { path: "network/batteries", element: <BatteriesPage /> },
+  { path: "network/batteries/:batteryId", element: <BatteryDetailPage /> },
   { path: "users", element: <AdminUsersPage /> },
-  { path: "users/roles", element: <RolesPermissionsPage /> },
   { path: "users/:userId", element: <AdminUserDetailPage /> },
-  { path: "audit/logs", element: <AuditLogsPage /> },
-  { path: "data/overview", element: <DataGovernanceOverviewPage /> },
-  { path: "data/quality", element: <DataQualityPage /> },
-  { path: "system/logs", element: <SystemLogsPage /> },
-  { path: "system/activity", element: <ActivityLogPage /> },
-  { path: "system/settings", element: <AdminSettingsPage /> },
-  { path: "system/notifications", element: <AdminNotificationsPage /> },
-  { path: "system/backup", element: <BackupPage /> },
+  { path: "payments", element: <Navigate to="/admin/payments/transactions" replace /> },
+  { path: "payments/transactions", element: <TransactionsPage /> },
+  { path: "payments/refunds", element: <RefundsPage /> },
+  { path: "audit", element: <AuditLogsPage /> },
+  { path: "settings", element: <AdminSettingsPage /> },
   { path: "profile", element: <AdminProfilePage /> },
   { path: "*", element: <Navigate to="/admin/dashboard" replace /> },
 ];
