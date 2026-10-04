@@ -15,33 +15,66 @@ import {
   VIETNAM_LOCATIONS,
 } from "../data/customerData";
 
-import { customerDeliveryService } from "../services/customerDeliveryService";
+import {
+  customerDeliveryService,
+  formatVnd,
+} from "../services/customerDeliveryService";
+
+import {
+  calculateDeliveryPricing,
+  isFragileCategory,
+} from "../services/deliveryPricing";
 import { customerProfileService } from "../services/customerProfileService";
+
+import {
+  resolveCustomerRoute,
+} from "../services/customerRouteService";
 
 import type {
   DeliveryDraft,
   PackageSize,
 } from "../types/customer";
 
+type DeliveryDraftWithPricing = Omit<
+  DeliveryDraft,
+  | "packageCategory"
+  | "weightKg"
+  | "packageSize"
+  | "deliveryMode"
+> & {
+  packageCategory:
+    | DeliveryDraft["packageCategory"]
+    | "";
+  weightKg: number | "";
+  packageSize: PackageSize | "";
+  deliveryMode:
+    | DeliveryDraft["deliveryMode"]
+    | "";
+  hasInsurance?: boolean;
+  draftVersion: 3;
+};
+
 const steps = ["Details", "Package", "Route", "Schedule"];
 
 function getDefaultDraft(
   name: string,
   phone: string,
-): DeliveryDraft {
+): DeliveryDraftWithPricing {
   return {
     senderName: name,
     senderPhone: phone,
     recipientName: "",
     recipientPhone: "",
-    packageCategory: "food",
+    packageCategory: "",
     packageDescription: "",
-    weightKg: 1,
-    packageSize: "S",
+    weightKg: "",
+    packageSize: "",
+    hasInsurance: false,
     originArea: "",
     destinationArea: "",
-    deliveryMode: "express",
+    deliveryMode: "",
     requestedDepartureAt: "",
+    draftVersion: 3,
   };
 }
 
@@ -74,40 +107,68 @@ export function CreateDeliveryPage() {
         phone: "",
       };
 
+  const storedDraft =
+    customerDeliveryService.getDraft() as
+      | DeliveryDraftWithPricing
+      | null;
+
   const existingDraft =
-    customerDeliveryService.getDraft();
+    storedDraft?.draftVersion === 3
+      ? storedDraft
+      : null;
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
 
-  const [form, setForm] = useState<DeliveryDraft>(
-    existingDraft ??
+  const [form, setForm] =
+    useState<DeliveryDraftWithPricing>(
+      existingDraft ??
       getDefaultDraft(
         user?.name ?? "",
         profile.phone,
       ),
-  );
+    );
 
   useEffect(() => {
-    customerDeliveryService.saveDraft(form);
+    customerDeliveryService.saveDraft(
+      form as unknown as DeliveryDraft,
+    );
   }, [form]);
 
   const preview = useMemo(() => {
-    if (
-      !form.originArea ||
-      !form.destinationArea
-    ) {
-      return null;
-    }
+    return resolveCustomerRoute(
+      form.originArea,
+      form.destinationArea,
+    );
+  }, [
+    form.originArea,
+    form.destinationArea,
+  ]);
 
-    return customerDeliveryService.preview(form);
-  }, [form]);
+  const pricing = useMemo(
+    () =>
+      calculateDeliveryPricing(
+        form,
+        preview,
+      ),
+    [form, preview],
+  );
+
+  const pricingReady =
+    Boolean(
+      form.packageCategory &&
+        form.weightKg !== "" &&
+        form.packageSize &&
+        form.deliveryMode &&
+        preview &&
+        preview.distanceKm !== null,
+    );
 
   const update = <
-    K extends keyof DeliveryDraft,
+    K extends keyof DeliveryDraftWithPricing,
   >(
     key: K,
-    value: DeliveryDraft[K],
+    value: DeliveryDraftWithPricing[K],
   ) => {
     setForm((current) => ({
       ...current,
@@ -144,12 +205,27 @@ export function CreateDeliveryPage() {
     }
 
     if (step === 1) {
+      if (!form.packageCategory) {
+        setError(
+          "Please select a package category.",
+        );
+        return false;
+      }
+
       if (
+        form.weightKg === "" ||
         form.weightKg <= 0 ||
-        form.weightKg > 12
+        form.weightKg >= 10
       ) {
         setError(
-          "Package weight must be greater than 0 kg and must not exceed 12 kg.",
+          "Please enter a package weight greater than 0 kg and less than 10 kg.",
+        );
+        return false;
+      }
+
+      if (!form.packageSize) {
+        setError(
+          "Please select a package size.",
         );
         return false;
       }
@@ -187,29 +263,41 @@ export function CreateDeliveryPage() {
       }
     }
 
-    if (
-      step === 3 &&
-      form.deliveryMode === "scheduled"
-    ) {
-      if (!form.requestedDepartureAt) {
+    if (step === 3) {
+      if (!form.deliveryMode) {
+        setError(
+          "Please select a delivery mode.",
+        );
+        return false;
+      }
+
+      if (
+        form.deliveryMode === "scheduled" &&
+        !form.requestedDepartureAt
+      ) {
         setError(
           "Please select a preferred departure time.",
         );
         return false;
       }
 
-      const minimum = new Date(
-        Date.now() + 3 * 60 * 60 * 1000,
-      );
-
       if (
-        new Date(form.requestedDepartureAt) <
-        minimum
+        form.deliveryMode === "scheduled"
       ) {
-        setError(
-          "Scheduled departure must be at least 3 hours from now.",
+        const minimum = new Date(
+          Date.now() + 3 * 60 * 60 * 1000,
         );
-        return false;
+
+        if (
+          new Date(
+            form.requestedDepartureAt,
+          ) < minimum
+        ) {
+          setError(
+            "Scheduled departure must be at least 3 hours from now.",
+          );
+          return false;
+        }
       }
     }
 
@@ -228,7 +316,9 @@ export function CreateDeliveryPage() {
     }
 
     if (step === steps.length - 1) {
-      customerDeliveryService.saveDraft(form);
+      customerDeliveryService.saveDraft(
+        form as unknown as DeliveryDraft,
+      );
       navigate(
         "/customer/deliveries/review",
       );
@@ -504,20 +594,29 @@ export function CreateDeliveryPage() {
             <div className="mt-3 sm:mt-5">
               <SummaryItem
                 label="Weight"
-                value={`${form.weightKg || 0} kg`}
+                value={
+                  form.weightKg === ""
+                    ? "—"
+                    : `${form.weightKg} kg`
+                }
               />
 
               <SummaryItem
                 label="Package size"
-                value={form.packageSize}
+                value={
+                  form.packageSize || "—"
+                }
               />
 
               <SummaryItem
                 label="Delivery mode"
                 value={
-                  form.deliveryMode === "express"
-                    ? "Express"
-                    : "Scheduled"
+                  !form.deliveryMode
+                    ? "—"
+                    : form.deliveryMode ===
+                        "express"
+                      ? "Express"
+                      : "Scheduled"
                 }
               />
 
@@ -538,13 +637,127 @@ export function CreateDeliveryPage() {
               )}
             </div>
 
+            {/* LIVE PRICE */}
+            <div className="mt-4 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 sm:mt-6 sm:p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/[0.42]">
+                    Estimated price
+                  </p>
+
+                  <p className="mt-1.5 text-[12px] leading-5 text-white/[0.48]">
+                    Updates automatically when category, weight, size, route, insurance or delivery mode changes.
+                  </p>
+                </div>
+
+                <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-white/[0.55]">
+                  {form.packageSize &&
+                  form.weightKg !== ""
+                    ? `Tier ${pricing.droneSize}`
+                    : "Tier —"}
+                </span>
+              </div>
+
+              {pricingReady ? (
+                <div className="mt-4 space-y-3 border-t border-white/[0.07] pt-4">
+                <PriceLine
+                  label="Base fee"
+                  value={formatVnd(
+                    pricing.baseFee,
+                  )}
+                />
+
+                <PriceLine
+                  label={
+                    pricing.distanceKm !== null
+                      ? `Distance · ${pricing.distanceKm} km`
+                      : "Distance"
+                  }
+                  value={
+                    pricing.isRoutePriced
+                      ? formatVnd(
+                          pricing.distanceFee,
+                        )
+                      : "Select route"
+                  }
+                  muted={
+                    !pricing.isRoutePriced
+                  }
+                />
+
+                <PriceLine
+                  label={`Payload · ${form.weightKg || 0} kg`}
+                  value={formatVnd(
+                    pricing.payloadFee,
+                  )}
+                />
+
+                {pricing.isFragile && (
+                  <PriceLine
+                    label="Fragile items · 15%"
+                    value={`+${formatVnd(
+                      pricing.fragileSurcharge,
+                    )}`}
+                  />
+                )}
+
+                {form.hasInsurance && (
+                  <PriceLine
+                    label="Package insurance · 10%"
+                    value={`+${formatVnd(
+                      pricing.insuranceSurcharge,
+                    )}`}
+                  />
+                )}
+
+                {form.deliveryMode ===
+                  "express" && (
+                  <PriceLine
+                    label="Express surcharge · 25%"
+                    value={`+${formatVnd(
+                      pricing.serviceSurcharge,
+                    )}`}
+                  />
+                )}
+                </div>
+              ) : (
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+                  <p className="text-[11px] leading-5 text-white/[0.34] sm:text-[12px]">
+                    Select package category, weight, size, route and delivery mode to calculate the price.
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/[0.08] pt-4">
+                <div>
+                  <p className="text-[12px] font-semibold text-white/[0.72]">
+                    Estimated total
+                  </p>
+
+                  {!pricingReady && (
+                    <p className="mt-1 text-[10px] text-white/[0.34]">
+                      Complete the required selections to calculate the final estimate.
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-right text-[22px] font-semibold tracking-[-0.03em] text-white">
+                  {pricingReady
+                    ? formatVnd(
+                        pricing.finalFee,
+                      )
+                    : "—"}
+                </p>
+              </div>
+            </div>
+
             <div className="mt-4 rounded-xl border border-orange-500/[0.16] bg-orange-500/[0.05] p-4 sm:mt-6 sm:p-5">
               <p className="text-[12px] font-semibold text-orange-400 sm:text-[14px]">
                 3-hour handover requirement
               </p>
 
               <p className="mt-2 text-[11px] font-medium leading-5 text-white/[0.62] sm:mt-3 sm:text-[13px] sm:leading-6 sm:text-white/[0.80]">
-                Bring your package to the recommended
+                Bring your package to the selected
                 origin hub within 3 hours after placing
                 the order.
               </p>
@@ -561,13 +774,13 @@ export function CreateDeliveryPage() {
 ========================================================= */
 
 interface StepProps {
-  form: DeliveryDraft;
+  form: DeliveryDraftWithPricing;
 
   update: <
-    K extends keyof DeliveryDraft,
+    K extends keyof DeliveryDraftWithPricing,
   >(
     key: K,
-    value: DeliveryDraft[K],
+    value: DeliveryDraftWithPricing[K],
   ) => void;
 }
 
@@ -644,6 +857,11 @@ function PackageStep({
   form,
   update,
 }: StepProps) {
+  const fragileSelected =
+    isFragileCategory(
+      form.packageCategory,
+    );
+
   return (
     <section>
       <SectionTitle
@@ -668,6 +886,13 @@ function PackageStep({
             }
             className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
           >
+            <option
+              value=""
+              disabled
+            >
+              Select package category
+            </option>
+
             {PACKAGE_CATEGORIES.map(
               (item) => (
                 <option
@@ -679,6 +904,12 @@ function PackageStep({
               ),
             )}
           </select>
+
+          {fragileSelected && (
+            <p className="mt-2 text-[11px] leading-5 text-orange-400/90 sm:text-[12px]">
+              Fragile handling surcharge +15% of Core Fee is applied automatically.
+            </p>
+          )}
         </label>
 
         {form.packageCategory ===
@@ -709,15 +940,17 @@ function PackageStep({
             <input
               type="number"
               min="0.1"
-              max="12"
+              max="9.9"
               step="0.1"
               value={form.weightKg}
               onChange={(event) =>
                 update(
                   "weightKg",
-                  Number(
-                    event.target.value,
-                  ),
+                  event.target.value === ""
+                    ? ""
+                    : Number(
+                        event.target.value,
+                      ),
                 )
               }
               className="min-w-0 flex-1 bg-transparent px-3 text-[14px] text-white outline-none sm:px-4 sm:text-[15px]"
@@ -730,17 +963,21 @@ function PackageStep({
 
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-[10px] text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
-              Maximum aircraft payload
+              Maximum supported payload
             </p>
 
             <p
               className={`text-[10px] font-medium sm:text-[11px] ${
-                form.weightKg > 12
+                form.weightKg !== "" &&
+                form.weightKg >= 10
                   ? "text-red-400"
                   : "text-white/[0.72] sm:text-white"
               }`}
             >
-              {form.weightKg || 0}/12 kg
+              {form.weightKg === ""
+                ? "—"
+                : form.weightKg}{" "}
+              / {"< 10 kg"}
             </p>
           </div>
         </div>
@@ -815,7 +1052,9 @@ function PackageStep({
                 </p>
 
                 <p className="mt-1 text-[13px] font-medium text-white sm:text-[14px]">
-                  Size {form.packageSize}
+                  {form.packageSize
+                    ? `Size ${form.packageSize}`
+                    : "Not selected"}
                 </p>
               </div>
 
@@ -826,9 +1065,11 @@ function PackageStep({
 
                 <p className="mt-1 text-[11px] leading-5 text-white/[0.82] sm:text-[13px] sm:text-white/[0.92]">
                   {
-                    PACKAGE_SIZE_RULES[
-                      form.packageSize
-                    ].dimensions
+                    form.packageSize
+                      ? PACKAGE_SIZE_RULES[
+                          form.packageSize
+                        ].dimensions
+                      : "—"
                   }
                 </p>
               </div>
@@ -836,12 +1077,51 @@ function PackageStep({
 
             <p className="mt-3 border-t border-white/[0.06] pt-3 text-[10px] leading-5 text-white/[0.52] sm:mt-4 sm:pt-4 sm:text-[11px] sm:text-white/[0.74]">
               {
-                PACKAGE_SIZE_RULES[
-                  form.packageSize
-                ].description
+                form.packageSize
+                  ? PACKAGE_SIZE_RULES[
+                      form.packageSize
+                    ].description
+                  : "Select a package size to view its limits."
               }
             </p>
+
+            <p className="mt-3 text-[10px] leading-5 text-white/[0.40] sm:text-[11px]">
+              Pricing tier is automatically upgraded when the package weight requires a larger drone capacity.
+            </p>
           </div>
+
+          {/* PACKAGE INSURANCE */}
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 transition hover:border-white/[0.16] sm:mt-5 sm:p-5">
+            <input
+              type="checkbox"
+              checked={Boolean(
+                form.hasInsurance,
+              )}
+              onChange={(event) =>
+                update(
+                  "hasInsurance",
+                  event.target.checked,
+                )
+              }
+              className="mt-0.5 h-4 w-4 shrink-0 accent-orange-500"
+            />
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-semibold text-white sm:text-[14px]">
+                  Package insurance
+                </p>
+
+                <span className="rounded-full bg-orange-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-orange-400">
+                  +10% Core Fee
+                </span>
+              </div>
+
+              <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
+                Optional protection for the shipment. Insurance is calculated from Core Fee.
+              </p>
+            </div>
+          </label>
         </div>
       </div>
     </section>
@@ -857,18 +1137,16 @@ function RouteStep({
   update,
 }: StepProps) {
   const preview =
-    form.originArea &&
-    form.destinationArea
-      ? customerDeliveryService.preview(
-          form,
-        )
-      : null;
+    resolveCustomerRoute(
+      form.originArea,
+      form.destinationArea,
+    );
 
   return (
     <section>
       <SectionTitle
         title="Delivery route"
-        description="Enter the sender and recipient areas. DroneOptAI will recommend the most suitable origin and destination hubs."
+        description="Enter the sending and receiving areas to display the origin and destination hubs for this delivery."
       />
 
       <datalist id="vietnam-locations">
@@ -908,8 +1186,8 @@ function RouteStep({
       {!preview && (
         <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] px-4 py-6 text-center sm:mt-7 sm:rounded-lg sm:px-5 sm:py-8">
           <p className="text-[12px] leading-5 text-white/[0.52] sm:text-[13px] sm:text-white">
-            Enter both locations to see the
-            recommended hub route.
+            Enter both locations to display the
+            delivery route.
           </p>
         </div>
       )}
@@ -920,7 +1198,7 @@ function RouteStep({
             <span className="h-2 w-2 rounded-full bg-orange-500" />
 
             <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-400 sm:text-[11px]">
-              Recommended route
+              Selected route
             </p>
           </div>
 
@@ -987,7 +1265,7 @@ function ScheduleStep({
             form.deliveryMode === "express"
           }
           title="Express"
-          description="The system schedules the earliest available flight after your package reaches the origin hub."
+          description="Earliest available flight after handover. Express adds 25% of Core Fee."
           onClick={() =>
             update(
               "deliveryMode",
@@ -1002,7 +1280,7 @@ function ScheduleStep({
             "scheduled"
           }
           title="Scheduled"
-          description="Choose a preferred departure time at least 3 hours from now."
+          description="Choose a preferred departure time at least 3 hours from now. No service surcharge."
           onClick={() =>
             update(
               "deliveryMode",
@@ -1326,6 +1604,38 @@ function SummaryItem({
 }
 
 /* =========================================================
+   PRICE LINE
+========================================================= */
+
+function PriceLine({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-[11px] leading-5 text-white/[0.42] sm:text-[12px]">
+        {label}
+      </span>
+
+      <span
+        className={`text-right text-[12px] font-medium leading-5 ${
+          muted
+            ? "text-white/[0.30]"
+            : "text-white/[0.78]"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* =========================================================
    STEP CAPTION
 ========================================================= */
 
@@ -1338,7 +1648,7 @@ function getStepCaption(index: number) {
       return "Package details";
 
     case 2:
-      return "Hub recommendation";
+      return "Delivery route";
 
     case 3:
       return "Delivery time";
