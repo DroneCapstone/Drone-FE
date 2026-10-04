@@ -146,4 +146,50 @@ export const defaultAdminSettings: AdminSettings = {
   emailNotifications: true,
 };
 
-export const revenueSeries = [18.2, 21.4, 19.8, 25.6, 29.4, 26.9, 33.8, 37.1, 35.7, 42.6, 44.1, 48.9];
+export const adminDashboardRevenue = {
+  totalVnd: 684_200_000,
+  todayVnd: 18_600_000,
+  monthVnd: 128_400_000,
+  todayDelta: "+8.4%",
+  paidOrdersToday: 23,
+  paidOrdersMonth: 286,
+  pendingPayments: 31,
+  refundsMonth: 9,
+};
+
+export const adminRevenueTrend = {
+  Today: {
+    totalVnd: 18_600_000,
+    caption: "captured today",
+    delta: "+8.4% vs yesterday",
+    values: [1.8, 2.7, 3.1, 4.2, 3.7, 3.1],
+    labels: ["06:00", "09:00", "12:00", "15:00", "18:00", "Now"],
+  },
+  "7 Days": {
+    totalVnd: 112_400_000,
+    caption: "last 7 days",
+    delta: "+12.8%",
+    values: [12.8, 15.4, 13.9, 18.1, 16.7, 16.9, 18.6],
+    labels: ["Sep 28", "Sep 29", "Sep 30", "Oct 01", "Oct 02", "Oct 03", "Oct 04"],
+  },
+  Month: {
+    totalVnd: 128_400_000,
+    caption: "October 2026",
+    delta: "+10.6% vs Sep",
+    values: [27.2, 29.6, 32.8, 38.8],
+    labels: ["W1", "W2", "W3", "W4"],
+  },
+} as const;
+
+export const adminDashboardMissionSummary = {
+  scheduled: 12,
+  inProgress: 7,
+  completed: 82,
+  failed: 3,
+  cancelled: 2,
+  completedToday: 23,
+  successRatePct: 94.3,
+};
+
+// Kept for compatibility with any older admin UI import.
+export const revenueSeries = adminRevenueTrend["7 Days"].values;
