@@ -20,14 +20,18 @@ export function getBasicDroneEligibility(
   return { eligible: reasons.length === 0, reasons };
 }
 
-export function getRemainingBattery(route: RouteOption) {
-  return Math.max(0, AVAILABLE_DRONE_START_BATTERY_PCT - route.batteryConsumptionPct);
+export function getRemainingBattery(
+  route: RouteOption,
+  startingBatteryPct = AVAILABLE_DRONE_START_BATTERY_PCT,
+) {
+  return Math.max(0, startingBatteryPct - route.batteryConsumptionPct);
 }
 
 export function getEnergyFeasibility(
   route: RouteOption,
   minimumReservePct = DEFAULT_BATTERY_RESERVE_PCT,
+  startingBatteryPct = AVAILABLE_DRONE_START_BATTERY_PCT,
 ) {
-  const remainingBattery = getRemainingBattery(route);
+  const remainingBattery = getRemainingBattery(route, startingBatteryPct);
   return { remainingBattery, feasible: remainingBattery >= minimumReservePct };
 }

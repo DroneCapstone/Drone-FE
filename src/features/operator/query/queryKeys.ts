@@ -55,4 +55,9 @@ export const operatorQueryKeys = {
   fleet: () => [...operatorQueryKeys.all, 'fleet'] as const,
 
   fleetDrones: () => [...operatorQueryKeys.fleet(), 'drones'] as const,
+
+  fleetDroneDetail: (droneId: string) =>
+    [...operatorQueryKeys.fleet(), 'drones', 'detail', droneId] as const,
+
+  fleetBatteries: () => [...operatorQueryKeys.fleet(), 'batteries'] as const,
 };

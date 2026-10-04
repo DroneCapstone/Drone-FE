@@ -1,5 +1,5 @@
-import type { OperatorDrone, TechnicalStatus } from '../types/operator';
-import { operatorApiRequest } from './orderApi';
+import type { OperatorBattery, OperatorDrone, TechnicalStatus } from '../types/operator';
+import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -37,16 +37,16 @@ function pickNumber(record: Record<string, unknown>, keys: string[], fallback = 
   return fallback;
 }
 
-function unwrapFleetList(payload: unknown): unknown[] {
+function unwrapList(payload: unknown, preferredKeys: string[]): unknown[] {
   const normalized = parseJsonString(payload);
   if (Array.isArray(normalized)) return normalized;
   if (!isRecord(normalized)) return [];
 
-  for (const key of ['drones', 'fleet', 'data', 'items', 'results', 'rows']) {
+  for (const key of [...preferredKeys, 'data', 'items', 'results', 'rows']) {
     const candidate = parseJsonString(normalized[key]);
     if (Array.isArray(candidate)) return candidate;
     if (isRecord(candidate)) {
-      const nested = unwrapFleetList(candidate);
+      const nested = unwrapList(candidate, preferredKeys);
       if (nested.length > 0) return nested;
     }
   }
@@ -55,8 +55,9 @@ function unwrapFleetList(payload: unknown): unknown[] {
   return Array.isArray(firstArray) ? firstArray : [];
 }
 
-function normalizeTechnicalStatus(value: unknown): TechnicalStatus {
+function normalizeDroneStatus(value: unknown): TechnicalStatus {
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+
   if (
     status.includes('MAINTENANCE') ||
     status.includes('OUT_OF_SERVICE') ||
@@ -65,6 +66,16 @@ function normalizeTechnicalStatus(value: unknown): TechnicalStatus {
   ) {
     return 'Maintenance';
   }
+
+  if (
+    status.includes('IN_FLIGHT') ||
+    status.includes('INFLIGHT') ||
+    status === 'FLYING' ||
+    status === 'ACTIVE_FLIGHT'
+  ) {
+    return 'In Flight';
+  }
+
   return 'Available';
 }
 
@@ -83,7 +94,7 @@ function mapFleetDrone(raw: unknown): OperatorDrone | null {
   const nestedHub = isRecord(raw.hub) ? raw.hub : undefined;
   const hubId = pickString(
     raw,
-    ['hub_id', 'hubId', 'current_hub_id', 'currentHubId', 'location_hub_id'],
+    ['current_hub_id', 'currentHubId', 'hub_id', 'hubId', 'location_hub_id'],
     nestedHub ? pickString(nestedHub, ['id', 'hub_id', 'hubId']) : '',
   );
 
@@ -99,20 +110,63 @@ function mapFleetDrone(raw: unknown): OperatorDrone | null {
     displayId,
     model: pickString(raw, ['model', 'drone_model', 'droneModel', 'model_name', 'modelName'], '—'),
     hubId,
-    technicalStatus: normalizeTechnicalStatus(
-      raw.technical_status ?? raw.technicalStatus ?? raw.status ?? raw.operational_status,
-    ),
+    hubName: pickString(raw, ['hub_name', 'hubName'], nestedHub ? pickString(nestedHub, ['name']) : ''),
+    technicalStatus: normalizeDroneStatus(raw.status ?? raw.operational_status ?? raw.technical_status),
     maxPayloadKg: pickNumber(
       raw,
-      ['max_payload_kg', 'maxPayloadKg', 'payload_capacity_kg', 'payloadCapacityKg', 'max_payload'],
+      ['payload_capacity_kg', 'payloadCapacityKg', 'max_payload_kg', 'maxPayloadKg', 'max_payload'],
       0,
     ),
+    maxSpeed: pickNumber(raw, ['max_speed', 'maxSpeed'], 0),
+    batteryLevelPct: pickNumber(raw, ['battery_level_pct', 'batteryLevelPct', 'battery_pct'], 0),
+    utilizationPct: pickNumber(raw, ['utilization_pct', 'utilizationPct'], 0),
+    batteryModel: pickString(raw, ['battery_model', 'batteryModel', 'battery_model_name', 'batteryModelName']) || undefined,
+  };
+}
+
+function mapFleetBattery(raw: unknown): OperatorBattery | null {
+  if (!isRecord(raw)) return null;
+
+  const id = pickString(raw, ['id', 'battery_id', 'batteryId']);
+  if (!id) return null;
+
+  const droneId = pickString(raw, ['drone_id', 'droneId']);
+
+  return {
+    id,
+    serialNumber: pickString(raw, ['serial_number', 'serialNumber'], `BAT-${id}`),
+    capacityWh: pickNumber(raw, ['capacity_wh', 'capacityWh'], 0),
+    status: pickString(raw, ['status'], 'Unknown'),
+    droneId: droneId && droneId !== '0' ? droneId : undefined,
+    currentHubId: pickString(raw, ['current_hub_id', 'currentHubId', 'hub_id', 'hubId']),
+    hubName: pickString(raw, ['hub_name', 'hubName']),
+    chargeLevelPct: pickNumber(raw, ['charge_level_pct', 'chargeLevelPct', 'battery_level_pct'], 0),
+    model: pickString(raw, ['model', 'battery_model', 'batteryModel', 'battery_model_name']) || undefined,
   };
 }
 
 export async function listFleetDronesApi(): Promise<OperatorDrone[]> {
-  const payload = await operatorApiRequest<unknown>('/fleet/drones');
-  return unwrapFleetList(payload)
+  const payload = await operatorApiRequest<unknown>('/operator/fleet/drones');
+  return unwrapList(payload, ['drones', 'fleet'])
     .map(mapFleetDrone)
     .filter((drone): drone is OperatorDrone => Boolean(drone));
+}
+
+export async function getFleetDroneApi(droneId: string): Promise<OperatorDrone> {
+  const normalizedDroneId = droneId.trim();
+  if (!normalizedDroneId) throw new OperatorApiError('Drone ID is required.', 400);
+
+  const payload = await operatorApiRequest<unknown>(
+    `/operator/fleet/drones/${encodeURIComponent(normalizedDroneId)}`,
+  );
+  const drone = mapFleetDrone(payload);
+  if (!drone) throw new OperatorApiError('Drone response is invalid.', 500, payload);
+  return drone;
+}
+
+export async function listFleetBatteriesApi(): Promise<OperatorBattery[]> {
+  const payload = await operatorApiRequest<unknown>('/operator/fleet/batteries');
+  return unwrapList(payload, ['batteries', 'battery'])
+    .map(mapFleetBattery)
+    .filter((battery): battery is OperatorBattery => Boolean(battery));
 }

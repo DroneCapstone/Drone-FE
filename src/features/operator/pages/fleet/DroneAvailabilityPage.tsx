@@ -15,7 +15,7 @@ const ALL_HUBS = 'All hubs';
 export function DroneAvailabilityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [technicalFilter, setTechnicalFilter] = useState('All technical');
+  const [technicalFilter, setTechnicalFilter] = useState('All status');
   const [page, setPage] = useState(1);
 
   const {
@@ -74,7 +74,7 @@ export function DroneAvailabilityPage() {
       const matchesHub = hubFilter === ALL_HUBS || drone.hubId === hubFilter;
 
       const matchesTechnical =
-        technicalFilter === 'All technical' ||
+        technicalFilter === 'All status' ||
         drone.technicalStatus === (technicalFilter as TechnicalStatus);
 
       return matchesQuery && matchesHub && matchesTechnical;
@@ -120,9 +120,9 @@ export function DroneAvailabilityPage() {
 
           <DropdownSelect
             value={technicalFilter}
-            options={['All technical', 'Available', 'Maintenance']}
+            options={['All status', 'Available', 'In Flight', 'Maintenance']}
             onChange={(value) => { setTechnicalFilter(value); setPage(1); }}
-            ariaLabel="Technical status"
+            ariaLabel="Drone status"
           />
 
           <span className="toolbar-spacer" />

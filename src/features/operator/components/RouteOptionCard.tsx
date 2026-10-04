@@ -10,6 +10,8 @@ interface RouteOptionCardProps {
   selected?: boolean;
   plannedStartAt: Date;
   estimatedArrivalAt: Date;
+  relayBatteryReady?: boolean;
+  relayBatterySummary?: string;
   onSelect?: () => void;
   onViewDetails?: () => void;
 }
@@ -28,15 +30,17 @@ export function RouteOptionCard({
   selected = false,
   plannedStartAt,
   estimatedArrivalAt,
+  relayBatteryReady = true,
+  relayBatterySummary,
   onSelect,
   onViewDetails,
 }: RouteOptionCardProps) {
   return (
-    <article className={`route-option-card selectable-card ${selected ? 'active' : ''} ${!feasible ? 'disabled-card' : ''}`}>
+    <article className={`route-option-card selectable-card ${selected ? 'active' : ''} ${!feasible || !relayBatteryReady ? 'disabled-card' : ''}`}>
       <button
         type="button"
         className="route-option-main"
-        disabled={!feasible}
+        disabled={!feasible || !relayBatteryReady}
         onClick={onSelect}
         aria-pressed={selected}
       >
@@ -49,6 +53,11 @@ export function RouteOptionCard({
             {route.recommended && <StatusBadge tone="success">AI Recommended</StatusBadge>}
             {route.relayHubIds?.length ? <StatusBadge tone="info">Relay route</StatusBadge> : null}
             {!feasible && <StatusBadge tone="danger">Low reserve</StatusBadge>}
+            {route.relayHubIds?.length ? (
+              <StatusBadge tone={relayBatteryReady ? 'success' : 'danger'}>
+                {relayBatteryReady ? 'Relay battery ready' : 'No compatible relay battery'}
+              </StatusBadge>
+            ) : null}
           </div>
         </div>
 
@@ -70,7 +79,7 @@ export function RouteOptionCard({
           <strong>{route.confidencePct}% confidence</strong>
           <small>
             {route.relayHubIds?.length && route.relayStopMinutes
-              ? `${route.weatherImpact} Relay stop ~${route.relayStopMinutes} min.`
+              ? `${route.weatherImpact} Relay stop ~${route.relayStopMinutes} min.${relayBatterySummary ? ` ${relayBatterySummary}` : ''}`
               : route.weatherImpact}
           </small>
         </span>
