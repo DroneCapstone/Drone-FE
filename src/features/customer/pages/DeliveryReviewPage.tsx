@@ -23,17 +23,42 @@ import {
   formatVnd,
 } from "../services/customerDeliveryService";
 
+import {
+  calculateDeliveryPricing,
+  persistDeliveryPricingSnapshot,
+} from "../services/deliveryPricing";
+
+import {
+  persistDeliveryRouteSnapshot,
+  resolveCustomerRoute,
+} from "../services/customerRouteService";
+
 /* =========================================================
-   DELIVERY REVIEW PAGE
+   DELIVERY REVIEW / CHECKOUT PAGE
+
+   Mobile UX:
+   - Compact review cards
+   - Total + Pay now always visible at the bottom
+   - No intermediate "Place order" page
+   - Continue directly to payment
+
+   Desktop UX:
+   - Detail column + sticky price summary
 ========================================================= */
 
 export function DeliveryReviewPage() {
   const navigate = useNavigate();
-
   const { user } = useAuth();
 
   const draft =
-    customerDeliveryService.getDraft();
+    customerDeliveryService.getDraft() as
+      | (ReturnType<
+          typeof customerDeliveryService.getDraft
+        > & {
+          hasInsurance?: boolean;
+          draftVersion?: number;
+        })
+      | null;
 
   if (!draft || !user) {
     return (
@@ -44,9 +69,47 @@ export function DeliveryReviewPage() {
     );
   }
 
-  const preview =
+  const selectedRoute =
+    resolveCustomerRoute(
+      draft.originArea,
+      draft.destinationArea,
+    );
+
+  if (
+    !draft.packageCategory ||
+    !draft.weightKg ||
+    !draft.packageSize ||
+    !draft.deliveryMode ||
+    !selectedRoute
+  ) {
+    return (
+      <Navigate
+        to="/customer/deliveries/create"
+        replace
+      />
+    );
+  }
+
+  /*
+   * customerDeliveryService.preview() is still used for timing.
+   * Route/hub information comes from the selected route resolver,
+   * so origin and destination cannot fall back to the same hub
+   * incorrectly.
+   */
+  const timingPreview =
     customerDeliveryService.preview(
       draft,
+    );
+
+  const preview = {
+    ...timingPreview,
+    ...selectedRoute,
+  };
+
+  const pricing =
+    calculateDeliveryPricing(
+      draft,
+      selectedRoute,
     );
 
   const category =
@@ -61,241 +124,477 @@ export function DeliveryReviewPage() {
       draft.packageSize
     ];
 
-  const placeOrder = () => {
+  /* =======================================================
+     CHECKOUT
+
+     The current mock Payment route requires a deliveryId.
+     We create/reuse a PENDING checkout record only to open
+     payment. The UI no longer treats this step as "Order placed".
+
+     On a real backend the recommended lifecycle is:
+     create checkout -> pay -> confirm order.
+  ======================================================== */
+
+  const continueToPayment = () => {
+    if (!pricing.isRoutePriced) {
+      return;
+    }
+
+    const signature = JSON.stringify({
+      customerId: user.id,
+      senderName: draft.senderName,
+      senderPhone: draft.senderPhone,
+      recipientName:
+        draft.recipientName,
+      recipientPhone:
+        draft.recipientPhone,
+      packageCategory:
+        draft.packageCategory,
+      weightKg: draft.weightKg,
+      packageSize:
+        draft.packageSize,
+      hasInsurance:
+        Boolean(
+          draft.hasInsurance,
+        ),
+      originArea:
+        draft.originArea,
+      destinationArea:
+        draft.destinationArea,
+      deliveryMode:
+        draft.deliveryMode,
+      requestedDepartureAt:
+        draft.requestedDepartureAt,
+      total: pricing.finalFee,
+    });
+
+    const storageKey =
+      "droneoptai.customer.pendingCheckout";
+
+    /*
+     * Reuse the same unpaid checkout when the customer goes
+     * back from Payment to Review and taps Pay again.
+     * This prevents duplicate mock orders.
+     */
+    try {
+      const stored =
+        window.sessionStorage.getItem(
+          storageKey,
+        );
+
+      if (stored) {
+        const parsed = JSON.parse(
+          stored,
+        ) as {
+          deliveryId?: string;
+          signature?: string;
+        };
+
+        if (
+          parsed.signature ===
+            signature &&
+          parsed.deliveryId
+        ) {
+          const existing =
+            customerDeliveryService.getById(
+              parsed.deliveryId,
+            );
+
+          if (
+            existing &&
+            existing.paymentStatus !==
+              "paid"
+          ) {
+            navigate(
+              `/customer/payment/${existing.id}`,
+            );
+            return;
+          }
+        }
+      }
+    } catch {
+      // Session storage is optional.
+    }
+
     const delivery =
       customerDeliveryService.create(
         user.id,
         draft,
       );
 
+    persistDeliveryPricingSnapshot(
+      delivery.id,
+      pricing,
+    );
+
+    persistDeliveryRouteSnapshot(
+      delivery.id,
+      selectedRoute,
+    );
+
+    try {
+      window.sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          deliveryId: delivery.id,
+          signature,
+        }),
+      );
+    } catch {
+      // Continue even if sessionStorage is unavailable.
+    }
+
+    /*
+     * IMPORTANT:
+     * Do NOT clear the draft here.
+     * The customer has not paid yet.
+     *
+     * Clear/reset the draft only after payment succeeds.
+     */
     navigate(
-      `/customer/deliveries/${delivery.id}/summary`,
+      `/customer/payment/${delivery.id}`,
     );
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 pb-28 pt-8 sm:px-6 sm:pt-10 lg:px-10 lg:pb-16 lg:pt-12">
-      {/* =====================================================
-          PAGE HEADER
-      ====================================================== */}
-      <header className="max-w-[720px]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">
-          Review
-        </p>
+    <>
+      <div className="mx-auto w-full max-w-[1180px] px-4 pb-[132px] pt-6 sm:px-6 sm:pb-28 sm:pt-9 lg:px-10 lg:pb-16 lg:pt-12">
+        {/* ===================================================
+            HEADER
+        ==================================================== */}
+        <header className="max-w-[720px]">
+          <p className="hidden text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500 sm:block">
+            Review
+          </p>
 
-        <h1 className="mt-3 text-[34px] font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-[42px]">
-          Review your delivery
-        </h1>
+          <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:mt-3 sm:text-[42px]">
+            Review your delivery
+          </h1>
 
-        <p className="mt-3 text-[14px] leading-6 text-white/[0.58] sm:text-[15px]">
-          Confirm the information
-          before placing your order.
-        </p>
-      </header>
+          <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-white/[0.48] sm:mt-3 sm:text-[15px] sm:leading-6 sm:text-white/[0.58]">
+            Check the delivery information
+            before continuing to payment.
+          </p>
+        </header>
 
-      {/* =====================================================
-          MAIN LAYOUT
-      ====================================================== */}
-      <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
-        {/* =================================================
-            LEFT — DELIVERY DETAILS
-        ================================================== */}
-        <main className="min-w-0 space-y-5">
-          {/* CONTACTS */}
-          <ReviewCard
-            eyebrow="Contacts"
-            title="Sender & recipient"
-          >
-            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-              <ContactCard
-                label="Sender"
-                name={draft.senderName}
-                phone={draft.senderPhone}
-              />
+        {/* ===================================================
+            MOBILE TOTAL PREVIEW
+        ==================================================== */}
+        <section className="mt-5 rounded-2xl border border-orange-500/[0.18] bg-orange-500/[0.045] p-4 lg:hidden">
+          <div className="flex items-end justify-between gap-5">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.40]">
+                Amount to pay
+              </p>
 
-              <ContactCard
-                label="Recipient"
-                name={draft.recipientName}
-                phone={draft.recipientPhone}
-              />
+              <p className="mt-1 text-[12px] text-white/[0.44]">
+                {draft.deliveryMode ===
+                "express"
+                  ? "Express delivery"
+                  : "Scheduled delivery"}
+              </p>
             </div>
-          </ReviewCard>
 
-          {/* PACKAGE */}
-          <ReviewCard
-            eyebrow="Package"
-            title="Package information"
-          >
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3">
-              <InfoItem
-                label="Category"
-                value={category}
-              />
+            <p className="text-right text-[24px] font-semibold tracking-[-0.035em] text-white">
+              {formatVnd(
+                pricing.finalFee,
+              )}
+            </p>
+          </div>
+        </section>
 
-              <InfoItem
-                label="Weight"
-                value={`${draft.weightKg} kg`}
-              />
+        {/* ===================================================
+            MAIN
+        ==================================================== */}
+        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-6 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
+          <main className="min-w-0 space-y-4 sm:space-y-5">
+            {/* ===============================================
+                CONTACTS
+            ================================================ */}
+            <CompactSection
+              title="Contacts"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=0",
+                )
+              }
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ContactInfo
+                  label="Sender"
+                  name={draft.senderName}
+                  phone={
+                    draft.senderPhone
+                  }
+                />
 
-              <InfoItem
-                label="Size"
-                value={draft.packageSize}
-                helper={
-                  sizeRule?.dimensions
-                }
-                fullWidthOnMobile
-              />
-            </div>
-          </ReviewCard>
+                <ContactInfo
+                  label="Recipient"
+                  name={
+                    draft.recipientName
+                  }
+                  phone={
+                    draft.recipientPhone
+                  }
+                />
+              </div>
+            </CompactSection>
 
-          {/* ROUTE */}
-          <ReviewCard
-            eyebrow="Route"
-            title="Hub-to-hub route"
-          >
-            <div className="relative">
-              {/* ROUTE LINE */}
-              <div className="absolute bottom-[44px] left-[9px] top-[44px] hidden w-px bg-white/[0.12] sm:block" />
+            {/* ===============================================
+                PACKAGE
+            ================================================ */}
+            <CompactSection
+              title="Package"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=1",
+                )
+              }
+            >
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
+                <CompactInfo
+                  label="Category"
+                  value={category}
+                />
 
-              {/* ORIGIN */}
-              <RoutePoint
-                type="Origin hub"
-                hub={
-                  preview.originHub.name
-                }
-                address={
-                  preview.originHub.address
-                }
-                first
-              />
+                <CompactInfo
+                  label="Weight"
+                  value={`${draft.weightKg} kg`}
+                />
 
-              {/* MOBILE CONNECTOR */}
-              <div className="my-3 ml-[9px] h-6 w-px bg-white/[0.12] sm:hidden" />
+                <CompactInfo
+                  label="Size"
+                  value={
+                    draft.packageSize
+                  }
+                  helper={
+                    sizeRule
+                      ?.dimensions
+                  }
+                />
 
-              {/* DESTINATION */}
-              <RoutePoint
-                type="Destination hub"
-                hub={
-                  preview.destinationHub.name
-                }
-                address={
-                  preview.destinationHub.address
-                }
-              />
-            </div>
-          </ReviewCard>
-        </main>
+                <CompactInfo
+                  label="Insurance"
+                  value={
+                    pricing.hasInsurance
+                      ? "Added"
+                      : "Not added"
+                  }
+                />
+              </div>
 
-        {/* =================================================
-            RIGHT — ORDER SUMMARY
-        ================================================== */}
-        <aside className="h-fit lg:sticky lg:top-[96px]">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-sm">
-            {/* SUMMARY HEADER */}
-            <div className="border-b border-white/[0.08] px-5 py-5 sm:px-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/[0.46]">
-                    Delivery summary
-                  </p>
-
-                  <p className="mt-2 text-[17px] font-semibold text-white">
-                    Order overview
+              {pricing.isFragile && (
+                <div className="mt-4 border-t border-white/[0.07] pt-3">
+                  <p className="text-[11px] leading-5 text-orange-400/90">
+                    Fragile items · +15%
+                    Core Fee applied
+                    automatically.
                   </p>
                 </div>
+              )}
+            </CompactSection>
 
-                <span className="rounded-full border border-orange-500/[0.24] bg-orange-500/[0.08] px-3 py-1.5 text-[11px] font-semibold text-orange-400">
-                  {draft.deliveryMode ===
-                  "express"
-                    ? "Express"
-                    : "Scheduled"}
-                </span>
+            {/* ===============================================
+                ROUTE
+            ================================================ */}
+            <CompactSection
+              title="Delivery route"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=2",
+                )
+              }
+            >
+              <div className="relative">
+                <RoutePoint
+                  label="Origin"
+                  name={
+                    preview.originHub
+                      .name
+                  }
+                  address={
+                    preview.originHub
+                      .address
+                  }
+                />
+
+                <div className="ml-[7px] h-6 border-l border-dashed border-white/[0.14]" />
+
+                <RoutePoint
+                  label="Destination"
+                  name={
+                    preview
+                      .destinationHub
+                      .name
+                  }
+                  address={
+                    preview
+                      .destinationHub
+                      .address
+                  }
+                />
               </div>
-            </div>
 
-            {/* DELIVERY TIME */}
-            <div className="px-5 py-5 sm:px-6">
-              <SummaryGroupLabel>
-                Delivery timing
-              </SummaryGroupLabel>
+              {pricing.distanceKm !==
+                null && (
+                <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-3">
+                  <span className="text-[11px] text-white/[0.36]">
+                    Estimated distance
+                  </span>
 
-              <div className="mt-4 space-y-4">
-                <SummaryRow
-                  label="Estimated departure"
+                  <span className="text-[12px] font-medium text-white/[0.72]">
+                    {pricing.distanceKm} km
+                  </span>
+                </div>
+              )}
+            </CompactSection>
+
+            {/* ===============================================
+                DELIVERY TIME
+            ================================================ */}
+            <CompactSection
+              title="Delivery time"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=3",
+                )
+              }
+            >
+              <div className="grid gap-4 sm:grid-cols-3">
+                <CompactInfo
+                  label="Mode"
+                  value={
+                    draft.deliveryMode ===
+                    "express"
+                      ? "Express"
+                      : "Scheduled"
+                  }
+                />
+
+                <CompactInfo
+                  label="Departure"
                   value={formatDateTime(
                     preview
                       .estimatedDepartureAt,
                   )}
                 />
 
-                <SummaryRow
-                  label="Estimated arrival"
+                <CompactInfo
+                  label="Arrival"
                   value={formatDateTime(
                     preview
                       .estimatedArrivalAt,
                   )}
                 />
+              </div>
 
-                <SummaryRow
-                  label="Hub handover deadline"
-                  value={formatDateTime(
+              <div className="mt-4 rounded-xl border border-orange-500/[0.12] bg-orange-500/[0.04] px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.10em] text-orange-400">
+                  Handover deadline
+                </p>
+
+                <p className="mt-1 text-[13px] font-medium text-white/[0.82]">
+                  {formatDateTime(
                     preview
                       .handoverDeadlineAt,
                   )}
-                  emphasized
-                />
+                </p>
               </div>
-            </div>
+            </CompactSection>
 
-            {/* FEES */}
-            <div className="border-t border-white/[0.08] px-5 py-5 sm:px-6">
-              <SummaryGroupLabel>
-                Price details
-              </SummaryGroupLabel>
-
-              <div className="mt-4 space-y-4">
-                <SummaryRow
-                  label="Delivery fee"
-                  value={formatVnd(
-                    preview.price
-                      .deliveryFee,
-                  )}
-                />
-
-                <SummaryRow
-                  label="Service fee"
-                  value={formatVnd(
-                    preview.price
-                      .serviceFee,
-                  )}
-                />
-              </div>
-
-              {/* TOTAL */}
-              <div className="mt-5 border-t border-white/[0.08] pt-5">
-                <div className="flex items-end justify-between gap-5">
+            {/* ===============================================
+                MOBILE PRICE DETAILS
+            ================================================ */}
+            <section className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_10px_28px_rgba(0,0,0,0.18)] lg:hidden">
+              <details>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
                   <div>
-                    <p className="text-[13px] font-medium text-white/[0.62]">
-                      Total
+                    <p className="text-[12px] font-semibold text-white/[0.84]">
+                      Price details
                     </p>
 
-                    <p className="mt-1 text-[11px] text-white/[0.34]">
-                      Final amount
+                    <p className="mt-1 text-[10px] text-white/[0.36]">
+                      View fee breakdown
                     </p>
                   </div>
 
-                  <p className="text-right text-[24px] font-semibold tracking-[-0.03em] text-white">
+                  <span className="text-[13px] font-semibold text-white">
                     {formatVnd(
-                      preview.price.total,
+                      pricing.finalFee,
                     )}
-                  </p>
+                  </span>
+                </summary>
+
+                <div className="border-t border-white/[0.07] px-4 py-4">
+                  <PriceBreakdown
+                    pricing={pricing}
+                    weightKg={
+                      draft.weightKg
+                    }
+                  />
+                </div>
+              </details>
+            </section>
+          </main>
+
+          {/* ===============================================
+              DESKTOP SUMMARY
+          ================================================ */}
+          <aside className="hidden h-fit lg:sticky lg:top-[96px] lg:block">
+            <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+              <div className="border-b border-white/[0.08] px-6 py-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.38]">
+                  Payment summary
+                </p>
+
+                <p className="mt-2 text-[18px] font-semibold text-white">
+                  Order total
+                </p>
+              </div>
+
+              <div className="px-6 py-5">
+                <PriceBreakdown
+                  pricing={pricing}
+                  weightKg={
+                    draft.weightKg
+                  }
+                />
+
+                <div className="mt-5 flex items-end justify-between gap-5 border-t border-white/[0.08] pt-5">
+                  <div>
+                    <p className="text-[13px] font-medium text-white/[0.60]">
+                      Total
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-white/[0.32]">
+                      Amount to pay
+                    </p>
+                  </div>
+
+                  <strong className="text-right text-[25px] font-semibold tracking-[-0.035em] text-white">
+                    {formatVnd(
+                      pricing.finalFee,
+                    )}
+                  </strong>
                 </div>
               </div>
-            </div>
 
-            {/* ACTIONS */}
-            <div className="border-t border-white/[0.08] p-4 sm:p-5">
-              <div className="grid gap-3 sm:grid-cols-[1fr_1.25fr] lg:grid-cols-1 xl:grid-cols-[1fr_1.15fr]">
+              <div className="border-t border-white/[0.08] p-5">
+                <button
+                  type="button"
+                  onClick={
+                    continueToPayment
+                  }
+                  className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400"
+                >
+                  Continue to payment
+
+                  <ArrowRight
+                    size={15}
+                    className="transition-transform group-hover:translate-x-0.5"
+                  />
+                </button>
+
                 <button
                   type="button"
                   onClick={() =>
@@ -303,62 +602,94 @@ export function DeliveryReviewPage() {
                       "/customer/deliveries/create",
                     )
                   }
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/[0.10] bg-white/[0.025] px-4 text-[13px] font-medium text-white/[0.78] transition hover:border-orange-500/[0.35] hover:bg-white/[0.04] hover:text-white"
+                  className="mt-3 flex h-10 w-full items-center justify-center gap-2 text-[12px] font-medium text-white/[0.42] transition hover:text-white"
                 >
                   <ArrowLeft
-                    size={15}
+                    size={14}
                   />
-
                   Edit delivery
-                </button>
-
-                <button
-                  type="button"
-                  onClick={placeOrder}
-                  className="group inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400"
-                >
-                  Place order
-
-                  <ArrowRight
-                    size={15}
-                    className="transition-transform group-hover:translate-x-0.5"
-                  />
                 </button>
               </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        </div>
       </div>
-    </div>
+
+      {/* =====================================================
+          MOBILE CHECKOUT BAR
+          Shopee / Grab style: always visible
+      ====================================================== */}
+      <div className="fixed inset-x-0 bottom-0 z-[110] border-t border-white/[0.10] bg-[#100d10]/[0.98] px-4 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-14px_34px_rgba(0,0,0,0.42)] backdrop-blur-xl lg:hidden">
+        <div className="mx-auto flex max-w-[520px] items-center gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/customer/deliveries/create",
+              )
+            }
+            className="flex h-12 shrink-0 items-center justify-center gap-1.5 px-1 text-[12px] font-medium text-white/[0.50]"
+          >
+            <ArrowLeft size={14} />
+            Edit
+          </button>
+
+          <div className="min-w-0 flex-1 text-right">
+            <p className="text-[10px] text-white/[0.36]">
+              Total
+            </p>
+
+            <p className="truncate text-[18px] font-semibold tracking-[-0.02em] text-white">
+              {formatVnd(
+                pricing.finalFee,
+              )}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={continueToPayment}
+            className="inline-flex h-12 min-w-[128px] shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
+          >
+            Pay now
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
 /* =========================================================
-   REVIEW CARD
+   COMPACT SECTION
 ========================================================= */
 
-function ReviewCard({
-  eyebrow,
+function CompactSection({
   title,
+  edit,
   children,
 }: {
-  eyebrow: string;
   title: string;
+  edit: () => void;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-sm">
-      <div className="border-b border-white/[0.07] px-5 py-5 sm:px-6">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
-          {eyebrow}
-        </p>
-
-        <h2 className="mt-2 text-[18px] font-semibold tracking-[-0.02em] text-white">
+    <section className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/94 shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
+      <div className="flex items-center justify-between gap-4 border-b border-white/[0.07] px-4 py-3.5 sm:px-5 sm:py-4">
+        <h2 className="text-[13px] font-semibold text-white/[0.88] sm:text-[15px]">
           {title}
         </h2>
+
+        <button
+          type="button"
+          onClick={edit}
+          className="text-[11px] font-medium text-orange-400/90 transition hover:text-orange-400"
+        >
+          Edit
+        </button>
       </div>
 
-      <div className="p-5 sm:p-6">
+      <div className="p-4 sm:p-5">
         {children}
       </div>
     </section>
@@ -366,10 +697,10 @@ function ReviewCard({
 }
 
 /* =========================================================
-   CONTACT CARD
+   CONTACT INFO
 ========================================================= */
 
-function ContactCard({
+function ContactInfo({
   label,
   name,
   phone,
@@ -379,55 +710,47 @@ function ContactCard({
   phone: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4 sm:p-5">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/[0.38]">
+    <div className="min-w-0">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.11em] text-white/[0.30]">
         {label}
       </p>
 
-      <p className="mt-3 truncate text-[15px] font-semibold text-white/[0.92]">
-        {name || "—"}
+      <p className="mt-1.5 truncate text-[13px] font-semibold text-white/[0.86]">
+        {name}
       </p>
 
-      <p className="mt-1 text-[13px] text-white/[0.55]">
-        {phone || "—"}
+      <p className="mt-0.5 text-[11px] text-white/[0.45]">
+        {phone}
       </p>
     </div>
   );
 }
 
 /* =========================================================
-   INFORMATION ITEM
+   COMPACT INFO
 ========================================================= */
 
-function InfoItem({
+function CompactInfo({
   label,
   value,
   helper,
-  fullWidthOnMobile = false,
 }: {
   label: string;
   value: string;
   helper?: string;
-  fullWidthOnMobile?: boolean;
 }) {
   return (
-    <div
-      className={
-        fullWidthOnMobile
-          ? "col-span-2 sm:col-span-1"
-          : ""
-      }
-    >
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/[0.38]">
+    <div className="min-w-0">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.10em] text-white/[0.30]">
         {label}
       </p>
 
-      <p className="mt-2 text-[15px] font-semibold leading-6 text-white/[0.90]">
+      <p className="mt-1.5 break-words text-[13px] font-semibold leading-5 text-white/[0.84]">
         {value}
       </p>
 
       {helper && (
-        <p className="mt-1 text-[12px] leading-5 text-white/[0.44]">
+        <p className="mt-0.5 text-[10px] leading-4 text-white/[0.34]">
           {helper}
         </p>
       )}
@@ -440,40 +763,28 @@ function InfoItem({
 ========================================================= */
 
 function RoutePoint({
-  type,
-  hub,
+  label,
+  name,
   address,
-  first = false,
 }: {
-  type: string;
-  hub: string;
+  label: string;
+  name: string;
   address: string;
-  first?: boolean;
 }) {
   return (
-    <div
-      className={`relative flex gap-4 ${
-        first
-          ? "pb-0 sm:pb-7"
-          : ""
-      }`}
-    >
-      {/* DOT */}
-      <div className="relative z-10 mt-1 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-orange-500/[0.42] bg-[#161217]">
-        <span className="h-[5px] w-[5px] rounded-full bg-orange-500" />
-      </div>
+    <div className="flex gap-3">
+      <div className="mt-[5px] h-[14px] w-[14px] shrink-0 rounded-full border-2 border-orange-500" />
 
-      {/* CONTENT */}
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-white/[0.38]">
-          {type}
+      <div className="min-w-0">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.10em] text-white/[0.30]">
+          {label}
         </p>
 
-        <p className="mt-2 text-[15px] font-semibold text-white/[0.92]">
-          {hub}
+        <p className="mt-1 text-[13px] font-semibold text-white/[0.86]">
+          {name}
         </p>
 
-        <p className="mt-1 max-w-[620px] text-[13px] leading-6 text-white/[0.52]">
+        <p className="mt-1 text-[10px] leading-4 text-white/[0.38]">
           {address}
         </p>
       </div>
@@ -482,45 +793,119 @@ function RoutePoint({
 }
 
 /* =========================================================
-   SUMMARY GROUP LABEL
+   PRICE BREAKDOWN
 ========================================================= */
 
-function SummaryGroupLabel({
-  children,
+function PriceBreakdown({
+  pricing,
+  weightKg,
 }: {
-  children: ReactNode;
+  pricing: ReturnType<
+    typeof calculateDeliveryPricing
+  >;
+  weightKg: number;
 }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-white/[0.34]">
-      {children}
-    </p>
+    <div className="space-y-3">
+      <PriceRow
+        label={`Base fee · Tier ${pricing.droneSize}`}
+        value={formatVnd(
+          pricing.baseFee,
+        )}
+      />
+
+      <PriceRow
+        label={
+          pricing.distanceKm !== null
+            ? `Distance · ${pricing.distanceKm} km`
+            : "Distance"
+        }
+        value={formatVnd(
+          pricing.distanceFee,
+        )}
+      />
+
+      <PriceRow
+        label={`Payload · ${weightKg} kg`}
+        value={formatVnd(
+          pricing.payloadFee,
+        )}
+      />
+
+      <PriceRow
+        label="Core fee"
+        value={formatVnd(
+          pricing.coreFee,
+        )}
+        strong
+      />
+
+      {pricing.isFragile && (
+        <PriceRow
+          label="Fragile items · 15%"
+          value={`+${formatVnd(
+            pricing.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {pricing.hasInsurance && (
+        <PriceRow
+          label="Package insurance · 10%"
+          value={`+${formatVnd(
+            pricing.insuranceSurcharge,
+          )}`}
+        />
+      )}
+
+      {pricing.deliveryMode ===
+      "express" ? (
+        <PriceRow
+          label="Express · 25%"
+          value={`+${formatVnd(
+            pricing.serviceSurcharge,
+          )}`}
+        />
+      ) : (
+        <PriceRow
+          label="Scheduled surcharge"
+          value={formatVnd(0)}
+        />
+      )}
+    </div>
   );
 }
 
 /* =========================================================
-   SUMMARY ROW
+   PRICE ROW
 ========================================================= */
 
-function SummaryRow({
+function PriceRow({
   label,
   value,
-  emphasized = false,
+  strong = false,
 }: {
   label: string;
   value: string;
-  emphasized?: boolean;
+  strong?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-5">
-      <span className="text-[12px] leading-5 text-white/[0.48]">
+    <div className="flex items-start justify-between gap-5">
+      <span
+        className={`text-[11px] leading-5 ${
+          strong
+            ? "font-semibold text-white/[0.66]"
+            : "text-white/[0.40]"
+        }`}
+      >
         {label}
       </span>
 
       <span
-        className={`max-w-[190px] text-right text-[12px] font-medium leading-5 ${
-          emphasized
-            ? "text-orange-400"
-            : "text-white/[0.82]"
+        className={`shrink-0 text-right text-[11px] leading-5 ${
+          strong
+            ? "font-semibold text-white"
+            : "font-medium text-white/[0.76]"
         }`}
       >
         {value}
