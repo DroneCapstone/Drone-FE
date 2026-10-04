@@ -7,10 +7,15 @@ import {
 import {
   BatteryCharging,
   BatteryFull,
+  ChevronRight,
   Clock3,
   History,
   X,
 } from "lucide-react";
+
+import {
+  useNavigate,
+} from "react-router-dom";
 
 import {
   Card,
@@ -35,10 +40,6 @@ import {
   useBatteriesQuery,
   useBatteryHistoryQuery,
 } from "../hooks/useBatteryQueries";
-
-import {
-  TECHNICIAN_HUB,
-} from "../utils/fleetStorage";
 
 type BatteryFilter =
   | "All status"
@@ -88,6 +89,9 @@ function getRemainingMinutes(iso?: string) {
 }
 
 export function BatteryManagementPage() {
+  const navigate =
+    useNavigate();
+
   const batteriesQuery =
     useBatteriesQuery();
 
@@ -118,7 +122,7 @@ export function BatteryManagementPage() {
 
   const hubLabel =
     hubBatteries[0]?.hub ||
-    TECHNICIAN_HUB;
+    "your managed hub";
 
   const visibleBatteries = useMemo(
     () =>
@@ -205,15 +209,19 @@ export function BatteryManagementPage() {
           </button>
         </CardContent>
 
-        <div className="grid grid-cols-[160px_130px_160px_1fr_170px] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
-          <Header>Battery ID</Header>
-          <Header>Charge</Header>
-          <Header>Status</Header>
-          <Header>Estimated full</Header>
-          <Header alignRight>Usage</Header>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[980px]">
+            <div className="grid grid-cols-[135px_155px_120px_110px_135px_1fr_130px] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
+              <Header>Battery ID</Header>
+              <Header>Model</Header>
+              <Header>Capacity</Header>
+              <Header>Charge</Header>
+              <Header>Status</Header>
+              <Header>Estimated full</Header>
+              <Header alignRight>Details</Header>
+            </div>
 
-        <div className="divide-y divide-[var(--tech-border)]">
+            <div className="divide-y divide-[var(--tech-border)]">
           {batteriesQuery.isPending &&
           hubBatteries.length === 0 ? (
             <div className="px-5 py-14 text-center text-[14px] text-[var(--tech-muted)]">
@@ -230,10 +238,20 @@ export function BatteryManagementPage() {
                 return (
                   <div
                     key={battery.id}
-                    className="grid grid-cols-[160px_130px_160px_1fr_170px] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
+                    className="grid grid-cols-[135px_155px_120px_110px_135px_1fr_130px] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
                   >
                     <span className="text-[14px] font-semibold text-[var(--tech-text)]">
                       {battery.id}
+                    </span>
+
+                    <span className="truncate text-[13px] font-medium text-[var(--tech-text-secondary)]">
+                      {battery.model ?? "—"}
+                    </span>
+
+                    <span className="text-[13px] text-[var(--tech-text-secondary)]">
+                      {battery.capacityWh
+                        ? `${battery.capacityWh} Wh`
+                        : "—"}
                     </span>
 
                     <div className="flex items-center gap-2">
@@ -292,11 +310,22 @@ export function BatteryManagementPage() {
                       )}
                     </div>
 
-                    <div className="text-right text-[12px] text-[var(--tech-muted)]">
-                      {battery.status ===
-                      "Ready"
-                        ? "Selected automatically from Outbound"
-                        : "Auto charging"}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/technician/fleet/batteries/${encodeURIComponent(
+                              battery.backendId ??
+                                battery.id,
+                            )}`,
+                          )
+                        }
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--tech-border)] px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500"
+                      >
+                        View details
+                        <ChevronRight size={14} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -305,14 +334,30 @@ export function BatteryManagementPage() {
           )}
 
           {!batteriesQuery.isPending &&
-            visibleBatteries.length ===
-              0 && (
+            hubBatteries.length === 0 && (
+              <div className="px-5 py-14 text-center">
+                <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
+                  No batteries are assigned to this technician hub.
+                </p>
+                <p className="mx-auto mt-2 max-w-[680px] text-[12px] leading-5 text-[var(--tech-muted)]">
+                  The request succeeded, but Backend returned an empty battery list.
+                  Check the authenticated Technician&apos;s hub assignment and make sure
+                  each battery&apos;s current_hub_id points to that same hub.
+                </p>
+              </div>
+            )}
+
+          {!batteriesQuery.isPending &&
+            hubBatteries.length > 0 &&
+            visibleBatteries.length === 0 && (
               <div className="px-5 py-14 text-center">
                 <p className="text-[14px] text-[var(--tech-muted)]">
                   No batteries match this status.
                 </p>
               </div>
             )}
+            </div>
+          </div>
         </div>
       </Card>
 

@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { operatorHubs } from '../../data/hubMockData';
+import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { Tone } from '../../types/operator';
 import {
@@ -13,7 +13,6 @@ import {
   isActionablePlanningState,
 } from '../../utils/deliveryPlanning';
 import { formatMissionTime } from '../../utils/missionTiming';
-import { loadOperatorMissions } from '../../utils/operatorMissionStorage';
 import { OrderPageShell } from './OrderPageShell';
 
 function hubName(hubId: string) {
@@ -30,7 +29,7 @@ function orderTone(status: string): Tone {
 export function OrderDetailPage() {
   const { orderId = '' } = useParams();
   const navigate = useNavigate();
-  const missions = useMemo(() => loadOperatorMissions(), []);
+  const { data: missions = [] } = useMissionListQuery();
   const {
     data: order,
     error,

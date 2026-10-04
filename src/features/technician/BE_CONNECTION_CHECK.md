@@ -1,37 +1,30 @@
-# Technician BE connection check
+# Technician BE connection check — Swagger refresh 02 Oct 2026
 
-## Frontend issues fixed
+## Quick smoke test
 
-- [x] `/api/v1` base normalization
-- [x] Bearer token from Auth service
-- [x] 401 refresh + one retry
-- [x] list envelope parsing
-- [x] no fake TanStack placeholder rows for live API lists
-- [x] Battery page no longer depends on Outbound API
-- [x] hard-coded hub filtering removed from server-scoped lists
-- [x] demo battery fallback removed from Fleet / Drone Detail
-- [x] reduced query refetch spam
-- [x] readable FastAPI 422 messages
-- [x] all Technician Swagger endpoints represented in the API layer
+After logging in with a real Technician account:
 
-## Backend checks still required
+1. `GET /api/v1/technician/auth/` -> expect `200`.
+2. `GET /api/v1/technician/users/` -> expect `200`.
+3. `GET /api/v1/technician/missions/` -> expect `200`.
+4. `GET /api/v1/technician/ai_predictions/` -> expect `200`.
+5. Hub Fleet -> `GET /technician/fleet/drones`.
+6. Transit -> `GET /technician/fleet/incoming`.
+7. Battery -> `GET /technician/fleet/batteries`.
+8. Outbound -> `GET /technician/deliveries/outbound`.
+9. Confirmations -> `GET /technician/deliveries/confirmations`.
+10. Maintenance -> alerts + work orders.
 
-From the screenshots, these requests were still browser-blocked while other protected Technician endpoints returned 200:
+## Status interpretation
 
-```text
-GET /api/v1/technician/fleet/incoming
-GET /api/v1/technician/deliveries/outbound
-```
+- `200`: endpoint and auth are working.
+- `401`: token/session/authentication problem.
+- `403`: authenticated but role/permission denied.
+- `404`: route or identifier mismatch.
+- `422`: request/path/body validation mismatch.
+- `500`: request reached Backend but route/service/query/serialization failed.
+- Browser CORS error with no normal HTTP response: Backend CORS/preflight/error-header configuration.
 
-Ask Backend to test both endpoints directly in Swagger with the same Technician account. If Swagger returns an application error/500, fix the route handler first. If Swagger returns 200 but the browser reports CORS, ensure CORS middleware covers `http://localhost:5173` and also adds headers to error responses.
+## Important
 
-## Recommended test order
-
-1. Login as real Technician.
-2. `GET /api/v1/users/me` -> 200.
-3. Hub Fleet -> only `drones` (+ header profile/unread-count) should be relevant.
-4. Battery Management -> `batteries` should return and render; Outbound must not be required.
-5. Transit Missions -> test `incoming`; only after real rows load, test `confirm-arrival`.
-6. Outbound Deliveries -> test `outbound`, then `receive`, then battery use + `prepare-battery`.
-7. Delivery Confirmations -> `confirmations`, then `confirm-pickup`.
-8. Maintenance Alerts / Work Orders -> list, create, detail, update, inspection, record.
+A `500 Internal Server Error` is not fixed by changing TanStack Query or the frontend URL when the request URL/method are already correct. Backend should check the server traceback.

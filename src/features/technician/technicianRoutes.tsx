@@ -10,6 +10,7 @@ import {
 import { FleetPage } from "./pages/FleetPage";
 import { TransitMissionsPage } from "./pages/TransitMissionsPage";
 import { BatteryManagementPage } from "./pages/BatteryManagementPage";
+import { BatteryDetailPage } from "./pages/BatteryDetailPage";
 import { DroneDetailPage } from "./pages/DroneDetailPage";
 import { OutboundDeliveriesPage } from "./pages/OutboundDeliveriesPage";
 import { DeliveryConfirmationsPage } from "./pages/DeliveryConfirmationsPage";
@@ -62,6 +63,10 @@ export const technicianRoutes: RouteObject[] = [
       {
         path: "fleet/batteries",
         element: <BatteryManagementPage />,
+      },
+      {
+        path: "fleet/batteries/:batteryId",
+        element: <BatteryDetailPage />,
       },
       {
         path: "fleet/:droneId",

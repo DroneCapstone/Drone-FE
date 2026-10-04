@@ -1,6 +1,24 @@
 export const technicianQueryKeys = {
   all: ["technician"] as const,
 
+  technicianAuth: () =>
+    [
+      ...technicianQueryKeys.all,
+      "auth",
+    ] as const,
+
+  technicianUsers: () =>
+    [
+      ...technicianQueryKeys.all,
+      "users",
+    ] as const,
+
+  aiPredictions: () =>
+    [
+      ...technicianQueryKeys.all,
+      "ai-predictions",
+    ] as const,
+
   fleet: () =>
     [...technicianQueryKeys.all, "fleet"] as const,
 
@@ -27,6 +45,13 @@ export const technicianQueryKeys = {
 
   batteries: () =>
     [...technicianQueryKeys.all, "batteries"] as const,
+
+  battery: (batteryId: string) =>
+    [
+      ...technicianQueryKeys.all,
+      "battery",
+      batteryId,
+    ] as const,
 
   outbound: () =>
     [...technicianQueryKeys.all, "outbound"] as const,

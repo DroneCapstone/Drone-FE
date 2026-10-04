@@ -15,6 +15,15 @@ export type MissionType = 'Delivery';
 
 export type DeliveryMode = 'Express' | 'Scheduled';
 
+export type CustomerContactChannel = 'Phone' | 'SMS';
+
+export type CustomerContactOutcome =
+  | 'Reached'
+  | 'No Answer'
+  | 'Will Pick Up'
+  | 'Sent'
+  | 'Failed';
+
 /**
  * Operator-facing Order lifecycle.
  * Operator scope ends when the package is received at the Destination Hub.

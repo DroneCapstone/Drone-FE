@@ -302,7 +302,7 @@ export function FleetPage() {
   return (
     <TechnicianPageShell
       title="Hub fleet"
-      description={`Drones physically stored at ${hubLabel}. Batteries are installed only when a drone is prepared for departure.`}
+      description={`Drones physically stored at ${hubLabel}.`}
     >
       {(apiError || queryError) && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
@@ -354,12 +354,11 @@ export function FleetPage() {
         <CardContent className="p-0">
           <Table className="fleet-table table-fixed">
             <colgroup>
-              <col className="w-[16%]" />
+              <col className="w-[18%]" />
+              <col className="w-[24%]" />
+              <col className="w-[24%]" />
               <col className="w-[20%]" />
-              <col className="w-[20%]" />
-              <col className="w-[16%]" />
-              <col className="w-[16%]" />
-              <col className="w-[12%]" />
+              <col className="w-[14%]" />
             </colgroup>
 
             <TableHeader>
@@ -377,10 +376,6 @@ export function FleetPage() {
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
-                  Battery
-                </TableHead>
-
-                <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
                   Hub
                 </TableHead>
 
@@ -395,12 +390,6 @@ export function FleetPage() {
               0 ? (
                 filteredDrones.map(
                   (drone) => {
-                    const installedBatteryId =
-                      drone.installedBatteryId;
-
-                    const installedBatteryPct =
-                      drone.installedBatteryPct;
-
                     const code =
                       getDroneDisplayCode(
                         drone,
@@ -449,24 +438,6 @@ export function FleetPage() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          {installedBatteryId ? (
-                            <div>
-                              <p className="text-[13px] font-semibold text-[var(--tech-text-secondary)]">
-                                {installedBatteryId}
-                              </p>
-
-                              <p className="mt-1 text-[11px] text-orange-500">
-                                {installedBatteryPct ?? 100}% · Installed
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-[12px] font-medium text-[var(--tech-muted)]">
-                              Not installed
-                            </span>
-                          )}
-                        </TableCell>
-
 
                         <TableCell className="text-center text-[12px] text-[var(--tech-muted)]">
                           {
@@ -518,7 +489,7 @@ export function FleetPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={5}
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
                     No drones are currently assigned to{" "}
@@ -589,49 +560,23 @@ export function FleetPage() {
                     />
                   </Field>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Status">
-                      <DropdownSelect
-                        value={
-                          form.status
-                        }
-                        onChange={(
-                          value,
-                        ) =>
-                          setForm(
-                            (
-                              current,
-                            ) => ({
-                              ...current,
-                              status:
-                                value as DroneStatus,
-                            }),
-                          )
-                        }
-                        options={[
-                          "Available",
-                          "Maintenance",
-                        ]}
-                        ariaLabel="Drone status"
-                        className="w-full min-w-0"
-                      />
-                    </Field>
-
-                    <Field label="Installed battery">
-                      <input
-                        disabled
-                        value={
-                          editingDrone.installedBatteryId ??
-                          "Not installed"
-                        }
-                        className="tech-control h-10 w-full cursor-not-allowed px-3 !text-[13px] opacity-70"
-                      />
-                    </Field>
-                  </div>
-
-                  <p className="-mt-1 text-[11px] leading-5 text-[var(--tech-muted)]">
-                    Hub-stored drones normally have no battery installed. Batteries are managed separately in Battery management.
-                  </p>
+                  <Field label="Technical status">
+                    <DropdownSelect
+                      value={form.status}
+                      onChange={(value) =>
+                        setForm((current) => ({
+                          ...current,
+                          status: value as DroneStatus,
+                        }))
+                      }
+                      options={[
+                        "Available",
+                        "Maintenance",
+                      ]}
+                      ariaLabel="Drone technical status"
+                      className="w-full min-w-0"
+                    />
+                  </Field>
 
                   <Field label="Assigned hub">
                     <input
