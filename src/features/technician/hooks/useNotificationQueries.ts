@@ -19,7 +19,10 @@ export function useNotificationsQuery() {
     queryKey:
       technicianQueryKeys.notifications(),
     queryFn: getNotificationsApi,
-    refetchInterval: 30_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -29,7 +32,10 @@ export function useUnreadCountQuery() {
       technicianQueryKeys.unreadCount(),
     queryFn:
       getUnreadNotificationCountApi,
-    refetchInterval: 30_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 

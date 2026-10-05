@@ -34,7 +34,6 @@ import {
 
 import {
   useBatteryDetailQuery,
-  useMarkBatteryChargedMutation,
 } from "../hooks/useBatteryQueries";
 
 function formatRemainingTime(iso?: string) {
@@ -73,44 +72,22 @@ export function BatteryDetailPage() {
     batteryId,
   );
 
-  const markChargedMutation =
-    useMarkBatteryChargedMutation();
 
   const battery = batteryQuery.data;
 
   const detailAction = battery ? (
-    <div className="flex items-center gap-2">
-      {battery.status === "Charging" && (
-        <Button
-          type="button"
-          disabled={markChargedMutation.isPending}
-          onClick={() =>
-            markChargedMutation.mutate(
-              battery.backendId ??
-                batteryId ??
-                battery.id,
-            )
-          }
-          className="h-10 bg-orange-500 px-4 text-[13px] font-semibold text-black hover:bg-orange-400"
-        >
-          {markChargedMutation.isPending
-            ? "Updating..."
-            : "Mark fully charged"}
-        </Button>
-      )}
-
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() =>
-          batteryQuery.refetch()
-        }
-        className="h-10 border-[var(--tech-border)] bg-transparent px-3 text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:bg-transparent hover:text-orange-500"
-        aria-label="Refresh battery details"
-      >
-        <RefreshCw size={15} />
-      </Button>
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() =>
+        batteryQuery.refetch()
+      }
+      className="h-10 border-[var(--tech-border)] bg-transparent px-3 text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:bg-transparent hover:text-orange-500"
+      aria-label="Refresh battery details"
+      title="Refresh battery details"
+    >
+      <RefreshCw size={15} />
+    </Button>
   ) : undefined;
 
   return (
@@ -335,11 +312,6 @@ export function BatteryDetailPage() {
             </CardContent>
           </Card>
 
-          {markChargedMutation.error instanceof Error && (
-            <div className="mt-5 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
-              {markChargedMutation.error.message}
-            </div>
-          )}
         </>
       )}
     </TechnicianPageShell>

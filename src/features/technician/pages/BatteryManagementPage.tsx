@@ -8,7 +8,6 @@ import {
   BatteryCharging,
   BatteryFull,
   ChevronRight,
-  Clock3,
   History,
   X,
 } from "lucide-react";
@@ -44,49 +43,6 @@ import {
 type BatteryFilter =
   | "All status"
   | BatteryStatus;
-
-function formatReadyTime(iso?: string) {
-  if (!iso) {
-    return "Ready now";
-  }
-
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-
-  return new Intl.DateTimeFormat(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    },
-  )
-    .format(date)
-    .replace(",", " ·");
-}
-
-function getRemainingMinutes(iso?: string) {
-  if (!iso) {
-    return 0;
-  }
-
-  const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.ceil(
-      (time - Date.now()) /
-        60_000,
-    ),
-  );
-}
 
 export function BatteryManagementPage() {
   const navigate =
@@ -151,7 +107,7 @@ export function BatteryManagementPage() {
   return (
     <TechnicianPageShell
       title="Battery management"
-      description={`Shared battery inventory at ${hubLabel}. Charge level and estimated full time are loaded from the backend.`}
+      description={`Shared battery inventory at ${hubLabel}. Charge level and charging status are loaded from the backend.`}
     >
       {batteriesQuery.error instanceof Error && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
@@ -210,14 +166,13 @@ export function BatteryManagementPage() {
         </CardContent>
 
         <div className="overflow-x-auto">
-          <div className="min-w-[980px]">
-            <div className="grid grid-cols-[135px_155px_120px_110px_135px_1fr_130px] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[145px_170px_130px_120px_145px_1fr] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
               <Header>Battery ID</Header>
               <Header>Model</Header>
               <Header>Capacity</Header>
               <Header>Charge</Header>
               <Header>Status</Header>
-              <Header>Estimated full</Header>
               <Header alignRight>Details</Header>
             </div>
 
@@ -230,15 +185,10 @@ export function BatteryManagementPage() {
           ) : (
             visibleBatteries.map(
               (battery) => {
-                const remaining =
-                  getRemainingMinutes(
-                    battery.estimatedReadyAt,
-                  );
-
                 return (
                   <div
                     key={battery.id}
-                    className="grid grid-cols-[135px_155px_120px_110px_135px_1fr_130px] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
+                    className="grid grid-cols-[145px_170px_130px_120px_145px_1fr] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
                   >
                     <span className="text-[14px] font-semibold text-[var(--tech-text)]">
                       {battery.id}
@@ -284,31 +234,6 @@ export function BatteryManagementPage() {
                       {battery.status}
                     </span>
 
-                    <div>
-                      {battery.status ===
-                      "Charging" ? (
-                        <>
-                          <p className="flex items-center gap-2 text-[13px] font-medium text-[var(--tech-text-secondary)]">
-                            <Clock3 size={14} />
-                            {remaining > 0
-                              ? `About ${remaining} min`
-                              : "Charging"}
-                          </p>
-
-                          {battery.estimatedReadyAt && (
-                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {formatReadyTime(
-                                battery.estimatedReadyAt,
-                              )}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-[12px] font-medium text-orange-500">
-                          Ready now
-                        </span>
-                      )}
-                    </div>
 
                     <div className="flex justify-end">
                       <button

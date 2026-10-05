@@ -10,15 +10,37 @@ import {
   unwrapList,
 } from "../api/httpClient";
 
+import {
+  getTechnicianAuthApi,
+} from "../api/authApi";
+
+import {
+  getTechnicianMissionsApi,
+} from "../api/transitApi";
+
+import {
+  buildDeliveryBackendContext,
+  getMissionInfoForDelivery,
+  resolveHubLabel,
+  type DeliveryBackendContext,
+} from "./deliveryBackendContext";
+
 export type DeliveryStatus =
   | "Delivered"
   | "Completed"
   | "Cancelled";
 
 export type DeliveryConfirmation = {
+  /** Internal/backend id used by action endpoints. */
   orderId: string;
+  /** Human-readable order code returned by Backend. */
+  orderCode?: string;
+
   missionId: string;
+  missionCode?: string;
+
   droneId: string;
+  droneCode?: string;
 
   recipient: string;
   destination: string;
@@ -459,58 +481,218 @@ function normalizeApiDeliveryStatus(
   return "Delivered";
 }
 
-function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation | null {
+function mapApiDeliveryConfirmation(
+  value: unknown,
+  context?: DeliveryBackendContext,
+): DeliveryConfirmation | null {
   if (!isRecord(value)) return null;
 
+  /*
+   * Use id/order_id for backend actions and keep order_code only for display.
+   * The two values are not interchangeable (e.g. id=25 while
+   * order_code=ORD-TECH-CONFIRM-1).
+   */
   const rawOrderId = pickString(value, ["order_id", "orderId", "id"]);
   if (!rawOrderId) return null;
 
-  const deliveredAtRaw = pickString(value, ["arrived_at", "delivered_at", "arrival_at"], "");
-  const deliveredDate = deliveredAtRaw ? new Date(deliveredAtRaw) : new Date();
-  const deliveredIso = Number.isNaN(deliveredDate.getTime())
-    ? new Date().toISOString()
-    : deliveredDate.toISOString();
-  const deadline = buildPickupDeadline(deliveredIso);
-  const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at", "received_confirmed_at"], "");
+  const orderId = confirmationDisplayId("ORD", rawOrderId);
+  const orderCode =
+    pickString(
+      value,
+      ["order_code", "orderCode", "code"],
+      "",
+    ) || orderId;
+
+  const missionInfo =
+    getMissionInfoForDelivery(value, context);
+
+  const rawMissionId =
+    pickString(value, ["mission_id", "missionId"], "") ||
+    missionInfo?.missionId ||
+    "";
+
+  const rawMissionCode =
+    pickString(
+      value,
+      ["mission_code", "missionCode"],
+      "",
+    ) ||
+    missionInfo?.missionCode ||
+    "";
+
+  const rawDroneId =
+    pickString(value, ["drone_id", "droneId"], "") ||
+    missionInfo?.droneId ||
+    "";
+
+  const rawDroneCode =
+    pickString(
+      value,
+      ["drone_code", "drone_name"],
+      "",
+    ) ||
+    missionInfo?.droneCode ||
+    "";
+
+  const deliveredAtRaw =
+    pickString(
+      value,
+      ["arrived_at", "delivered_at", "arrival_at"],
+      "",
+    ) ||
+    missionInfo?.arrivedAt ||
+    "";
+
+  /*
+   * Do not fabricate "now" when Backend does not return an arrival timestamp.
+   * That used to create a fake 48-hour countdown on every page refresh.
+   */
+  const deliveredDate = deliveredAtRaw
+    ? new Date(deliveredAtRaw)
+    : null;
+
+  const hasValidDeliveredAt = Boolean(
+    deliveredDate &&
+      !Number.isNaN(deliveredDate.getTime()),
+  );
+
+  const deliveredIso =
+    hasValidDeliveredAt && deliveredDate
+      ? deliveredDate.toISOString()
+      : "";
+
+  const deadline = deliveredIso
+    ? buildPickupDeadline(deliveredIso)
+    : {
+        pickupDeadlineAt: "—",
+        pickupDeadlineAtIso: "",
+      };
+
+  const confirmedAt = pickString(
+    value,
+    [
+      "arrival_confirmed_at",
+      "pickup_confirmed_at",
+      "received_confirmed_at",
+    ],
+    "",
+  );
+
   const rawStatus = pickString(
     value,
     ["status", "order_status", "delivery_status", "package_status"],
     "Delivered",
   );
-  const status = normalizeApiDeliveryStatus(rawStatus, confirmedAt);
-  const cancelledAt = pickString(value, ["cancelled_at", "canceled_at"], "");
-  const cancelReason = pickString(value, ["cancel_reason", "cancellation_reason", "reason"], "");
+
+  const status = normalizeApiDeliveryStatus(
+    rawStatus,
+    confirmedAt,
+  );
+
+  const cancelledAt = pickString(
+    value,
+    ["cancelled_at", "canceled_at"],
+    "",
+  );
+
+  const cancelReason = pickString(
+    value,
+    ["cancel_reason", "cancellation_reason", "reason"],
+    "",
+  );
+
+  const missionId = rawMissionId
+    ? confirmationDisplayId("MSN", rawMissionId)
+    : "";
+
+  const missionCode =
+    rawMissionCode || missionId;
+
+  const droneId = rawDroneId
+    ? confirmationDisplayId("DR", rawDroneId, 3)
+    : "";
+
+  const droneCode =
+    rawDroneCode || droneId;
 
   return {
-    orderId: confirmationDisplayId("ORD", rawOrderId),
-    missionId: confirmationDisplayId(
-      "MSN",
-      pickString(value, ["mission_id", "missionId"], "0"),
+    orderId,
+    orderCode,
+
+    missionId,
+    missionCode: missionCode || undefined,
+
+    droneId,
+    droneCode: droneCode || undefined,
+
+    recipient: pickString(
+      value,
+      ["recipient_name", "customer_name", "recipient"],
+      "Customer",
     ),
-    droneId: confirmationDisplayId(
-      "DR",
-      pickString(value, ["drone_id", "droneId"], "0"),
-      3,
+
+    destination: resolveHubLabel(
+      value,
+      "destination",
+      context,
+      missionInfo?.destinationHub,
+      true,
     ),
-    recipient: pickString(value, ["recipient_name", "customer_name", "recipient"], "Customer"),
-    destination: pickString(value, ["destination_hub_name", "hub_name", "destination"], "—"),
+
     status,
-    deliveredAt: formatApiDateTime(deliveredAtRaw, "—"),
+
+    deliveredAt: deliveredAtRaw
+      ? formatApiDateTime(deliveredAtRaw, "—")
+      : "—",
+
     deliveredAtIso: deliveredIso,
+
     ...deadline,
-    receivedConfirmedAt: confirmedAt ? formatApiDateTime(confirmedAt, confirmedAt) : undefined,
-    confirmedBy: pickString(value, ["confirmed_by", "technician_name"], "") || undefined,
+
+    receivedConfirmedAt: confirmedAt
+      ? formatApiDateTime(confirmedAt, confirmedAt)
+      : undefined,
+
+    confirmedBy:
+      pickString(
+        value,
+        ["confirmed_by", "technician_name"],
+        "",
+      ) || undefined,
+
     cancelledAt: cancelledAt
       ? formatApiDateTime(cancelledAt, cancelledAt)
       : undefined,
+
     cancelReason: cancelReason || undefined,
   };
 }
 
 export async function refreshDeliveryConfirmationsFromApi() {
   const payload = await getDeliveryConfirmationsApi();
+
+  /*
+   * Confirmation rows may only contain order/hub ids. Enrich them with the
+   * Technician mission list and current Technician hub from Backend. Both
+   * enrichment calls are optional; the confirmation API remains the source
+   * of truth and the page still renders if either helper endpoint fails.
+   */
+  const [missionsResult, authResult] = await Promise.allSettled([
+    getTechnicianMissionsApi(),
+    getTechnicianAuthApi(),
+  ]);
+
+  const context = buildDeliveryBackendContext(
+    missionsResult.status === "fulfilled"
+      ? missionsResult.value
+      : null,
+    authResult.status === "fulfilled"
+      ? authResult.value
+      : null,
+  );
+
   demoDeliveries = unwrapList(payload)
-    .map(mapApiDeliveryConfirmation)
+    .map((value) => mapApiDeliveryConfirmation(value, context))
     .filter((item): item is DeliveryConfirmation => Boolean(item));
 
   notifyDeliveryUpdate();

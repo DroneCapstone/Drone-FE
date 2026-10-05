@@ -1,6 +1,7 @@
 import {
   confirmMissionArrivalApi,
   getIncomingMissionsApi,
+  getTechnicianMissionsApi,
 } from "../api/transitApi";
 
 import {
@@ -28,6 +29,12 @@ export type TransitMission = {
 
   missionId: string;
   legId: string;
+
+  /** Raw mission state returned by Backend, e.g. "In Progress". */
+  missionState?: string;
+
+  /** Backend drone display code/name when provided. */
+  droneCode?: string;
 
   purpose:
     TransitMissionPurpose;
@@ -76,6 +83,12 @@ export type TransitMissionHistory = {
 
   missionId: string;
   legId: string;
+
+  /** Raw mission state returned by Backend, e.g. "In Progress". */
+  missionState?: string;
+
+  /** Backend drone display code/name when provided. */
+  droneCode?: string;
 
   purpose:
     TransitMissionPurpose;
@@ -308,68 +321,172 @@ function displayId(prefix: string, value: string, width = 4) {
 function mapApiTransitMission(value: unknown): TransitMission | null {
   if (!isRecord(value)) return null;
 
-  const missionRaw = pickString(value, ["mission_id", "missionId", "id"]);
+  // /technician/missions/ returns mission_code, while /fleet/incoming
+  // may return mission_id/id. Support all variants so Transit Missions can
+  // consume the real Backend payload instead of depending on one shape.
+  const missionRaw = pickString(
+    value,
+    ["mission_code", "mission_id", "missionId", "id"],
+  );
+
   if (!missionRaw) return null;
 
-  const droneRaw = pickString(value, ["drone_id", "current_drone_id", "droneId"], "0");
+  const rawDroneCode = pickString(
+    value,
+    ["drone_code", "drone_name", "name"],
+    "",
+  );
+
+  const droneRaw = pickString(
+    value,
+    ["drone_id", "current_drone_id", "droneId"],
+    "",
+  );
+
+  const derivedDroneId =
+    droneRaw ||
+    rawDroneCode.match(/(\d+)$/)?.[1] ||
+    "0";
+
   const missionId = displayId("MSN", missionRaw);
-  const droneId = displayId("DR", droneRaw, 3);
-  const droneName = pickString(value, ["drone_name", "drone_code", "name"], "DR");
-  const droneType = (droneName.match(/[A-Za-z]+/)?.[0] ?? pickString(value, ["drone_type"], "DR")).toUpperCase();
+  const droneId = displayId("DR", derivedDroneId, 3);
+  const droneType = (
+    rawDroneCode.match(/[A-Za-z]+/)?.[0] ??
+    pickString(value, ["drone_type"], "DR")
+  ).toUpperCase();
 
   const status = normalizeTransitStatus(
     pickString(value, ["handling_status", "status"], "INCOMING"),
   );
 
   const purpose = normalizeTransitPurpose(
-    pickString(value, ["purpose", "mission_purpose", "arrival_reason"], "BATTERY_STOP"),
+    pickString(
+      value,
+      ["purpose", "mission_purpose", "arrival_reason"],
+      "BATTERY_STOP",
+    ),
+  );
+
+  const batteryCode = pickString(
+    value,
+    ["battery_code", "battery_id", "installed_battery_id"],
+    "",
   );
 
   return {
     id: pickString(value, ["transit_id", "id"], `TM-${missionRaw}`),
     missionId,
-    legId: pickString(value, ["leg_id", "mission_leg_id"], `LEG-${missionRaw}`),
+    legId: pickString(
+      value,
+      ["leg_id", "mission_leg_id"],
+      `LEG-${missionRaw}`,
+    ),
+    missionState:
+      pickString(value, ["mission_state", "mission_status"], "") ||
+      undefined,
+    droneCode: rawDroneCode || undefined,
     purpose,
     currentDroneId: droneId,
     droneType,
-    droneModel: pickString(value, ["drone_model", "model"], "—"),
-    batteryId: (() => {
-      const battery = pickString(value, ["battery_id", "installed_battery_id"], "");
-      return battery ? displayId("BAT", battery, 3) : undefined;
-    })(),
-    batteryLevelPct: pickNumber(value, ["battery_level_pct", "battery_pct", "charge_level_pct"], 0),
-    requiredDepartureBatteryPct: pickNumber(value, ["required_departure_battery_pct", "required_battery_pct"], 100),
-    batteryServiceRequired: pickBoolean(value, ["battery_service_required", "requires_battery_service"], status === "At Hub" && purpose === "BATTERY_STOP"),
+    droneModel: pickString(value, ["drone_model", "model"], rawDroneCode || "—"),
+    batteryId: batteryCode
+      ? displayId("BAT", batteryCode, 3)
+      : undefined,
+    batteryLevelPct: pickNumber(
+      value,
+      ["battery_percent", "battery_level_pct", "battery_pct", "charge_level_pct"],
+      0,
+    ),
+    requiredDepartureBatteryPct: pickNumber(
+      value,
+      ["required_departure_battery_pct", "required_battery_pct"],
+      100,
+    ),
+    batteryServiceRequired: pickBoolean(
+      value,
+      ["battery_service_required", "requires_battery_service"],
+      status === "At Hub" && purpose === "BATTERY_STOP",
+    ),
     origin: pickString(value, ["origin", "origin_hub_name", "origin_name"], "—"),
     hub: pickString(value, ["hub", "hub_name", "target_hub_name"], "Hub"),
-    destination: pickString(value, ["destination", "destination_hub_name", "destination_name"], "—"),
+    destination: pickString(
+      value,
+      ["destination", "destination_hub_name", "destination_name"],
+      "—",
+    ),
     status,
-    arrivalConfirmedAt: pickString(value, ["arrival_confirmed_at"], "") || undefined,
-    cannotContinueReason: pickString(value, ["cannot_continue_reason"], "") || undefined,
-    replacementRequestedAt: pickString(value, ["replacement_requested_at"], "") || undefined,
-    replacementReason: pickString(value, ["replacement_reason"], "") || undefined,
+    arrivalConfirmedAt:
+      pickString(value, ["arrival_confirmed_at"], "") || undefined,
+    cannotContinueReason:
+      pickString(value, ["cannot_continue_reason"], "") || undefined,
+    replacementRequestedAt:
+      pickString(value, ["replacement_requested_at"], "") || undefined,
+    replacementReason:
+      pickString(value, ["replacement_reason"], "") || undefined,
     replacementDroneId: (() => {
       const replacement = pickString(value, ["replacement_drone_id"], "");
       return replacement ? displayId("DR", replacement, 3) : undefined;
     })(),
-    replacementAssignedAt: pickString(value, ["replacement_assigned_at"], "") || undefined,
-    incidentAlertId: pickString(value, ["incident_alert_id", "maintenance_alert_id"], "") || undefined,
+    replacementAssignedAt:
+      pickString(value, ["replacement_assigned_at"], "") || undefined,
+    incidentAlertId:
+      pickString(value, ["incident_alert_id", "maintenance_alert_id"], "") ||
+      undefined,
   };
 }
 
 export async function refreshTransitMissionsFromApi() {
-  const payload = await getIncomingMissionsApi();
-  const next = unwrapList(payload)
-    .map(mapApiTransitMission)
-    .filter((item): item is TransitMission => Boolean(item));
+  // Transit Missions needs both missions still approaching the hub and missions
+  // already at the hub. The Backend /technician/missions/ endpoint currently
+  // returns that state (mission_code, mission_state, handling_status), while
+  // /fleet/incoming can be empty because it only represents the narrower
+  // incoming-fleet queue. Merge both responses and let the incoming payload
+  // override a mission when it contains richer arrival data.
+  const [missionsResult, incomingResult] = await Promise.allSettled([
+    getTechnicianMissionsApi(),
+    getIncomingMissionsApi(),
+  ]);
 
-  demoTransitMissions = next;
+  const merged = new Map<string, TransitMission>();
+
+  const addPayload = (payload: unknown) => {
+    unwrapList(payload)
+      .map(mapApiTransitMission)
+      .filter((item): item is TransitMission => Boolean(item))
+      .forEach((mission) => {
+        merged.set(mission.missionId, {
+          ...(merged.get(mission.missionId) ?? {}),
+          ...mission,
+        } as TransitMission);
+      });
+  };
+
+  if (missionsResult.status === "fulfilled") {
+    addPayload(missionsResult.value);
+  }
+
+  if (incomingResult.status === "fulfilled") {
+    addPayload(incomingResult.value);
+  }
+
+  if (merged.size === 0) {
+    if (missionsResult.status === "rejected") {
+      throw missionsResult.reason;
+    }
+
+    if (incomingResult.status === "rejected") {
+      throw incomingResult.reason;
+    }
+  }
+
+  demoTransitMissions = [...merged.values()];
   window.dispatchEvent(new Event("technician-transit-missions-updated"));
   return loadTransitMissions();
 }
 
 export async function confirmTransitArrivalOnServer(missionId: string) {
-  const result = await confirmMissionArrivalApi(missionId);
-  await refreshTransitMissionsFromApi();
-  return result;
+  // Do not refetch here. The TanStack mutation invalidates the transit query
+  // after a successful confirmation, which produces one fresh request cycle.
+  // Refetching here as well caused duplicate missions/incoming requests.
+  return confirmMissionArrivalApi(missionId);
 }

@@ -303,7 +303,7 @@ export function OutboundDeliveriesPage() {
             >
               <div>
                 <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                  {delivery.orderId}
+                  {delivery.orderCode ?? delivery.orderId}
                 </p>
 
                 <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
@@ -318,9 +318,10 @@ export function OutboundDeliveriesPage() {
               </div>
 
               <span className="text-[13px] text-[var(--tech-text-secondary)]">
-                {getMissionDisplayId(
-                  delivery.missionId,
-                )}
+                {delivery.missionCode ??
+                  getMissionDisplayId(
+                    delivery.missionId,
+                  )}
               </span>
 
               <span className="text-[13px] text-[var(--tech-text-secondary)]">
