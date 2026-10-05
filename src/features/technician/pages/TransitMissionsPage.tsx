@@ -106,6 +106,10 @@ function getDroneCode(
 function getMissionDroneCode(
   mission: TransitMission,
 ) {
+  if (mission.droneCode) {
+    return mission.droneCode;
+  }
+
   return getDroneCode(
     mission.droneType,
     mission.currentDroneId,
@@ -158,15 +162,17 @@ function getPurposeLabel(
 }
 
 function getMissionStateLabel(
-  purpose: TransitMissionPurpose,
+  mission: TransitMission,
 ) {
-  if (purpose === "BATTERY_STOP") {
+  if (mission.missionState) {
+    return mission.missionState;
+  }
+
+  if (mission.purpose === "BATTERY_STOP") {
     return "Active mission";
   }
 
-  if (
-    purpose === "RETURN_TO_HUB"
-  ) {
+  if (mission.purpose === "RETURN_TO_HUB") {
     return "Mission completed";
   }
 
@@ -1170,7 +1176,7 @@ export function TransitMissionsPage() {
                         }
                       >
                         {getMissionStateLabel(
-                          mission.purpose,
+                          mission,
                         )}
                       </p>
 
@@ -1199,10 +1205,9 @@ export function TransitMissionsPage() {
                             : "mt-1 block text-[12px] text-[var(--tech-muted)]"
                         }
                       >
-                        {
-                          mission.batteryLevelPct
-                        }
-                        %
+                        {mission.batteryId || mission.batteryLevelPct > 0
+                          ? `${mission.batteryLevelPct}%`
+                          : "—"}
                       </span>
 
                       {batteryNeedsService &&
@@ -1594,7 +1599,7 @@ export function TransitMissionsPage() {
                   <DetailField
                     label="Mission state"
                     value={getMissionStateLabel(
-                      selectedMission.purpose,
+                      selectedMission,
                     )}
                   />
 

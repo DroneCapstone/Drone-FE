@@ -22,6 +22,21 @@ import {
 
 import { markOrderReceivedAtOriginHub } from "../../operator/utils/operatorOrderStorage";
 
+import {
+  getTechnicianAuthApi,
+} from "../api/authApi";
+
+import {
+  getTechnicianMissionsApi,
+} from "../api/transitApi";
+
+import {
+  buildDeliveryBackendContext,
+  getMissionInfoForDelivery,
+  resolveHubLabel,
+  type DeliveryBackendContext,
+} from "./deliveryBackendContext";
+
 export type OutboundDeliveryStatus =
 
   | "Awaiting Drop-off"
@@ -34,7 +49,14 @@ export type OutboundDeliveryStatus =
 
 export type OutboundDelivery = {
 
+  /**
+   * Internal/backend order identifier. Keep this separate from orderCode so
+   * action endpoints still receive the real database id.
+   */
   orderId: string;
+
+  /** Human-readable code returned by Backend, e.g. ORD-TECH-OUT-3. */
+  orderCode?: string;
 
   customerName: string;
 
@@ -49,6 +71,8 @@ export type OutboundDelivery = {
   status: OutboundDeliveryStatus;
 
   missionId?: string;
+
+  missionCode?: string;
 
   legId?: string;
 
@@ -678,45 +702,138 @@ function normalizeOutboundStatus(
 
 }
 
-function mapApiOutbound(value: unknown): OutboundDelivery | null {
+function mapApiOutbound(
+  value: unknown,
+  context?: DeliveryBackendContext,
+): OutboundDelivery | null {
 
   if (!isRecord(value)) return null;
 
+  /*
+   * Keep the database id as the action id. `order_code` is only a display
+   * value; using ORD-TECH-OUT-3 as the API id could incorrectly resolve to 3
+   * even when the actual backend order id is 24.
+   */
   const rawOrderId = pickString(value, ["order_id", "orderId", "id"]);
 
   if (!rawOrderId) return null;
 
   const orderId = outboundDisplayId("ORD", rawOrderId);
 
-  const rawMissionId = pickString(value, ["mission_id", "missionId"], "");
+  const orderCode =
+    pickString(
+      value,
+      ["order_code", "orderCode", "code"],
+      "",
+    ) || orderId;
 
-  const rawDroneId = pickString(value, ["drone_id", "assigned_drone_id", "droneId"], "");
+  const missionInfo =
+    getMissionInfoForDelivery(value, context);
 
-  const rawBatteryId = pickString(value, ["battery_id", "installed_battery_id"], "");
+  const rawMissionId =
+    pickString(value, ["mission_id", "missionId"], "") ||
+    missionInfo?.missionId ||
+    "";
 
-  const missionId = rawMissionId ? outboundDisplayId("MSN", rawMissionId) : undefined;
+  const rawDroneId =
+    pickString(
+      value,
+      ["drone_id", "assigned_drone_id", "droneId"],
+      "",
+    ) ||
+    missionInfo?.droneId ||
+    "";
 
-  const assignedDroneId = rawDroneId ? outboundDisplayId("DR", rawDroneId, 3) : undefined;
+  const rawBatteryId =
+    pickString(
+      value,
+      ["battery_id", "installed_battery_id"],
+      "",
+    ) ||
+    missionInfo?.batteryId ||
+    "";
 
-  const assignedDroneCode = pickString(value, ["drone_code", "assigned_drone_code", "drone_name"], assignedDroneId ?? "") || undefined;
+  const missionId = rawMissionId
+    ? outboundDisplayId("MSN", rawMissionId)
+    : undefined;
+
+  const missionCode =
+    pickString(
+      value,
+      ["mission_code", "missionCode"],
+      "",
+    ) ||
+    missionInfo?.missionCode ||
+    missionId;
+
+  const assignedDroneId = rawDroneId
+    ? outboundDisplayId("DR", rawDroneId, 3)
+    : undefined;
+
+  const assignedDroneCode =
+    pickString(
+      value,
+      ["drone_code", "assigned_drone_code", "drone_name"],
+      "",
+    ) ||
+    missionInfo?.droneCode ||
+    assignedDroneId;
+
+  const hub = resolveHubLabel(
+    value,
+    "origin",
+    context,
+    missionInfo?.originHub,
+    true,
+  );
+
+  const destination = resolveHubLabel(
+    value,
+    "destination",
+    context,
+    missionInfo?.destinationHub,
+  );
 
   return {
 
     orderId,
 
-    customerName: pickString(value, ["customer_name", "recipient_name", "customer"], "Customer"),
+    orderCode,
 
-    packageName: pickString(value, ["package_name", "package_type", "parcel_name"], "Package"),
+    customerName: pickString(
+      value,
+      ["customer_name", "recipient_name", "customer"],
+      "Customer",
+    ),
 
-    weightKg: pickNumber(value, ["weight_kg", "package_weight_kg", "weight"], 0),
+    packageName: pickString(
+      value,
+      ["package_name", "package_type", "parcel_name"],
+      "Package",
+    ),
 
-    hub: pickString(value, ["origin_hub_name", "hub_name", "hub"], TECHNICIAN_HUB),
+    weightKg: pickNumber(
+      value,
+      ["weight_kg", "package_weight_kg", "weight"],
+      0,
+    ),
 
-    destination: pickString(value, ["destination_hub_name", "destination", "destination_name"], "—"),
+    hub,
 
+    destination,
+
+    /*
+     * `status` is the order lifecycle (e.g. Scheduled/In Progress), while
+     * `handling_status` describes the Technician handoff state
+     * (Incoming/At hub/Ready). This page must use handling_status first.
+     */
     status: normalizeOutboundStatus(
 
-      pickString(value, ["status", "handling_status", "package_status"], "INCOMING"),
+      pickString(
+        value,
+        ["handling_status", "package_status", "status"],
+        "INCOMING",
+      ),
 
       Boolean(missionId),
 
@@ -726,17 +843,34 @@ function mapApiOutbound(value: unknown): OutboundDelivery | null {
 
     missionId,
 
-    legId: pickString(value, ["leg_id", "mission_leg_id"], "") || undefined,
+    missionCode: missionCode || undefined,
+
+    legId:
+      pickString(value, ["leg_id", "mission_leg_id"], "") ||
+      undefined,
 
     assignedDroneId,
 
-    assignedDroneCode,
+    assignedDroneCode:
+      assignedDroneCode || undefined,
 
-    packageReceivedAt: pickString(value, ["package_received_at", "received_at"], "") || undefined,
+    packageReceivedAt:
+      pickString(
+        value,
+        ["package_received_at", "received_at"],
+        "",
+      ) || undefined,
 
-    installedBatteryId: rawBatteryId ? outboundDisplayId("BAT", rawBatteryId, 3) : undefined,
+    installedBatteryId: rawBatteryId
+      ? outboundDisplayId("BAT", rawBatteryId, 3)
+      : undefined,
 
-    readyConfirmedAt: pickString(value, ["ready_confirmed_at", "ready_at"], "") || undefined,
+    readyConfirmedAt:
+      pickString(
+        value,
+        ["ready_confirmed_at", "ready_at"],
+        "",
+      ) || undefined,
 
   };
 
@@ -746,9 +880,29 @@ export async function refreshOutboundDeliveriesFromApi() {
 
   const payload = await getOutboundDeliveriesApi();
 
+  /*
+   * Outbound rows currently expose hub/order ids but may omit readable hub
+   * names, mission and drone fields. Enrich from other Technician-scoped
+   * Backend endpoints when available. Enrichment is best-effort so a failure
+   * in /missions or /auth never hides the outbound list itself.
+   */
+  const [missionsResult, authResult] = await Promise.allSettled([
+    getTechnicianMissionsApi(),
+    getTechnicianAuthApi(),
+  ]);
+
+  const context = buildDeliveryBackendContext(
+    missionsResult.status === "fulfilled"
+      ? missionsResult.value
+      : null,
+    authResult.status === "fulfilled"
+      ? authResult.value
+      : null,
+  );
+
   demoOutboundDeliveries = unwrapList(payload)
 
-    .map(mapApiOutbound)
+    .map((value) => mapApiOutbound(value, context))
 
     .filter((item): item is OutboundDelivery => Boolean(item))
 

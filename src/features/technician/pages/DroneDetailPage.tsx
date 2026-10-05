@@ -6,7 +6,6 @@ import {
 
 import {
   ArrowLeft,
-  Battery,
   CalendarClock,
   CheckCircle2,
   Clock3,
@@ -486,21 +485,6 @@ export function DroneDetailPage() {
     );
   }
 
-  const installedBattery =
-    drone.installedBatteryId
-      ? {
-          id: drone.installedBatteryId,
-          chargeLevelPct:
-            drone.installedBatteryPct ?? 100,
-        }
-      : undefined;
-
-  const lowBattery =
-    Boolean(
-      installedBattery &&
-        installedBattery.chargeLevelPct < 40,
-    );
-
   /*
    * Nếu đã có Maintenance Record thật của drone thì dùng lần hoàn thành
    * gần nhất. Nếu chưa có record thì dùng lịch mock demo.
@@ -611,17 +595,10 @@ export function DroneDetailPage() {
 
         <SummaryCard
           icon={
-            <Battery
-              size={20}
-            />
+            <MapPin size={20} />
           }
-          label="Installed battery"
-          value={
-            installedBattery
-              ? `${installedBattery.id} · ${installedBattery.chargeLevelPct}%`
-              : "Not installed"
-          }
-          danger={lowBattery}
+          label="Current hub"
+          value={drone.location}
         />
 
         <SummaryCard
@@ -701,7 +678,7 @@ export function DroneDetailPage() {
       {activeTab ===
         "overview" && (
         <div className="space-y-5">
-          <div className="grid gap-5 xl:grid-cols-2">
+          <div>
             {/* DRONE INFORMATION */}
             <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
               <CardContent className="p-6">
@@ -709,7 +686,7 @@ export function DroneDetailPage() {
                   Drone information
                 </h2>
 
-                <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2">
+                <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
                   <InfoItem
                     label="Drone ID"
                     value={
@@ -752,86 +729,6 @@ export function DroneDetailPage() {
               </CardContent>
             </Card>
 
-            {/* BATTERY */}
-            <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                    Battery status
-                  </h2>
-
-                  {installedBattery ? (
-                    <span className="rounded-md border border-orange-500/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-orange-500">
-                      Installed
-                    </span>
-                  ) : (
-                    <span className="rounded-md border border-[var(--tech-border)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--tech-muted)]">
-                      Not installed
-                    </span>
-                  )}
-                </div>
-
-                {installedBattery ? (
-                  <>
-                    <div className="mt-7 grid gap-5 sm:grid-cols-2">
-                      <InfoItem
-                        label="Battery ID"
-                        value={
-                          installedBattery.id
-                        }
-                      />
-
-                      <InfoItem
-                        label="Charge level"
-                        value={`${installedBattery.chargeLevelPct}%`}
-                        danger={
-                          lowBattery
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--tech-border)]">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          lowBattery
-                            ? "bg-red-500"
-                            : "bg-orange-500"
-                        }`}
-                        style={{
-                          width: `${installedBattery.chargeLevelPct}%`,
-                        }}
-                      />
-                    </div>
-
-                    <p className="mt-5 text-[12px] leading-5 text-[var(--tech-muted)]">
-                      This battery is temporarily assigned to the current prepared or active mission. Batteries do not permanently belong to a drone.
-                    </p>
-                  </>
-                ) : (
-                  <div className="mt-7 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-5">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
-                      No battery installed
-                    </p>
-
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">
-                      Hub-stored drones normally have no battery installed. Use Battery Management when an Operator-assigned mission needs a ready battery.
-                    </p>
-
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          "/technician/fleet/batteries",
-                        )
-                      }
-                      className="mt-4 h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:!border-orange-500/50 hover:!bg-transparent hover:!text-orange-500"
-                    >
-                      Open Battery Management
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* MONTHLY MAINTENANCE SCHEDULE */}

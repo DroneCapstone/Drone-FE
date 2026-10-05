@@ -39,6 +39,11 @@ export function useBatteryDetailQuery(
       ),
     enabled: Boolean(batteryId),
     staleTime: 15_000,
+    // Battery charging is backend-owned. Poll detail data so the UI
+    // automatically reflects charge/status changes without a manual
+    // "Mark fully charged" action.
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 
