@@ -29,11 +29,11 @@ export type OrderStatus =
   | "cancelled";
 
 export interface DeliveryHub {
-  id: string;
+  id: string | number;
   name: string;
-  city: string;
-  area: string;
   address: string;
+  city?: string;
+  area?: string;
 }
 
 export interface DeliveryDraft {
@@ -49,12 +49,20 @@ export interface DeliveryDraft {
   weightKg: number;
   packageSize: PackageSize;
 
+  /**
+   * Customer hub IDs are stored as strings in the form so native
+   * <select> controls remain simple. The API adapter converts them
+   * back to string | number when sending requests.
+   */
   originArea: string;
   destinationArea: string;
 
   deliveryMode: DeliveryMode;
-
   requestedDepartureAt: string;
+
+  /** FE-only until backend adds an insurance field to the order API. */
+  hasInsurance?: boolean;
+  draftVersion?: number;
 }
 
 export interface DeliveryPrice {
@@ -68,7 +76,6 @@ export interface DeliveryPreview {
   destinationHub: DeliveryHub;
 
   handoverDeadlineAt: string;
-
   estimatedDepartureAt: string;
   estimatedArrivalAt: string;
 
@@ -78,7 +85,6 @@ export interface DeliveryPreview {
 export interface CustomerDelivery
   extends DeliveryDraft {
   id: string;
-
   customerId: string;
 
   originHub: DeliveryHub;
@@ -87,7 +93,6 @@ export interface CustomerDelivery
   createdAt: string;
 
   handoverDeadlineAt: string;
-
   estimatedDepartureAt: string;
   estimatedArrivalAt: string;
 
@@ -95,6 +100,8 @@ export interface CustomerDelivery
   orderStatus: OrderStatus;
 
   packageReceivedAtHub: boolean;
-
   price: DeliveryPrice;
+
+  /** Raw backend status is kept for debugging / future mapping. */
+  backendStatus?: string;
 }

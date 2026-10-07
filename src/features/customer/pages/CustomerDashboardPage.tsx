@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   ArrowRight,
@@ -25,10 +25,27 @@ import hubImage from "../../../assets/images/home/delivery-hub.png";
 
 export function CustomerDashboardPage() {
   const { user } = useAuth();
+  const [, setRevision] = useState(0);
 
   const deliveries = user
     ? customerDeliveryService.getByCustomer(user.id)
     : [];
+
+  useEffect(() => {
+    const pendingIds = deliveries
+      .filter((item) => item.paymentStatus === "pending")
+      .map((item) => item.id);
+
+    if (pendingIds.length === 0) return;
+
+    Promise.allSettled(
+      pendingIds.map((id) =>
+        customerDeliveryService.refreshPaymentStatus(id),
+      ),
+    ).then(() => {
+      setRevision((value) => value + 1);
+    });
+  }, [user?.id]);
 
   const activeDeliveries = deliveries.filter(
     (delivery) =>

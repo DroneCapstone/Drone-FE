@@ -10,29 +10,48 @@ import {
 } from "react-router-dom";
 
 import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
   customerDeliveryService,
   formatDateTime,
   formatVnd,
 } from "../services/customerDeliveryService";
 
-import {
-  getDeliveryPricing,
-} from "../services/deliveryPricing";
-
-/* =========================================================
-   DELIVERY DETAIL PAGE
-========================================================= */
-
 export function DeliveryDetailPage() {
-  const { deliveryId } =
-    useParams();
+  const { deliveryId } = useParams();
 
-  const delivery =
-    deliveryId
-      ? customerDeliveryService.getById(
-          deliveryId,
-        )
-      : null;
+  const [delivery, setDelivery] =
+    useState(() =>
+      deliveryId
+        ? customerDeliveryService.getById(
+            deliveryId,
+          )
+        : null,
+    );
+
+  useEffect(() => {
+    if (
+      !deliveryId ||
+      !delivery ||
+      delivery.paymentStatus !== "pending"
+    ) {
+      return;
+    }
+
+    customerDeliveryService
+      .refreshPaymentStatus(deliveryId)
+      .then((next) => {
+        if (next) {
+          setDelivery(next);
+        }
+      })
+      .catch(() => {
+        // Keep cached delivery when status endpoint is unavailable.
+      });
+  }, [deliveryId]);
 
   if (!delivery) {
     return (
@@ -49,15 +68,11 @@ export function DeliveryDetailPage() {
     );
 
   const paid =
-    delivery.paymentStatus ===
-    "paid";
-
-  const pricing =
-    getDeliveryPricing(delivery);
+    delivery.paymentStatus === "paid";
 
   const steps = [
     {
-      label: "Order placed",
+      label: "Order created",
       complete: true,
     },
     {
@@ -65,43 +80,32 @@ export function DeliveryDetailPage() {
       complete: paid,
     },
     {
-      label:
-        "Package at origin hub",
+      label: "Package at origin hub",
       complete:
         delivery.packageReceivedAtHub,
     },
     {
       label: "Scheduled",
       complete:
-        delivery.orderStatus ===
-          "accepted" ||
-        delivery.orderStatus ===
-          "in_delivery" ||
-        delivery.orderStatus ===
-          "completed",
+        delivery.orderStatus === "accepted" ||
+        delivery.orderStatus === "in_delivery" ||
+        delivery.orderStatus === "completed",
     },
     {
       label: "In delivery",
       complete:
-        delivery.orderStatus ===
-          "in_delivery" ||
-        delivery.orderStatus ===
-          "completed",
+        delivery.orderStatus === "in_delivery" ||
+        delivery.orderStatus === "completed",
     },
     {
-      label:
-        "Arrived at destination hub",
+      label: "Arrived at destination hub",
       complete:
-        delivery.orderStatus ===
-        "completed",
+        delivery.orderStatus === "completed",
     },
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 pb-28 pt-8 sm:px-6 sm:pt-10 lg:px-10 lg:pb-16 lg:pt-12">
-      {/* =====================================================
-          HEADER
-      ====================================================== */}
+    <div className="mx-auto w-full max-w-[1180px] px-4 pb-20 pt-8 sm:px-6 sm:pt-10 lg:px-10 lg:pb-16 lg:pt-12">
       <header>
         <Link
           to="/customer/dashboard"
@@ -122,36 +126,21 @@ export function DeliveryDetailPage() {
             </h1>
 
             <p className="mt-3 text-[14px] text-white/[0.50]">
-              {
-                delivery.originHub
-                  .name
-              }
-              <span className="mx-2 text-white/[0.25]">
-                →
-              </span>
-              {
-                delivery
-                  .destinationHub.name
-              }
+              {delivery.originHub.name}
+              <span className="mx-2 text-white/[0.25]">→</span>
+              {delivery.destinationHub.name}
             </p>
           </div>
 
           <p className="text-[11px] text-white/[0.30]">
-            Created{" "}
-            {formatDateTime(
-              delivery.createdAt,
-            )}
+            Created {formatDateTime(delivery.createdAt)}
           </p>
         </div>
       </header>
 
-      {/* =====================================================
-          CONTENT
-      ====================================================== */}
       <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
         <main className="min-w-0 space-y-5">
-          {/* PROGRESS */}
-          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-sm sm:p-6">
+          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 shadow-[0_12px_32px_rgba(0,0,0,0.22)] sm:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
               Delivery progress
             </p>
@@ -161,28 +150,18 @@ export function DeliveryDetailPage() {
             </h2>
 
             <div className="mt-6">
-              {steps.map(
-                (step, index) => (
-                  <TimelineStep
-                    key={step.label}
-                    label={
-                      step.label
-                    }
-                    complete={
-                      step.complete
-                    }
-                    last={
-                      index ===
-                      steps.length - 1
-                    }
-                  />
-                ),
-              )}
+              {steps.map((step, index) => (
+                <TimelineStep
+                  key={step.label}
+                  label={step.label}
+                  complete={step.complete}
+                  last={index === steps.length - 1}
+                />
+              ))}
             </div>
           </section>
 
-          {/* ROUTE */}
-          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-sm sm:p-6">
+          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 sm:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
               Delivery route
             </p>
@@ -190,45 +169,18 @@ export function DeliveryDetailPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <RouteCard
                 label="Origin hub"
-                name={
-                  delivery.originHub
-                    .name
-                }
-                address={
-                  delivery.originHub
-                    .address
-                }
+                name={delivery.originHub.name}
+                address={delivery.originHub.address}
               />
-
               <RouteCard
                 label="Destination hub"
-                name={
-                  delivery
-                    .destinationHub.name
-                }
-                address={
-                  delivery
-                    .destinationHub
-                    .address
-                }
+                name={delivery.destinationHub.name}
+                address={delivery.destinationHub.address}
               />
             </div>
-
-            {pricing.distanceKm !== null && (
-              <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-4">
-                <span className="text-[11px] text-white/[0.38]">
-                  Estimated hub distance
-                </span>
-
-                <span className="text-[13px] font-medium text-white/[0.78]">
-                  {pricing.distanceKm} km
-                </span>
-              </div>
-            )}
           </section>
 
-          {/* DELIVERY INFO */}
-          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-sm sm:p-6">
+          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 sm:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
               Delivery information
             </p>
@@ -241,49 +193,30 @@ export function DeliveryDetailPage() {
                 )}
                 emphasized
               />
-
               <DetailItem
                 label="Estimated departure"
                 value={formatDateTime(
                   delivery.estimatedDepartureAt,
                 )}
               />
-
               <DetailItem
                 label="Estimated arrival"
                 value={formatDateTime(
                   delivery.estimatedArrivalAt,
                 )}
               />
-
               <DetailItem
                 label="Package"
                 value={`${delivery.weightKg} kg · Size ${delivery.packageSize}`}
               />
-
               <DetailItem
-                label="Handling"
-                value={
-                  pricing.isFragile
-                    ? "Fragile"
-                    : "Standard"
-                }
+                label="Payment"
+                value={paid ? "Paid" : "Pending"}
               />
-
-              <DetailItem
-                label="Insurance"
-                value={
-                  pricing.hasInsurance
-                    ? "Protected"
-                    : "Not added"
-                }
-              />
-
               <DetailItem
                 label="Delivery mode"
                 value={
-                  pricing.deliveryMode ===
-                  "express"
+                  delivery.deliveryMode === "express"
                     ? "Express"
                     : "Scheduled"
                 }
@@ -292,112 +225,50 @@ export function DeliveryDetailPage() {
           </section>
         </main>
 
-        {/* =================================================
-            PRICE SUMMARY
-        ================================================== */}
         <aside className="h-fit lg:sticky lg:top-[96px]">
-          <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-sm">
-            <div className="border-b border-white/[0.08] px-5 py-5 sm:px-6">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.40]">
-                Price summary
-              </p>
+          <div className="rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.28)] sm:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.40]">
+              Backend quotation
+            </p>
 
-              <p className="mt-2 text-[17px] font-semibold text-white">
-                Delivery charge
-              </p>
+            <PriceRow
+              label="Delivery fee"
+              value={formatVnd(
+                delivery.price.deliveryFee,
+              )}
+            />
+            <PriceRow
+              label="Service fee"
+              value={formatVnd(
+                delivery.price.serviceFee,
+              )}
+            />
+
+            <div className="mt-5 flex items-end justify-between gap-5 border-t border-white/[0.08] pt-5">
+              <span className="text-[13px] font-medium text-white/[0.62]">
+                Total
+              </span>
+              <strong className="text-right text-[24px] font-semibold tracking-[-0.03em] text-white">
+                {formatVnd(
+                  delivery.price.total,
+                )}
+              </strong>
             </div>
 
-            <div className="px-5 py-5 sm:px-6">
-              <div className="space-y-3.5">
-                <PriceRow
-                  label={`Base fee · Tier ${pricing.droneSize}`}
-                  value={formatVnd(
-                    pricing.baseFee,
-                  )}
-                />
-
-                <PriceRow
-                  label={
-                    pricing.distanceKm !== null
-                      ? `Distance · ${pricing.distanceKm} km`
-                      : "Distance"
-                  }
-                  value={formatVnd(
-                    pricing.distanceFee,
-                  )}
-                />
-
-                <PriceRow
-                  label={`Payload · ${delivery.weightKg} kg`}
-                  value={formatVnd(
-                    pricing.payloadFee,
-                  )}
-                />
-
-                <PriceRow
-                  label="Core fee"
-                  value={formatVnd(
-                    pricing.coreFee,
-                  )}
-                  strong
-                />
-
-                {pricing.isFragile && (
-                  <PriceRow
-                    label="Fragile items · 15%"
-                    value={`+${formatVnd(
-                      pricing.fragileSurcharge,
-                    )}`}
-                  />
-                )}
-
-                {pricing.hasInsurance && (
-                  <PriceRow
-                    label="Package insurance · 10%"
-                    value={`+${formatVnd(
-                      pricing.insuranceSurcharge,
-                    )}`}
-                  />
-                )}
-
-                {pricing.deliveryMode ===
-                  "express" ? (
-                  <PriceRow
-                    label="Express surcharge · 25%"
-                    value={`+${formatVnd(
-                      pricing.serviceSurcharge,
-                    )}`}
-                  />
-                ) : (
-                  <PriceRow
-                    label="Scheduled surcharge"
-                    value={formatVnd(0)}
-                  />
-                )}
-              </div>
-
-              <div className="mt-5 flex items-end justify-between gap-5 border-t border-white/[0.08] pt-5">
-                <span className="text-[13px] font-medium text-white/[0.62]">
-                  Total
-                </span>
-
-                <strong className="text-right text-[24px] font-semibold tracking-[-0.03em] text-white">
-                  {formatVnd(
-                    pricing.finalFee,
-                  )}
-                </strong>
-              </div>
-            </div>
+            {!paid && (
+              <Link
+                to={`/customer/payment/${delivery.id}`}
+                className="mt-6 flex h-11 items-center justify-center rounded-xl bg-orange-500 text-[13px] font-semibold text-black"
+              >
+                Complete payment
+              </Link>
+            )}
           </div>
         </aside>
       </div>
     </div>
   );
 }
-
-/* =========================================================
-   TIMELINE STEP
-========================================================= */
 
 function TimelineStep({
   label,
@@ -418,9 +289,7 @@ function TimelineStep({
               : "border-white/[0.14] bg-[#161217]"
           }`}
         >
-          {complete && (
-            <Check size={13} />
-          )}
+          {complete && <Check size={13} />}
         </div>
 
         {!last && (
@@ -447,10 +316,6 @@ function TimelineStep({
   );
 }
 
-/* =========================================================
-   ROUTE CARD
-========================================================= */
-
 function RouteCard({
   label,
   name,
@@ -465,21 +330,15 @@ function RouteCard({
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/[0.36]">
         {label}
       </p>
-
       <p className="mt-2 text-[15px] font-semibold text-white/[0.90]">
         {name}
       </p>
-
       <p className="mt-1 text-[12px] leading-5 text-white/[0.46]">
         {address}
       </p>
     </div>
   );
 }
-
-/* =========================================================
-   DETAIL ITEM
-========================================================= */
 
 function DetailItem({
   label,
@@ -495,7 +354,6 @@ function DetailItem({
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/[0.34]">
         {label}
       </p>
-
       <p
         className={`mt-2 text-[13px] font-medium leading-5 ${
           emphasized
@@ -509,38 +367,19 @@ function DetailItem({
   );
 }
 
-/* =========================================================
-   PRICE ROW
-========================================================= */
-
 function PriceRow({
   label,
   value,
-  strong = false,
 }: {
   label: string;
   value: string;
-  strong?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-5">
-      <span
-        className={`text-[12px] leading-5 ${
-          strong
-            ? "font-semibold text-white/[0.66]"
-            : "text-white/[0.44]"
-        }`}
-      >
+    <div className="mt-4 flex items-start justify-between gap-5 text-[12px]">
+      <span className="text-white/[0.44]">
         {label}
       </span>
-
-      <span
-        className={`shrink-0 text-right text-[12px] leading-5 ${
-          strong
-            ? "font-semibold text-white"
-            : "font-medium text-white/[0.82]"
-        }`}
-      >
+      <span className="font-medium text-white/[0.82]">
         {value}
       </span>
     </div>
