@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Bell,
@@ -17,6 +17,11 @@ import {
 import { useAuth } from "../../auth/hooks/useAuth";
 
 import logo from "../../../assets/images/home/logo.png";
+
+import {
+  customerApi,
+  extractUnreadCount,
+} from "../services/customerApi";
 
 /* =========================================================
    NAVIGATION
@@ -45,10 +50,45 @@ export function CustomerHeader() {
   const [mobileOpen, setMobileOpen] =
     useState(false);
 
+  const [unreadCount, setUnreadCount] =
+    useState(0);
+
   const { user, logout } = useAuth();
 
   const location = useLocation();
   const navigate = useNavigate();
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUnread() {
+      try {
+        const response =
+          await customerApi.getUnreadCount();
+
+        if (!cancelled) {
+          setUnreadCount(
+            extractUnreadCount(response),
+          );
+        }
+      } catch {
+        // Header remains usable when notification API is unavailable.
+      }
+    }
+
+    loadUnread();
+
+    const timer = window.setInterval(
+      loadUnread,
+      30000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [location.pathname]);
 
   /* =========================================================
      LOGOUT
@@ -214,10 +254,18 @@ export function CustomerHeader() {
           {/* NOTIFICATIONS */}
           <Link
             to="/customer/notifications"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.04] hover:text-white"
+            className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.04] hover:text-white"
             aria-label="Notifications"
           >
             <Bell size={18} />
+
+            {unreadCount > 0 && (
+              <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-black">
+                {unreadCount > 99
+                  ? "99+"
+                  : unreadCount}
+              </span>
+            )}
           </Link>
 
           <div className="h-8 w-px bg-white/[0.08]" />

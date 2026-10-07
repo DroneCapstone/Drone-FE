@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useState,
 } from "react";
 
@@ -9,60 +10,93 @@ import {
 } from "../services/customerProfileService";
 
 export function CustomerProfilePage() {
-  const { user } =
-    useAuth();
+  const { user } = useAuth();
 
-  const profile =
-    user
-      ? customerProfileService.get(
-          user.id,
-        )
-      : {
-          phone: "",
-        };
+  const cached = user
+    ? customerProfileService.get(
+        user.id,
+      )
+    : {
+        phone: "",
+      };
 
   const [phone, setPhone] =
-    useState(profile.phone);
+    useState(cached.phone);
 
-  const [saved, setSaved] =
+  const [loading, setLoading] =
+    useState(Boolean(user));
+
+  const [saving, setSaving] =
     useState(false);
+
+  const [message, setMessage] =
+    useState("");
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    customerProfileService
+      .loadRemote(user.id)
+      .then((profile) => {
+        setPhone(profile.phone);
+      })
+      .catch((error) => {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load profile.",
+        );
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [user]);
 
   if (!user) {
     return null;
   }
 
-  const save = () => {
-    customerProfileService.save(
-      user.id,
-      {
-        phone,
-      },
-    );
+  const save = async () => {
+    setSaving(true);
+    setMessage("");
 
-    setSaved(true);
+    try {
+      const profile =
+        await customerProfileService.saveRemote(
+          user.id,
+          phone.trim(),
+        );
 
-    window.setTimeout(
-      () => setSaved(false),
-      2000,
-    );
+      setPhone(profile.phone);
+      setMessage("Saved");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save changes.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-14 lg:px-10">
-      <h1 className="text-4xl font-semibold tracking-[-0.04em]">
+    <div className="mx-auto max-w-[760px] px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
+      <h1 className="text-[34px] font-semibold tracking-[-0.04em] sm:text-4xl">
         Profile
       </h1>
 
-      <div className="mt-10 space-y-7">
+      <div className="mt-8 space-y-6 sm:mt-10 sm:space-y-7">
         <label className="block">
           <span className="text-xs text-white/40">
             Full name
           </span>
-
           <input
             value={user.name}
             readOnly
-            className="mt-2 h-12 w-full border border-white/10 bg-white/[0.025] px-4 text-sm text-white/45"
+            className="mt-2 h-12 w-full rounded-lg border border-white/10 bg-white/[0.025] px-4 text-sm text-white/45"
           />
         </label>
 
@@ -70,11 +104,10 @@ export function CustomerProfilePage() {
           <span className="text-xs text-white/40">
             Email
           </span>
-
           <input
             value={user.email}
             readOnly
-            className="mt-2 h-12 w-full border border-white/10 bg-white/[0.025] px-4 text-sm text-white/45"
+            className="mt-2 h-12 w-full rounded-lg border border-white/10 bg-white/[0.025] px-4 text-sm text-white/45"
           />
         </label>
 
@@ -82,25 +115,32 @@ export function CustomerProfilePage() {
           <span className="text-xs text-white/40">
             Phone number
           </span>
-
           <input
             value={phone}
+            disabled={loading}
             onChange={(event) =>
               setPhone(
                 event.target.value,
               )
             }
-            className="mt-2 h-12 w-full border border-white/10 bg-[#0a0a0a] px-4 text-sm outline-none focus:border-orange-500"
+            className="mt-2 h-12 w-full rounded-lg border border-white/10 bg-[#0a0a0a] px-4 text-sm outline-none focus:border-orange-500 disabled:opacity-60"
           />
         </label>
+
+        {message && (
+          <p className="text-[12px] text-white/[0.50]">
+            {message}
+          </p>
+        )}
 
         <button
           type="button"
           onClick={save}
-          className="h-12 bg-orange-500 px-7 text-sm font-semibold text-black hover:bg-orange-400"
+          disabled={loading || saving}
+          className="h-12 rounded-lg bg-orange-500 px-7 text-sm font-semibold text-black hover:bg-orange-400 disabled:opacity-50"
         >
-          {saved
-            ? "Saved"
+          {saving
+            ? "Saving…"
             : "Save changes"}
         </button>
       </div>

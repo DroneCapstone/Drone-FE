@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   ArrowRight,
   Package,
@@ -19,10 +21,27 @@ import {
 
 export function MyDeliveriesPage() {
   const { user } = useAuth();
+  const [, setRevision] = useState(0);
 
   const deliveries = user
     ? customerDeliveryService.getByCustomer(user.id)
     : [];
+
+  useEffect(() => {
+    const pendingIds = deliveries
+      .filter((item) => item.paymentStatus === "pending")
+      .map((item) => item.id);
+
+    if (pendingIds.length === 0) return;
+
+    Promise.allSettled(
+      pendingIds.map((id) =>
+        customerDeliveryService.refreshPaymentStatus(id),
+      ),
+    ).then(() => {
+      setRevision((value) => value + 1);
+    });
+  }, [user?.id]);
 
   return (
     <div className="min-h-[calc(100vh-72px)] bg-transparent font-sans">
