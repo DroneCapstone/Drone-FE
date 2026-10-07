@@ -114,7 +114,7 @@ export function CustomerDashboardPage() {
 
               <div className="mt-6 grid max-w-[420px] grid-cols-2 gap-3 sm:mt-8 sm:flex sm:max-w-none sm:flex-wrap sm:items-center sm:gap-4">
                 <Link
-                  to="/customer/deliveries/create"
+                  to="/customer/deliveries/create?new=1"
                   className="group inline-flex h-[50px] items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-[13px] font-semibold text-black transition hover:bg-orange-400 sm:h-[54px] sm:gap-3 sm:px-7 sm:text-[14px]"
                 >
                   Create delivery
@@ -208,7 +208,7 @@ export function CustomerDashboardPage() {
 
             <div className="grid grid-cols-3 gap-2 md:block md:overflow-hidden md:rounded-2xl md:border md:border-white/[0.10] md:bg-[#161217]/96 md:shadow-[0_12px_32px_rgba(0,0,0,0.30)] md:backdrop-blur-sm">
               <QuickAction
-                to="/customer/deliveries/create"
+                to="/customer/deliveries/create?new=1"
                 title="Create"
                 desktopTitle="Create delivery"
                 description="Start a new shipment."
@@ -441,7 +441,7 @@ function EmptyActiveDelivery() {
         </div>
 
         <Link
-          to="/customer/deliveries/create"
+          to="/customer/deliveries/create?new=1"
           className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.10] bg-white/[0.02] px-5 text-[13px] font-medium text-white/[0.88] transition hover:border-orange-500/[0.40] hover:text-white sm:w-auto sm:rounded-lg sm:bg-transparent"
         >
           Create delivery

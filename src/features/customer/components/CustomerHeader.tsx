@@ -199,7 +199,12 @@ export function CustomerHeader() {
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={
+                  item.to ===
+                  "/customer/deliveries/create"
+                    ? "/customer/deliveries/create?new=1"
+                    : item.to
+                }
                 className="group relative flex h-full items-center px-1"
               >
                 {/* LABEL */}
@@ -345,7 +350,12 @@ export function CustomerHeader() {
               return (
                 <Link
                   key={item.to}
-                  to={item.to}
+                  to={
+                    item.to ===
+                    "/customer/deliveries/create"
+                      ? "/customer/deliveries/create?new=1"
+                      : item.to
+                  }
                   onClick={() =>
                     setMobileOpen(false)
                   }
