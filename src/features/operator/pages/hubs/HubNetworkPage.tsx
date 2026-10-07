@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OperatorPagination } from '../../components/OperatorPagination';
+import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
 import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
 import { FleetHubPageShell } from '../fleet/FleetHubPageShell';
 
@@ -13,18 +14,27 @@ export function HubNetworkPage() {
   const [page, setPage] = useState(1);
   const { data: apiHubs, isLoading: hubsLoading, error: hubsError } = useMissionHubsQuery();
   const { data: apiMiniHubs, isLoading: miniHubsLoading, error: miniHubsError } = useMissionMiniHubsQuery();
+  const { data: fleet, isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
 
-  const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => ({
-    id: hub.id,
-    name: hub.name,
-    area: '',
-    address: hub.address ?? '',
-    latitude: hub.latitude ?? 0,
-    longitude: hub.longitude ?? 0,
-    status: 'Active' as const,
-    totalDrones: hub.totalDrones ?? 0,
-    availableDrones: hub.availableDrones ?? 0,
-  }));
+  const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => {
+    const hubDrones = (fleet ?? []).filter(
+      (drone) => String(drone.hubId) === String(hub.id),
+    );
+
+    return {
+      id: hub.id,
+      name: hub.name,
+      area: '',
+      address: hub.address ?? '',
+      latitude: 0,
+      longitude: 0,
+      status: 'Active' as const,
+      totalDrones: hubDrones.length,
+      availableDrones: hubDrones.filter(
+        (drone) => drone.technicalStatus === 'Available',
+      ).length,
+    };
+  });
 
   const totalPages = Math.max(1, Math.ceil(hubs.length / HUBS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
@@ -37,8 +47,8 @@ export function HubNetworkPage() {
     navigate(`/operator/fleet-hubs/drones?hub=${encodeURIComponent(hubId)}`);
   };
 
-  const loading = hubsLoading || miniHubsLoading;
-  const error = hubsError ?? miniHubsError;
+  const loading = hubsLoading || miniHubsLoading || fleetLoading;
+  const error = hubsError ?? miniHubsError ?? fleetError;
 
   return (
     <FleetHubPageShell active="/operator/fleet-hubs/hubs">

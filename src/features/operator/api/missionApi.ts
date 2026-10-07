@@ -5,10 +5,6 @@ export interface MissionHubSummary {
   id: string;
   name: string;
   address?: string;
-  latitude?: number;
-  longitude?: number;
-  totalDrones?: number;
-  availableDrones?: number;
 }
 
 export interface LiveTrackingDrone {
@@ -218,16 +214,10 @@ function normalizeIncidentPolicy(value: unknown, health: LiveTrackingDrone['heal
 
 function mapHub(raw: unknown): MissionHubSummary {
   const record = asRecord(raw);
-  const latitude = pickNumber(record, ['latitude', 'lat'], Number.NaN);
-  const longitude = pickNumber(record, ['longitude', 'lng', 'lon'], Number.NaN);
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
     address: pickString(record, ['address', 'location']) || undefined,
-    latitude: Number.isFinite(latitude) ? latitude : undefined,
-    longitude: Number.isFinite(longitude) ? longitude : undefined,
-    totalDrones: pickNumber(record, ['totalDrones', 'total_drones'], Number.NaN),
-    availableDrones: pickNumber(record, ['availableDrones', 'available_drones'], Number.NaN),
   };
 }
 
