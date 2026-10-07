@@ -4,7 +4,7 @@ import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OperatorPagination } from '../../components/OperatorPagination';
 import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
-import { useMissionHubsQuery } from '../../hooks/useMissionQueries';
+import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
 import { FleetHubPageShell } from '../fleet/FleetHubPageShell';
 
 const HUBS_PER_PAGE = 9;
@@ -13,10 +13,13 @@ export function HubNetworkPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const { data: apiHubs, isLoading: hubsLoading, error: hubsError } = useMissionHubsQuery();
-  const { data: fleet = [], isLoading: fleetLoading } = useFleetDronesQuery();
+  const { data: apiMiniHubs, isLoading: miniHubsLoading, error: miniHubsError } = useMissionMiniHubsQuery();
+  const { data: fleet = [], isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
 
-  const hubs = (apiHubs ?? []).map((hub) => {
-    const hubFleet = fleet.filter((drone) => drone.hubId === hub.id);
+  const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => {
+    const hubFleet = fleet.filter(
+      (drone) => String(drone.hubId) === String(hub.id),
+    );
     const availableFleet = hubFleet.filter((drone) => drone.technicalStatus === 'Available');
     return {
       id: hub.id,
@@ -31,8 +34,8 @@ export function HubNetworkPage() {
     };
   });
 
-  const isLoading = hubsLoading || fleetLoading;
-  const error = hubsError;
+  const isLoading = hubsLoading || miniHubsLoading || fleetLoading;
+  const error = hubsError ?? miniHubsError ?? fleetError;
 
   const totalPages = Math.max(1, Math.ceil(hubs.length / HUBS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);

@@ -563,6 +563,11 @@ export async function listMissionHubsApi(): Promise<MissionHubSummary[]> {
   return unwrapArray(payload, ['hubs']).map(mapHub).filter((hub) => hub.id);
 }
 
+export async function listMissionMiniHubsApi(): Promise<MissionHubSummary[]> {
+  const payload = await operatorApiRequest<unknown>('/operator/missions/mini-hubs');
+  return unwrapArray(payload, ['mini_hubs', 'miniHubs', 'hubs']).map(mapHub).filter((hub) => hub.id);
+}
+
 export async function getLiveTrackingApi(): Promise<LiveTrackingDrone[]> {
   const payload = await operatorApiRequest<unknown>('/missions/dashboard/active-flights');
   return unwrapArray(payload, ['drones', 'aircraft', 'missions', 'live_tracking', 'liveTracking'])

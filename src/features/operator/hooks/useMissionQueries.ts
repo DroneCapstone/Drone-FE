@@ -20,6 +20,7 @@ import {
   listIncidentsApi,
   listMissionsApi,
   listMissionHubsApi,
+  listMissionMiniHubsApi,
   updateIncidentStatusApi,
   type AnalyzeMissionPlanningInput,
   type CreateIncidentInput,
@@ -65,6 +66,13 @@ export function useMissionHubsQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.missionHubs(),
     queryFn: listMissionHubsApi,
+  });
+}
+
+export function useMissionMiniHubsQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionMiniHubs(),
+    queryFn: listMissionMiniHubsApi,
   });
 }
 
