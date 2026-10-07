@@ -1,17 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { MissionTable } from '../../components/MissionTable';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/OperatorPagination';
-import { loadOperatorMissions } from '../../utils/operatorMissionStorage';
+import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { MissionPageShell } from './MissionPageShell';
 
 export function AllMissionsPage() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('All statuses');
   const [page, setPage] = useState(1);
-  const missions = useMemo(() => loadOperatorMissions(), []);
+  const {
+    data: missions = [],
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useMissionListQuery();
 
   const filtered = missions.filter((mission) => {
     const matchesQuery = `${mission.name} ${mission.id} ${mission.orderId} ${mission.drone} ${mission.route}`
@@ -45,15 +51,32 @@ export function AllMissionsPage() {
             ariaLabel="Mission status"
           />
           <span className="toolbar-spacer" />
-          <small>{filtered.length} flight missions</small>
+          <small>{isFetching ? 'Refreshing…' : `${filtered.length} flight missions`}</small>
         </div>
-        <MissionTable items={paginatedMissions} />
-        <OperatorPagination
-          currentPage={currentPage}
-          totalItems={filtered.length}
-          itemLabel="flight missions"
-          onPageChange={setPage}
-        />
+
+        {error ? (
+          <div className="operator-empty-state">
+            <strong>Unable to load Missions</strong>
+            <span>{error instanceof Error ? error.message : 'Could not load missions.'}</span>
+            <button type="button" className="row-action" onClick={() => void refetch()}>
+              Retry
+            </button>
+          </div>
+        ) : isLoading ? (
+          <div className="operator-empty-state">Loading Missions…</div>
+        ) : filtered.length === 0 ? (
+          <div className="operator-empty-state">No Missions match the current filters.</div>
+        ) : (
+          <>
+            <MissionTable items={paginatedMissions} />
+            <OperatorPagination
+              currentPage={currentPage}
+              totalItems={filtered.length}
+              itemLabel="flight missions"
+              onPageChange={setPage}
+            />
+          </>
+        )}
       </OperatorPanel>
     </MissionPageShell>
   );

@@ -18,13 +18,21 @@ import {
   getTechnicianMissionsApi,
 } from "../api/transitApi";
 
+const TRANSIT_POLL_INTERVAL_MS = 30_000;
+
 export function useTransitMissionsQuery() {
   return useQuery({
     queryKey:
       technicianQueryKeys.transit(),
     queryFn:
       refreshTransitMissionsFromApi,
-    refetchInterval: 15_000,
+    // Transit data changes often enough to poll, but 30 seconds avoids
+    // continuously hammering both /technician/missions/ and /fleet/incoming.
+    staleTime: 15_000,
+    refetchInterval:
+      TRANSIT_POLL_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -34,7 +42,8 @@ export function useTechnicianMissionsQuery() {
     queryKey:
       technicianQueryKeys.missions(),
     queryFn: getTechnicianMissionsApi,
-    staleTime: 30_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 

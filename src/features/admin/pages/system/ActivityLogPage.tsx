@@ -1,0 +1,9 @@
+import { Activity } from "lucide-react";
+import { AdminPageShell } from "../../components/AdminPageShell";
+import { adminActivityLogs } from "../../data/adminData";
+
+export function ActivityLogPage() {
+  return <AdminPageShell title="Activity log" description="Human-readable activity feed across customer, operator, technician and administrator actions.">
+    <div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="divide-y divide-[var(--admin-border)]">{adminActivityLogs.map((log) => <div key={log.id} className="flex gap-3 p-4"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-muted)]"><Activity size={16} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-[12px]">{log.user}</strong><span className="text-[10px] text-[var(--admin-muted)]">{new Date(log.occurredAt).toLocaleString("en-GB")}</span></div><p className="mt-1 text-[12px] text-[var(--admin-text)]">{log.activity}</p><p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">{log.module}</p></div></div>)}</div></div>
+  </AdminPageShell>;
+}

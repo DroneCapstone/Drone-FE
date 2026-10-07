@@ -11,10 +11,14 @@ import {
   createMissionApi,
   getIncidentApi,
   getLiveTrackingApi,
+  getMissionActiveFlightsApi,
+  getMissionDashboardKpiApi,
+  getMissionDashboardStatusApi,
   getMissionApi,
   getMissionHubCheckpointsApi,
   getMissionTelemetryApi,
   listIncidentsApi,
+  listMissionsApi,
   listMissionHubsApi,
   listMissionMiniHubsApi,
   updateIncidentStatusApi,
@@ -24,6 +28,39 @@ import {
   type UpdateIncidentStatusInput,
 } from '../api/missionApi';
 import { operatorQueryKeys } from '../query/queryKeys';
+
+export function useMissionListQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionList(),
+    queryFn: listMissionsApi,
+    staleTime: 5_000,
+  });
+}
+
+export function useMissionDashboardKpiQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionDashboardKpi(),
+    queryFn: getMissionDashboardKpiApi,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useMissionDashboardStatusQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionDashboardStatus(),
+    queryFn: getMissionDashboardStatusApi,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useMissionActiveFlightsQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionActiveFlights(),
+    queryFn: getMissionActiveFlightsApi,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
+  });
+}
 
 export function useMissionHubsQuery() {
   return useQuery({
@@ -108,7 +145,9 @@ export function useCreateMissionMutation() {
     mutationFn: (input: CreateMissionInput) => createMissionApi(input),
     onSuccess: (mission) => {
       queryClient.setQueryData(operatorQueryKeys.missionDetail(mission.id), mission);
+      void queryClient.invalidateQueries({ queryKey: operatorQueryKeys.missions() });
       void queryClient.invalidateQueries({ queryKey: operatorQueryKeys.orders() });
+      void queryClient.invalidateQueries({ queryKey: operatorQueryKeys.fleet() });
     },
   });
 }

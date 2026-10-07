@@ -11,6 +11,10 @@
 
 ## Chạy dự án
 
+Tạo `.env` từ `.env.example` và chỉnh `VITE_API_BASE_URL` mỗi khi
+Cloudflare tunnel đổi. Có thể dùng URL gốc, URL `/docs`, hoặc URL đầy
+đủ `/api/v1`; frontend sẽ chuẩn hóa về API base URL.
+
 ```bash
 npm install
 npm run dev

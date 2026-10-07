@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  getBatteryDetailFromApi,
   loadBatteryHistory,
   markBatteryChargedOnServer,
   refreshBatteriesFromApi,
@@ -22,6 +23,27 @@ export function useBatteriesQuery() {
       technicianQueryKeys.batteries(),
     queryFn: refreshBatteriesFromApi,
     refetchInterval: 30_000,
+  });
+}
+
+export function useBatteryDetailQuery(
+  batteryId?: string,
+) {
+  return useQuery({
+    queryKey: technicianQueryKeys.battery(
+      batteryId ?? "",
+    ),
+    queryFn: () =>
+      getBatteryDetailFromApi(
+        batteryId ?? "",
+      ),
+    enabled: Boolean(batteryId),
+    staleTime: 15_000,
+    // Battery charging is backend-owned. Poll detail data so the UI
+    // automatically reflects charge/status changes without a manual
+    // "Mark fully charged" action.
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -54,11 +76,18 @@ export function useBatteryMutation() {
         batteryId,
         missionId,
       ),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey:
-          technicianQueryKeys.batteries(),
-      });
+    onSuccess: async (_, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey:
+            technicianQueryKeys.batteries(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.battery(
+            variables.batteryId,
+          ),
+        }),
+      ]);
     },
   });
 }
@@ -88,10 +117,18 @@ export function useMarkBatteryChargedMutation() {
       markBatteryChargedOnServer(
         batteryId,
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey:
-          technicianQueryKeys.batteries(),
-      }),
+    onSuccess: async (_, batteryId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey:
+            technicianQueryKeys.batteries(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.battery(
+            batteryId,
+          ),
+        }),
+      ]);
+    },
   });
 }

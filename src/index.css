@@ -9928,3 +9928,398 @@ button.alert-row:last-child {
     text-align: left;
   }
 }
+
+/* =========================================================
+   ADMIN — shared Operator visual system extensions
+   Only admin-specific compositions live here. Core shell,
+   header, sidebar, panels, metrics, tables and controls reuse
+   the Operator styles above.
+========================================================= */
+.admin-detail-grid,
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 13px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-list > span {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-list > span:last-child {
+  border-bottom: 0;
+}
+
+.detail-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-list strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.list-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-stack > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-stack > span:last-child {
+  border-bottom: 0;
+}
+
+.list-stack strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.list-stack small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.toggle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .detail-grid,
+  .settings-grid,
+  .toggle-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   ADMIN DASHBOARD — Operator-aligned information hierarchy
+========================================================= */
+.admin-dashboard-primary {
+  align-items: stretch;
+}
+
+.admin-dashboard-primary > .card,
+.admin-dashboard-three > .card {
+  min-width: 0;
+}
+
+.admin-revenue-footer,
+.admin-mission-footer {
+  display: grid;
+  gap: 0;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-revenue-footer {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-mission-footer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-revenue-footer > span,
+.admin-mission-footer > span {
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border);
+}
+
+.admin-revenue-footer > span:last-child,
+.admin-mission-footer > span:last-child {
+  border-right: 0;
+}
+
+.admin-revenue-footer small,
+.admin-mission-footer small,
+.admin-health-row small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.admin-revenue-footer strong,
+.admin-mission-footer strong {
+  color: var(--text);
+  font: 700 17px 'Manrope';
+}
+
+.admin-mission-donut {
+  min-height: 238px;
+}
+
+.admin-dashboard-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin: 13px 0;
+}
+
+.admin-distribution-list,
+.admin-health-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-distribution-row {
+  padding: 10px 0 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-distribution-row:last-child,
+.admin-health-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-distribution-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-distribution-copy strong {
+  color: var(--text);
+  font: 700 14px 'Manrope';
+}
+
+.admin-distribution-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--surface-3);
+}
+
+.admin-distribution-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--orange);
+}
+
+.admin-health-row {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-health-row > span {
+  min-width: 0;
+}
+
+.admin-health-row strong {
+  display: block;
+  color: var(--text);
+  font: 700 18px 'Manrope';
+}
+
+.admin-dashboard-alerts .alert-row {
+  align-items: flex-start;
+}
+
+@media (max-width: 1180px) {
+  .admin-dashboard-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-dashboard-three > .card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-dashboard-three,
+  .admin-revenue-footer,
+  .admin-mission-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-revenue-footer > span,
+  .admin-mission-footer > span {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .admin-revenue-footer > span:last-child,
+  .admin-mission-footer > span:last-child {
+    border-bottom: 0;
+  }
+}
+
+/* =========================================================
+   ADMIN USERS — compact list + Operator-style detail hierarchy
+========================================================= */
+.admin-user-role-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.admin-user-detail-layout {
+  align-items: start;
+}
+
+.admin-user-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-user-avatar {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--orange-soft);
+  border: 1px solid rgba(237, 116, 46, .18);
+  color: var(--orange);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.admin-user-hero-copy {
+  min-width: 0;
+}
+
+.admin-user-hero-copy h2 {
+  margin: 8px 0 2px;
+  font-size: 19px;
+}
+
+.admin-user-hero-copy p,
+.admin-user-hero-copy small {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-user-hero-copy p {
+  font-size: 13px;
+}
+
+.admin-user-hero-copy small {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.admin-user-hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.admin-user-key-values dd {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.admin-user-activity > div {
+  align-items: flex-start;
+  padding: 8px 0;
+}
+
+.admin-user-activity dd {
+  max-width: 58%;
+  text-align: right;
+  line-height: 1.45;
+}
+
+.admin-field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-inline-note {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-user-form-actions {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .admin-user-hero {
+    align-items: flex-start;
+  }
+
+  .admin-user-form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

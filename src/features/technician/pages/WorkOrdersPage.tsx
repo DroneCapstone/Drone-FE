@@ -37,6 +37,7 @@ import {
   loadWorkOrders,
   loadWorkOrderLogs,
   loadMaintenanceRecords,
+  fetchWorkOrderLogsFromApi,
   type CompletedMaintenanceRecord,
   type WorkOrder,
   type WorkOrderLog,
@@ -50,10 +51,14 @@ import {
   useWorkOrdersQuery,
 } from "../hooks/useMaintenanceQueries";
 
+import {
+  useBatteriesQuery,
+} from "../hooks/useBatteryQueries";
+
 type AlertSource =
   | "Schedule"
-  | "Flight event"
-  | "Incident";
+  | "Incident"
+  | "Hub inspection";
 
 type ActiveWorkOrderStatus =
   Exclude<
@@ -66,8 +71,6 @@ type WorkOrderForm = {
   droneId: string;
   batteryId: string;
   title: string;
-  priority: WorkOrderPriority;
-  assignedTo: string;
   relatedAlertId?: string;
   alertSource?: AlertSource;
 };
@@ -91,8 +94,6 @@ const initialForm: WorkOrderForm = {
   droneId: "",
   batteryId: "",
   title: "",
-  priority: "Medium",
-  assignedTo: "Technician Demo",
 };
 
 function loadAlertLogs(): AlertLog[] {
@@ -148,6 +149,14 @@ export function WorkOrdersPage() {
 
   const updateWorkOrderMutation =
     useUpdateWorkOrderMutation();
+
+  const batteriesQuery =
+    useBatteriesQuery();
+
+  const readyBatteries =
+    (batteriesQuery.data ?? []).filter(
+      (battery) => battery.status === "Ready",
+    );
 
   const workOrders: WorkOrder[] =
     workOrdersQuery.data ?? [];
@@ -238,9 +247,6 @@ export function WorkOrdersPage() {
           "batteryId",
         ) ?? "",
       title,
-      priority: "Medium",
-      assignedTo:
-        "Technician Demo",
       relatedAlertId:
         searchParams.get(
           "alertId",
@@ -331,16 +337,34 @@ export function WorkOrdersPage() {
     setCreateModalOpen(true);
   };
 
-  const openHistory = () => {
-    setWorkOrderLogs(
-      loadWorkOrderLogs(),
-    );
-
+  const openHistory = async () => {
     setMaintenanceRecords(
       loadMaintenanceRecords(),
     );
-
     setHistoryOpen(true);
+
+    if (workOrders.length === 0) {
+      setWorkOrderLogs([]);
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      workOrders.map((order) =>
+        fetchWorkOrderLogsFromApi(order.id),
+      ),
+    );
+
+    const apiLogs = results.flatMap((result) =>
+      result.status === "fulfilled"
+        ? result.value
+        : [],
+    );
+
+    setWorkOrderLogs(
+      apiLogs.length > 0
+        ? apiLogs
+        : loadWorkOrderLogs(),
+    );
   };
 
 
@@ -356,7 +380,7 @@ export function WorkOrdersPage() {
       !form.title.trim()
     ) {
       setApiError(
-        "Drone ID, Battery ID and issue description are required by Backend.",
+        "Drone ID, test Battery ID and issue description are required by Backend.",
       );
       return;
     }
@@ -413,10 +437,7 @@ export function WorkOrdersPage() {
       await updateWorkOrderMutation.mutateAsync({
         workOrderId: orderId,
         payload: {
-          status:
-            nextStatus === "In Progress"
-              ? "IN_PROGRESS"
-              : "NOT_STARTED",
+          status: nextStatus,
         },
       });
     } catch (error) {
@@ -492,8 +513,8 @@ export function WorkOrdersPage() {
             <option value="all">
               All status
             </option>
-            <option value="Not Started">
-              Not started
+            <option value="Pending">
+              Pending
             </option>
             <option value="In Progress">
               In progress
@@ -540,7 +561,9 @@ export function WorkOrdersPage() {
 
             <button
               type="button"
-              onClick={openHistory}
+              onClick={() => {
+                void openHistory();
+              }}
               className="
   inline-flex items-center gap-2
   text-[13px] font-medium
@@ -610,8 +633,8 @@ export function WorkOrdersPage() {
                         }
                         className="tech-control h-8 w-[150px] px-2 !text-[13px]"
                       >
-                        <option value="Not Started">
-                          Not started
+                        <option value="Pending">
+                          Pending
                         </option>
                         <option value="In Progress">
                           In progress
@@ -1008,9 +1031,10 @@ export function WorkOrdersPage() {
                     />
                   </Field>
 
-                  <Field label="Battery ID">
+                  <Field label="Test battery ID">
                     <input
                       required
+                      list="maintenance-test-battery-options"
                       value={form.batteryId}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -1021,6 +1045,14 @@ export function WorkOrdersPage() {
                       placeholder="BAT-001"
                       className="tech-control h-10 w-full px-3 !text-[14px]"
                     />
+
+                    <datalist id="maintenance-test-battery-options">
+                      {readyBatteries.map((battery) => (
+                        <option key={battery.id} value={battery.id}>
+                          {battery.id} · {battery.chargeLevelPct}% · Ready
+                        </option>
+                      ))}
+                    </datalist>
                   </Field>
                 </div>
 
@@ -1045,58 +1077,13 @@ export function WorkOrdersPage() {
                   />
                 </Field>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="Priority">
-                    <select
-                      value={
-                        form.priority
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setForm(
-                          (current) => ({
-                            ...current,
-                            priority:
-                              event.target
-                                .value as WorkOrderPriority,
-                          }),
-                        )
-                      }
-                      className="tech-control h-10 w-full px-3 !text-[14px]"
-                    >
-                      <option value="High">
-                        High
-                      </option>
-                      <option value="Medium">
-                        Medium
-                      </option>
-                      <option value="Low">
-                        Low
-                      </option>
-                    </select>
-                  </Field>
-
-                  <Field label="Assigned technician">
-                    <input
-                      value={
-                        form.assignedTo
-                      }
-                      onChange={(
-                        event,
-                      ) =>
-                        setForm(
-                          (current) => ({
-                            ...current,
-                            assignedTo:
-                              event.target
-                                .value,
-                          }),
-                        )
-                      }
-                      className="tech-control h-10 w-full px-3 !text-[14px]"
-                    />
-                  </Field>
+                <div className="rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 py-3">
+                  <p className="text-[12px] font-medium text-[var(--tech-text-secondary)]">
+                    The selected battery is a temporary test battery for diagnostics and power-on checks.
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-[var(--tech-muted)]">
+                    Battery inventory and charging remain managed in Battery Management. Priority and technician assignment are returned by Backend and are not submitted by this form.
+                  </p>
                 </div>
               </div>
 

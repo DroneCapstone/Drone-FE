@@ -14,27 +14,28 @@ export function HubNetworkPage() {
   const [page, setPage] = useState(1);
   const { data: apiHubs, isLoading: hubsLoading, error: hubsError } = useMissionHubsQuery();
   const { data: apiMiniHubs, isLoading: miniHubsLoading, error: miniHubsError } = useMissionMiniHubsQuery();
-  const { data: fleet, isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
+  const { data: fleet = [], isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
 
   const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => {
-    const hubDrones = (fleet ?? []).filter(
+    const hubFleet = fleet.filter(
       (drone) => String(drone.hubId) === String(hub.id),
     );
-
+    const availableFleet = hubFleet.filter((drone) => drone.technicalStatus === 'Available');
     return {
       id: hub.id,
       name: hub.name,
       area: '',
       address: hub.address ?? '',
-      latitude: 0,
-      longitude: 0,
+      latitude: hub.latitude ?? 0,
+      longitude: hub.longitude ?? 0,
       status: 'Active' as const,
-      totalDrones: hubDrones.length,
-      availableDrones: hubDrones.filter(
-        (drone) => drone.technicalStatus === 'Available',
-      ).length,
+      totalDrones: hub.totalDrones ?? hubFleet.length,
+      availableDrones: hub.availableDrones ?? availableFleet.length,
     };
   });
+
+  const isLoading = hubsLoading || miniHubsLoading || fleetLoading;
+  const error = hubsError ?? miniHubsError ?? fleetError;
 
   const totalPages = Math.max(1, Math.ceil(hubs.length / HUBS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
@@ -47,9 +48,6 @@ export function HubNetworkPage() {
     navigate(`/operator/fleet-hubs/drones?hub=${encodeURIComponent(hubId)}`);
   };
 
-  const loading = hubsLoading || miniHubsLoading || fleetLoading;
-  const error = hubsError ?? miniHubsError ?? fleetError;
-
   return (
     <FleetHubPageShell active="/operator/fleet-hubs/hubs">
       <OperatorPanel
@@ -60,7 +58,7 @@ export function HubNetworkPage() {
           </NavLink>
         }
       >
-        {loading ? (
+        {isLoading ? (
           <div className="operator-empty-state">Loading hubs…</div>
         ) : error ? (
           <div className="operator-empty-state">

@@ -238,19 +238,24 @@ export function DeliveryConfirmationsPage() {
                 >
                   <span className="text-[14px] font-semibold text-[var(--tech-text)]">
                     {
+                      delivery.orderCode ??
                       delivery.orderId
                     }
                   </span>
 
                   <span className="text-[13px] text-[var(--tech-text-secondary)]">
                     {
-                      delivery.missionId
+                      delivery.missionCode ||
+                      delivery.missionId ||
+                      "—"
                     }
                   </span>
 
                   <span className="text-[13px] text-[var(--tech-text-secondary)]">
                     {
-                      delivery.droneId
+                      delivery.droneCode ||
+                      delivery.droneId ||
+                      "—"
                     }
                   </span>
 
@@ -385,22 +390,27 @@ function DeliveryStatusBlock({
         Delivered · waiting pickup
       </p>
 
-      <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-orange-500">
-        <Clock3
-          size={12}
-        />
-        {getRemainingPickupTime(
-          delivery
-            .pickupDeadlineAtIso,
-        )}
-      </p>
+      {delivery.pickupDeadlineAtIso ? (
+        <>
+          <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-orange-500">
+            <Clock3
+              size={12}
+            />
+            {getRemainingPickupTime(
+              delivery.pickupDeadlineAtIso,
+            )}
+          </p>
 
-      <p className="mt-1 text-[10px] text-[var(--tech-subtle)]">
-        Deadline:{" "}
-        {
-          delivery.pickupDeadlineAt
-        }
-      </p>
+          <p className="mt-1 text-[10px] text-[var(--tech-subtle)]">
+            Deadline:{" "}
+            {delivery.pickupDeadlineAt}
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 text-[10px] text-[var(--tech-subtle)]">
+          Arrival time not provided by backend
+        </p>
+      )}
     </div>
   );
 }

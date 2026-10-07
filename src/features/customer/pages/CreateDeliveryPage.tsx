@@ -4,47 +4,98 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/hooks/useAuth";
+
 import {
   PACKAGE_CATEGORIES,
   PACKAGE_SIZE_RULES,
   VIETNAM_LOCATIONS,
 } from "../data/customerData";
-import { customerDeliveryService } from "../services/customerDeliveryService";
+
+import {
+  customerDeliveryService,
+  formatVnd,
+} from "../services/customerDeliveryService";
+
+import {
+  calculateDeliveryPricing,
+  isFragileCategory,
+} from "../services/deliveryPricing";
 import { customerProfileService } from "../services/customerProfileService";
-import type { DeliveryDraft, PackageSize } from "../types/customer";
+
+import {
+  resolveCustomerRoute,
+} from "../services/customerRouteService";
+
+import type {
+  DeliveryDraft,
+  PackageSize,
+} from "../types/customer";
+
+type DeliveryDraftWithPricing = Omit<
+  DeliveryDraft,
+  | "packageCategory"
+  | "weightKg"
+  | "packageSize"
+  | "deliveryMode"
+> & {
+  packageCategory:
+    | DeliveryDraft["packageCategory"]
+    | "";
+  weightKg: number | "";
+  packageSize: PackageSize | "";
+  deliveryMode:
+    | DeliveryDraft["deliveryMode"]
+    | "";
+  hasInsurance?: boolean;
+  draftVersion: 3;
+};
 
 const steps = ["Details", "Package", "Route", "Schedule"];
 
-function getDefaultDraft(name: string, phone: string): DeliveryDraft {
+function getDefaultDraft(
+  name: string,
+  phone: string,
+): DeliveryDraftWithPricing {
   return {
     senderName: name,
     senderPhone: phone,
     recipientName: "",
     recipientPhone: "",
-    packageCategory: "food",
+    packageCategory: "",
     packageDescription: "",
-    weightKg: 1,
-    packageSize: "S",
+    weightKg: "",
+    packageSize: "",
+    hasInsurance: false,
     originArea: "",
     destinationArea: "",
-    deliveryMode: "express",
+    deliveryMode: "",
     requestedDepartureAt: "",
+    draftVersion: 3,
   };
 }
 
 function getMinimumScheduleValue() {
-  const date = new Date(Date.now() + 3 * 60 * 60 * 1000);
-  const pad = (value: number) => String(value).padStart(2, "0");
+  const date = new Date(
+    Date.now() + 3 * 60 * 60 * 1000,
+  );
 
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate(),
-  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const pad = (value: number) =>
+    String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(
+    date.getMonth() + 1,
+  )}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
 }
+
+/* =========================================================
+   CREATE DELIVERY PAGE
+========================================================= */
 
 export function CreateDeliveryPage() {
   const navigate = useNavigate();
@@ -56,29 +107,68 @@ export function CreateDeliveryPage() {
         phone: "",
       };
 
-  const existingDraft = customerDeliveryService.getDraft();
+  const storedDraft =
+    customerDeliveryService.getDraft() as
+      | DeliveryDraftWithPricing
+      | null;
+
+  const existingDraft =
+    storedDraft?.draftVersion === 3
+      ? storedDraft
+      : null;
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<DeliveryDraft>(
-    existingDraft ?? getDefaultDraft(user?.name ?? "", profile.phone),
-  );
+
+  const [form, setForm] =
+    useState<DeliveryDraftWithPricing>(
+      existingDraft ??
+      getDefaultDraft(
+        user?.name ?? "",
+        profile.phone,
+      ),
+    );
 
   useEffect(() => {
-    customerDeliveryService.saveDraft(form);
+    customerDeliveryService.saveDraft(
+      form as unknown as DeliveryDraft,
+    );
   }, [form]);
 
   const preview = useMemo(() => {
-    if (!form.originArea || !form.destinationArea) {
-      return null;
-    }
+    return resolveCustomerRoute(
+      form.originArea,
+      form.destinationArea,
+    );
+  }, [
+    form.originArea,
+    form.destinationArea,
+  ]);
 
-    return customerDeliveryService.preview(form);
-  }, [form]);
+  const pricing = useMemo(
+    () =>
+      calculateDeliveryPricing(
+        form,
+        preview,
+      ),
+    [form, preview],
+  );
 
-  const update = <K extends keyof DeliveryDraft>(
+  const pricingReady =
+    Boolean(
+      form.packageCategory &&
+        form.weightKg !== "" &&
+        form.packageSize &&
+        form.deliveryMode &&
+        preview &&
+        preview.distanceKm !== null,
+    );
+
+  const update = <
+    K extends keyof DeliveryDraftWithPricing,
+  >(
     key: K,
-    value: DeliveryDraft[K],
+    value: DeliveryDraftWithPricing[K],
   ) => {
     setForm((current) => ({
       ...current,
@@ -97,7 +187,9 @@ export function CreateDeliveryPage() {
         !form.recipientName.trim() ||
         !form.recipientPhone.trim()
       ) {
-        setError("Please complete all sender and recipient information.");
+        setError(
+          "Please complete all sender and recipient information.",
+        );
         return false;
       }
 
@@ -105,15 +197,35 @@ export function CreateDeliveryPage() {
         form.senderPhone.trim().length < 9 ||
         form.recipientPhone.trim().length < 9
       ) {
-        setError("Please enter valid phone numbers.");
+        setError(
+          "Please enter valid phone numbers.",
+        );
         return false;
       }
     }
 
     if (step === 1) {
-      if (form.weightKg <= 0 || form.weightKg > 12) {
+      if (!form.packageCategory) {
         setError(
-          "Package weight must be greater than 0 kg and must not exceed 12 kg.",
+          "Please select a package category.",
+        );
+        return false;
+      }
+
+      if (
+        form.weightKg === "" ||
+        form.weightKg <= 0 ||
+        form.weightKg >= 10
+      ) {
+        setError(
+          "Please enter a package weight greater than 0 kg and less than 10 kg.",
+        );
+        return false;
+      }
+
+      if (!form.packageSize) {
+        setError(
+          "Please select a package size.",
         );
         return false;
       }
@@ -122,34 +234,70 @@ export function CreateDeliveryPage() {
         form.packageCategory === "other" &&
         !form.packageDescription.trim()
       ) {
-        setError("Please describe the package contents.");
+        setError(
+          "Please describe the package contents.",
+        );
         return false;
       }
     }
 
     if (step === 2) {
-      if (!form.originArea.trim() || !form.destinationArea.trim()) {
-        setError("Please enter both sending and receiving locations.");
+      if (
+        !form.originArea.trim() ||
+        !form.destinationArea.trim()
+      ) {
+        setError(
+          "Please enter both sending and receiving locations.",
+        );
         return false;
       }
 
-      if (form.originArea.trim() === form.destinationArea.trim()) {
-        setError("Origin and destination cannot be the same location.");
+      if (
+        form.originArea.trim() ===
+        form.destinationArea.trim()
+      ) {
+        setError(
+          "Origin and destination cannot be the same location.",
+        );
         return false;
       }
     }
 
-    if (step === 3 && form.deliveryMode === "scheduled") {
-      if (!form.requestedDepartureAt) {
-        setError("Please select a preferred departure time.");
+    if (step === 3) {
+      if (!form.deliveryMode) {
+        setError(
+          "Please select a delivery mode.",
+        );
         return false;
       }
 
-      const minimum = new Date(Date.now() + 3 * 60 * 60 * 1000);
-
-      if (new Date(form.requestedDepartureAt) < minimum) {
-        setError("Scheduled departure must be at least 3 hours from now.");
+      if (
+        form.deliveryMode === "scheduled" &&
+        !form.requestedDepartureAt
+      ) {
+        setError(
+          "Please select a preferred departure time.",
+        );
         return false;
+      }
+
+      if (
+        form.deliveryMode === "scheduled"
+      ) {
+        const minimum = new Date(
+          Date.now() + 3 * 60 * 60 * 1000,
+        );
+
+        if (
+          new Date(
+            form.requestedDepartureAt,
+          ) < minimum
+        ) {
+          setError(
+            "Scheduled departure must be at least 3 hours from now.",
+          );
+          return false;
+        }
       }
     }
 
@@ -168,33 +316,104 @@ export function CreateDeliveryPage() {
     }
 
     if (step === steps.length - 1) {
-      customerDeliveryService.saveDraft(form);
-      navigate("/customer/deliveries/review");
+      customerDeliveryService.saveDraft(
+        form as unknown as DeliveryDraft,
+      );
+      navigate(
+        "/customer/deliveries/review",
+      );
       return;
     }
 
     setStep((current) => current + 1);
   };
 
+  const back = () => {
+    setStep((current) =>
+      Math.max(0, current - 1),
+    );
+    setError("");
+  };
+
   return (
     <div className="min-h-[calc(100vh-72px)] bg-transparent font-sans">
-      <div className="mx-auto max-w-[1500px] px-6 py-10 lg:px-10 lg:py-12">
+      <div className="mx-auto max-w-[1500px] px-4 pb-10 pt-6 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+        {/* =================================================
+            PAGE HEADER
+        ================================================== */}
         <header>
-          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-orange-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-500 sm:text-[12px]">
             New delivery
           </p>
 
-          <h1 className="mt-3 text-[38px] font-semibold tracking-[-0.04em] text-white lg:text-[44px]">
+          <h1 className="mt-2 text-[32px] font-bold tracking-[-0.04em] text-white sm:mt-3 sm:text-[40px] lg:text-[46px]">
             Create delivery
           </h1>
 
-          <p className="mt-3 max-w-[680px] text-[15px] leading-7 text-white/[0.58]">
-            Enter package information, choose your delivery areas and schedule
-            a hub-to-hub delivery.
+          <p className="mt-2 max-w-[680px] text-[13px] leading-5 text-white/[0.48] sm:hidden">
+            Enter package details, choose your route and schedule a hub-to-hub delivery.
           </p>
         </header>
 
-        <div className="mt-9 overflow-hidden rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+        {/* =================================================
+            MOBILE PROGRESS
+        ================================================== */}
+        <div className="mt-6 sm:hidden">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/[0.42]">
+                Step {step + 1} of {steps.length}
+              </p>
+
+              <p className="mt-1 text-[17px] font-semibold text-white">
+                {steps[step]}
+              </p>
+            </div>
+
+            <span className="text-[12px] font-medium text-orange-400">
+              {Math.round(
+                ((step + 1) / steps.length) *
+                  100,
+              )}
+              %
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {steps.map((label, index) => {
+              const active = index === step;
+              const completed = index < step;
+
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  aria-label={`Go to ${label}`}
+                  onClick={() => {
+                    if (index <= step) {
+                      setStep(index);
+                      setError("");
+                    }
+                  }}
+                  className="group"
+                >
+                  <span
+                    className={`block h-[3px] rounded-full transition ${
+                      active || completed
+                        ? "bg-orange-500"
+                        : "bg-white/[0.10]"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* =================================================
+            DESKTOP / TABLET STEPPER
+        ================================================== */}
+        <div className="mt-9 hidden overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/96 shadow-[0_12px_30px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:block">
           <div className="grid grid-cols-2 md:grid-cols-4">
             {steps.map((label, index) => {
               const active = index === step;
@@ -221,10 +440,12 @@ export function CreateDeliveryPage() {
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition ${
                         active || completed
                           ? "bg-orange-500 text-black"
-                          : "border border-white/[0.12] text-white/[0.48]"
+                          : "border border-white/[0.12] text-white/[0.74]"
                       }`}
                     >
-                      {completed ? "✓" : index + 1}
+                      {completed
+                        ? "✓"
+                        : index + 1}
                     </span>
 
                     <div>
@@ -233,14 +454,14 @@ export function CreateDeliveryPage() {
                           active
                             ? "text-white"
                             : completed
-                              ? "text-white/[0.76]"
-                              : "text-white/[0.48]"
+                              ? "text-white/[0.92]"
+                              : "text-white/[0.74]"
                         }`}
                       >
                         {label}
                       </p>
 
-                      <p className="mt-0.5 hidden text-[11px] text-white/[0.25] lg:block">
+                      <p className="mt-0.5 hidden text-[11px] text-white/[0.58] lg:block">
                         {getStepCaption(index)}
                       </p>
                     </div>
@@ -255,31 +476,87 @@ export function CreateDeliveryPage() {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 p-6 shadow-[0_14px_34px_rgba(0,0,0,0.30)] backdrop-blur-sm lg:p-8">
-            {step === 0 && <ContactStep form={form} update={update} />}
-            {step === 1 && <PackageStep form={form} update={update} />}
-            {step === 2 && <RouteStep form={form} update={update} />}
-            {step === 3 && <ScheduleStep form={form} update={update} />}
+        {/* =================================================
+            FORM + SUMMARY
+        ================================================== */}
+        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          {/* FORM */}
+          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/96 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.24)] backdrop-blur-sm sm:p-6 sm:shadow-[0_14px_34px_rgba(0,0,0,0.30)] lg:p-8">
+            {step === 0 && (
+              <ContactStep
+                form={form}
+                update={update}
+              />
+            )}
+
+            {step === 1 && (
+              <PackageStep
+                form={form}
+                update={update}
+              />
+            )}
+
+            {step === 2 && (
+              <RouteStep
+                form={form}
+                update={update}
+              />
+            )}
+
+            {step === 3 && (
+              <ScheduleStep
+                form={form}
+                update={update}
+              />
+            )}
 
             {error && (
               <div
-                className="mt-7 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] leading-6 text-red-300"
+                className="mt-5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[12px] leading-5 text-red-300 sm:mt-7 sm:text-[13px] sm:leading-6"
                 role="alert"
               >
                 {error}
               </div>
             )}
 
-            <div className="mt-10 flex items-center justify-between border-t border-white/[0.08] pt-6">
+            {/* MOBILE NAVIGATION */}
+            <div className="mt-7 grid grid-cols-[auto_1fr] gap-3 border-t border-white/[0.08] pt-5 sm:hidden">
+              {step > 0 ? (
+                <button
+                  type="button"
+                  onClick={back}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.10] px-4 text-[13px] font-medium text-white/[0.78] transition active:bg-white/[0.04]"
+                >
+                  <ArrowLeft size={16} />
+                  Back
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <button
+                type="button"
+                onClick={next}
+                className="group inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
+              >
+                {step === steps.length - 1
+                  ? "Review delivery"
+                  : "Continue"}
+
+                <ArrowRight
+                  size={16}
+                  className="transition-transform group-hover:translate-x-0.5"
+                />
+              </button>
+            </div>
+
+            {/* DESKTOP NAVIGATION */}
+            <div className="mt-10 hidden items-center justify-between border-t border-white/[0.08] pt-6 sm:flex">
               <button
                 type="button"
                 disabled={step === 0}
-                onClick={() => {
-                  setStep((current) => Math.max(0, current - 1));
-                  setError("");
-                }}
-                className="inline-flex h-12 items-center gap-2 rounded-lg px-5 text-[14px] font-medium text-white/[0.62] transition hover:bg-white/[0.04] hover:text-white disabled:pointer-events-none disabled:opacity-0"
+                onClick={back}
+                className="inline-flex h-12 items-center gap-2 rounded-lg px-5 text-[14px] font-medium text-white/[0.84] transition hover:bg-white/[0.04] hover:text-white disabled:pointer-events-none disabled:opacity-0"
               >
                 <ArrowLeft size={16} />
                 Back
@@ -290,7 +567,9 @@ export function CreateDeliveryPage() {
                 onClick={next}
                 className="group inline-flex h-12 items-center gap-3 rounded-lg bg-orange-500 px-7 text-[14px] font-semibold text-black transition hover:bg-orange-400"
               >
-                {step === steps.length - 1 ? "Review delivery" : "Continue"}
+                {step === steps.length - 1
+                  ? "Review delivery"
+                  : "Continue"}
 
                 <ArrowRight
                   size={16}
@@ -300,44 +579,187 @@ export function CreateDeliveryPage() {
             </div>
           </section>
 
-          <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#0d0d10]/95 p-6 shadow-[0_14px_34px_rgba(0,0,0,0.30)] backdrop-blur-sm lg:sticky lg:top-[96px]">
+          {/* SUMMARY */}
+          <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#161217]/96 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.24)] backdrop-blur-sm sm:p-6 sm:shadow-[0_14px_34px_rgba(0,0,0,0.30)] lg:sticky lg:top-[96px]">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.15em] text-white/[0.58]">
+              <p className="text-[12px] font-bold uppercase tracking-[0.15em] text-white/[0.82] sm:text-[14px] sm:text-white">
                 Delivery summary
               </p>
 
-              <span className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium text-white/[0.54]">
+              <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium text-white/[0.62] sm:px-3 sm:py-1.5 sm:text-[11px] sm:text-white">
                 Draft
               </span>
             </div>
 
-            <div className="mt-5">
-              <SummaryItem label="Weight" value={`${form.weightKg || 0} kg`} />
-              <SummaryItem label="Package size" value={form.packageSize} />
+            <div className="mt-3 sm:mt-5">
+              <SummaryItem
+                label="Weight"
+                value={
+                  form.weightKg === ""
+                    ? "—"
+                    : `${form.weightKg} kg`
+                }
+              />
+
+              <SummaryItem
+                label="Package size"
+                value={
+                  form.packageSize || "—"
+                }
+              />
+
               <SummaryItem
                 label="Delivery mode"
-                value={form.deliveryMode === "express" ? "Express" : "Scheduled"}
+                value={
+                  !form.deliveryMode
+                    ? "—"
+                    : form.deliveryMode ===
+                        "express"
+                      ? "Express"
+                      : "Scheduled"
+                }
               />
 
               {preview && (
                 <>
-                  <SummaryItem label="Origin hub" value={preview.originHub.name} />
+                  <SummaryItem
+                    label="Origin hub"
+                    value={preview.originHub.name}
+                  />
+
                   <SummaryItem
                     label="Destination hub"
-                    value={preview.destinationHub.name}
+                    value={
+                      preview.destinationHub.name
+                    }
                   />
                 </>
               )}
             </div>
 
-            <div className="mt-6 rounded-xl border border-orange-500/[0.16] bg-orange-500/[0.05] p-5">
-              <p className="text-[14px] font-semibold text-orange-400">
+            {/* LIVE PRICE */}
+            <div className="mt-4 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 sm:mt-6 sm:p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/[0.42]">
+                    Estimated price
+                  </p>
+
+                  <p className="mt-1.5 text-[12px] leading-5 text-white/[0.48]">
+                    Updates automatically when category, weight, size, route, insurance or delivery mode changes.
+                  </p>
+                </div>
+
+                <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-white/[0.55]">
+                  {form.packageSize &&
+                  form.weightKg !== ""
+                    ? `Tier ${pricing.droneSize}`
+                    : "Tier —"}
+                </span>
+              </div>
+
+              {pricingReady ? (
+                <div className="mt-4 space-y-3 border-t border-white/[0.07] pt-4">
+                <PriceLine
+                  label="Base fee"
+                  value={formatVnd(
+                    pricing.baseFee,
+                  )}
+                />
+
+                <PriceLine
+                  label={
+                    pricing.distanceKm !== null
+                      ? `Distance · ${pricing.distanceKm} km`
+                      : "Distance"
+                  }
+                  value={
+                    pricing.isRoutePriced
+                      ? formatVnd(
+                          pricing.distanceFee,
+                        )
+                      : "Select route"
+                  }
+                  muted={
+                    !pricing.isRoutePriced
+                  }
+                />
+
+                <PriceLine
+                  label={`Payload · ${form.weightKg || 0} kg`}
+                  value={formatVnd(
+                    pricing.payloadFee,
+                  )}
+                />
+
+                {pricing.isFragile && (
+                  <PriceLine
+                    label="Fragile items · 15%"
+                    value={`+${formatVnd(
+                      pricing.fragileSurcharge,
+                    )}`}
+                  />
+                )}
+
+                {form.hasInsurance && (
+                  <PriceLine
+                    label="Package insurance · 10%"
+                    value={`+${formatVnd(
+                      pricing.insuranceSurcharge,
+                    )}`}
+                  />
+                )}
+
+                {form.deliveryMode ===
+                  "express" && (
+                  <PriceLine
+                    label="Express surcharge · 25%"
+                    value={`+${formatVnd(
+                      pricing.serviceSurcharge,
+                    )}`}
+                  />
+                )}
+                </div>
+              ) : (
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+                  <p className="text-[11px] leading-5 text-white/[0.34] sm:text-[12px]">
+                    Select package category, weight, size, route and delivery mode to calculate the price.
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/[0.08] pt-4">
+                <div>
+                  <p className="text-[12px] font-semibold text-white/[0.72]">
+                    Estimated total
+                  </p>
+
+                  {!pricingReady && (
+                    <p className="mt-1 text-[10px] text-white/[0.34]">
+                      Complete the required selections to calculate the final estimate.
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-right text-[22px] font-semibold tracking-[-0.03em] text-white">
+                  {pricingReady
+                    ? formatVnd(
+                        pricing.finalFee,
+                      )
+                    : "—"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-orange-500/[0.16] bg-orange-500/[0.05] p-4 sm:mt-6 sm:p-5">
+              <p className="text-[12px] font-semibold text-orange-400 sm:text-[14px]">
                 3-hour handover requirement
               </p>
 
-              <p className="mt-3 text-[12px] leading-6 text-white/[0.42]">
-                Bring your package to the recommended origin hub within 3 hours
-                after placing the order.
+              <p className="mt-2 text-[11px] font-medium leading-5 text-white/[0.62] sm:mt-3 sm:text-[13px] sm:leading-6 sm:text-white/[0.80]">
+                Bring your package to the selected
+                origin hub within 3 hours after placing
+                the order.
               </p>
             </div>
           </aside>
@@ -347,15 +769,29 @@ export function CreateDeliveryPage() {
   );
 }
 
+/* =========================================================
+   STEP PROPS
+========================================================= */
+
 interface StepProps {
-  form: DeliveryDraft;
-  update: <K extends keyof DeliveryDraft>(
+  form: DeliveryDraftWithPricing;
+
+  update: <
+    K extends keyof DeliveryDraftWithPricing,
+  >(
     key: K,
-    value: DeliveryDraft[K],
+    value: DeliveryDraftWithPricing[K],
   ) => void;
 }
 
-function ContactStep({ form, update }: StepProps) {
+/* =========================================================
+   CONTACT STEP
+========================================================= */
+
+function ContactStep({
+  form,
+  update,
+}: StepProps) {
   return (
     <section>
       <SectionTitle
@@ -363,19 +799,25 @@ function ContactStep({ form, update }: StepProps) {
         description="Confirm the sender information and enter the details of the person receiving the package."
       />
 
-      <div className="mt-8 grid gap-6 xl:grid-cols-2">
+      <div className="mt-5 grid gap-4 sm:mt-8 sm:gap-6 xl:grid-cols-2">
         <ContactGroup
           title="Sender"
           description="Your registered account information."
         >
-          <Field label="Full name" value={form.senderName} readOnly />
+          <Field
+            label="Full name"
+            value={form.senderName}
+            readOnly
+          />
 
           <Field
             label="Phone number"
             value={form.senderPhone}
             placeholder="090 123 4567"
             inputMode="tel"
-            onChange={(value) => update("senderPhone", value)}
+            onChange={(value) =>
+              update("senderPhone", value)
+            }
           />
         </ContactGroup>
 
@@ -387,7 +829,9 @@ function ContactStep({ form, update }: StepProps) {
             label="Full name"
             value={form.recipientName}
             placeholder="Recipient name"
-            onChange={(value) => update("recipientName", value)}
+            onChange={(value) =>
+              update("recipientName", value)
+            }
           />
 
           <Field
@@ -395,7 +839,9 @@ function ContactStep({ form, update }: StepProps) {
             value={form.recipientPhone}
             placeholder="090 987 6543"
             inputMode="tel"
-            onChange={(value) => update("recipientPhone", value)}
+            onChange={(value) =>
+              update("recipientPhone", value)
+            }
           />
         </ContactGroup>
       </div>
@@ -403,7 +849,19 @@ function ContactStep({ form, update }: StepProps) {
   );
 }
 
-function PackageStep({ form, update }: StepProps) {
+/* =========================================================
+   PACKAGE STEP
+========================================================= */
+
+function PackageStep({
+  form,
+  update,
+}: StepProps) {
+  const fragileSelected =
+    isFragileCategory(
+      form.packageCategory,
+    );
+
   return (
     <section>
       <SectionTitle
@@ -411,93 +869,155 @@ function PackageStep({ form, update }: StepProps) {
         description="Provide the package category, weight and physical size so the system can validate aircraft capacity."
       />
 
-      <div className="mt-8">
+      <div className="mt-5 sm:mt-8">
         <label className="block">
-          <FieldLabel>Package category</FieldLabel>
+          <FieldLabel>
+            Package category
+          </FieldLabel>
 
           <select
             value={form.packageCategory}
             onChange={(event) =>
               update(
                 "packageCategory",
-                event.target.value as DeliveryDraft["packageCategory"],
+                event.target
+                  .value as DeliveryDraft["packageCategory"],
               )
             }
-            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
+            className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
           >
-            {PACKAGE_CATEGORIES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
+            <option
+              value=""
+              disabled
+            >
+              Select package category
+            </option>
+
+            {PACKAGE_CATEGORIES.map(
+              (item) => (
+                <option
+                  key={item.value}
+                  value={item.value}
+                >
+                  {item.label}
+                </option>
+              ),
+            )}
           </select>
+
+          {fragileSelected && (
+            <p className="mt-2 text-[11px] leading-5 text-orange-400/90 sm:text-[12px]">
+              Fragile handling surcharge +15% of Core Fee is applied automatically.
+            </p>
+          )}
         </label>
 
-        {form.packageCategory === "other" && (
-          <div className="mt-6">
+        {form.packageCategory ===
+          "other" && (
+          <div className="mt-5 sm:mt-6">
             <Field
               label="Package description"
-              value={form.packageDescription}
+              value={
+                form.packageDescription
+              }
               placeholder="Describe the package contents"
-              onChange={(value) => update("packageDescription", value)}
+              onChange={(value) =>
+                update(
+                  "packageDescription",
+                  value,
+                )
+              }
             />
           </div>
         )}
 
-        <div className="mt-7">
-          <FieldLabel>Package weight</FieldLabel>
+        <div className="mt-6 sm:mt-7">
+          <FieldLabel>
+            Package weight
+          </FieldLabel>
 
-          <div className="mt-2.5 flex h-[54px] overflow-hidden rounded-lg border border-white/[0.1] bg-[#111116] transition hover:border-white/[0.17] focus-within:border-orange-500">
+          <div className="mt-2 flex h-[50px] overflow-hidden rounded-lg border border-white/[0.1] bg-[#19151a] transition hover:border-white/[0.17] focus-within:border-orange-500 sm:mt-2.5 sm:h-[54px]">
             <input
               type="number"
               min="0.1"
-              max="12"
+              max="9.9"
               step="0.1"
               value={form.weightKg}
-              onChange={(event) => update("weightKg", Number(event.target.value))}
-              className="min-w-0 flex-1 bg-transparent px-4 text-[15px] text-white outline-none"
+              onChange={(event) =>
+                update(
+                  "weightKg",
+                  event.target.value === ""
+                    ? ""
+                    : Number(
+                        event.target.value,
+                      ),
+                )
+              }
+              className="min-w-0 flex-1 bg-transparent px-3 text-[14px] text-white outline-none sm:px-4 sm:text-[15px]"
             />
 
-            <div className="flex items-center border-l border-white/[0.08] px-4 text-[13px] text-white/[0.54]">
+            <div className="flex items-center border-l border-white/[0.08] px-3 text-[12px] text-white/[0.72] sm:px-4 sm:text-[13px] sm:text-white">
               kg
             </div>
           </div>
 
-          <div className="mt-2 flex items-center justify-between">
-            <p className="text-[11px] text-white/[0.42]">Maximum aircraft payload</p>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="text-[10px] text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
+              Maximum supported payload
+            </p>
 
             <p
-              className={`text-[11px] font-medium ${
-                form.weightKg > 12 ? "text-red-400" : "text-white/[0.54]"
+              className={`text-[10px] font-medium sm:text-[11px] ${
+                form.weightKg !== "" &&
+                form.weightKg >= 10
+                  ? "text-red-400"
+                  : "text-white/[0.72] sm:text-white"
               }`}
             >
-              {form.weightKg || 0}/12 kg
+              {form.weightKg === ""
+                ? "—"
+                : form.weightKg}{" "}
+              / {"< 10 kg"}
             </p>
           </div>
         </div>
 
-        <div className="mt-8">
-          <FieldLabel>Package size</FieldLabel>
+        <div className="mt-6 sm:mt-8">
+          <FieldLabel>
+            Package size
+          </FieldLabel>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(Object.keys(PACKAGE_SIZE_RULES) as PackageSize[]).map((size) => {
-              const active = form.packageSize === size;
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+            {(
+              Object.keys(
+                PACKAGE_SIZE_RULES,
+              ) as PackageSize[]
+            ).map((size) => {
+              const active =
+                form.packageSize === size;
 
               return (
                 <button
                   key={size}
                   type="button"
-                  onClick={() => update("packageSize", size)}
-                  className={`rounded-lg border p-4 text-left transition ${
+                  onClick={() =>
+                    update(
+                      "packageSize",
+                      size,
+                    )
+                  }
+                  className={`min-h-[92px] rounded-xl border p-3 text-left transition sm:min-h-0 sm:rounded-lg sm:p-4 ${
                     active
                       ? "border-orange-500 bg-orange-500/[0.055]"
-                      : "border-white/[0.08] bg-[#111116] hover:border-white/[0.18]"
+                      : "border-white/[0.08] bg-[#19151a] hover:border-white/[0.18]"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <p
-                      className={`text-[20px] font-semibold ${
-                        active ? "text-orange-400" : "text-white/[0.80]"
+                      className={`text-[18px] font-semibold sm:text-[20px] ${
+                        active
+                          ? "text-orange-400"
+                          : "text-white"
                       }`}
                     >
                       {size}
@@ -505,114 +1025,214 @@ function PackageStep({ form, update }: StepProps) {
 
                     <span
                       className={`h-2 w-2 rounded-full ${
-                        active ? "bg-orange-500" : "bg-white/10"
+                        active
+                          ? "bg-orange-500"
+                          : "bg-white/10"
                       }`}
                     />
                   </div>
 
-                  <p className="mt-3 text-[11px] leading-5 text-white/[0.48]">
-                    {PACKAGE_SIZE_RULES[size].dimensions}
+                  <p className="mt-2 text-[10px] leading-4 text-white/[0.54] sm:mt-3 sm:text-[11px] sm:leading-5 sm:text-white/[0.74]">
+                    {
+                      PACKAGE_SIZE_RULES[
+                        size
+                      ].dimensions
+                    }
                   </p>
                 </button>
               );
             })}
           </div>
 
-          <div className="mt-5 rounded-lg border border-white/[0.07] bg-[#111116] p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 rounded-xl border border-white/[0.07] bg-[#19151a] p-4 sm:mt-5 sm:rounded-lg sm:p-5">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] text-white/[0.48]">Selected size</p>
-                <p className="mt-1 text-[14px] font-medium text-white/[0.80]">
-                  Size {form.packageSize}
+                <p className="text-[10px] text-white/[0.46] sm:text-[11px] sm:text-white/[0.74]">
+                  Selected size
+                </p>
+
+                <p className="mt-1 text-[13px] font-medium text-white sm:text-[14px]">
+                  {form.packageSize
+                    ? `Size ${form.packageSize}`
+                    : "Not selected"}
                 </p>
               </div>
 
-              <div className="text-right">
-                <p className="text-[11px] text-white/[0.48]">Maximum dimensions</p>
-                <p className="mt-1 text-[13px] text-white/[0.70]">
-                  {PACKAGE_SIZE_RULES[form.packageSize].dimensions}
+              <div className="max-w-[58%] text-right">
+                <p className="text-[10px] text-white/[0.46] sm:text-[11px] sm:text-white/[0.74]">
+                  Maximum dimensions
+                </p>
+
+                <p className="mt-1 text-[11px] leading-5 text-white/[0.82] sm:text-[13px] sm:text-white/[0.92]">
+                  {
+                    form.packageSize
+                      ? PACKAGE_SIZE_RULES[
+                          form.packageSize
+                        ].dimensions
+                      : "—"
+                  }
                 </p>
               </div>
             </div>
 
-            <p className="mt-4 border-t border-white/[0.06] pt-4 text-[11px] leading-5 text-white/[0.48]">
-              {PACKAGE_SIZE_RULES[form.packageSize].description}
+            <p className="mt-3 border-t border-white/[0.06] pt-3 text-[10px] leading-5 text-white/[0.52] sm:mt-4 sm:pt-4 sm:text-[11px] sm:text-white/[0.74]">
+              {
+                form.packageSize
+                  ? PACKAGE_SIZE_RULES[
+                      form.packageSize
+                    ].description
+                  : "Select a package size to view its limits."
+              }
+            </p>
+
+            <p className="mt-3 text-[10px] leading-5 text-white/[0.40] sm:text-[11px]">
+              Pricing tier is automatically upgraded when the package weight requires a larger drone capacity.
             </p>
           </div>
+
+          {/* PACKAGE INSURANCE */}
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 transition hover:border-white/[0.16] sm:mt-5 sm:p-5">
+            <input
+              type="checkbox"
+              checked={Boolean(
+                form.hasInsurance,
+              )}
+              onChange={(event) =>
+                update(
+                  "hasInsurance",
+                  event.target.checked,
+                )
+              }
+              className="mt-0.5 h-4 w-4 shrink-0 accent-orange-500"
+            />
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-semibold text-white sm:text-[14px]">
+                  Package insurance
+                </p>
+
+                <span className="rounded-full bg-orange-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-orange-400">
+                  +10% Core Fee
+                </span>
+              </div>
+
+              <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
+                Optional protection for the shipment. Insurance is calculated from Core Fee.
+              </p>
+            </div>
+          </label>
         </div>
       </div>
     </section>
   );
 }
 
-function RouteStep({ form, update }: StepProps) {
+/* =========================================================
+   ROUTE STEP
+========================================================= */
+
+function RouteStep({
+  form,
+  update,
+}: StepProps) {
   const preview =
-    form.originArea && form.destinationArea
-      ? customerDeliveryService.preview(form)
-      : null;
+    resolveCustomerRoute(
+      form.originArea,
+      form.destinationArea,
+    );
 
   return (
     <section>
       <SectionTitle
         title="Delivery route"
-        description="Enter the sender and recipient areas. DroneOptAI will recommend the most suitable origin and destination hubs."
+        description="Enter the sending and receiving areas to display the origin and destination hubs for this delivery."
       />
 
       <datalist id="vietnam-locations">
-        {VIETNAM_LOCATIONS.map((location) => (
-          <option key={location} value={location} />
-        ))}
+        {VIETNAM_LOCATIONS.map(
+          (location) => (
+            <option
+              key={location}
+              value={location}
+            />
+          ),
+        )}
       </datalist>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
+      <div className="mt-5 grid gap-4 sm:mt-8 sm:gap-6 md:grid-cols-2">
         <LocationField
           label="Sending area"
           value={form.originArea}
           placeholder="Example: Go Vap, Ho Chi Minh City"
-          onChange={(value) => update("originArea", value)}
+          onChange={(value) =>
+            update("originArea", value)
+          }
         />
 
         <LocationField
           label="Receiving area"
           value={form.destinationArea}
           placeholder="Example: Thu Duc, Ho Chi Minh City"
-          onChange={(value) => update("destinationArea", value)}
+          onChange={(value) =>
+            update(
+              "destinationArea",
+              value,
+            )
+          }
         />
       </div>
 
       {!preview && (
-        <div className="mt-7 rounded-lg border border-dashed border-white/[0.08] px-5 py-8 text-center">
-          <p className="text-[13px] text-white/[0.54]">
-            Enter both locations to see the recommended hub route.
+        <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] px-4 py-6 text-center sm:mt-7 sm:rounded-lg sm:px-5 sm:py-8">
+          <p className="text-[12px] leading-5 text-white/[0.52] sm:text-[13px] sm:text-white">
+            Enter both locations to display the
+            delivery route.
           </p>
         </div>
       )}
 
       {preview && (
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8">
           <div className="flex items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-orange-500" />
 
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-orange-400">
-              Recommended route
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-400 sm:text-[11px]">
+              Selected route
             </p>
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_46px_1fr] md:items-center">
+          <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 md:grid-cols-[1fr_46px_1fr] md:items-center">
             <HubBlock
               label="Origin hub"
               name={preview.originHub.name}
-              address={preview.originHub.address}
+              address={
+                preview.originHub.address
+              }
             />
 
             <div className="hidden items-center justify-center md:flex">
-              <ArrowRight size={18} className="text-white/[0.25]" />
+              <ArrowRight
+                size={18}
+                className="text-white/[0.58]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/[0.28] md:hidden">
+              <span className="h-px flex-1 bg-white/[0.08]" />
+              <ArrowRight size={13} />
+              <span className="h-px flex-1 bg-white/[0.08]" />
             </div>
 
             <HubBlock
               label="Destination hub"
-              name={preview.destinationHub.name}
-              address={preview.destinationHub.address}
+              name={
+                preview.destinationHub.name
+              }
+              address={
+                preview.destinationHub
+                  .address
+              }
             />
           </div>
         </div>
@@ -621,8 +1241,16 @@ function RouteStep({ form, update }: StepProps) {
   );
 }
 
-function ScheduleStep({ form, update }: StepProps) {
-  const minimumSchedule = getMinimumScheduleValue();
+/* =========================================================
+   SCHEDULE STEP
+========================================================= */
+
+function ScheduleStep({
+  form,
+  update,
+}: StepProps) {
+  const minimumSchedule =
+    getMinimumScheduleValue();
 
   return (
     <section>
@@ -631,58 +1259,87 @@ function ScheduleStep({ form, update }: StepProps) {
         description="Choose Express for the earliest available delivery or schedule a preferred departure time."
       />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+      <div className="mt-5 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4">
         <ModeButton
-          active={form.deliveryMode === "express"}
+          active={
+            form.deliveryMode === "express"
+          }
           title="Express"
-          description="The system schedules the earliest available flight after your package reaches the origin hub."
-          onClick={() => update("deliveryMode", "express")}
+          description="Earliest available flight after handover. Express adds 25% of Core Fee."
+          onClick={() =>
+            update(
+              "deliveryMode",
+              "express",
+            )
+          }
         />
 
         <ModeButton
-          active={form.deliveryMode === "scheduled"}
+          active={
+            form.deliveryMode ===
+            "scheduled"
+          }
           title="Scheduled"
-          description="Choose a preferred departure time at least 3 hours from now."
-          onClick={() => update("deliveryMode", "scheduled")}
+          description="Choose a preferred departure time at least 3 hours from now. No service surcharge."
+          onClick={() =>
+            update(
+              "deliveryMode",
+              "scheduled",
+            )
+          }
         />
       </div>
 
-      {form.deliveryMode === "scheduled" && (
-        <div className="mt-7 max-w-[460px]">
-          <FieldLabel>Preferred departure</FieldLabel>
+      {form.deliveryMode ===
+        "scheduled" && (
+        <div className="mt-5 max-w-[460px] sm:mt-7">
+          <FieldLabel>
+            Preferred departure
+          </FieldLabel>
 
           <input
             type="datetime-local"
             min={minimumSchedule}
-            value={form.requestedDepartureAt}
-            onChange={(event) =>
-              update("requestedDepartureAt", event.target.value)
+            value={
+              form.requestedDepartureAt
             }
-            className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500"
+            onChange={(event) =>
+              update(
+                "requestedDepartureAt",
+                event.target.value,
+              )
+            }
+            className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
           />
 
-          <p className="mt-2 text-[11px] leading-5 text-white/[0.42]">
-            Scheduled departure must be at least 3 hours from the current time.
+          <p className="mt-2 text-[10px] leading-5 text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
+            Scheduled departure must be at
+            least 3 hours from the current
+            time.
           </p>
         </div>
       )}
 
-      <div className="mt-8 rounded-lg border border-orange-500/[0.14] bg-orange-500/[0.045] p-5">
-        <div className="flex gap-4">
-          <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[11px] font-bold text-black">
+      <div className="mt-6 rounded-xl border border-orange-500/[0.14] bg-orange-500/[0.045] p-4 sm:mt-8 sm:rounded-lg sm:p-5">
+        <div className="flex gap-3 sm:gap-4">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-black sm:mt-1 sm:h-7 sm:w-7 sm:text-[11px]">
             !
           </div>
 
           <div>
-            <p className="text-[14px] font-semibold text-white/[0.85]">
+            <p className="text-[13px] font-semibold text-white sm:text-[14px]">
               Package handover policy
             </p>
 
-            <p className="mt-2 max-w-[650px] text-[12px] leading-6 text-white/[0.42]">
-              After placing the order, the package must be delivered to the
-              assigned origin hub within 3 hours. If the package arrives after
-              the deadline, the requested delivery time may be moved to the
-              next available flight slot.
+            <p className="mt-1.5 max-w-[650px] text-[11px] font-medium leading-5 text-white/[0.62] sm:mt-2 sm:text-[13px] sm:leading-6 sm:text-white/[0.80]">
+              After placing the order, the
+              package must be delivered to
+              the assigned origin hub within
+              3 hours. If the package arrives
+              after the deadline, the
+              requested delivery time may be
+              moved to the next available
+              flight slot.
             </p>
           </div>
         </div>
@@ -690,6 +1347,10 @@ function ScheduleStep({ form, update }: StepProps) {
     </section>
   );
 }
+
+/* =========================================================
+   SECTION TITLE
+========================================================= */
 
 function SectionTitle({
   title,
@@ -699,17 +1360,21 @@ function SectionTitle({
   description: string;
 }) {
   return (
-    <div className="border-b border-white/[0.08] pb-6">
-      <h2 className="text-[24px] font-semibold tracking-[-0.025em] text-white">
+    <div className="border-b border-white/[0.08] pb-4 sm:pb-6">
+      <h2 className="text-[21px] font-bold tracking-[-0.025em] text-white sm:text-[26px]">
         {title}
       </h2>
 
-      <p className="mt-3 max-w-[680px] text-[14px] leading-6 text-white/[0.45]">
+      <p className="mt-2 max-w-[680px] text-[12px] font-medium leading-5 text-white/[0.50] sm:mt-3 sm:text-[15px] sm:leading-7 sm:text-white/[0.82]">
         {description}
       </p>
     </div>
   );
 }
+
+/* =========================================================
+   CONTACT GROUP
+========================================================= */
 
 function ContactGroup({
   title,
@@ -721,23 +1386,37 @@ function ContactGroup({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.10] bg-[#111116] p-6 shadow-[0_8px_22px_rgba(0,0,0,0.18)]">
-      <div className="border-b border-white/[0.07] pb-5">
-        <p className="text-[16px] font-semibold text-white/[0.85]">{title}</p>
+    <div className="rounded-xl border border-white/[0.10] bg-[#19151a] p-4 shadow-[0_6px_18px_rgba(0,0,0,0.14)] sm:rounded-2xl sm:p-6 sm:shadow-[0_8px_22px_rgba(0,0,0,0.18)]">
+      <div className="border-b border-white/[0.07] pb-4 sm:pb-5">
+        <p className="text-[15px] font-bold text-white sm:text-[17px]">
+          {title}
+        </p>
 
-        <p className="mt-2 text-[12px] leading-5 text-white/[0.48]">
+        <p className="mt-1.5 text-[11px] font-medium leading-5 text-white/[0.50] sm:mt-2 sm:text-[13px] sm:text-white/[0.80]">
           {description}
         </p>
       </div>
 
-      <div className="mt-6 space-y-6">{children}</div>
+      <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+        {children}
+      </div>
     </div>
   );
 }
 
-function FieldLabel({ children }: { children: ReactNode }) {
+/* =========================================================
+   FIELD LABEL
+========================================================= */
+
+function FieldLabel({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
-    <span className="text-[13px] font-medium text-white/[0.68]">{children}</span>
+    <span className="text-[12px] font-semibold text-white/[0.82] sm:text-[14px] sm:text-white">
+      {children}
+    </span>
   );
 }
 
@@ -750,6 +1429,10 @@ type FieldInputMode =
   | "numeric"
   | "decimal"
   | "search";
+
+/* =========================================================
+   FIELD
+========================================================= */
 
 function Field({
   label,
@@ -775,16 +1458,22 @@ function Field({
         readOnly={readOnly}
         inputMode={inputMode}
         placeholder={placeholder}
-        onChange={(event) => onChange?.(event.target.value)}
-        className={`mt-2.5 h-[54px] w-full rounded-lg border px-4 text-[15px] outline-none transition ${
+        onChange={(event) =>
+          onChange?.(event.target.value)
+        }
+        className={`mt-2 h-[50px] w-full rounded-lg border px-3 text-[14px] outline-none transition sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] ${
           readOnly
-            ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.62]"
-            : "border-white/[0.1] bg-[#15151b] text-white placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
+            ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.68] sm:text-white/[0.84]"
+            : "border-white/[0.1] bg-[#1d181d] text-white placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:placeholder:text-white/[0.42]"
         }`}
       />
     </label>
   );
 }
+
+/* =========================================================
+   LOCATION FIELD
+========================================================= */
 
 function LocationField({
   label,
@@ -804,13 +1493,19 @@ function LocationField({
       <input
         list="vietnam-locations"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
         placeholder={placeholder}
-        className="mt-2.5 h-[54px] w-full rounded-lg border border-white/[0.1] bg-[#111116] px-4 text-[15px] text-white outline-none transition placeholder:text-white/[0.22] hover:border-white/[0.17] focus:border-orange-500"
+        className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] sm:placeholder:text-white/[0.42]"
       />
     </label>
   );
 }
+
+/* =========================================================
+   HUB BLOCK
+========================================================= */
 
 function HubBlock({
   label,
@@ -822,17 +1517,25 @@ function HubBlock({
   address: string;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#15151b] p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.42]">
+    <div className="rounded-xl border border-white/[0.07] bg-[#1d181d] p-4 sm:rounded-lg sm:p-5">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/[0.46] sm:text-[10px] sm:text-white/[0.72]">
         {label}
       </p>
 
-      <p className="mt-2 text-[15px] font-semibold text-white/[0.85]">{name}</p>
+      <p className="mt-2 text-[14px] font-bold text-white sm:text-[16px]">
+        {name}
+      </p>
 
-      <p className="mt-2 text-[11px] leading-5 text-white/[0.48]">{address}</p>
+      <p className="mt-1.5 text-[10px] leading-5 text-white/[0.48] sm:mt-2 sm:text-[11px] sm:text-white/[0.74]">
+        {address}
+      </p>
     </div>
   );
 }
+
+/* =========================================================
+   MODE BUTTON
+========================================================= */
 
 function ModeButton({
   active,
@@ -849,14 +1552,16 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border p-5 text-left transition ${
+      className={`rounded-xl border p-4 text-left transition sm:rounded-lg sm:p-5 ${
         active
           ? "border-orange-500 bg-orange-500/[0.05]"
-          : "border-white/[0.09] bg-[#111116] hover:border-white/[0.18]"
+          : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.18]"
       }`}
     >
       <div className="flex items-center justify-between gap-4">
-        <p className="text-[15px] font-semibold text-white/[0.85]">{title}</p>
+        <p className="text-[14px] font-bold text-white sm:text-[16px]">
+          {title}
+        </p>
 
         <span
           className={`h-2.5 w-2.5 rounded-full border ${
@@ -867,12 +1572,16 @@ function ModeButton({
         />
       </div>
 
-      <p className="mt-2 text-[12px] leading-6 text-white/[0.38]">
+      <p className="mt-1.5 text-[11px] font-medium leading-5 text-white/[0.52] sm:mt-2 sm:text-[13px] sm:leading-6 sm:text-white/[0.80]">
         {description}
       </p>
     </button>
   );
 }
+
+/* =========================================================
+   SUMMARY ITEM
+========================================================= */
 
 function SummaryItem({
   label,
@@ -882,26 +1591,68 @@ function SummaryItem({
   value: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-6 border-b border-white/[0.07] py-5 last:border-b-0">
-      <span className="text-[13px] text-white/[0.4]">{label}</span>
+    <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] py-3.5 last:border-b-0 sm:gap-6 sm:py-5">
+      <span className="text-[11px] text-white/[0.36] sm:text-[13px] sm:text-white/[0.4]">
+        {label}
+      </span>
 
-      <span className="max-w-[180px] text-right text-[15px] font-medium text-white/[0.8]">
+      <span className="max-w-[60%] text-right text-[13px] font-semibold leading-5 text-white/[0.76] sm:max-w-[180px] sm:text-[17px] sm:font-bold sm:text-white/[0.8]">
         {value}
       </span>
     </div>
   );
 }
 
+/* =========================================================
+   PRICE LINE
+========================================================= */
+
+function PriceLine({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-[11px] leading-5 text-white/[0.42] sm:text-[12px]">
+        {label}
+      </span>
+
+      <span
+        className={`text-right text-[12px] font-medium leading-5 ${
+          muted
+            ? "text-white/[0.30]"
+            : "text-white/[0.78]"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* =========================================================
+   STEP CAPTION
+========================================================= */
+
 function getStepCaption(index: number) {
   switch (index) {
     case 0:
       return "Sender & recipient";
+
     case 1:
       return "Package details";
+
     case 2:
-      return "Hub recommendation";
+      return "Delivery route";
+
     case 3:
       return "Delivery time";
+
     default:
       return "";
   }
