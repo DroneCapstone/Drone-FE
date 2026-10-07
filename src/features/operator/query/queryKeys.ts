@@ -33,6 +33,8 @@ export const operatorQueryKeys = {
 
   missionHubs: () => [...operatorQueryKeys.missions(), 'hubs'] as const,
 
+  missionMiniHubs: () => [...operatorQueryKeys.missionHubs(), 'mini'] as const,
+
   liveTracking: () => [...operatorQueryKeys.missions(), 'live-tracking'] as const,
 
   missionDetail: (missionId: string) =>

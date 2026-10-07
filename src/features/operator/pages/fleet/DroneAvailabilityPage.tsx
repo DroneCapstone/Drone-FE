@@ -6,7 +6,7 @@ import { DroneAvailabilityTable } from '../../components/DroneAvailabilityTable'
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/OperatorPagination';
 import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
-import { useMissionHubsQuery } from '../../hooks/useMissionQueries';
+import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
 import type { Hub, TechnicalStatus } from '../../types/operator';
 import { FleetHubPageShell } from './FleetHubPageShell';
 
@@ -31,18 +31,24 @@ export function DroneAvailabilityPage() {
     error: hubsError,
     refetch: refetchHubs,
   } = useMissionHubsQuery();
+  const {
+    data: apiMiniHubs = [],
+    isLoading: miniHubsLoading,
+    error: miniHubsError,
+    refetch: refetchMiniHubs,
+  } = useMissionMiniHubsQuery();
 
   const hubs = useMemo<Hub[]>(
-    () => apiHubs.map((hub) => ({
+    () => [...apiHubs, ...apiMiniHubs].map((hub) => ({
       id: hub.id,
       name: hub.name,
       area: '',
       address: hub.address ?? '',
-      latitude: hub.latitude ?? 0,
-      longitude: hub.longitude ?? 0,
+      latitude: 0,
+      longitude: 0,
       status: 'Active',
     })),
-    [apiHubs],
+    [apiHubs, apiMiniHubs],
   );
 
   const requestedHubId = searchParams.get('hub');
@@ -89,8 +95,8 @@ export function DroneAvailabilityPage() {
     currentPage * OPERATOR_PAGE_SIZE,
   );
 
-  const loading = fleetLoading || hubsLoading;
-  const error = fleetError ?? hubsError;
+  const loading = fleetLoading || hubsLoading || miniHubsLoading;
+  const error = fleetError ?? hubsError ?? miniHubsError;
 
   return (
     <FleetHubPageShell active="/operator/fleet-hubs/drones">
@@ -138,7 +144,11 @@ export function DroneAvailabilityPage() {
             <button
               type="button"
               className="row-action"
-              onClick={() => { void refetchFleet(); void refetchHubs(); }}
+              onClick={() => {
+                void refetchFleet();
+                void refetchHubs();
+                void refetchMiniHubs();
+              }}
             >
               Retry
             </button>
