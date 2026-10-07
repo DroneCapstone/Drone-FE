@@ -104,17 +104,27 @@ export function CreateDeliveryPage() {
         phone: "",
       };
 
+  const stepParam =
+    searchParams.get("step");
+
+  const isNewDelivery =
+    searchParams.get("new") === "1";
+
   const storedDraft =
     customerDeliveryService.getDraft() as
       | DeliveryDraftWithPricing
       | null;
 
   const existingDraft =
+    !isNewDelivery &&
     storedDraft?.draftVersion === 4
       ? storedDraft
       : null;
 
-  const requestedStep = Number(searchParams.get("step") ?? "0");
+  const requestedStep = Number(
+    stepParam ?? "0",
+  );
+
   const initialStep =
     Number.isInteger(requestedStep) &&
     requestedStep >= 0 &&
@@ -131,7 +141,10 @@ export function CreateDeliveryPage() {
   const [estimateLoading, setEstimateLoading] = useState(false);
   const [estimateError, setEstimateError] = useState("");
   const [preview, setPreview] = useState(
-    () => customerDeliveryService.getCachedEstimate(),
+    () =>
+      isNewDelivery
+        ? null
+        : customerDeliveryService.getCachedEstimate(),
   );
 
   const [form, setForm] =
@@ -144,23 +157,96 @@ export function CreateDeliveryPage() {
     );
 
   useEffect(() => {
+    if (!isNewDelivery) {
+      return;
+    }
+
+    /*
+     * Explicit "Create delivery" entry point.
+     *
+     * Clear the previous order draft and estimate, then start a
+     * completely fresh form. Sender account information can stay
+     * prefilled, while recipient/package/route/schedule fields reset.
+     */
+    customerDeliveryService.clearDraft();
+
+    setForm(
+      getDefaultDraft(
+        user?.name ?? "",
+        profile.phone,
+      ),
+    );
+
+    setPreview(null);
+    setStep(0);
+    setError("");
+    setEstimateError("");
+
+    /*
+     * Remove ?new=1 after the reset. This prevents a refresh from
+     * resetting the form again while the customer is filling it.
+     */
+    navigate(
+      "/customer/deliveries/create",
+      {
+        replace: true,
+      },
+    );
+  }, [
+    isNewDelivery,
+    navigate,
+    profile.phone,
+    user?.name,
+  ]);
+
+  useEffect(() => {
+    /*
+     * Do not save the stale previous-order form during the single
+     * render where ?new=1 is being processed.
+     */
+    if (isNewDelivery) {
+      return;
+    }
+
     customerDeliveryService.saveDraft(
       form as unknown as DeliveryDraft,
     );
-  }, [form]);
+  }, [form, isNewDelivery]);
 
   useEffect(() => {
-    const nextStep = Number(searchParams.get("step"));
+    /*
+     * Only sync the wizard step when the URL explicitly contains
+     * ?step=...
+     *
+     * Without this guard:
+     *   searchParams.get("step") === null
+     *   Number(null) === 0
+     *
+     * so clicking Continue from step 0 -> 1 was immediately reset
+     * back to step 0.
+     */
+    if (
+      isNewDelivery ||
+      stepParam === null
+    ) {
+      return;
+    }
+
+    const nextStep =
+      Number(stepParam);
+
     if (
       Number.isInteger(nextStep) &&
       nextStep >= 0 &&
-      nextStep < steps.length &&
-      nextStep !== step
+      nextStep < steps.length
     ) {
       setStep(nextStep);
       setError("");
     }
-  }, [searchParams, step]);
+  }, [
+    isNewDelivery,
+    stepParam,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,6 +352,7 @@ export function CreateDeliveryPage() {
     form.packageCategory,
     form.weightKg,
     form.packageSize,
+    form.hasInsurance,
     form.originArea,
     form.destinationArea,
     form.deliveryMode,
@@ -326,10 +413,10 @@ export function CreateDeliveryPage() {
       if (
         form.weightKg === "" ||
         form.weightKg <= 0 ||
-        form.weightKg >= 10
+        form.weightKg > 10
       ) {
         setError(
-          "Please enter a package weight greater than 0 kg and less than 10 kg.",
+          "Please enter a package weight greater than 0 kg and less than or equal to 10 kg.",
         );
         return false;
       }
@@ -1017,7 +1104,7 @@ function PackageStep({
             <input
               type="number"
               min="0.1"
-              max="9.9"
+              max="10"
               step="0.1"
               value={form.weightKg}
               onChange={(event) =>
@@ -1046,7 +1133,7 @@ function PackageStep({
             <p
               className={`text-[10px] font-medium sm:text-[11px] ${
                 form.weightKg !== "" &&
-                form.weightKg >= 10
+                form.weightKg > 10
                   ? "text-red-400"
                   : "text-white/[0.72] sm:text-white"
               }`}
@@ -1054,7 +1141,7 @@ function PackageStep({
               {form.weightKg === ""
                 ? "—"
                 : form.weightKg}{" "}
-              / {"< 10 kg"}
+              / {"≤ 10 kg"}
             </p>
           </div>
         </div>
@@ -1168,12 +1255,24 @@ function PackageStep({
           </div>
 
           {/* PACKAGE INSURANCE */}
-          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 transition hover:border-white/[0.16] sm:mt-5 sm:p-5">
+          <label
+            className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition sm:mt-5 sm:p-5 ${
+              form.hasInsurance
+                ? "border-orange-500/[0.45] bg-orange-500/[0.05]"
+                : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.16]"
+            }`}
+          >
             <input
               type="checkbox"
-              checked={false}
-              disabled
-              onChange={() => undefined}
+              checked={Boolean(
+                form.hasInsurance,
+              )}
+              onChange={(event) =>
+                update(
+                  "hasInsurance",
+                  event.target.checked,
+                )
+              }
               className="mt-0.5 h-4 w-4 shrink-0 accent-orange-500"
             />
 
@@ -1184,12 +1283,16 @@ function PackageStep({
                 </p>
 
                 <span className="rounded-full bg-orange-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-orange-400">
-                  Backend update required
+                  +10%
                 </span>
               </div>
 
               <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
-                Insurance is designed as +10%, but the current Swagger estimate/create-order contract has no insurance field, so it is disabled to avoid charging the wrong amount.
+                Optional package protection. The selection is saved with this draft.
+              </p>
+
+              <p className="mt-1 text-[10px] leading-5 text-white/[0.34] sm:text-[11px]">
+                Note: the current backend estimate/create-order API does not expose an insurance field yet, so the final PayOS amount will only include insurance after Backend adds support for it.
               </p>
             </div>
           </label>

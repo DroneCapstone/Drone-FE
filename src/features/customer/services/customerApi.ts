@@ -11,9 +11,27 @@
      Authorization: Bearer <token> when one is found.
 ========================================================= */
 
+/*
+ * VITE_API_BASE_URL in the current project already ends with /api/v1.
+ * The endpoint definitions below also use /api/v1/..., so without
+ * normalization the browser calls:
+ *
+ *   .../api/v1/api/v1/users/me
+ *
+ * which returns 404.
+ *
+ * Normalize the configured base back to the backend origin so this
+ * client works with either:
+ *
+ *   https://example.com
+ * or
+ *   https://example.com/api/v1
+ */
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? ""
-).replace(/\/$/, "");
+)
+  .replace(/\/+$/, "")
+  .replace(/\/api\/v1$/i, "");
 
 export class ApiError extends Error {
   status: number;
@@ -323,9 +341,9 @@ export const customerApi = {
   },
 
   getHubs() {
-    return apiRequest<CustomerHubApi[]>("/api/v1/customer/hubs", {}, {
-      auth: false,
-    });
+    return apiRequest<CustomerHubApi[]>(
+      "/api/v1/customer/hubs",
+    );
   },
 
   estimateOrder(body: CustomerEstimateRequest) {
