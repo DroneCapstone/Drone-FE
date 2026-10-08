@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import {
   Bell,
-  ChevronDown,
   LogOut,
   Menu,
   X,
@@ -14,18 +16,13 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import { useAuth } from "../../auth/hooks/useAuth";
-
 import logo from "../../../assets/images/home/logo.png";
+import { useAuth } from "../../auth/hooks/useAuth";
 
 import {
   customerApi,
   extractUnreadCount,
 } from "../services/customerApi";
-
-/* =========================================================
-   NAVIGATION
-========================================================= */
 
 const navigation = [
   {
@@ -40,24 +37,35 @@ const navigation = [
     label: "My deliveries",
     to: "/customer/deliveries",
   },
+  {
+    label: "Pricing & services",
+    to: "/customer/pricing",
+  },
+  {
+    label: "Help & policies",
+    to: "/customer/help",
+  },
 ];
 
-/* =========================================================
-   CUSTOMER HEADER
-========================================================= */
-
 export function CustomerHeader() {
-  const [mobileOpen, setMobileOpen] =
-    useState(false);
+  const [
+    mobileOpen,
+    setMobileOpen,
+  ] = useState(false);
 
-  const [unreadCount, setUnreadCount] =
-    useState(0);
+  const [
+    unreadCount,
+    setUnreadCount,
+  ] = useState(0);
 
-  const { user, logout } = useAuth();
+  const { user, logout } =
+    useAuth();
 
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location =
+    useLocation();
 
+  const navigate =
+    useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -69,32 +77,58 @@ export function CustomerHeader() {
 
         if (!cancelled) {
           setUnreadCount(
-            extractUnreadCount(response),
+            extractUnreadCount(
+              response,
+            ),
           );
         }
       } catch {
-        // Header remains usable when notification API is unavailable.
+        // Keep the header usable even if notifications fail.
       }
     }
 
-    loadUnread();
+    void loadUnread();
 
-    const timer = window.setInterval(
-      loadUnread,
-      30000,
-    );
+    const timer =
+      window.setInterval(
+        () => {
+          void loadUnread();
+        },
+        30000,
+      );
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer,
+      );
     };
   }, [location.pathname]);
 
-  /* =========================================================
-     LOGOUT
-  ========================================================= */
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      return;
+    }
+
+    const previous =
+      document.body.style
+        .overflow;
+
+    document.body.style.overflow =
+      "hidden";
+
+    return () => {
+      document.body.style.overflow =
+        previous;
+    };
+  }, [mobileOpen]);
 
   const handleLogout = () => {
+    setMobileOpen(false);
     logout();
 
     navigate("/", {
@@ -102,31 +136,29 @@ export function CustomerHeader() {
     });
   };
 
-  /* =========================================================
-     AVATAR
-  ========================================================= */
-
   const initial =
     user?.name
       ?.trim()
       .charAt(0)
-      .toUpperCase() ?? "C";
+      .toUpperCase() ??
+    "C";
 
-  /* =========================================================
-     ACTIVE NAV
-  ========================================================= */
+  const isNavActive = (
+    to: string,
+  ) => {
+    const path =
+      location.pathname;
 
-  const isNavActive = (to: string) => {
-    const path = location.pathname;
-
-    /* DASHBOARD */
-    if (to === "/customer/dashboard") {
-      return path === "/customer/dashboard";
+    if (
+      to ===
+      "/customer/dashboard"
+    ) {
+      return path === to;
     }
 
-    /* CREATE DELIVERY */
     if (
-      to === "/customer/deliveries/create"
+      to ===
+      "/customer/deliveries/create"
     ) {
       return (
         path ===
@@ -136,11 +168,11 @@ export function CustomerHeader() {
       );
     }
 
-    /* MY DELIVERIES */
     if (
-      to === "/customer/deliveries"
+      to ===
+      "/customer/deliveries"
     ) {
-      const isDeliveryRoute =
+      const deliveryRoute =
         path ===
           "/customer/deliveries" ||
         path.startsWith(
@@ -150,390 +182,304 @@ export function CustomerHeader() {
           "/customer/payment/",
         );
 
-      const isCreateFlow =
+      const createFlow =
         path ===
           "/customer/deliveries/create" ||
         path ===
           "/customer/deliveries/review";
 
       return (
-        isDeliveryRoute &&
-        !isCreateFlow
+        deliveryRoute &&
+        !createFlow
       );
     }
 
-    return false;
+    return path === to;
   };
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07] bg-[#060606]/95 backdrop-blur-xl">
-      <div className="mx-auto flex h-[72px] max-w-[1500px] items-center justify-between px-6 lg:px-10">
-        {/* =====================================================
-            BRAND
-        ====================================================== */}
+    <>
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07] bg-[#050505]/98 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-10">
+          {/* BRAND */}
+          <Link
+            to="/customer/dashboard"
+            className="flex shrink-0 items-center gap-2.5"
+          >
+            <img
+              src={logo}
+              alt="DroneOptAI"
+              className="h-8 w-auto object-contain sm:h-9"
+            />
 
-        <Link
-          to="/"
-          className="flex shrink-0 items-center gap-3"
-        >
-          <img
-            src={logo}
-            alt="DroneOptAI"
-            className="h-9 w-auto object-contain"
-          />
+            <span className="text-[16px] font-semibold tracking-[-0.025em] text-orange-400 sm:text-[17px]">
+              DroneOptAI
+            </span>
+          </Link>
 
-          <span className="bg-gradient-to-r from-orange-300 via-orange-400 to-orange-500 bg-clip-text text-[17px] font-semibold tracking-[-0.02em] text-transparent">
-            DroneOptAI
-          </span>
-        </Link>
+          {/* DESKTOP NAV */}
+          <nav className="hidden h-full items-center gap-5 lg:flex xl:gap-7">
+            {navigation.map(
+              (item) => {
+                const active =
+                  isNavActive(
+                    item.to,
+                  );
 
-        {/* =====================================================
-            DESKTOP NAVIGATION
-        ====================================================== */}
-
-        <nav className="hidden h-full items-center gap-10 md:flex">
-          {navigation.map((item) => {
-            const active =
-              isNavActive(item.to);
-
-            return (
-              <Link
-                key={item.to}
-                to={
+                const target =
                   item.to ===
                   "/customer/deliveries/create"
                     ? "/customer/deliveries/create?new=1"
-                    : item.to
-                }
-                className="group relative flex h-full items-center px-1"
-              >
-                {/* LABEL */}
-                <span
-                  className={`relative z-10 text-[13px] font-medium transition-colors duration-300 ${
-                    active
-                      ? "text-white"
-                      : "text-white/45 group-hover:text-white"
-                  }`}
-                >
-                  {item.label}
-                </span>
+                    : item.to;
 
-                {/* =============================================
-                    UNDERLINE
-                    Scale từ giữa ra hai bên
-                ============================================== */}
-
-                <span
-                  className={`
-                    absolute
-    bottom-0
-    left-1/2
-    h-[2px]
-    w-full
-    -translate-x-1/2
-    origin-center
-    bg-gradient-to-r
-    from-orange-300
-    via-orange-600
-    to-orange-300
-    transition-transform
-    duration-300
-    ease-out
-                    ${
-                      active
-                        ? "scale-x-100"
-                        : "scale-x-0 group-hover:scale-x-100"
-                    }
-                  `}
-                />
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* =====================================================
-            USER ACTIONS
-        ====================================================== */}
-
-        <div className="hidden items-center gap-3 md:flex">
-          {/* NOTIFICATIONS */}
-          <Link
-            to="/customer/notifications"
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.04] hover:text-white"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-
-            {unreadCount > 0 && (
-              <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-black">
-                {unreadCount > 99
-                  ? "99+"
-                  : unreadCount}
-              </span>
-            )}
-          </Link>
-
-          <div className="h-8 w-px bg-white/[0.08]" />
-
-          {/* USER */}
-          <Link
-            to="/customer/profile"
-            className="group flex items-center gap-3 rounded-lg px-2 py-1.5 transition hover:bg-white/[0.035]"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500 text-[14px] font-semibold text-black">
-              {initial}
-            </div>
-
-            <div className="min-w-[95px]">
-              <p className="max-w-[145px] truncate text-[13px] font-medium text-white/85">
-                {user?.name ??
-                  "Customer"}
-              </p>
-
-              <p className="mt-0.5 text-[10px] text-white/30">
-                Customer
-              </p>
-            </div>
-
-            <ChevronDown
-              size={14}
-              className="text-white/25 transition group-hover:text-white/50"
-            />
-          </Link>
-
-          <div className="h-8 w-px bg-white/[0.08]" />
-
-          {/* LOGOUT */}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-white/30 transition hover:bg-white/[0.04] hover:text-white"
-            aria-label="Sign out"
-          >
-            <LogOut size={17} />
-          </button>
-        </div>
-
-        {/* =====================================================
-            MOBILE BUTTON
-        ====================================================== */}
-
-        <button
-          type="button"
-          onClick={() =>
-            setMobileOpen(
-              (value) => !value,
-            )
-          }
-          className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] text-white/70 md:hidden"
-          aria-label="Toggle navigation"
-        >
-          {mobileOpen ? (
-            <X size={20} />
-          ) : (
-            <Menu size={20} />
-          )}
-        </button>
-      </div>
-
-      {/* =====================================================
-          MOBILE NAVIGATION
-      ====================================================== */}
-
-      {mobileOpen && (
-        <div className="border-t border-white/[0.07] bg-[#060606] px-6 py-5 md:hidden">
-          <nav className="flex flex-col">
-            {navigation.map((item) => {
-              const active =
-                isNavActive(item.to);
-
-              return (
-                <Link
-                  key={item.to}
-                  to={
-                    item.to ===
-                    "/customer/deliveries/create"
-                      ? "/customer/deliveries/create?new=1"
-                      : item.to
-                  }
-                  onClick={() =>
-                    setMobileOpen(false)
-                  }
-                  className={`group relative border-b border-white/[0.06] px-1 py-4 text-[13px] font-medium transition-colors ${
-                    active
-                      ? "text-white"
-                      : "text-white/45 hover:text-white"
-                  }`}
-                >
-                  {item.label}
-
-                  <span
-                    className={`
-                      absolute
-                      bottom-0
-                      left-1/2
-                      h-[2px]
-                      w-full
-                      -translate-x-1/2
-                      origin-center
-                      bg-gradient-to-r
-                      from-orange-600
-                      via-orange-300
-                      to-orange-600
-                      transition-transform
-                      duration-300
-                      ease-out
-                      ${
+                return (
+                  <Link
+                    key={item.to}
+                    to={target}
+                    className="relative flex h-full items-center px-0.5"
+                  >
+                    <span
+                      className={`text-[13px] font-medium transition-colors ${
                         active
-                          ? "scale-x-100"
-                          : "scale-x-0 group-hover:scale-x-100"
+                          ? "bg-gradient-to-r from-orange-300 via-orange-500 to-amber-300 bg-clip-text font-bold text-transparent"
+                          : "text-white/54 hover:text-white"
+                      }`}
+                    >
+                      {
+                        item.label
                       }
-                    `}
-                  />
-                </Link>
-              );
-            })}
+                    </span>
+
+                    {active && (
+                      <span className="absolute bottom-0 left-0 h-[2px] w-full bg-orange-500" />
+                    )}
+                  </Link>
+                );
+              },
+            )}
           </nav>
 
-          {/* ===================================================
-              MOBILE SECONDARY NAVIGATION
-              Same style as Dashboard / Create / My deliveries
-          ==================================================== */}
+          {/* DESKTOP ACCOUNT */}
+          <div className="hidden items-center gap-2 lg:flex">
+            <Link
+              to="/customer/notifications"
+              className={`relative flex h-9 w-9 items-center justify-center text-white/48 transition hover:text-white ${
+                location.pathname ===
+                "/customer/notifications"
+                  ? "bg-gradient-to-r from-orange-300 via-orange-500 to-amber-300 bg-clip-text font-bold text-transparent"
+                  : ""
+              }`}
+              aria-label="Notifications"
+            >
+              <Bell size={17} />
 
-          <div className="flex flex-col">
-            {/* NOTIFICATIONS */}
+              {unreadCount >
+                0 && (
+                <span className="absolute right-0 top-0 min-w-[15px] rounded-full bg-orange-500 px-1 text-center text-[8px] font-bold leading-[15px] text-black">
+                  {unreadCount >
+                  99
+                    ? "99+"
+                    : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            <Link
+              to="/customer/profile"
+              className="flex items-center gap-3 px-1.5 py-1"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-[13px] font-semibold text-black">
+                {initial}
+              </div>
+
+              <div className="hidden min-w-0 xl:block">
+                <p className="max-w-[150px] truncate text-[12px] font-medium text-white/88">
+                  {user?.name ??
+                    "Customer"}
+                </p>
+
+                <p className="mt-0.5 text-[10px] text-white/38">
+                  Customer
+                </p>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              onClick={
+                handleLogout
+              }
+              className="flex h-9 w-9 items-center justify-center text-white/38 transition hover:text-white"
+              aria-label="Sign out"
+            >
+              <LogOut
+                size={16}
+              />
+            </button>
+          </div>
+
+          {/* MOBILE BUTTON */}
+          <button
+            type="button"
+            onClick={() =>
+              setMobileOpen(
+                (value) =>
+                  !value,
+              )
+            }
+            className="flex h-10 w-10 items-center justify-center text-white/72 transition hover:text-white lg:hidden"
+            aria-label="Toggle navigation"
+            aria-expanded={
+              mobileOpen
+            }
+          >
+            {mobileOpen ? (
+              <X size={21} />
+            ) : (
+              <Menu size={21} />
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* MOBILE BACKDROP */}
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() =>
+            setMobileOpen(false)
+          }
+          className="fixed inset-0 top-[72px] z-40 bg-black/55 lg:hidden"
+        />
+      )}
+
+      {/* MOBILE NAV */}
+      <div
+        className={`fixed inset-x-0 top-[72px] z-50 transition duration-200 lg:hidden ${
+          mobileOpen
+            ? "pointer-events-auto translate-y-0 opacity-100"
+            : "pointer-events-none -translate-y-1 opacity-0"
+        }`}
+      >
+        <div className="mx-auto max-h-[calc(100vh-72px)] max-w-[520px] overflow-y-auto border-x border-b border-white/[0.07] bg-[#080808] px-5 pb-5 pt-3 shadow-[0_24px_50px_rgba(0,0,0,0.46)]">
+          <nav>
+            {navigation.map(
+              (item) => {
+                const active =
+                  isNavActive(
+                    item.to,
+                  );
+
+                const target =
+                  item.to ===
+                  "/customer/deliveries/create"
+                    ? "/customer/deliveries/create?new=1"
+                    : item.to;
+
+                return (
+                  <Link
+                    key={item.to}
+                    to={target}
+                    onClick={() =>
+                      setMobileOpen(
+                        false,
+                      )
+                    }
+                    className={`relative flex h-[49px] items-center px-4 text-[13px] font-medium transition ${
+                      active
+                        ? "bg-gradient-to-r from-orange-300 via-orange-500 to-amber-300 bg-clip-text font-bold text-transparent"
+                        : "text-white/72 hover:text-white"
+                    }`}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 bg-orange-500" />
+                    )}
+
+                    {
+                      item.label
+                    }
+                  </Link>
+                );
+              },
+            )}
+
             <Link
               to="/customer/notifications"
               onClick={() =>
                 setMobileOpen(false)
               }
-              className={`group relative flex min-h-[52px] items-center justify-between border-b border-white/[0.06] px-1 py-4 text-[13px] font-medium transition-colors ${
+              className={`relative flex h-[49px] items-center justify-between px-4 text-[13px] font-medium transition ${
                 location.pathname ===
                 "/customer/notifications"
-                  ? "text-white"
-                  : "text-white/45 hover:text-white"
+                  ? "bg-gradient-to-r from-orange-300 via-orange-500 to-amber-300 bg-clip-text font-bold text-transparent"
+                  : "text-white/72 hover:text-white"
               }`}
             >
-              <span>Notifications</span>
+              {location.pathname ===
+                "/customer/notifications" && (
+                <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 bg-orange-500" />
+              )}
 
-              {unreadCount > 0 && (
-                <span className="min-w-[18px] rounded-full bg-orange-500 px-1.5 text-center text-[9px] font-bold leading-[18px] text-black">
-                  {unreadCount > 99
+              <span>
+                Notifications
+              </span>
+
+              {unreadCount >
+                0 && (
+                <span className="min-w-[20px] rounded-full bg-orange-500 px-1.5 text-center text-[9px] font-bold leading-[20px] text-black">
+                  {unreadCount >
+                  99
                     ? "99+"
                     : unreadCount}
                 </span>
               )}
-
-              <span
-                className={`
-                  absolute
-                  bottom-0
-                  left-1/2
-                  h-[2px]
-                  w-full
-                  -translate-x-1/2
-                  origin-center
-                  bg-gradient-to-r
-                  from-orange-600
-                  via-orange-300
-                  to-orange-600
-                  transition-transform
-                  duration-300
-                  ease-out
-                  ${
-                    location.pathname ===
-                    "/customer/notifications"
-                      ? "scale-x-100"
-                      : "scale-x-0 group-hover:scale-x-100"
-                  }
-                `}
-              />
             </Link>
+          </nav>
 
-            {/* PROFILE */}
-            <Link
-              to="/customer/profile"
-              onClick={() =>
-                setMobileOpen(false)
-              }
-              className={`group relative flex min-h-[58px] items-center justify-between gap-4 border-b border-white/[0.06] px-1 py-3 text-[13px] font-medium transition-colors ${
-                location.pathname ===
-                "/customer/profile"
-                  ? "text-white"
-                  : "text-white/45 hover:text-white"
-              }`}
-            >
-              <span>Profile</span>
+          <div className="my-3 h-px bg-white/[0.08]" />
 
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span className="max-w-[150px] truncate text-[11px] font-normal text-white/35">
-                  {user?.name ??
-                    "Customer"}
-                </span>
+          <Link
+            to="/customer/profile"
+            onClick={() =>
+              setMobileOpen(false)
+            }
+            className="flex items-center justify-between gap-4 px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p
+                className={`max-w-[220px] truncate text-[13px] ${
+                  location.pathname ===
+                  "/customer/profile"
+                    ? "bg-gradient-to-r from-orange-300 via-orange-500 to-amber-300 bg-clip-text font-bold text-transparent"
+                    : "font-medium text-white/90"
+                }`}
+              >
+                {user?.name ??
+                  "Customer"}
+              </p>
 
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[10px] font-semibold text-black">
-                  {initial}
-                </div>
-              </div>
+              <p className="mt-1 text-[10px] text-white/42">
+                View profile
+              </p>
+            </div>
 
-              <span
-                className={`
-                  absolute
-                  bottom-0
-                  left-1/2
-                  h-[2px]
-                  w-full
-                  -translate-x-1/2
-                  origin-center
-                  bg-gradient-to-r
-                  from-orange-600
-                  via-orange-300
-                  to-orange-600
-                  transition-transform
-                  duration-300
-                  ease-out
-                  ${
-                    location.pathname ===
-                    "/customer/profile"
-                      ? "scale-x-100"
-                      : "scale-x-0 group-hover:scale-x-100"
-                  }
-                `}
-              />
-            </Link>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[12px] font-semibold text-black">
+              {initial}
+            </div>
+          </Link>
 
-            {/* SIGN OUT */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="group relative flex min-h-[52px] w-full items-center border-b border-white/[0.06] px-1 py-4 text-left text-[13px] font-medium text-white/45 transition-colors hover:text-white"
-            >
-              <span>Sign out</span>
-
-              <span
-                className="
-                  absolute
-                  bottom-0
-                  left-1/2
-                  h-[2px]
-                  w-full
-                  -translate-x-1/2
-                  origin-center
-                  scale-x-0
-                  bg-gradient-to-r
-                  from-orange-600
-                  via-orange-300
-                  to-orange-600
-                  transition-transform
-                  duration-300
-                  ease-out
-                  group-hover:scale-x-100
-                "
-              />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={
+              handleLogout
+            }
+            className="mt-1 flex h-[46px] w-full items-center px-4 text-left text-[13px] font-medium text-white/54 transition hover:text-white"
+          >
+            Sign out
+          </button>
         </div>
-      )}
-    </header>
+      </div>
+    </>
   );
 }

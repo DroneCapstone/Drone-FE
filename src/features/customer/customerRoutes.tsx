@@ -111,6 +111,24 @@ const CustomerProfilePage =
     "CustomerProfilePage",
   );
 
+const PricingServiceInfoPage =
+  lazyPage(
+    () =>
+      import(
+        "./pages/PricingServiceInfoPage"
+      ),
+    "PricingServiceInfoPage",
+  );
+
+const HelpPoliciesPage =
+  lazyPage(
+    () =>
+      import(
+        "./pages/HelpPoliciesPage"
+      ),
+    "HelpPoliciesPage",
+  );
+
 export const customerRoutes: RouteObject[] =
   [
     {
@@ -184,6 +202,20 @@ export const customerRoutes: RouteObject[] =
       ),
     },
 
+
+    {
+      path: "pricing",
+      element: (
+        <PricingServiceInfoPage />
+      ),
+    },
+
+    {
+      path: "help",
+      element: (
+        <HelpPoliciesPage />
+      ),
+    },
     {
       path: "profile",
       element: (
