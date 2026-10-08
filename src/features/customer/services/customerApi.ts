@@ -232,14 +232,45 @@ export type CustomerEstimateRequest = {
   destination_hub_id: string | number;
   payload_kg: number;
   package_size: "S" | "M" | "L" | "XL";
+
+  /**
+   * Current backend pricing distinguishes normal vs fragile handling.
+   * Example values from the BE contract: "Standard", "Fragile".
+   */
+  package_type: string;
+
   delivery_mode: "EXPRESS" | "SCHEDULED";
+
+  /**
+   * Retained for Scheduled delivery compatibility.
+   */
   requested_delivery_at: string | null;
+
+  /**
+   * New BE field. Insurance is 10% of core_fee.
+   */
+  has_insurance: boolean;
+};
+
+export type CustomerFeeDetailsApi = {
+  base_fee: number;
+  distance_fee: number;
+  payload_fee: number;
+  insurance_fee: number;
+  express_surcharge: number;
+  fragile_surcharge: number;
 };
 
 export type CustomerEstimateResponse = {
   delivery_fee: number;
   service_fee: number;
   total_fee: number;
+
+  /**
+   * New detailed backend breakdown.
+   */
+  fee_details?: CustomerFeeDetailsApi;
+
   estimated_departure: string;
   estimated_arrival: string;
   handover_deadline: string;
@@ -247,12 +278,28 @@ export type CustomerEstimateResponse = {
 
 export type CustomerCreateOrderRequest = {
   package_type: string;
+  package_label: string;
+
   payload_kg: number;
   package_size: "S" | "M" | "L" | "XL";
+
   origin_hub_id: string | number;
   destination_hub_id: string | number;
+
   delivery_mode: "EXPRESS" | "SCHEDULED";
+
+  /**
+   * Retained for Scheduled delivery compatibility.
+   */
   requested_delivery_at: string | null;
+
+  sender_phone: string;
+  receiver_phone: string;
+
+  /**
+   * New BE field.
+   */
+  has_insurance: boolean;
 };
 
 export type CustomerCreateOrderResponse = {

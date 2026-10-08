@@ -27,6 +27,7 @@ import {
 
 import type {
   DeliveryDraft,
+  DeliveryPrice,
 } from "../types/customer";
 
 /* =========================================================
@@ -155,82 +156,12 @@ export function DeliveryReviewPage() {
           </h1>
 
           <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-white/[0.48] sm:mt-3 sm:text-[15px] sm:leading-6 sm:text-white/[0.58]">
-            Check the delivery information and backend quotation before payment.
+            Confirm the route, contacts, package, schedule and final amount before payment.
           </p>
         </header>
 
-        <section className="mt-5 rounded-2xl border border-orange-500/[0.18] bg-orange-500/[0.045] p-4 lg:hidden">
-          <div className="flex items-end justify-between gap-5">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.40]">
-                Amount to pay
-              </p>
-              <p className="mt-1 text-[12px] text-white/[0.44]">
-                {draft.deliveryMode === "express"
-                  ? "Express delivery"
-                  : "Scheduled delivery"}
-              </p>
-            </div>
-
-            <p className="text-right text-[24px] font-semibold tracking-[-0.035em] text-white">
-              {formatVnd(preview.price.total)}
-            </p>
-          </div>
-        </section>
-
         <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-6 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
           <main className="min-w-0 space-y-4 sm:space-y-5">
-            <CompactSection
-              title="Contacts"
-              edit={() =>
-                navigate(
-                  "/customer/deliveries/create?step=0",
-                )
-              }
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <ContactInfo
-                  label="Sender"
-                  name={draft.senderName}
-                  phone={draft.senderPhone}
-                />
-                <ContactInfo
-                  label="Recipient"
-                  name={draft.recipientName}
-                  phone={draft.recipientPhone}
-                />
-              </div>
-            </CompactSection>
-
-            <CompactSection
-              title="Package"
-              edit={() =>
-                navigate(
-                  "/customer/deliveries/create?step=1",
-                )
-              }
-            >
-              <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
-                <CompactInfo
-                  label="Category"
-                  value={category}
-                />
-                <CompactInfo
-                  label="Weight"
-                  value={`${draft.weightKg} kg`}
-                />
-                <CompactInfo
-                  label="Size"
-                  value={draft.packageSize}
-                  helper={sizeRule?.dimensions}
-                />
-                <CompactInfo
-                  label="Insurance"
-                  value="Not available in current BE contract"
-                />
-              </div>
-            </CompactSection>
-
             <CompactSection
               title="Delivery route"
               edit={() =>
@@ -255,7 +186,62 @@ export function DeliveryReviewPage() {
             </CompactSection>
 
             <CompactSection
-              title="Delivery time"
+              title="Contacts"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=0",
+                )
+              }
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <ContactInfo
+                  label="Sender"
+                  name={draft.senderName}
+                  phone={draft.senderPhone}
+                />
+                <ContactInfo
+                  label="Recipient"
+                  name={draft.recipientName}
+                  phone={draft.recipientPhone}
+                />
+              </div>
+            </CompactSection>
+
+            <CompactSection
+              title="Package details"
+              edit={() =>
+                navigate(
+                  "/customer/deliveries/create?step=1",
+                )
+              }
+            >
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
+                <CompactInfo
+                  label="Category"
+                  value={category}
+                />
+                <CompactInfo
+                  label="Weight"
+                  value={`${draft.weightKg} kg`}
+                />
+                <CompactInfo
+                  label="Size"
+                  value={draft.packageSize}
+                  helper={sizeRule?.dimensions}
+                />
+                <CompactInfo
+                  label="Insurance"
+                  value={
+                    draft.hasInsurance
+                      ? "Added · 10% core fee"
+                      : "Not added"
+                  }
+                />
+              </div>
+            </CompactSection>
+
+            <CompactSection
+              title="Delivery schedule"
               edit={() =>
                 navigate(
                   "/customer/deliveries/create?step=3",
@@ -297,26 +283,53 @@ export function DeliveryReviewPage() {
               </div>
             </CompactSection>
 
+            {/* ===================================================
+                MOBILE PAYMENT DETAILS
+                Delivery-app checkout order:
+                route -> contacts -> package -> schedule -> payment
+            ==================================================== */}
             <section className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_10px_28px_rgba(0,0,0,0.18)] lg:hidden">
-              <details>
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
+              <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-4 py-3.5 sm:px-5 sm:py-4">
+                <div>
+                  <h2 className="text-[13px] font-semibold text-white/[0.96] sm:text-[15px]">
+                    Payment details
+                  </h2>
+
+                  <p className="mt-1 text-[10px] text-white/[0.58]">
+                    Backend quotation
+                  </p>
+                </div>
+
+                <span className="text-[11px] font-medium text-white/[0.72]">
+                  {draft.deliveryMode === "express"
+                    ? "Express"
+                    : "Scheduled"}
+                </span>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <PriceBreakdown
+                  price={preview.price}
+                />
+
+                <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/[0.10] pt-4">
                   <div>
-                    <p className="text-[12px] font-semibold text-white/[0.84]">
-                      Price details
+                    <p className="text-[12px] font-semibold text-white/[0.90]">
+                      Order total
                     </p>
-                    <p className="mt-1 text-[10px] text-white/[0.36]">
-                      Backend estimate
+
+                    <p className="mt-1 text-[9px] text-white/[0.52]">
+                      Amount to pay
                     </p>
                   </div>
-                  <span className="text-[13px] font-semibold text-white">
-                    {formatVnd(preview.price.total)}
-                  </span>
-                </summary>
 
-                <div className="border-t border-white/[0.07] px-4 py-4">
-                  <PriceBreakdown price={preview.price} />
+                  <strong className="text-right text-[23px] font-semibold tracking-[-0.035em] text-white">
+                    {formatVnd(
+                      preview.price.total,
+                    )}
+                  </strong>
                 </div>
-              </details>
+              </div>
             </section>
 
             {submitError && (
@@ -329,11 +342,11 @@ export function DeliveryReviewPage() {
           <aside className="hidden h-fit lg:sticky lg:top-[96px] lg:block">
             <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-sm">
               <div className="border-b border-white/[0.08] px-6 py-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.38]">
-                  Payment summary
+                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.64]">
+                  Payment details
                 </p>
                 <p className="mt-2 text-[18px] font-semibold text-white">
-                  Backend quotation
+                  Order total
                 </p>
               </div>
 
@@ -342,10 +355,10 @@ export function DeliveryReviewPage() {
 
                 <div className="mt-5 flex items-end justify-between gap-5 border-t border-white/[0.08] pt-5">
                   <div>
-                    <p className="text-[13px] font-medium text-white/[0.60]">
+                    <p className="text-[13px] font-medium text-white/[0.88]">
                       Total
                     </p>
-                    <p className="mt-1 text-[10px] text-white/[0.32]">
+                    <p className="mt-1 text-[10px] text-white/[0.52]">
                       Amount to pay
                     </p>
                   </div>
@@ -535,27 +548,95 @@ function RoutePoint({
 function PriceBreakdown({
   price,
 }: {
-  price: {
-    deliveryFee: number;
-    serviceFee: number;
-    total: number;
-  };
+  price: DeliveryPrice;
 }) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <PriceRow
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+
+        <PriceRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
   return (
     <div className="space-y-3">
       <PriceRow
-        label="Delivery fee"
-        value={formatVnd(price.deliveryFee)}
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
       />
+
       <PriceRow
-        label="Service fee"
-        value={formatVnd(price.serviceFee)}
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
       />
+
       <PriceRow
-        label="Total"
-        value={formatVnd(price.total)}
-        strong
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
       />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceRow
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <PriceRow
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <PriceRow
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      {details.expressSurcharge > 0 && (
+        <PriceRow
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
     </div>
   );
 }
@@ -574,17 +655,18 @@ function PriceRow({
       <span
         className={`text-[11px] leading-5 ${
           strong
-            ? "font-semibold text-white/[0.66]"
-            : "text-white/[0.40]"
+            ? "font-semibold text-white/[0.96]"
+            : "font-medium text-white/[0.78]"
         }`}
       >
         {label}
       </span>
+
       <span
         className={`shrink-0 text-right text-[11px] leading-5 ${
           strong
             ? "font-semibold text-white"
-            : "font-medium text-white/[0.76]"
+            : "font-semibold text-white/[0.96]"
         }`}
       >
         {value}

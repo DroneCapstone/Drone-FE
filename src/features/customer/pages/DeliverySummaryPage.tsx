@@ -14,6 +14,10 @@ import {
   formatVnd,
 } from "../services/customerDeliveryService";
 
+import type {
+  DeliveryPrice,
+} from "../types/customer";
+
 export function DeliverySummaryPage() {
   const { deliveryId } = useParams();
 
@@ -89,17 +93,8 @@ export function DeliverySummaryPage() {
             Backend quotation
           </p>
 
-          <AmountRow
-            label="Delivery fee"
-            value={formatVnd(
-              delivery.price.deliveryFee,
-            )}
-          />
-          <AmountRow
-            label="Service fee"
-            value={formatVnd(
-              delivery.price.serviceFee,
-            )}
+          <SummaryPriceBreakdown
+            price={delivery.price}
           />
 
           <div className="mt-5 flex items-center justify-between border-t border-white/[0.08] pt-5">
@@ -169,19 +164,155 @@ function Info({
   );
 }
 
+function SummaryPriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <AmountRow
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <AmountRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <AmountRow
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <AmountRow
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <AmountRow
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <AmountRow
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <AmountRow
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <AmountRow
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <AmountRow
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <AmountRow
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <AmountRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
 function AmountRow({
   label,
   value,
+  strong = false,
 }: {
   label: string;
   value: string;
+  strong?: boolean;
 }) {
   return (
     <div className="mt-4 flex justify-between gap-5 text-[12px]">
-      <span className="text-white/[0.40]">
+      <span
+        className={
+          strong
+            ? "font-semibold text-white/[0.62]"
+            : "text-white/[0.40]"
+        }
+      >
         {label}
       </span>
-      <span className="font-medium text-white/[0.82]">
+
+      <span
+        className={
+          strong
+            ? "font-semibold text-white"
+            : "font-medium text-white/[0.82]"
+        }
+      >
         {value}
       </span>
     </div>
