@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Bell,
   ChevronDown,
+  ChevronRight,
   LogOut,
   Menu,
   X,
@@ -396,34 +397,96 @@ export function CustomerHeader() {
           </nav>
 
           {/* ===================================================
-              USER MOBILE
+              ACCOUNT MOBILE
           ==================================================== */}
 
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-[13px] font-semibold text-black">
-                {initial}
-              </div>
+          <div className="mt-6">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25">
+              Account
+            </p>
 
-              <div>
-                <p className="text-[13px] font-medium text-white/80">
-                  {user?.name ??
-                    "Customer"}
-                </p>
+            <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.015]">
+              {/* NOTIFICATIONS */}
+              <Link
+                to="/customer/notifications"
+                onClick={() =>
+                  setMobileOpen(false)
+                }
+                className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-4 py-4 transition hover:bg-white/[0.035]"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-white/60">
+                    <Bell size={17} />
 
-                <p className="mt-0.5 text-[10px] text-white/30">
-                  Customer
-                </p>
-              </div>
+                    {unreadCount > 0 && (
+                      <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-black">
+                        {unreadCount > 99
+                          ? "99+"
+                          : unreadCount}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-white/80">
+                      Notifications
+                    </p>
+
+                    <p className="mt-0.5 text-[10px] text-white/30">
+                      {unreadCount > 0
+                        ? `${unreadCount} unread`
+                        : "No unread notifications"}
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight
+                  size={16}
+                  className="shrink-0 text-white/25"
+                />
+              </Link>
+
+              {/* PROFILE */}
+              <Link
+                to="/customer/profile"
+                onClick={() =>
+                  setMobileOpen(false)
+                }
+                className="flex items-center justify-between gap-4 px-4 py-4 transition hover:bg-white/[0.035]"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[13px] font-semibold text-black">
+                    {initial}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-white/80">
+                      {user?.name ??
+                        "Customer"}
+                    </p>
+
+                    <p className="mt-0.5 text-[10px] text-white/30">
+                      View and edit profile
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight
+                  size={16}
+                  className="shrink-0 text-white/25"
+                />
+              </Link>
             </div>
 
+            {/* LOGOUT */}
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] text-white/40"
-              aria-label="Sign out"
+              className="mt-3 flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.08] px-4 text-[12px] font-medium text-white/45 transition hover:bg-white/[0.035] hover:text-white"
             >
-              <LogOut size={17} />
+              <span>Sign out</span>
+
+              <LogOut size={16} />
             </button>
           </div>
         </div>
