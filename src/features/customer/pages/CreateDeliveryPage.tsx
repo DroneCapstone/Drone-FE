@@ -28,6 +28,7 @@ import { customerProfileService } from "../services/customerProfileService";
 import type {
   DeliveryDraft,
   DeliveryHub,
+  DeliveryPrice,
   PackageSize,
 } from "../types/customer";
 
@@ -868,21 +869,15 @@ export function CreateDeliveryPage() {
                   {estimateLoading
                     ? "Calculating…"
                     : preview
-                      ? "Backend estimate"
+                      ? "Estimate"
                       : "Waiting"}
                 </span>
               </div>
 
               {pricingReady && preview ? (
-                <div className="mt-4 space-y-3 border-t border-white/[0.07] pt-4">
-                  <PriceLine
-                    label="Delivery fee"
-                    value={formatVnd(preview.price.deliveryFee)}
-                  />
-
-                  <PriceLine
-                    label="Service fee"
-                    value={formatVnd(preview.price.serviceFee)}
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+                  <CreatePriceBreakdown
+                    price={preview.price}
                   />
                 </div>
               ) : (
@@ -1071,7 +1066,7 @@ function PackageStep({
 
           {fragileSelected && (
             <p className="mt-2 text-[11px] leading-5 text-orange-400/90 sm:text-[12px]">
-              Fragile item selected. The current backend estimate schema does not include package type, so this surcharge must be added by BE before it can be charged safely.
+              Fragile handling will be included automatically in the backend estimate and shown in the price breakdown.
             </p>
           )}
         </label>
@@ -1288,11 +1283,11 @@ function PackageStep({
               </div>
 
               <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
-                Optional package protection. The selection is saved with this draft.
+                Optional package protection. Insurance is calculated by Backend as 10% of the core fee.
               </p>
 
               <p className="mt-1 text-[10px] leading-5 text-white/[0.34] sm:text-[11px]">
-                Note: the current backend estimate/create-order API does not expose an insurance field yet, so the final PayOS amount will only include insurance after Backend adds support for it.
+                Turning this option on or off automatically requests a new backend estimate, so the displayed total always follows the latest quotation.
               </p>
             </div>
           </label>
@@ -1781,26 +1776,157 @@ function SummaryItem({
    PRICE LINE
 ========================================================= */
 
+function CreatePriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <PriceLine
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <PriceLine
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <PriceLine
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <PriceLine
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <PriceLine
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceLine
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <PriceLine
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <PriceLine
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceLine
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <PriceLine
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <PriceLine
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
 function PriceLine({
   label,
   value,
   muted = false,
+  strong = false,
 }: {
   label: string;
   value: string;
   muted?: boolean;
+  strong?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-[11px] leading-5 text-white/[0.42] sm:text-[12px]">
+      <span
+        className={`text-[11px] leading-5 sm:text-[12px] ${
+          strong
+            ? "font-semibold text-white/[0.68]"
+            : "text-white/[0.42]"
+        }`}
+      >
         {label}
       </span>
 
       <span
-        className={`text-right text-[12px] font-medium leading-5 ${
-          muted
-            ? "text-white/[0.30]"
-            : "text-white/[0.78]"
+        className={`text-right text-[12px] leading-5 ${
+          strong
+            ? "font-semibold text-white"
+            : muted
+              ? "font-medium text-white/[0.30]"
+              : "font-medium text-white/[0.78]"
         }`}
       >
         {value}

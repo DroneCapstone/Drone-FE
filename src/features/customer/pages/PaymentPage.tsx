@@ -27,6 +27,10 @@ import {
   formatVnd,
 } from "../services/customerDeliveryService";
 
+import type {
+  DeliveryPrice,
+} from "../types/customer";
+
 export function PaymentPage() {
   const { deliveryId } = useParams();
   const navigate = useNavigate();
@@ -36,6 +40,15 @@ export function PaymentPage() {
         deliveryId,
       )
     : null;
+
+  /*
+   * useParams() returns string | undefined.
+   * Use the loaded delivery id as a stable string for async closures.
+   * This avoids TypeScript losing the narrowing inside nested async
+   * functions in useEffect().
+   */
+  const paymentOrderId =
+    delivery?.id ?? null;
 
   const [checkoutUrl, setCheckoutUrl] =
     useState<string | null>(null);
@@ -49,17 +62,18 @@ export function PaymentPage() {
   const checkoutStarted = useRef(false);
 
   useEffect(() => {
-    if (!deliveryId || !delivery) {
+    if (!paymentOrderId) {
       return;
     }
 
+    const orderId = paymentOrderId;
     let cancelled = false;
 
     async function checkStatus() {
       try {
         const response =
           await customerApi.getPaymentStatus(
-            deliveryId,
+            orderId,
           );
 
         const status =
@@ -67,12 +81,12 @@ export function PaymentPage() {
 
         if (status === "paid") {
           customerDeliveryService.markPaid(
-            deliveryId,
+            orderId,
           );
 
           if (!cancelled) {
             navigate(
-              `/customer/payment/${deliveryId}/success`,
+              `/customer/payment/${orderId}/success`,
               {
                 replace: true,
               },
@@ -84,10 +98,12 @@ export function PaymentPage() {
       }
     }
 
-    checkStatus();
+    void checkStatus();
 
     const timer = window.setInterval(
-      checkStatus,
+      () => {
+        void checkStatus();
+      },
       4000,
     );
 
@@ -95,21 +111,22 @@ export function PaymentPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [deliveryId, delivery, navigate]);
+  }, [paymentOrderId, navigate]);
 
   useEffect(() => {
     if (
-      !deliveryId ||
-      !delivery ||
+      !paymentOrderId ||
       checkoutStarted.current
     ) {
       return;
     }
 
+    const orderId = paymentOrderId;
+
     checkoutStarted.current = true;
 
     const sessionKey =
-      `droneoptai.payos.checkout-opened:${deliveryId}`;
+      `droneoptai.payos.checkout-opened:${orderId}`;
 
     const alreadyOpened =
       window.sessionStorage.getItem(
@@ -123,7 +140,7 @@ export function PaymentPage() {
       try {
         const response =
           await customerApi.createCheckout(
-            deliveryId,
+            orderId,
           );
 
         const url =
@@ -156,8 +173,8 @@ export function PaymentPage() {
       }
     }
 
-    startCheckout();
-  }, [deliveryId, delivery]);
+    void startCheckout();
+  }, [paymentOrderId]);
 
   if (!delivery) {
     return (
@@ -242,6 +259,12 @@ export function PaymentPage() {
           </strong>
         </div>
 
+        <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-4">
+          <PaymentPriceBreakdown
+            price={delivery.price}
+          />
+        </div>
+
         <div className="mt-5 flex items-center justify-between gap-5">
           <span className="text-[12px] text-white/[0.40]">
             Payment status
@@ -276,6 +299,162 @@ export function PaymentPage() {
           After payment, return to this tab if PayOS does not redirect automatically. DroneOptAI checks the backend payment status every few seconds.
         </p>
       </div>
+    </div>
+  );
+}
+
+
+function PaymentPriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <PaymentPriceRow
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <PaymentPriceRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <PaymentPriceRow
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <PaymentPriceRow
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <PaymentPriceRow
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PaymentPriceRow
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <PaymentPriceRow
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <PaymentPriceRow
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PaymentPriceRow
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <PaymentPriceRow
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <PaymentPriceRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+function PaymentPriceRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-5 text-[11px]">
+      <span
+        className={
+          strong
+            ? "font-semibold text-white/[0.62]"
+            : "text-white/[0.38]"
+        }
+      >
+        {label}
+      </span>
+
+      <span
+        className={
+          strong
+            ? "font-semibold text-white"
+            : "font-medium text-white/[0.78]"
+        }
+      >
+        {value}
+      </span>
     </div>
   );
 }

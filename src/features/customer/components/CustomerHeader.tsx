@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   Bell,
   ChevronDown,
-  ChevronRight,
   LogOut,
   Menu,
   X,
@@ -397,96 +396,140 @@ export function CustomerHeader() {
           </nav>
 
           {/* ===================================================
-              ACCOUNT MOBILE
+              MOBILE SECONDARY NAVIGATION
+              Same style as Dashboard / Create / My deliveries
           ==================================================== */}
 
-          <div className="mt-6">
-            <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25">
-              Account
-            </p>
+          <div className="flex flex-col">
+            {/* NOTIFICATIONS */}
+            <Link
+              to="/customer/notifications"
+              onClick={() =>
+                setMobileOpen(false)
+              }
+              className={`group relative flex min-h-[52px] items-center justify-between border-b border-white/[0.06] px-1 py-4 text-[13px] font-medium transition-colors ${
+                location.pathname ===
+                "/customer/notifications"
+                  ? "text-white"
+                  : "text-white/45 hover:text-white"
+              }`}
+            >
+              <span>Notifications</span>
 
-            <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.015]">
-              {/* NOTIFICATIONS */}
-              <Link
-                to="/customer/notifications"
-                onClick={() =>
-                  setMobileOpen(false)
-                }
-                className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-4 py-4 transition hover:bg-white/[0.035]"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-white/60">
-                    <Bell size={17} />
+              {unreadCount > 0 && (
+                <span className="min-w-[18px] rounded-full bg-orange-500 px-1.5 text-center text-[9px] font-bold leading-[18px] text-black">
+                  {unreadCount > 99
+                    ? "99+"
+                    : unreadCount}
+                </span>
+              )}
 
-                    {unreadCount > 0 && (
-                      <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-orange-500 px-1 text-center text-[9px] font-bold leading-4 text-black">
-                        {unreadCount > 99
-                          ? "99+"
-                          : unreadCount}
-                      </span>
-                    )}
-                  </div>
+              <span
+                className={`
+                  absolute
+                  bottom-0
+                  left-1/2
+                  h-[2px]
+                  w-full
+                  -translate-x-1/2
+                  origin-center
+                  bg-gradient-to-r
+                  from-orange-600
+                  via-orange-300
+                  to-orange-600
+                  transition-transform
+                  duration-300
+                  ease-out
+                  ${
+                    location.pathname ===
+                    "/customer/notifications"
+                      ? "scale-x-100"
+                      : "scale-x-0 group-hover:scale-x-100"
+                  }
+                `}
+              />
+            </Link>
 
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-white/80">
-                      Notifications
-                    </p>
+            {/* PROFILE */}
+            <Link
+              to="/customer/profile"
+              onClick={() =>
+                setMobileOpen(false)
+              }
+              className={`group relative flex min-h-[58px] items-center justify-between gap-4 border-b border-white/[0.06] px-1 py-3 text-[13px] font-medium transition-colors ${
+                location.pathname ===
+                "/customer/profile"
+                  ? "text-white"
+                  : "text-white/45 hover:text-white"
+              }`}
+            >
+              <span>Profile</span>
 
-                    <p className="mt-0.5 text-[10px] text-white/30">
-                      {unreadCount > 0
-                        ? `${unreadCount} unread`
-                        : "No unread notifications"}
-                    </p>
-                  </div>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="max-w-[150px] truncate text-[11px] font-normal text-white/35">
+                  {user?.name ??
+                    "Customer"}
+                </span>
+
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[10px] font-semibold text-black">
+                  {initial}
                 </div>
+              </div>
 
-                <ChevronRight
-                  size={16}
-                  className="shrink-0 text-white/25"
-                />
-              </Link>
+              <span
+                className={`
+                  absolute
+                  bottom-0
+                  left-1/2
+                  h-[2px]
+                  w-full
+                  -translate-x-1/2
+                  origin-center
+                  bg-gradient-to-r
+                  from-orange-600
+                  via-orange-300
+                  to-orange-600
+                  transition-transform
+                  duration-300
+                  ease-out
+                  ${
+                    location.pathname ===
+                    "/customer/profile"
+                      ? "scale-x-100"
+                      : "scale-x-0 group-hover:scale-x-100"
+                  }
+                `}
+              />
+            </Link>
 
-              {/* PROFILE */}
-              <Link
-                to="/customer/profile"
-                onClick={() =>
-                  setMobileOpen(false)
-                }
-                className="flex items-center justify-between gap-4 px-4 py-4 transition hover:bg-white/[0.035]"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[13px] font-semibold text-black">
-                    {initial}
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-white/80">
-                      {user?.name ??
-                        "Customer"}
-                    </p>
-
-                    <p className="mt-0.5 text-[10px] text-white/30">
-                      View and edit profile
-                    </p>
-                  </div>
-                </div>
-
-                <ChevronRight
-                  size={16}
-                  className="shrink-0 text-white/25"
-                />
-              </Link>
-            </div>
-
-            {/* LOGOUT */}
+            {/* SIGN OUT */}
             <button
               type="button"
               onClick={handleLogout}
-              className="mt-3 flex h-11 w-full items-center justify-between rounded-xl border border-white/[0.08] px-4 text-[12px] font-medium text-white/45 transition hover:bg-white/[0.035] hover:text-white"
+              className="group relative flex min-h-[52px] w-full items-center border-b border-white/[0.06] px-1 py-4 text-left text-[13px] font-medium text-white/45 transition-colors hover:text-white"
             >
               <span>Sign out</span>
 
-              <LogOut size={16} />
+              <span
+                className="
+                  absolute
+                  bottom-0
+                  left-1/2
+                  h-[2px]
+                  w-full
+                  -translate-x-1/2
+                  origin-center
+                  scale-x-0
+                  bg-gradient-to-r
+                  from-orange-600
+                  via-orange-300
+                  to-orange-600
+                  transition-transform
+                  duration-300
+                  ease-out
+                  group-hover:scale-x-100
+                "
+              />
             </button>
           </div>
         </div>

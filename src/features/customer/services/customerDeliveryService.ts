@@ -162,6 +162,36 @@ function categoryLabel(
   );
 }
 
+/**
+ * Pricing contract helper.
+ *
+ * The updated estimate API now accepts package_type so Backend can return
+ * fragile_surcharge in fee_details. We keep the mapping centralized here
+ * so it is easy to adjust if Backend later changes the enum/string values.
+ */
+function backendPackageType(
+  draft: DeliveryDraft,
+) {
+  return draft.packageCategory === "fragile"
+    ? "Fragile"
+    : "Standard";
+}
+
+function backendPackageLabel(
+  draft: DeliveryDraft,
+) {
+  if (
+    draft.packageCategory === "other" &&
+    draft.packageDescription.trim()
+  ) {
+    return draft.packageDescription.trim();
+  }
+
+  return categoryLabel(
+    draft.packageCategory,
+  );
+}
+
 function readEstimate(): DeliveryPreview | null {
   try {
     return JSON.parse(
@@ -189,11 +219,26 @@ function clearEstimate() {
   );
 }
 
+function readCachedHubs(): DeliveryHub[] {
+  try {
+    return JSON.parse(
+      localStorage.getItem(
+        HUBS_KEY,
+      ) ?? "[]",
+    ) as DeliveryHub[];
+  } catch {
+    return [];
+  }
+}
+
 function normalizeEstimate(
   response: CustomerEstimateResponse,
   originHub: DeliveryHub,
   destinationHub: DeliveryHub,
 ): DeliveryPreview {
+  const details =
+    response.fee_details;
+
   const price: DeliveryPrice = {
     deliveryFee: Number(
       response.delivery_fee ?? 0,
@@ -204,6 +249,29 @@ function normalizeEstimate(
     total: Number(
       response.total_fee ?? 0,
     ),
+
+    feeDetails: details
+      ? {
+          baseFee: Number(
+            details.base_fee ?? 0,
+          ),
+          distanceFee: Number(
+            details.distance_fee ?? 0,
+          ),
+          payloadFee: Number(
+            details.payload_fee ?? 0,
+          ),
+          insuranceFee: Number(
+            details.insurance_fee ?? 0,
+          ),
+          expressSurcharge: Number(
+            details.express_surcharge ?? 0,
+          ),
+          fragileSurcharge: Number(
+            details.fragile_surcharge ?? 0,
+          ),
+        }
+      : undefined,
   };
 
   return {
@@ -263,15 +331,7 @@ export const customerDeliveryService = {
   ======================================================== */
 
   getCachedHubs(): DeliveryHub[] {
-    try {
-      return JSON.parse(
-        localStorage.getItem(
-          HUBS_KEY,
-        ) ?? "[]",
-      ) as DeliveryHub[];
-    } catch {
-      return [];
-    }
+    return readCachedHubs();
   },
 
   async loadHubs() {
@@ -299,18 +359,21 @@ export const customerDeliveryService = {
 
   async estimateRemote(
     draft: DeliveryDraft,
-    hubs = this.getCachedHubs(),
+    hubs?: DeliveryHub[],
   ) {
+    const availableHubs =
+      hubs ?? readCachedHubs();
+
     const originHub =
       resolveHubFromDraft(
         draft.originArea,
-        hubs,
+        availableHubs,
       );
 
     const destinationHub =
       resolveHubFromDraft(
         draft.destinationArea,
-        hubs,
+        availableHubs,
       );
 
     if (!originHub || !destinationHub) {
@@ -329,6 +392,10 @@ export const customerDeliveryService = {
           draft.weightKg,
         package_size:
           draft.packageSize,
+        package_type:
+          backendPackageType(
+            draft,
+          ),
         delivery_mode:
           draft.deliveryMode ===
           "express"
@@ -342,6 +409,10 @@ export const customerDeliveryService = {
                 draft.requestedDepartureAt,
               ).toISOString()
             : null,
+        has_insurance:
+          Boolean(
+            draft.hasInsurance,
+          ),
       });
 
     const preview = normalizeEstimate(
@@ -385,7 +456,7 @@ export const customerDeliveryService = {
     customerId: string,
     draft: DeliveryDraft,
   ): Promise<CustomerDelivery> {
-    const hubs = this.getCachedHubs();
+    const hubs = readCachedHubs();
 
     const originHub =
       resolveHubFromDraft(
@@ -413,22 +484,31 @@ export const customerDeliveryService = {
 
     const response =
       await customerApi.createOrder({
-        package_type: categoryLabel(
-          draft.packageCategory,
-        ),
+        package_type:
+          backendPackageType(
+            draft,
+          ),
+        package_label:
+          backendPackageLabel(
+            draft,
+          ),
+
         payload_kg:
           draft.weightKg,
         package_size:
           draft.packageSize,
+
         origin_hub_id:
           originHub.id,
         destination_hub_id:
           destinationHub.id,
+
         delivery_mode:
           draft.deliveryMode ===
           "express"
             ? "EXPRESS"
             : "SCHEDULED",
+
         requested_delivery_at:
           draft.deliveryMode ===
             "scheduled" &&
@@ -437,6 +517,16 @@ export const customerDeliveryService = {
                 draft.requestedDepartureAt,
               ).toISOString()
             : null,
+
+        sender_phone:
+          draft.senderPhone.trim(),
+        receiver_phone:
+          draft.recipientPhone.trim(),
+
+        has_insurance:
+          Boolean(
+            draft.hasInsurance,
+          ),
       });
 
     const delivery: CustomerDelivery = {

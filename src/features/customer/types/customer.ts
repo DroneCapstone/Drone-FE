@@ -60,15 +60,42 @@ export interface DeliveryDraft {
   deliveryMode: DeliveryMode;
   requestedDepartureAt: string;
 
-  /** FE-only until backend adds an insurance field to the order API. */
+  /**
+   * Customer insurance selection.
+   * Sent to both estimate and create-order APIs as has_insurance.
+   */
   hasInsurance?: boolean;
   draftVersion?: number;
 }
 
+export interface DeliveryFeeDetails {
+  baseFee: number;
+  distanceFee: number;
+  payloadFee: number;
+  insuranceFee: number;
+  expressSurcharge: number;
+  fragileSurcharge: number;
+}
+
 export interface DeliveryPrice {
+  /**
+   * Backend delivery subtotal.
+   */
   deliveryFee: number;
+
+  /**
+   * Backend service fee. In the current contract this normally matches
+   * expressSurcharge for Express orders.
+   */
   serviceFee: number;
+
   total: number;
+
+  /**
+   * Present on the updated estimate response.
+   * Optional so older locally cached deliveries remain readable.
+   */
+  feeDetails?: DeliveryFeeDetails;
 }
 
 export interface DeliveryPreview {

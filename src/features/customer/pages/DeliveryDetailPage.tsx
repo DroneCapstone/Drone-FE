@@ -20,6 +20,10 @@ import {
   formatVnd,
 } from "../services/customerDeliveryService";
 
+import type {
+  DeliveryPrice,
+} from "../types/customer";
+
 export function DeliveryDetailPage() {
   const { deliveryId } = useParams();
 
@@ -210,6 +214,14 @@ export function DeliveryDetailPage() {
                 value={`${delivery.weightKg} kg · Size ${delivery.packageSize}`}
               />
               <DetailItem
+                label="Insurance"
+                value={
+                  delivery.hasInsurance
+                    ? "Included"
+                    : "Not added"
+                }
+              />
+              <DetailItem
                 label="Payment"
                 value={paid ? "Paid" : "Pending"}
               />
@@ -231,17 +243,8 @@ export function DeliveryDetailPage() {
               Backend quotation
             </p>
 
-            <PriceRow
-              label="Delivery fee"
-              value={formatVnd(
-                delivery.price.deliveryFee,
-              )}
-            />
-            <PriceRow
-              label="Service fee"
-              value={formatVnd(
-                delivery.price.serviceFee,
-              )}
+            <DetailPriceBreakdown
+              price={delivery.price}
             />
 
             <div className="mt-5 flex items-end justify-between gap-5 border-t border-white/[0.08] pt-5">
@@ -367,19 +370,154 @@ function DetailItem({
   );
 }
 
+function DetailPriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <PriceRow
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <PriceRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <PriceRow
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <PriceRow
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <PriceRow
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceRow
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <PriceRow
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <PriceRow
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceRow
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <PriceRow
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <PriceRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
 function PriceRow({
   label,
   value,
+  strong = false,
 }: {
   label: string;
   value: string;
+  strong?: boolean;
 }) {
   return (
     <div className="mt-4 flex items-start justify-between gap-5 text-[12px]">
-      <span className="text-white/[0.44]">
+      <span
+        className={
+          strong
+            ? "font-semibold text-white/[0.64]"
+            : "text-white/[0.44]"
+        }
+      >
         {label}
       </span>
-      <span className="font-medium text-white/[0.82]">
+      <span
+        className={
+          strong
+            ? "font-semibold text-white"
+            : "font-medium text-white/[0.82]"
+        }
+      >
         {value}
       </span>
     </div>
