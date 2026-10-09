@@ -1,6 +1,8 @@
 import {
   ArrowLeft,
-  ExternalLink,
+  Check,
+  Copy,
+  RefreshCw,
 } from "lucide-react";
 
 import {
@@ -18,8 +20,9 @@ import {
 
 import {
   customerApi,
-  extractCheckoutUrl,
+  extractPaymentCheckoutDetails,
   normalizePaymentStatus,
+  type PaymentCheckoutDetails,
 } from "../services/customerApi";
 
 import {
@@ -31,42 +34,176 @@ import type {
   DeliveryPrice,
 } from "../types/customer";
 
-export function PaymentPage() {
-  const { deliveryId } = useParams();
-  const navigate = useNavigate();
+/* =========================================================
+   HELPERS
+========================================================= */
 
-  const delivery = deliveryId
-    ? customerDeliveryService.getById(
-        deliveryId,
+function buildVietQrImageUrl(
+  details: PaymentCheckoutDetails,
+) {
+  if (
+    !details.bin ||
+    !details.accountNumber
+  ) {
+    return null;
+  }
+
+  const params =
+    new URLSearchParams();
+
+  if (
+    details.amount !== null &&
+    details.amount > 0
+  ) {
+    params.set(
+      "amount",
+      String(
+        Math.round(
+          details.amount,
+        ),
+      ),
+    );
+  }
+
+  if (details.description) {
+    params.set(
+      "addInfo",
+      details.description,
+    );
+  }
+
+  if (details.accountName) {
+    params.set(
+      "accountName",
+      details.accountName,
+    );
+  }
+
+  const query =
+    params.toString();
+
+  return `https://img.vietqr.io/image/${encodeURIComponent(
+    details.bin,
+  )}-${encodeURIComponent(
+    details.accountNumber,
+  )}-compact2.png${
+    query ? `?${query}` : ""
+  }`;
+}
+
+function resolveQrImage(
+  details: PaymentCheckoutDetails,
+) {
+  if (
+    details.qrDataUrl &&
+    (
+      details.qrDataUrl.startsWith(
+        "data:image/",
+      ) ||
+      details.qrDataUrl.startsWith(
+        "http://",
+      ) ||
+      details.qrDataUrl.startsWith(
+        "https://",
       )
-    : null;
+    )
+  ) {
+    return details.qrDataUrl;
+  }
+
+  if (
+    details.qrCode &&
+    (
+      details.qrCode.startsWith(
+        "data:image/",
+      ) ||
+      details.qrCode.startsWith(
+        "http://",
+      ) ||
+      details.qrCode.startsWith(
+        "https://",
+      )
+    )
+  ) {
+    return details.qrCode;
+  }
 
   /*
-   * useParams() returns string | undefined.
-   * Use the loaded delivery id as a stable string for async closures.
-   * This avoids TypeScript losing the narrowing inside nested async
-   * functions in useEffect().
+   * payOS normally returns the VietQR payload as text plus
+   * bin/accountNumber/amount/description. We use those payment
+   * fields to show the bank QR directly inside DroneOptAI.
    */
+  return buildVietQrImageUrl(
+    details,
+  );
+}
+
+async function copyText(
+  value: string,
+) {
+  await navigator.clipboard.writeText(
+    value,
+  );
+}
+
+/* =========================================================
+   PAYMENT PAGE
+========================================================= */
+
+export function PaymentPage() {
+  const { deliveryId } =
+    useParams();
+
+  const navigate =
+    useNavigate();
+
+  const delivery =
+    deliveryId
+      ? customerDeliveryService.getById(
+          deliveryId,
+        )
+      : null;
+
   const paymentOrderId =
     delivery?.id ?? null;
 
-  const [checkoutUrl, setCheckoutUrl] =
-    useState<string | null>(null);
+  const [
+    checkout,
+    setCheckout,
+  ] = useState<
+    PaymentCheckoutDetails | null
+  >(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const checkoutStarted = useRef(false);
+  const [
+    copied,
+    setCopied,
+  ] = useState("");
+
+  const checkoutStarted =
+    useRef(false);
+
+  /* =======================================================
+     PAYMENT STATUS POLLING
+  ======================================================== */
 
   useEffect(() => {
     if (!paymentOrderId) {
       return;
     }
 
-    const orderId = paymentOrderId;
+    const orderId =
+      paymentOrderId;
+
     let cancelled = false;
 
     async function checkStatus() {
@@ -77,9 +214,13 @@ export function PaymentPage() {
           );
 
         const status =
-          normalizePaymentStatus(response);
+          normalizePaymentStatus(
+            response,
+          );
 
-        if (status === "paid") {
+        if (
+          status === "paid"
+        ) {
           customerDeliveryService.markPaid(
             orderId,
           );
@@ -94,24 +235,34 @@ export function PaymentPage() {
           }
         }
       } catch {
-        // Keep polling; transient status errors should not break payment UI.
+        // Temporary status errors should not break the payment page.
       }
     }
 
     void checkStatus();
 
-    const timer = window.setInterval(
-      () => {
-        void checkStatus();
-      },
-      4000,
-    );
+    const timer =
+      window.setInterval(
+        () => {
+          void checkStatus();
+        },
+        4000,
+      );
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer,
+      );
     };
-  }, [paymentOrderId, navigate]);
+  }, [
+    paymentOrderId,
+    navigate,
+  ]);
+
+  /* =======================================================
+     LOAD BANK PAYMENT DETAILS
+  ======================================================== */
 
   useEffect(() => {
     if (
@@ -121,19 +272,13 @@ export function PaymentPage() {
       return;
     }
 
-    const orderId = paymentOrderId;
+    checkoutStarted.current =
+      true;
 
-    checkoutStarted.current = true;
+    const orderId =
+      paymentOrderId;
 
-    const sessionKey =
-      `droneoptai.payos.checkout-opened:${orderId}`;
-
-    const alreadyOpened =
-      window.sessionStorage.getItem(
-        sessionKey,
-      );
-
-    async function startCheckout() {
+    async function loadCheckout() {
       setLoading(true);
       setError("");
 
@@ -143,37 +288,27 @@ export function PaymentPage() {
             orderId,
           );
 
-        const url =
-          extractCheckoutUrl(response);
-
-        if (!url) {
-          throw new Error(
-            "Backend created the checkout but did not return a PayOS checkout URL.",
-          );
-        }
-
-        setCheckoutUrl(url);
-
-        if (!alreadyOpened) {
-          window.sessionStorage.setItem(
-            sessionKey,
-            "1",
+        const details =
+          extractPaymentCheckoutDetails(
+            response,
           );
 
-          window.location.assign(url);
-        }
-      } catch (requestError) {
+        setCheckout(details);
+      } catch (
+        requestError
+      ) {
         setError(
-          requestError instanceof Error
+          requestError instanceof
+            Error
             ? requestError.message
-            : "Unable to create the PayOS checkout.",
+            : "Unable to prepare payment.",
         );
       } finally {
         setLoading(false);
       }
     }
 
-    void startCheckout();
+    void loadCheckout();
   }, [paymentOrderId]);
 
   if (!delivery) {
@@ -185,124 +320,372 @@ export function PaymentPage() {
     );
   }
 
-  const openCheckout = async () => {
-    if (checkoutUrl) {
-      window.location.assign(
-        checkoutUrl,
-      );
-      return;
-    }
+  const reloadPayment =
+    async () => {
+      setLoading(true);
+      setError("");
 
-    setLoading(true);
-    setError("");
+      try {
+        const response =
+          await customerApi.createCheckout(
+            delivery.id,
+          );
 
-    try {
-      const response =
-        await customerApi.createCheckout(
-          delivery.id,
+        setCheckout(
+          extractPaymentCheckoutDetails(
+            response,
+          ),
         );
-
-      const url =
-        extractCheckoutUrl(response);
-
-      if (!url) {
-        throw new Error(
-          "PayOS checkout URL was not returned by the backend.",
+      } catch (
+        requestError
+      ) {
+        setError(
+          requestError instanceof
+            Error
+            ? requestError.message
+            : "Unable to reload payment.",
         );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const handleCopy =
+    async (
+      key: string,
+      value: string | null,
+    ) => {
+      if (!value) {
+        return;
       }
 
-      setCheckoutUrl(url);
-      window.location.assign(url);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to open PayOS.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        await copyText(value);
+
+        setCopied(key);
+
+        window.setTimeout(
+          () => {
+            setCopied("");
+          },
+          1400,
+        );
+      } catch {
+        // Clipboard can be blocked by browser permissions.
+      }
+    };
+
+  const qrImage =
+    checkout
+      ? resolveQrImage(
+          checkout,
+        )
+      : null;
+
+  const displayAmount =
+    checkout?.amount ??
+    delivery.price.total;
+
+  const hasBankDetails =
+    Boolean(
+      checkout?.bin &&
+        checkout
+          ?.accountNumber,
+    );
 
   return (
-    <div className="mx-auto max-w-[820px] px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
+    <div className="mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <Link
         to="/customer/deliveries/review"
-        className="inline-flex items-center gap-2 text-[12px] text-white/[0.45] transition hover:text-white"
+        className="inline-flex items-center gap-2 text-[12px] text-white/[0.50] transition hover:text-white"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft
+          size={14}
+        />
+
         Back to review
       </Link>
 
-      <p className="mt-8 text-[11px] uppercase tracking-[0.2em] text-orange-500">
-        Payment
-      </p>
-
-      <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.04em] sm:text-4xl">
-        Pay with PayOS
-      </h1>
-
-      <p className="mt-3 text-sm leading-6 text-white/40">
-        Order {delivery.id} is waiting for payment. This page checks payment status automatically.
-      </p>
-
-      <div className="mt-8 rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-7">
-        <div className="flex items-center justify-between gap-5 border-b border-white/[0.08] pb-5">
-          <span className="text-[12px] text-white/[0.40]">
-            Amount
-          </span>
-
-          <strong className="text-[24px] tracking-[-0.03em] text-white">
-            {formatVnd(
-              delivery.price.total,
-            )}
-          </strong>
-        </div>
-
-        <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-4">
-          <PaymentPriceBreakdown
-            price={delivery.price}
-          />
-        </div>
-
-        <div className="mt-5 flex items-center justify-between gap-5">
-          <span className="text-[12px] text-white/[0.40]">
-            Payment status
-          </span>
-
-          <span className="rounded-full border border-amber-400/[0.20] bg-amber-400/[0.06] px-3 py-1.5 text-[11px] font-medium text-amber-200">
-            Waiting for payment
-          </span>
-        </div>
-
-        {error && (
-          <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[12px] leading-5 text-red-300">
-            {error}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={openCheckout}
-          disabled={loading}
-          className="mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 text-[13px] font-semibold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <ExternalLink size={15} />
-          {loading
-            ? "Preparing PayOS…"
-            : checkoutUrl
-              ? "Open PayOS again"
-              : "Open PayOS"}
-        </button>
-
-        <p className="mt-4 text-[11px] leading-5 text-white/[0.30]">
-          After payment, return to this tab if PayOS does not redirect automatically. DroneOptAI checks the backend payment status every few seconds.
+      <div className="mt-7">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-400">
+          Payment
         </p>
+
+        <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.045em] text-white sm:text-[38px]">
+          Scan to pay
+        </h1>
+
+        <p className="mt-2 max-w-[650px] text-[12px] leading-6 text-white/[0.60] sm:text-[13px]">
+          Scan the VietQR code with your banking app. You can complete the payment without leaving DroneOptAI.
+        </p>
+      </div>
+
+      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* PAYMENT QR */}
+        <section className="overflow-hidden rounded-[22px] border border-white/[0.10] bg-[#151217]/95">
+          <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] px-5 py-4 sm:px-6">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.12em] text-white/[0.42]">
+                Amount to pay
+              </p>
+
+              <p className="mt-1 text-[25px] font-semibold tracking-[-0.035em] text-white">
+                {formatVnd(
+                  displayAmount,
+                )}
+              </p>
+            </div>
+
+            <span className="rounded-full border border-amber-400/[0.20] bg-amber-400/[0.07] px-3 py-1.5 text-[10px] font-semibold text-amber-200">
+              Waiting for payment
+            </span>
+          </div>
+
+          {error && (
+            <div className="mx-5 mt-5 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[11px] leading-5 text-red-300 sm:mx-6">
+              {error}
+            </div>
+          )}
+
+          <div className="p-5 sm:p-6">
+            {loading ? (
+              <div className="flex min-h-[390px] flex-col items-center justify-center rounded-2xl bg-white px-6 text-center">
+                <RefreshCw
+                  size={24}
+                  className="animate-spin text-orange-500"
+                />
+
+                <p className="mt-4 text-[13px] font-semibold text-neutral-900">
+                  Preparing payment QR
+                </p>
+              </div>
+            ) : qrImage ? (
+              <div className="overflow-hidden rounded-2xl bg-white p-3 sm:p-4">
+                <img
+                  src={qrImage}
+                  alt="VietQR payment code"
+                  className="mx-auto block w-full max-w-[430px]"
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-[300px] flex-col items-center justify-center rounded-2xl border border-white/[0.08] bg-black/[0.12] px-6 text-center">
+                <p className="text-[14px] font-semibold text-white">
+                  QR information is not available
+                </p>
+
+                <p className="mt-2 max-w-[430px] text-[11px] leading-5 text-white/[0.52]">
+                  The checkout API succeeded, but its response does not include the bank details needed to render the VietQR code directly on DroneOptAI.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    reloadPayment
+                  }
+                  className="mt-5 inline-flex items-center gap-2 text-[11px] font-semibold text-orange-400"
+                >
+                  <RefreshCw
+                    size={13}
+                  />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {hasBankDetails &&
+              checkout && (
+                <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.08]">
+                  <BankRow
+                    label="Bank BIN"
+                    value={
+                      checkout.bin
+                    }
+                  />
+
+                  <BankRow
+                    label="Account number"
+                    value={
+                      checkout.accountNumber
+                    }
+                    copyKey="account"
+                    copied={
+                      copied
+                    }
+                    onCopy={
+                      handleCopy
+                    }
+                  />
+
+                  {checkout.accountName && (
+                    <BankRow
+                      label="Account name"
+                      value={
+                        checkout.accountName
+                      }
+                    />
+                  )}
+
+                  <BankRow
+                    label="Amount"
+                    value={formatVnd(
+                      displayAmount,
+                    )}
+                    copyValue={String(
+                      Math.round(
+                        displayAmount,
+                      ),
+                    )}
+                    copyKey="amount"
+                    copied={
+                      copied
+                    }
+                    onCopy={
+                      handleCopy
+                    }
+                  />
+
+                  {checkout.description && (
+                    <BankRow
+                      label="Transfer content"
+                      value={
+                        checkout.description
+                      }
+                      copyKey="description"
+                      copied={
+                        copied
+                      }
+                      onCopy={
+                        handleCopy
+                      }
+                    />
+                  )}
+                </div>
+              )}
+
+            <div className="mt-5 flex items-start gap-3 rounded-xl bg-white/[0.025] px-4 py-3">
+              <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+
+              <p className="text-[10px] leading-5 text-white/[0.45]">
+                Keep this page open after transferring. DroneOptAI checks the backend payment status automatically every few seconds.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* SUMMARY */}
+        <aside className="h-fit rounded-[22px] border border-white/[0.10] bg-[#151217]/95 p-5 sm:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.44]">
+            Payment summary
+          </p>
+
+          <div className="mt-4 border-b border-white/[0.08] pb-4">
+            <p className="text-[10px] text-white/[0.42]">
+              Order
+            </p>
+
+            <p className="mt-1 break-all text-[13px] font-semibold text-white/[0.92]">
+              {delivery.id}
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <PaymentPriceBreakdown
+              price={
+                delivery.price
+              }
+            />
+          </div>
+
+          <div className="mt-5 flex items-end justify-between gap-4 border-t border-white/[0.08] pt-5">
+            <span className="text-[12px] font-medium text-white/[0.64]">
+              Total
+            </span>
+
+            <strong className="text-[22px] tracking-[-0.03em] text-white">
+              {formatVnd(
+                delivery.price
+                  .total,
+              )}
+            </strong>
+          </div>
+        </aside>
       </div>
     </div>
   );
 }
 
+/* =========================================================
+   BANK DETAIL ROW
+========================================================= */
+
+function BankRow({
+  label,
+  value,
+  copyValue,
+  copyKey,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: string | null;
+  copyValue?: string;
+  copyKey?: string;
+  copied?: string;
+  onCopy?: (
+    key: string,
+    value: string | null,
+  ) => void;
+}) {
+  const canCopy =
+    Boolean(
+      copyKey &&
+        onCopy &&
+        value,
+    );
+
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-white/[0.07] px-4 py-3.5 last:border-b-0">
+      <div className="min-w-0">
+        <p className="text-[9px] uppercase tracking-[0.10em] text-white/[0.34]">
+          {label}
+        </p>
+
+        <p className="mt-1 break-words text-[12px] font-medium text-white/[0.84]">
+          {value ?? "—"}
+        </p>
+      </div>
+
+      {canCopy && (
+        <button
+          type="button"
+          onClick={() =>
+            onCopy?.(
+              copyKey!,
+              copyValue ??
+                value,
+            )
+          }
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/[0.40] transition hover:bg-white/[0.05] hover:text-white"
+          aria-label={`Copy ${label}`}
+        >
+          {copied ===
+          copyKey ? (
+            <Check
+              size={14}
+              className="text-emerald-400"
+            />
+          ) : (
+            <Copy size={14} />
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+   PRICE BREAKDOWN
+========================================================= */
 
 function PaymentPriceBreakdown({
   price,
@@ -321,6 +704,7 @@ function PaymentPriceBreakdown({
             price.deliveryFee,
           )}
         />
+
         <PaymentPriceRow
           label="Service fee"
           value={formatVnd(
@@ -376,7 +760,8 @@ function PaymentPriceBreakdown({
         />
       </div>
 
-      {details.fragileSurcharge > 0 && (
+      {details.fragileSurcharge >
+        0 && (
         <PaymentPriceRow
           label="Fragile surcharge"
           value={`+${formatVnd(
@@ -385,7 +770,8 @@ function PaymentPriceBreakdown({
         />
       )}
 
-      {details.insuranceFee > 0 && (
+      {details.insuranceFee >
+        0 && (
         <PaymentPriceRow
           label="Package insurance"
           value={`+${formatVnd(
@@ -404,7 +790,8 @@ function PaymentPriceBreakdown({
         />
       </div>
 
-      {details.expressSurcharge > 0 && (
+      {details.expressSurcharge >
+        0 && (
         <PaymentPriceRow
           label="Express surcharge"
           value={`+${formatVnd(
@@ -439,8 +826,8 @@ function PaymentPriceRow({
       <span
         className={
           strong
-            ? "font-semibold text-white/[0.62]"
-            : "text-white/[0.38]"
+            ? "font-semibold text-white/[0.72]"
+            : "text-white/[0.52]"
         }
       >
         {label}
@@ -450,7 +837,7 @@ function PaymentPriceRow({
         className={
           strong
             ? "font-semibold text-white"
-            : "font-medium text-white/[0.78]"
+            : "font-medium text-white/[0.86]"
         }
       >
         {value}
