@@ -344,18 +344,67 @@ export type PaymentCheckoutResponse = {
   checkoutUrl?: string;
   payment_url?: string;
   paymentUrl?: string;
+
   qr_code?: string;
   qrCode?: string;
+  qr_data_url?: string;
+  qrDataURL?: string;
+
+  bin?: string | number;
+  account_number?: string;
+  accountNumber?: string;
+  account_name?: string;
+  accountName?: string;
+  amount?: number;
+  description?: string;
+  order_code?: number;
+  orderCode?: number;
+  payment_link_id?: string;
+  paymentLinkId?: string;
+  status?: string;
+
   data?: {
     checkout_url?: string;
     checkoutUrl?: string;
     payment_url?: string;
     paymentUrl?: string;
+
     qr_code?: string;
     qrCode?: string;
+    qr_data_url?: string;
+    qrDataURL?: string;
+
+    bin?: string | number;
+    account_number?: string;
+    accountNumber?: string;
+    account_name?: string;
+    accountName?: string;
+    amount?: number;
+    description?: string;
+    order_code?: number;
+    orderCode?: number;
+    payment_link_id?: string;
+    paymentLinkId?: string;
+    status?: string;
+
     [key: string]: unknown;
   };
+
   [key: string]: unknown;
+};
+
+export type PaymentCheckoutDetails = {
+  checkoutUrl: string | null;
+  qrCode: string | null;
+  qrDataUrl: string | null;
+  bin: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  amount: number | null;
+  description: string | null;
+  orderCode: number | null;
+  paymentLinkId: string | null;
+  status: string | null;
 };
 
 export type PaymentStatusResponse = {
@@ -545,6 +594,148 @@ export function extractCheckoutUrl(value: PaymentCheckoutResponse) {
     value.data?.paymentUrl ??
     null
   );
+}
+
+export function extractPaymentCheckoutDetails(
+  value: PaymentCheckoutResponse,
+): PaymentCheckoutDetails {
+  const data =
+    value.data && typeof value.data === "object"
+      ? value.data
+      : undefined;
+
+  const readString = (
+    ...items: unknown[]
+  ): string | null => {
+    for (const item of items) {
+      if (
+        typeof item === "string" &&
+        item.trim()
+      ) {
+        return item.trim();
+      }
+
+      if (
+        typeof item === "number" &&
+        Number.isFinite(item)
+      ) {
+        return String(item);
+      }
+    }
+
+    return null;
+  };
+
+  const readNumber = (
+    ...items: unknown[]
+  ): number | null => {
+    for (const item of items) {
+      if (
+        typeof item === "number" &&
+        Number.isFinite(item)
+      ) {
+        return item;
+      }
+
+      if (
+        typeof item === "string" &&
+        item.trim() &&
+        Number.isFinite(Number(item))
+      ) {
+        return Number(item);
+      }
+    }
+
+    return null;
+  };
+
+  const checkoutUrl =
+    readString(
+      value.checkout_url,
+      value.checkoutUrl,
+      value.payment_url,
+      value.paymentUrl,
+      data?.checkout_url,
+      data?.checkoutUrl,
+      data?.payment_url,
+      data?.paymentUrl,
+    );
+
+  const qrCode =
+    readString(
+      value.qr_code,
+      value.qrCode,
+      data?.qr_code,
+      data?.qrCode,
+    );
+
+  const qrDataUrl =
+    readString(
+      value.qr_data_url,
+      value.qrDataURL,
+      data?.qr_data_url,
+      data?.qrDataURL,
+    );
+
+  return {
+    checkoutUrl,
+    qrCode,
+    qrDataUrl,
+
+    bin: readString(
+      value.bin,
+      data?.bin,
+    ),
+
+    accountNumber:
+      readString(
+        value.account_number,
+        value.accountNumber,
+        data?.account_number,
+        data?.accountNumber,
+      ),
+
+    accountName:
+      readString(
+        value.account_name,
+        value.accountName,
+        data?.account_name,
+        data?.accountName,
+      ),
+
+    amount: readNumber(
+      value.amount,
+      data?.amount,
+    ),
+
+    description:
+      readString(
+        value.description,
+        data?.description,
+      ),
+
+    orderCode:
+      readNumber(
+        value.order_code,
+        value.orderCode,
+        data?.order_code,
+        data?.orderCode,
+      ),
+
+    paymentLinkId:
+      readString(
+        value.payment_link_id,
+        value.paymentLinkId,
+        data?.payment_link_id,
+        data?.paymentLinkId,
+      ),
+
+    status:
+      readString(
+        value.status,
+        data?.status,
+      ),
+  };
 }
 
 export function normalizePaymentStatus(value: PaymentStatusResponse) {
