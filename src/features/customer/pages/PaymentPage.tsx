@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  ExternalLink,
   RefreshCw,
 } from "lucide-react";
 
@@ -561,6 +562,25 @@ export function PaymentPage() {
                   )}
                 </div>
               )}
+
+            {checkout?.checkoutUrl && (
+              <div className="mt-5 border-t border-white/[0.08] pt-5">
+                <a
+                  href={checkout.checkoutUrl}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400"
+                >
+                  Pay with PayOS
+
+                  <ExternalLink
+                    size={15}
+                  />
+                </a>
+
+                <p className="mt-2 text-center text-[10px] leading-5 text-white/[0.40]">
+                  Continue to PayOS to complete payment. After a successful payment, PayOS will use the return URL configured by the backend to return to DroneOptAI.
+                </p>
+              </div>
+            )}
 
             <div className="mt-5 flex items-start gap-3 rounded-xl bg-white/[0.025] px-4 py-3">
               <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
