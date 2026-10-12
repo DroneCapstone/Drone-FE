@@ -59,12 +59,12 @@ const pricingTiers = [
 
 export function PricingServiceInfoPage() {
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-4 pb-28 pt-6 sm:px-6 sm:pb-16 sm:pt-8 lg:px-8 xl:px-10">
+    <div className="mx-auto w-full max-w-[1360px] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8 xl:px-10">
       {/* TOP INTRO */}
       <section className="overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#111014] shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
         <div className="grid lg:grid-cols-[1.08fr_0.92fr]">
           <div className="p-5 sm:p-7 lg:p-9">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-400">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-400">
               Pricing & services
             </p>
 
@@ -72,7 +72,7 @@ export function PricingServiceInfoPage() {
               Choose a delivery option that fits your order
             </h1>
 
-            <p className="mt-4 max-w-[620px] text-[13px] leading-6 text-white/[0.50] sm:text-[14px]">
+            <p className="mt-4 max-w-[620px] text-[14px] leading-6 text-white/[0.74] sm:text-[14px]">
               Compare speed, package limits and fees before you book.
             </p>
 
@@ -105,7 +105,7 @@ export function PricingServiceInfoPage() {
 
               <a
                 href="#package-guide"
-                className="inline-flex h-12 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.025] px-6 text-[13px] font-semibold text-white/[0.78] transition hover:border-white/[0.20] hover:text-white"
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-white/[0.12] bg-white/[0.025] px-6 text-[14px] font-semibold text-white/[0.90] transition hover:border-white/[0.20] hover:text-white"
               >
                 View package sizes
               </a>
@@ -122,11 +122,11 @@ export function PricingServiceInfoPage() {
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,16,20,0.82),rgba(17,16,20,0.08)_44%,rgba(17,16,20,0.02))]" />
 
             <div className="absolute bottom-5 right-5 rounded-2xl border border-white/[0.12] bg-black/50 px-4 py-3 backdrop-blur-md">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/[0.42]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.96]">
                 Final price
               </p>
 
-              <p className="mt-1 text-[13px] font-semibold text-white">
+              <p className="mt-1 text-[14px] font-semibold text-white">
                 Quoted before payment
               </p>
             </div>
@@ -226,7 +226,7 @@ export function PricingServiceInfoPage() {
           </div>
 
           <details className="group mt-4 border-t border-white/[0.07] pt-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[12px] font-medium text-white/[0.58]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[13px] font-medium text-white/[0.80]">
               How the final price is calculated
 
               <ChevronDown
@@ -235,7 +235,7 @@ export function PricingServiceInfoPage() {
               />
             </summary>
 
-            <div className="mt-3 rounded-xl bg-black/[0.12] px-4 py-3 text-[11px] leading-6 text-white/[0.46]">
+            <div className="mt-3 rounded-xl bg-black/[0.12] px-4 py-3 text-[12px] leading-6 text-white/[0.72]">
               Core fee = Base fee + Distance fee + Payload fee. Optional surcharges are added when selected.
             </div>
           </details>
@@ -266,24 +266,24 @@ export function PricingServiceInfoPage() {
         <details className="group mt-4 overflow-hidden rounded-[22px] border border-white/[0.10] bg-[#151217]/94">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
             <div>
-              <p className="text-[13px] font-semibold text-white/[0.88]">
+              <p className="text-[14px] font-semibold text-white/[0.96]">
                 Detailed rate table
               </p>
 
-              <p className="mt-1 text-[10px] text-white/[0.36]">
+              <p className="mt-1 text-[11px] text-white/[0.68]">
                 Base fee, rate per km and rate per kg
               </p>
             </div>
 
             <ChevronDown
               size={17}
-              className="shrink-0 text-white/[0.42] transition-transform group-open:rotate-180"
+              className="shrink-0 text-white/[0.96] transition-transform group-open:rotate-180"
             />
           </summary>
 
           <div className="border-t border-white/[0.07]">
             <div className="hidden md:block">
-              <div className="grid grid-cols-[80px_130px_1fr_120px_120px_120px] gap-4 px-5 py-3 text-[9px] font-semibold uppercase tracking-[0.10em] text-white/[0.30]">
+              <div className="grid grid-cols-[80px_130px_1fr_120px_120px_120px] gap-4 px-5 py-3 text-[10px] font-semibold uppercase tracking-[0.10em] text-white/[0.62]">
                 <span>Size</span>
                 <span>Payload</span>
                 <span>Dimensions</span>
@@ -298,19 +298,19 @@ export function PricingServiceInfoPage() {
                     key={
                       tier.size
                     }
-                    className="grid grid-cols-[80px_130px_1fr_120px_120px_120px] items-center gap-4 border-t border-white/[0.06] px-5 py-3 text-[11px]"
+                    className="grid grid-cols-[80px_130px_1fr_120px_120px_120px] items-center gap-4 border-t border-white/[0.06] px-5 py-3 text-[12px]"
                   >
                     <strong className="text-white">
                       {tier.size}
                     </strong>
 
-                    <span className="text-white/[0.56]">
+                    <span className="text-white/[0.90]">
                       {
                         tier.maxPayload
                       }
                     </span>
 
-                    <span className="text-white/[0.42]">
+                    <span className="text-white/[0.96]">
                       {
                         PACKAGE_SIZE_RULES[
                           tier.size
@@ -318,19 +318,19 @@ export function PricingServiceInfoPage() {
                       }
                     </span>
 
-                    <span className="text-white/[0.78]">
+                    <span className="text-white/[0.90]">
                       {formatVnd(
                         tier.baseFee,
                       )}
                     </span>
 
-                    <span className="text-white/[0.78]">
+                    <span className="text-white/[0.90]">
                       {formatVnd(
                         tier.distanceRate,
                       )}
                     </span>
 
-                    <span className="text-white/[0.78]">
+                    <span className="text-white/[0.90]">
                       {formatVnd(
                         tier.payloadRate,
                       )}
@@ -350,11 +350,11 @@ export function PricingServiceInfoPage() {
                     className="px-5 py-4"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <strong className="text-[13px] text-white">
+                      <strong className="text-[14px] text-white">
                         Size {tier.size}
                       </strong>
 
-                      <span className="text-[10px] font-semibold text-orange-300">
+                      <span className="text-[11px] font-semibold text-orange-300">
                         {
                           tier.maxPayload
                         }
@@ -425,18 +425,18 @@ export function PricingServiceInfoPage() {
       <section className="mt-8 rounded-[22px] border border-orange-500/[0.16] bg-[linear-gradient(135deg,rgba(249,115,22,0.09),rgba(21,18,23,0.96))] p-5 sm:p-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[17px] font-semibold text-white">
+            <p className="text-[18px] font-semibold text-white">
               Ready to check your price?
             </p>
 
-            <p className="mt-1.5 max-w-[600px] text-[11px] leading-5 text-white/[0.42]">
+            <p className="mt-1.5 max-w-[600px] text-[12px] leading-5 text-white/[0.96]">
               Enter your route and package details to get the live backend quotation.
             </p>
           </div>
 
           <Link
             to="/customer/deliveries/create?new=1"
-            className="group inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400"
+            className="group inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 text-[14px] font-semibold text-black transition hover:bg-orange-400"
           >
             Create delivery
 
@@ -447,18 +447,6 @@ export function PricingServiceInfoPage() {
           </Link>
         </div>
       </section>
-
-      {/* MOBILE STICKY CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.08] bg-[#0b0a0d]/96 px-4 py-3 backdrop-blur-xl sm:hidden">
-        <Link
-          to="/customer/deliveries/create?new=1"
-          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 text-[14px] font-semibold text-black"
-        >
-          Get a quote
-
-          <ArrowRight size={16} />
-        </Link>
-      </div>
     </div>
   );
 }
@@ -476,7 +464,7 @@ function SectionHeader({
         {title}
       </h2>
 
-      <p className="mt-1.5 max-w-[720px] text-[11px] leading-5 text-white/[0.38] sm:text-[12px]">
+      <p className="mt-1.5 max-w-[720px] text-[12px] leading-5 text-white/[0.68] sm:text-[13px]">
         {subtitle}
       </p>
     </div>
@@ -489,7 +477,7 @@ function MiniPill({
   children: ReactNode;
 }) {
   return (
-    <span className="rounded-full border border-white/[0.09] bg-white/[0.035] px-3 py-1.5 text-[10px] font-medium text-white/[0.60]">
+    <span className="rounded-full border border-white/[0.09] bg-white/[0.035] px-3 py-1.5 text-[11px] font-medium text-white/[0.80]">
       {children}
     </span>
   );
@@ -536,7 +524,7 @@ function CommerceServiceCard({
             {icon}
           </div>
 
-          <span className="rounded-full bg-black/46 px-3 py-1 text-[9px] font-semibold text-white/[0.76] backdrop-blur-md">
+          <span className="rounded-full bg-black/46 px-3 py-1 text-[10px] font-semibold text-white/[0.90] backdrop-blur-md">
             {subtitle}
           </span>
         </div>
@@ -549,12 +537,12 @@ function CommerceServiceCard({
               {title}
             </h3>
 
-            <p className="mt-1.5 text-[11px] leading-5 text-white/[0.45]">
+            <p className="mt-1.5 text-[12px] leading-5 text-white/[0.72]">
               {description}
             </p>
           </div>
 
-          <span className="shrink-0 rounded-full border border-orange-500/[0.18] bg-orange-500/[0.06] px-2.5 py-1 text-[9px] font-semibold text-orange-300">
+          <span className="shrink-0 rounded-full border border-orange-500/[0.18] bg-orange-500/[0.06] px-2.5 py-1 text-[10px] font-semibold text-orange-300">
             {fee}
           </span>
         </div>
@@ -564,7 +552,7 @@ function CommerceServiceCard({
             (point) => (
               <div
                 key={point}
-                className="flex items-start gap-2 text-[10px] leading-5 text-white/[0.56]"
+                className="flex items-start gap-2 text-[11px] leading-5 text-white/[0.90]"
               >
                 <Check
                   size={13}
@@ -590,11 +578,11 @@ function PriceTile({
 }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-black/[0.12] px-3 py-3 text-center">
-      <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/[0.34]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/[0.66]">
         {label}
       </p>
 
-      <p className="mt-1 text-[11px] font-semibold text-white/[0.82]">
+      <p className="mt-1 text-[12px] font-semibold text-white/[0.94]">
         {value}
       </p>
     </div>
@@ -618,14 +606,14 @@ function SurchargeChip({
           : "border-orange-500/[0.14] bg-orange-500/[0.04]"
       }`}
     >
-      <span className="text-[10px] text-white/[0.46]">
+      <span className="text-[11px] text-white/[0.72]">
         {label}
       </span>
 
       <strong
-        className={`text-[10px] ${
+        className={`text-[11px] ${
           muted
-            ? "text-white/[0.64]"
+            ? "text-white/[0.94]"
             : "text-orange-300"
         }`}
       >
@@ -643,11 +631,11 @@ function PackageCard({
   return (
     <article className="rounded-[18px] border border-white/[0.10] bg-[#151217]/94 p-4 transition hover:border-orange-500/[0.22]">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.05] text-white/[0.78]">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.05] text-white/[0.90]">
           <Package size={17} />
         </div>
 
-        <span className="text-[10px] font-semibold text-orange-300">
+        <span className="text-[11px] font-semibold text-orange-300">
           {tier.maxPayload}
         </span>
       </div>
@@ -656,7 +644,7 @@ function PackageCard({
         Size {tier.size}
       </p>
 
-      <p className="mt-1 text-[10px] leading-4 text-white/[0.34]">
+      <p className="mt-1 text-[11px] leading-4 text-white/[0.66]">
         {
           PACKAGE_SIZE_RULES[
             tier.size
@@ -665,11 +653,11 @@ function PackageCard({
       </p>
 
       <div className="mt-4 border-t border-white/[0.07] pt-3">
-        <p className="text-[8px] font-semibold uppercase tracking-[0.10em] text-white/[0.25]">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.10em] text-white/[0.80]">
           From
         </p>
 
-        <p className="mt-1 text-[12px] font-semibold text-white/[0.78]">
+        <p className="mt-1 text-[13px] font-semibold text-white/[0.90]">
           {formatVnd(
             tier.baseFee,
           )}
@@ -688,11 +676,11 @@ function SmallRate({
 }) {
   return (
     <div>
-      <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-white/[0.26]">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/[0.80]">
         {label}
       </p>
 
-      <p className="mt-1 text-[10px] font-medium text-white/[0.70]">
+      <p className="mt-1 text-[11px] font-medium text-white/[0.96]">
         {value}
       </p>
     </div>
@@ -718,17 +706,17 @@ function ExtraServiceCard({
         </div>
 
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-white/[0.86]">
+          <p className="text-[13px] font-semibold text-white/[0.96]">
             {title}
           </p>
 
-          <p className="mt-1 text-[10px] leading-4 text-white/[0.36]">
+          <p className="mt-1 text-[11px] leading-4 text-white/[0.68]">
             {text}
           </p>
         </div>
       </div>
 
-      <span className="shrink-0 text-[10px] font-semibold text-orange-300">
+      <span className="shrink-0 text-[11px] font-semibold text-orange-300">
         {price}
       </span>
     </div>

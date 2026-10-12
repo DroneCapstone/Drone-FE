@@ -1,18 +1,17 @@
 import {
   ChevronDown,
-  CreditCard,
-  Package,
   Search,
-  ShieldCheck,
-  Truck,
   X,
 } from "lucide-react";
-
 import {
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
+
+import deliveryHandoverImage from "../../../assets/images/customer/help-delivery-handover.png";
+import packageRulesImage from "../../../assets/images/customer/help-package-rules.png";
+import pricingPaymentImage from "../../../assets/images/customer/help-pricing-payment.png";
+import insurancePoliciesImage from "../../../assets/images/customer/help-insurance-policies.png";
 
 type HelpCategory =
   | "delivery"
@@ -28,39 +27,41 @@ type HelpArticle = {
   content: string;
 };
 
-const CATEGORIES: Array<{
+type CategoryCard = {
   id: HelpCategory;
   title: string;
   description: string;
-  icon: ReactNode;
-}> = [
+  image: string;
+};
+
+const CATEGORIES: CategoryCard[] = [
   {
     id: "delivery",
     title: "Delivery & handover",
     description:
       "Hub delivery, deadlines and delivery modes.",
-    icon: <Truck size={18} />,
+    image: deliveryHandoverImage,
   },
   {
     id: "package",
     title: "Package rules",
     description:
       "Package size, weight and fragile items.",
-    icon: <Package size={18} />,
+    image: packageRulesImage,
   },
   {
     id: "payment",
     title: "Pricing & payment",
     description:
       "Quotation, checkout and payment status.",
-    icon: <CreditCard size={18} />,
+    image: pricingPaymentImage,
   },
   {
     id: "policy",
     title: "Insurance & policies",
     description:
       "Insurance, changes and cancellation.",
-    icon: <ShieldCheck size={18} />,
+    image: insurancePoliciesImage,
   },
 ];
 
@@ -203,9 +204,8 @@ export function HelpPoliciesPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1180px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
-      {/* SIMPLE HELP CENTER HEADER */}
       <section className="mx-auto max-w-[760px] text-center">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-400">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">
           Help & policies
         </p>
 
@@ -213,15 +213,15 @@ export function HelpPoliciesPage() {
           How can we help?
         </h1>
 
-        <p className="mx-auto mt-3 max-w-[560px] text-[12px] leading-6 text-white/[0.68] sm:text-[13px]">
+        <p className="mx-auto mt-3 max-w-[560px] text-[13px] leading-7 text-white/[0.88] sm:text-[14px]">
           Search for delivery, package,
           payment or policy information.
         </p>
 
         <div className="mx-auto mt-6 max-w-[620px]">
-          <label className="flex h-[54px] items-center gap-3 rounded-2xl border border-white/[0.14] bg-[#171419]/95 px-3 shadow-[0_12px_34px_rgba(0,0,0,0.22)] transition focus-within:border-orange-500/[0.48] focus-within:bg-[#1a161b] focus-within:shadow-[0_0_0_3px_rgba(249,115,22,0.08),0_14px_34px_rgba(0,0,0,0.24)]">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/[0.72]">
-              <Search size={17} />
+          <label className="flex h-[56px] items-center gap-3 rounded-[20px] border border-white/[0.14] bg-[#171419]/95 px-3 shadow-[0_12px_34px_rgba(0,0,0,0.22)] transition focus-within:border-orange-500/[0.48] focus-within:bg-[#1a161b] focus-within:shadow-[0_0_0_3px_rgba(249,115,22,0.08),0_14px_34px_rgba(0,0,0,0.24)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/[0.88]">
+              <Search size={18} />
             </div>
 
             <input
@@ -232,7 +232,7 @@ export function HelpPoliciesPage() {
                 )
               }
               placeholder="Search delivery, payment, package..."
-              className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-white outline-none placeholder:font-normal placeholder:text-white/[0.46]"
+              className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-white outline-none placeholder:font-normal placeholder:text-white/[0.55]"
             />
 
             {query ? (
@@ -242,18 +242,19 @@ export function HelpPoliciesPage() {
                   setQuery("")
                 }
                 aria-label="Clear search"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/[0.48] transition hover:bg-white/[0.06] hover:text-white"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/[0.62] transition hover:bg-white/[0.06] hover:text-white"
               >
                 <X size={15} />
               </button>
             ) : null}
           </label>
 
-         
+          <p className="mt-2 text-center text-[11px] text-white/[0.62]">
+            Try “payment”, “package limit” or “handover”.
+          </p>
         </div>
       </section>
 
-      {/* CATEGORY NAVIGATION */}
       {!isSearching && (
         <section className="mt-9">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -265,44 +266,37 @@ export function HelpPoliciesPage() {
 
                 return (
                   <button
-                    key={
-                      category.id
-                    }
+                    key={category.id}
                     type="button"
                     onClick={() =>
                       setSelectedCategory(
                         category.id,
                       )
                     }
-                    className={`min-w-0 rounded-[18px] border p-4 text-left transition ${
+                    className={`group min-w-0 overflow-hidden rounded-[22px] border text-left transition ${
                       active
-                        ? "border-orange-500/[0.30] bg-orange-500/[0.07]"
-                        : "border-white/[0.09] bg-[#151217]/88 hover:border-white/[0.15]"
+                        ? "border-orange-500/[0.34] bg-orange-500/[0.05] shadow-[0_16px_32px_rgba(249,115,22,0.08)]"
+                        : "border-white/[0.09] bg-[#151217]/88 hover:border-white/[0.16]"
                     }`}
                   >
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                        active
-                          ? "bg-orange-500/[0.13] text-orange-300"
-                          : "bg-white/[0.04] text-white/[0.54]"
-                      }`}
-                    >
-                      {
-                        category.icon
-                      }
+                    <div className="relative h-[104px] overflow-hidden">
+                      <img
+                        src={category.image}
+                        alt={category.title}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#151217]/95" />
                     </div>
 
-                    <p className="mt-3 text-[12px] font-semibold leading-5 text-white/[0.96] sm:text-[13px]">
-                      {
-                        category.title
-                      }
-                    </p>
+                    <div className="px-4 pb-4 pt-3">
+                      <p className="text-[15px] font-bold leading-5 text-white sm:text-[16px]">
+                        {category.title}
+                      </p>
 
-                    <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-white/[0.56] sm:text-[10px]">
-                      {
-                        category.description
-                      }
-                    </p>
+                      <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-white/[0.86]">
+                        {category.description}
+                      </p>
+                    </div>
                   </button>
                 );
               },
@@ -311,25 +305,24 @@ export function HelpPoliciesPage() {
         </section>
       )}
 
-      {/* ARTICLES */}
       <section className="mx-auto mt-9 max-w-[860px]">
         <div className="mb-4">
-          <h2 className="text-[19px] font-semibold tracking-[-0.03em] text-white sm:text-[21px]">
+          <h2 className="text-[23px] font-bold tracking-[-0.035em] text-white sm:text-[26px]">
             {isSearching
               ? "Search results"
               : activeCategory?.title}
           </h2>
 
-          <p className="mt-1 text-[10px] text-white/[0.58] sm:text-[11px]">
-            {isSearching
-              ? `${visibleArticles.length} result${
-                  visibleArticles.length ===
-                  1
-                    ? ""
-                    : "s"
-                }`
-              : activeCategory?.description}
-          </p>
+          {isSearching ? (
+            <p className="mt-1 text-[12px] leading-6 text-white/[0.82]">
+              {`${visibleArticles.length} result${
+                visibleArticles.length ===
+                1
+                  ? ""
+                  : "s"
+              }`}
+            </p>
+          ) : null}
         </div>
 
         {visibleArticles.length >
@@ -341,12 +334,8 @@ export function HelpPoliciesPage() {
                 index,
               ) => (
                 <ArticleRow
-                  key={
-                    article.id
-                  }
-                  article={
-                    article
-                  }
+                  key={article.id}
+                  article={article}
                   last={
                     index ===
                     visibleArticles.length -
@@ -358,11 +347,11 @@ export function HelpPoliciesPage() {
           </div>
         ) : (
           <div className="rounded-[20px] border border-white/[0.09] bg-[#151217]/90 px-5 py-10 text-center">
-            <p className="text-[14px] font-semibold text-white">
+            <p className="text-[15px] font-semibold text-white">
               No results found
             </p>
 
-            <p className="mt-2 text-[10px] leading-5 text-white/[0.58]">
+            <p className="mt-2 text-[12px] leading-6 text-white/[0.80]">
               Try another keyword.
             </p>
 
@@ -371,7 +360,7 @@ export function HelpPoliciesPage() {
               onClick={() =>
                 setQuery("")
               }
-              className="mt-4 text-[12px] font-semibold text-orange-400"
+              className="mt-4 text-[13px] font-semibold text-orange-400"
             >
               Clear search
             </button>
@@ -379,15 +368,14 @@ export function HelpPoliciesPage() {
         )}
       </section>
 
-      {/* SMALL FOOTER HELP */}
       <section className="mx-auto mt-8 max-w-[860px] rounded-[20px] border border-white/[0.08] bg-white/[0.025] px-5 py-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[12px] font-semibold text-white/[0.92]">
+            <p className="text-[13px] font-semibold text-white">
               Need delivery pricing?
             </p>
 
-            <p className="mt-1 text-[10px] leading-5 text-white/[0.56]">
+            <p className="mt-1 text-[12px] leading-6 text-white/[0.84]">
               Compare delivery modes,
               package sizes and fees.
             </p>
@@ -395,7 +383,7 @@ export function HelpPoliciesPage() {
 
           <a
             href="/customer/pricing"
-            className="text-[12px] font-semibold text-orange-400 hover:text-orange-300"
+            className="text-[13px] font-semibold text-orange-400 hover:text-orange-300"
           >
             View pricing & services
           </a>
@@ -421,25 +409,21 @@ function ArticleRow({
           : "border-b border-white/[0.07]"
       }`}
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5 sm:py-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-[18px] sm:px-5 sm:py-5">
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold text-white/[0.94] sm:text-[13px]">
+          <p className="text-[15px] font-bold leading-6 text-white transition-colors group-open:text-orange-200 sm:text-[16px]">
             {article.title}
-          </p>
-
-          <p className="mt-1 line-clamp-1 text-[10px] text-white/[0.54]">
-            {article.summary}
           </p>
         </div>
 
         <ChevronDown
           size={16}
-          className="shrink-0 text-white/[0.48] transition-transform group-open:rotate-180 group-open:text-orange-400"
+          className="shrink-0 text-white/[0.70] transition-transform group-open:rotate-180 group-open:text-orange-400"
         />
       </summary>
 
       <div className="border-t border-white/[0.06] px-4 py-4 sm:px-5">
-        <p className="max-w-[720px] text-[11px] leading-6 text-white/[0.72]">
+        <p className="max-w-[720px] text-[13px] leading-7 text-white/[0.92]">
           {article.content}
         </p>
       </div>
