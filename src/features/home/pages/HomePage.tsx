@@ -9,20 +9,15 @@ import { PlatformSection } from "../components/PlatformSection";
 
 export function HomePage() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#050505] text-white">
+    <div className="min-h-screen scroll-smooth overflow-x-hidden bg-[#050505] text-white">
       <HomeHeader />
 
       <main>
         <HeroSection />
-
         <HorizontalDeliverySection />
-
         <DroneShowcaseSection />
-
         <HubShowcaseSection />
-
         <PlatformSection />
-
         <CTASection />
       </main>
 
