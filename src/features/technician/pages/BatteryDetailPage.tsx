@@ -7,7 +7,6 @@ import {
   BatteryCharging,
   BatteryFull,
   Box,
-  Clock3,
   Cpu,
   MapPin,
   Plane,
@@ -33,30 +32,8 @@ import {
 } from "../components/TechnicianPageShell";
 
 import {
-  useBatteryDetailQuery,
+  useBatteriesQuery,
 } from "../hooks/useBatteryQueries";
-
-function formatRemainingTime(iso?: string) {
-  if (!iso) return "—";
-
-  const readyAt = new Date(iso).getTime();
-  if (Number.isNaN(readyAt)) return "—";
-
-  const minutes = Math.max(
-    0,
-    Math.ceil((readyAt - Date.now()) / 60_000),
-  );
-
-  if (minutes <= 0) return "Ready now";
-  if (minutes < 60) return `About ${minutes} min`;
-
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-
-  return remainder > 0
-    ? `About ${hours}h ${remainder}m`
-    : `About ${hours}h`;
-}
 
 function formatDroneId(value?: string) {
   if (!value) return "—";
@@ -68,19 +45,21 @@ export function BatteryDetailPage() {
   const navigate = useNavigate();
   const { batteryId } = useParams();
 
-  const batteryQuery = useBatteryDetailQuery(
-    batteryId,
+  const batteriesQuery = useBatteriesQuery();
+
+  const battery = (batteriesQuery.data ?? []).find(
+    (item) =>
+      item.id === batteryId ||
+      item.backendId === batteryId ||
+      item.serialNumber === batteryId,
   );
-
-
-  const battery = batteryQuery.data;
 
   const detailAction = battery ? (
     <Button
       type="button"
       variant="outline"
       onClick={() =>
-        batteryQuery.refetch()
+        batteriesQuery.refetch()
       }
       className="h-10 border-[var(--tech-border)] bg-transparent px-3 text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:bg-transparent hover:text-orange-500"
       aria-label="Refresh battery details"
@@ -107,7 +86,7 @@ export function BatteryDetailPage() {
         Back to Battery management
       </button>
 
-      {batteryQuery.isPending && (
+      {batteriesQuery.isPending && (
         <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
           <CardContent className="px-6 py-14 text-center text-[14px] text-[var(--tech-muted)]">
             Loading battery details...
@@ -115,20 +94,20 @@ export function BatteryDetailPage() {
         </Card>
       )}
 
-      {batteryQuery.error instanceof Error && (
+      {batteriesQuery.error instanceof Error && (
         <div className="mb-5 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
-          {batteryQuery.error.message}
+          {batteriesQuery.error.message}
         </div>
       )}
 
-      {!batteryQuery.isPending && !battery && (
+      {!batteriesQuery.isPending && !battery && (
         <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
           <CardContent className="px-6 py-14 text-center">
             <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
               Battery not found.
             </p>
             <p className="mx-auto mt-2 max-w-[620px] text-[12px] leading-5 text-[var(--tech-muted)]">
-              Make sure this battery belongs to the Technician&apos;s managed hub and that the Backend returns it from the battery list or detail endpoint.
+              Make sure this battery belongs to the Technician&apos;s managed hub and is returned by GET /technician/fleet/batteries.
             </p>
           </CardContent>
         </Card>
@@ -146,7 +125,7 @@ export function BatteryDetailPage() {
             </span>
           </div>
 
-          <div className="mb-5 grid gap-4 md:grid-cols-3">
+          <div className="mb-5 grid gap-4 md:grid-cols-2">
             <OverviewCard
               icon={
                 battery.status === "Ready" ? (
@@ -188,23 +167,6 @@ export function BatteryDetailPage() {
                   : "—"
               }
               helper="Capacity returned by Backend"
-            />
-
-            <OverviewCard
-              icon={<Clock3 size={18} />}
-              label="Estimated full"
-              value={
-                battery.status === "Ready"
-                  ? "Ready now"
-                  : formatRemainingTime(
-                      battery.estimatedReadyAt,
-                    )
-              }
-              helper={
-                battery.status === "Ready"
-                  ? "Battery is fully charged"
-                  : "Backend charging estimate"
-              }
             />
           </div>
 
@@ -264,17 +226,6 @@ export function BatteryDetailPage() {
                     <Plane size={14} />
                   ) : undefined
                 }
-              />
-              <InfoRow
-                label="Estimated full"
-                value={
-                  battery.status === "Ready"
-                    ? "Ready now"
-                    : formatRemainingTime(
-                        battery.estimatedReadyAt,
-                      )
-                }
-                last
               />
             </InfoCard>
           </div>

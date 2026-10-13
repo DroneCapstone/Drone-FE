@@ -1,6 +1,5 @@
 import {
   getBatteriesApi,
-  getBatteryDetailApi,
   markBatteryChargedApi,
   useBatteryApi,
 } from "../api/batteryApi";
@@ -11,7 +10,6 @@ import {
   pickNumber,
   pickString,
   unwrapList,
-  unwrapObject,
 } from "../api/httpClient";
 
 export type BatteryStatus =
@@ -1041,24 +1039,9 @@ export async function refreshBatteriesFromApi() {
 export async function getBatteryDetailFromApi(
   batteryId: string,
 ) {
-  /*
-   * Prefer a dedicated detail endpoint when Backend exposes it.
-   * Until then, gracefully fall back to the existing battery-list endpoint.
-   * This lets the detail page work immediately once `model`, `created_at`,
-   * and `updated_at` are included in the list response as well.
-   */
-  try {
-    const payload = await getBatteryDetailApi(batteryId);
-    const candidate = unwrapObject(payload);
-    const mapped = mapApiBattery(candidate);
-
-    if (mapped) {
-      return mapped;
-    }
-  } catch {
-    // Fall through to the list endpoint below.
-  }
-
+  // Swagger exposes only GET /technician/fleet/batteries for Technician.
+  // Resolve detail data from that list instead of calling a non-existent
+  // GET /technician/fleet/batteries/{battery_id} endpoint.
   const batteries = await refreshBatteriesFromApi();
 
   return (
