@@ -11,16 +11,30 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Mascot } from "page-mascot";
 
 import droneDirections from "../assets/mascot/delivery-drone-directions.webp";
 import droneReactions from "../assets/mascot/delivery-drone-reactions.webp";
 
+import {
+  CustomerChatbotApiError,
+  getCustomerQuickQuestions,
+  getStoredConversationId,
+  saveCreateDeliveryPrefill,
+  sendCustomerChatMessage,
+  storeConversationId,
+} from "../features/customer/chatbot/customerChatbotService";
+import type {
+  CustomerChatbotAction,
+  QuickQuestion,
+} from "../features/customer/chatbot/customerChatbot.types";
+
 type ChatMessage = {
   id: string;
   role: "assistant" | "user";
   content: string;
+  actions?: CustomerChatbotAction[];
 };
 
 type Position = {
@@ -42,11 +56,27 @@ type PointerStart = {
   moved: boolean;
 };
 
-const QUICK_ACTIONS = [
-  "Track my delivery",
-  "Payment help",
-  "Create a delivery",
-  "Handover instructions",
+const FALLBACK_QUICK_QUESTIONS: QuickQuestion[] = [
+  {
+    id: "track_delivery",
+    title: "Track my delivery",
+    prompt: "Track my latest delivery",
+  },
+  {
+    id: "payment_help",
+    title: "Payment help",
+    prompt: "Help me with payment for my delivery",
+  },
+  {
+    id: "create_delivery",
+    title: "Create a delivery",
+    prompt: "How do I create a delivery?",
+  },
+  {
+    id: "handover",
+    title: "Handover instructions",
+    prompt: "Explain package handover instructions",
+  },
 ];
 
 const POSITION_STORAGE_KEY =
@@ -70,12 +100,19 @@ const SNAP_DURATION = 220;
 
 export function DroneAssistantWidget() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const [mascotSize, setMascotSize] = useState(112);
 
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [quickQuestions, setQuickQuestions] = useState<QuickQuestion[]>([]);
+  const [quickQuestionsLoaded, setQuickQuestionsLoaded] = useState(false);
+  const [conversationId, setConversationId] = useState(() =>
+    getStoredConversationId(),
+  );
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const [position, setPosition] =
     useState<Position | null>(null);
@@ -117,6 +154,9 @@ export function DroneAssistantWidget() {
 
   const snapTimerRef =
     useRef<number | null>(null);
+
+  const chatRequestAbortRef =
+    useRef<AbortController | null>(null);
 
   /* =======================================================
      RESPONSIVE SIZE
@@ -275,6 +315,63 @@ export function DroneAssistantWidget() {
   }, [messages, isTyping]);
 
   /* =======================================================
+     CHATBOT QUICK QUESTIONS
+  ======================================================== */
+
+  useEffect(() => {
+    if (!open || quickQuestionsLoaded) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    getCustomerQuickQuestions(controller.signal)
+      .then((questions) => {
+        setQuickQuestions(questions);
+      })
+      .catch((error) => {
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.error(
+          "[DroneAssistantWidget] Failed to load quick questions:",
+          error,
+        );
+      })
+      .finally(() => {
+        setQuickQuestionsLoaded(true);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [open, quickQuestionsLoaded]);
+
+  /* =======================================================
+     RATE LIMIT COUNTDOWN
+  ======================================================== */
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((current) =>
+        Math.max(0, current - 1),
+      );
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [cooldownSeconds]);
+
+  /* =======================================================
      CLEANUP
   ======================================================== */
 
@@ -285,6 +382,8 @@ export function DroneAssistantWidget() {
           snapTimerRef.current,
         );
       }
+
+      chatRequestAbortRef.current?.abort();
     };
   }, []);
 
@@ -498,37 +597,27 @@ export function DroneAssistantWidget() {
   }
 
   /* =======================================================
-     CHAT
+     CHAT — BACKEND API v1.1
   ======================================================== */
 
-  function appendAssistantReply(
-    userText: string,
-  ) {
-    setIsTyping(true);
-
-    window.setTimeout(() => {
-      const reply =
-        getAssistantReply(userText);
-
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-
-      setIsTyping(false);
-    }, 500);
-  }
-
-  function sendMessage(text: string) {
+  async function sendMessage(text: string) {
     const value = text.trim();
 
-    if (!value || isTyping) {
+    if (
+      !value ||
+      isTyping ||
+      cooldownSeconds > 0
+    ) {
       return;
     }
+
+    const history = messages
+      .filter((message) => message.id !== "welcome-1")
+      .slice(-10)
+      .map((message) => ({
+        role: message.role === "assistant" ? "model" as const : "user" as const,
+        content: message.content,
+      }));
 
     setMessages((previous) => [
       ...previous,
@@ -540,7 +629,174 @@ export function DroneAssistantWidget() {
     ]);
 
     setInput("");
-    appendAssistantReply(value);
+    setIsTyping(true);
+
+    chatRequestAbortRef.current?.abort();
+    const controller = new AbortController();
+    chatRequestAbortRef.current = controller;
+
+    try {
+      const response = await sendCustomerChatMessage(
+        {
+          message: value,
+          conversation_id: conversationId || null,
+          history,
+        },
+        controller.signal,
+      );
+
+      if (response.conversation_id) {
+        setConversationId(response.conversation_id);
+        storeConversationId(response.conversation_id);
+      }
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `${Date.now()}-assistant`,
+          role: "assistant",
+          content:
+            response.reply ||
+            "DroneOptAI Assistant did not return a reply.",
+          actions: response.actions,
+        },
+      ]);
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError"
+      ) {
+        return;
+      }
+
+      if (error instanceof CustomerChatbotApiError) {
+        if (
+          error.status === 429 ||
+          error.code === "CHAT_RATE_LIMITED"
+        ) {
+          const retrySeconds = Math.max(
+            1,
+            error.retryAfterSeconds ?? 30,
+          );
+
+          setCooldownSeconds(retrySeconds);
+
+          setMessages((previous) => [
+            ...previous,
+            {
+              id: `${Date.now()}-assistant-error`,
+              role: "assistant",
+              content:
+                error.message ||
+                `The assistant is busy. Please try again in ${retrySeconds} seconds.`,
+            },
+          ]);
+
+          return;
+        }
+
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: `${Date.now()}-assistant-error`,
+            role: "assistant",
+            content:
+              error.message ||
+              "I could not connect to DroneOptAI services. Please try again.",
+          },
+        ]);
+
+        return;
+      }
+
+      console.error(
+        "[DroneAssistantWidget] Chat request failed:",
+        error,
+      );
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `${Date.now()}-assistant-error`,
+          role: "assistant",
+          content:
+            "I could not connect to DroneOptAI services. Please try again.",
+        },
+      ]);
+    } finally {
+      if (chatRequestAbortRef.current === controller) {
+        chatRequestAbortRef.current = null;
+      }
+
+      setIsTyping(false);
+    }
+  }
+
+  function handleAssistantAction(
+    action: CustomerChatbotAction,
+  ) {
+    const payload = action.payload ?? {};
+
+    if (action.type === "CREATE_DELIVERY") {
+      saveCreateDeliveryPrefill(action.payload);
+      setOpen(false);
+      navigate(
+        "/customer/deliveries/create?new=1&from=chatbot",
+      );
+      return;
+    }
+
+    if (action.type === "OPEN_PRICING") {
+      setOpen(false);
+      navigate("/customer/pricing");
+      return;
+    }
+
+    if (action.type === "OPEN_NOTIFICATIONS") {
+      setOpen(false);
+      navigate("/customer/notifications");
+      return;
+    }
+
+    if (action.type === "LOGIN_REQUIRED") {
+      setOpen(false);
+      navigate("/login");
+      return;
+    }
+
+    const orderId =
+      readActionValue(payload, "order_id") ||
+      readActionValue(payload, "order_code") ||
+      getLastPathSegment(action.href);
+
+    if (action.type === "OPEN_ORDER_TRACKING" && orderId) {
+      setOpen(false);
+      navigate(
+        `/customer/deliveries/${encodeURIComponent(orderId)}`,
+      );
+      return;
+    }
+
+    if (action.type === "OPEN_PAYMENT" && orderId) {
+      setOpen(false);
+      navigate(
+        `/customer/payment/${encodeURIComponent(orderId)}`,
+      );
+      return;
+    }
+
+    if (action.href) {
+      if (/^https?:\/\//i.test(action.href)) {
+        window.open(
+          action.href,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      } else {
+        setOpen(false);
+        navigate(action.href);
+      }
+    }
   }
 
   /* =======================================================
@@ -657,9 +913,26 @@ export function DroneAssistantWidget() {
                             : "border border-white/[0.08] bg-white/[0.03] text-white/[0.86]"
                         }`}
                       >
-                        {
-                          message.content
-                        }
+                        {message.content}
+
+                        {message.role === "assistant" &&
+                          message.actions &&
+                          message.actions.length > 0 && (
+                            <div className="mt-2.5 flex flex-wrap gap-2 border-t border-white/[0.07] pt-2.5">
+                              {message.actions.map((action, index) => (
+                                <button
+                                  key={`${action.type}-${index}`}
+                                  type="button"
+                                  onClick={() =>
+                                    handleAssistantAction(action)
+                                  }
+                                  className="rounded-full border border-orange-500/[0.25] bg-orange-500/[0.08] px-2.5 py-1 text-[11px] font-medium text-orange-300 transition hover:bg-orange-500/[0.14]"
+                                >
+                                  {action.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                       </div>
                     </div>
                   ),
@@ -683,28 +956,37 @@ export function DroneAssistantWidget() {
 
             <div className="border-t border-white/[0.08] px-4 py-3">
               <div className="mb-3 flex flex-wrap gap-2">
-                {QUICK_ACTIONS.map(
-                  (action) => (
-                    <button
-                      key={action}
-                      type="button"
-                      onClick={() =>
-                        sendMessage(
-                          action,
-                        )
-                      }
-                      className="rounded-full border border-white/[0.09] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/[0.68] transition hover:border-orange-500/[0.35] hover:text-white"
-                    >
-                      {action}
-                    </button>
-                  ),
-                )}
+                {(quickQuestions.length > 0
+                  ? quickQuestions
+                  : FALLBACK_QUICK_QUESTIONS
+                ).map((question) => (
+                  <button
+                    key={question.id}
+                    type="button"
+                    onClick={() =>
+                      void sendMessage(question.prompt)
+                    }
+                    disabled={
+                      isTyping ||
+                      cooldownSeconds > 0
+                    }
+                    className="rounded-full border border-white/[0.09] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/[0.68] transition hover:border-orange-500/[0.35] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {question.title}
+                  </button>
+                ))}
               </div>
+
+              {cooldownSeconds > 0 && (
+                <p className="mb-2 text-[11px] text-amber-300/[0.82]">
+                  Assistant is busy. Try again in {cooldownSeconds}s.
+                </p>
+              )}
 
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  sendMessage(input);
+                  void sendMessage(input);
                 }}
                 className="flex items-end gap-2"
               >
@@ -716,7 +998,15 @@ export function DroneAssistantWidget() {
                     )
                   }
                   rows={1}
-                  placeholder="Ask about your delivery..."
+                  placeholder={
+                    cooldownSeconds > 0
+                      ? `Try again in ${cooldownSeconds}s`
+                      : "Ask about your delivery..."
+                  }
+                  disabled={
+                    isTyping ||
+                    cooldownSeconds > 0
+                  }
                   className="
                     max-h-[120px]
                     min-h-[44px]
@@ -741,7 +1031,8 @@ export function DroneAssistantWidget() {
                   type="submit"
                   disabled={
                     !input.trim() ||
-                    isTyping
+                    isTyping ||
+                    cooldownSeconds > 0
                   }
                   className="
                     inline-flex
@@ -1036,55 +1327,32 @@ function getChatPosition(
   };
 }
 
-/* =========================================================
-   DEMO CHAT REPLIES
-========================================================= */
-
-function getAssistantReply(
-  text: string,
+function readActionValue(
+  payload: Record<string, unknown>,
+  key: string,
 ) {
-  const normalized =
-    text.toLowerCase();
+  const value = payload[key];
 
   if (
-    normalized.includes("track") ||
-    normalized.includes(
-      "delivery status",
-    ) ||
-    normalized.includes("where is")
+    typeof value === "string" ||
+    typeof value === "number"
   ) {
-    return "You can track your delivery from Customer > Deliveries. Open an order to view its latest progress, hub status and estimated arrival.";
+    return String(value);
   }
 
-  if (
-    normalized.includes("payment") ||
-    normalized.includes("pay")
-  ) {
-    return "For payment support, go to your delivery details or the payment page. Pending payments must be completed before package handover can continue.";
+  return "";
+}
+
+function getLastPathSegment(
+  href?: string | null,
+) {
+  if (!href) {
+    return "";
   }
 
-  if (
-    normalized.includes("create") ||
-    normalized.includes(
-      "new delivery",
-    )
-  ) {
-    return "To create a new delivery, open Customer > Create delivery. You will fill in sender, recipient, package details, route and schedule.";
-  }
+  const segments = href
+    .split("/")
+    .filter(Boolean);
 
-  if (
-    normalized.includes(
-      "handover",
-    ) ||
-    normalized.includes(
-      "bring package",
-    ) ||
-    normalized.includes(
-      "origin hub",
-    )
-  ) {
-    return "After payment is confirmed, please bring your package to the selected origin hub before the handover deadline shown in your order.";
-  }
-
-  return "I can help with delivery tracking, payment, package handover and creating a delivery. Try one of the quick actions below.";
+  return segments[segments.length - 1] ?? "";
 }
