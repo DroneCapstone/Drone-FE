@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, RouteOption, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteOption, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -105,6 +105,7 @@ export interface CreateMissionInput {
   orderId: string;
   droneId: string;
   routeId: string;
+  batteryPlanId?: string;
 }
 
 export interface AnalyzeMissionPlanningInput {
@@ -473,6 +474,39 @@ function mapIncident(raw: unknown): OperatorIncident {
   };
 }
 
+/** Unknown is deliberately different from false, especially for relay validation. */
+function pickOptionalBoolean(record: Record<string, unknown>, keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    if (record[key] === true || record[key] === 'true') return true;
+    if (record[key] === false || record[key] === 'false') return false;
+  }
+  return undefined;
+}
+
+function mapRouteLeg(raw: unknown): PlannedRouteLeg {
+  const record = asRecord(raw);
+  return {
+    fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']),
+    toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']),
+    predictedEnergyWh: pickOptionalNumber(record, ['predicted_energy_wh', 'predictedEnergyWh']),
+    endingSocPct: pickOptionalNumber(record, ['ending_soc_pct', 'endingSocPct', 'battery_after_pct', 'batteryAfterPct']),
+    minimumReservePct: pickOptionalNumber(record, ['minimum_reserve_pct', 'minimumReservePct']),
+    feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
+  };
+}
+
+function mapRelayBattery(raw: unknown): PlannedRelayBattery {
+  const record = asRecord(raw);
+  return {
+    hubId: pickString(record, ['hub_id', 'hubId', 'relay_hub_id', 'relayHubId']),
+    batteryModel: pickString(record, ['battery_model', 'batteryModel']) || undefined,
+    requiredBatteryCount: pickOptionalNumber(record, ['required_battery_count', 'requiredBatteryCount']),
+    availableBatteryCount: pickOptionalNumber(record, ['available_battery_count', 'availableBatteryCount']),
+    batteryIds: pickArray(record, ['battery_ids', 'batteryIds']).map(String),
+    ready: pickOptionalBoolean(record, ['ready', 'verified', 'is_ready', 'isReady']),
+  };
+}
+
 function mapRouteOption(raw: unknown, index: number): RouteOption {
   const record = asRecord(raw);
   const relayHubIds = pickArray(record, ['relay_hub_ids', 'relayHubIds', 'relay_hubs', 'relayHubs']).map((item) => {
@@ -494,6 +528,10 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     weatherImpact: pickString(record, ['weather_impact', 'weatherImpact'], 'Backend weather assessment'),
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
+    feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
+    legs: pickArray(record, ['legs', 'route_legs', 'routeLegs']).map(mapRouteLeg),
+    relayBatteryPlan: pickArray(record, ['relay_battery_plan', 'relayBatteryPlan']).map(mapRelayBattery),
+    batteryPlanId: pickString(record, ['battery_plan_id', 'batteryPlanId']) || undefined,
     recommended: pickBoolean(record, ['recommended', 'is_recommended', 'isRecommended']),
     recommendationReasons: reasons,
     tradeOff: pickString(record, ['trade_off', 'tradeOff'], ''),
@@ -765,6 +803,7 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
       orderId: input.orderId,
       droneId: numericDroneId,
       routeId: input.routeId,
+      ...(input.batteryPlanId ? { batteryPlanId: input.batteryPlanId } : {}),
     }),
   });
   return mapMission(payload);

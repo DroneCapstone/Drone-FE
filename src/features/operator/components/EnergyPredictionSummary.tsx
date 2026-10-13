@@ -14,6 +14,7 @@ export function EnergyPredictionSummary({
   estimatedArrivalAt?: Date;
 }) {
   const { remainingBattery, feasible } = getEnergyFeasibility(route);
+  const hasRelay = Boolean(route.relayHubIds?.length);
 
   return (
     <div className="energy-summary">
@@ -21,13 +22,13 @@ export function EnergyPredictionSummary({
         <span className="energy-summary-icon"><Icon name="battery" size={18} /></span>
         <div><small>Predicted energy</small><strong>{route.predictedEnergyWh.toFixed(1)} Wh</strong></div>
         <StatusBadge tone={feasible ? 'success' : 'danger'}>
-          {feasible ? `${route.confidencePct}% confidence` : 'Insufficient reserve'}
+          {feasible ? `${route.confidencePct}% confidence` : hasRelay ? 'Relay plan unverified' : 'Insufficient reserve'}
         </StatusBadge>
       </div>
 
       <div className="energy-summary-grid">
-        <span><small>Predicted battery use</small><strong>{route.batteryConsumptionPct}%</strong></span>
-        <span><small>Expected remaining</small><strong>{remainingBattery}%</strong></span>
+        <span><small>Predicted battery use</small><strong>{hasRelay ? 'Per leg' : `${route.batteryConsumptionPct}%`}</strong></span>
+        <span><small>Expected remaining</small><strong>{Number.isFinite(remainingBattery) ? `${remainingBattery}%` : '—'}</strong></span>
         <span><small>Minimum reserve</small><strong>{DEFAULT_BATTERY_RESERVE_PCT}%</strong></span>
         {plannedStartAt && <span><small>Planned start</small><strong>{formatMissionTime(plannedStartAt)}</strong></span>}
         {estimatedArrivalAt && <span><small>Estimated arrival</small><strong>{formatMissionTime(estimatedArrivalAt)}</strong></span>}

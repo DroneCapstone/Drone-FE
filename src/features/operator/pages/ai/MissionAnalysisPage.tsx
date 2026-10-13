@@ -163,7 +163,7 @@ export function MissionAnalysisPage() {
               <span><small>Predicted duration</small><strong>{route.predictedDurationMin} min</strong></span>
               <span><small>Confidence</small><strong>{route.confidencePct}%</strong></span>
               <span><small>Risk</small><strong>{route.risk}</strong></span>
-              <span><small>Battery after</small><strong>{energy ? `${energy.remainingBattery}%` : '—'}</strong></span>
+              <span><small>Battery after</small><strong>{energy && Number.isFinite(energy.remainingBattery) ? `${energy.remainingBattery}%` : '—'}</strong></span>
             </div>
           </OperatorPanel>
           {/* Order eyebrow hidden by request. */}
@@ -196,7 +196,7 @@ export function MissionAnalysisPage() {
                     <span><strong>{candidate.id} {candidate.name}</strong><small>{candidate.recommended ? 'AI recommended' : candidate.tradeOff}</small></span>
                     <span><small>Duration</small><strong>{candidate.predictedDurationMin} min</strong></span>
                     <span><small>Energy</small><strong>{candidate.predictedEnergyWh.toFixed(1)} Wh</strong></span>
-                    <span><small>Battery after</small><strong>{candidateEnergy ? `${candidateEnergy.remainingBattery}%` : '—'}</strong></span>
+                    <span><small>Battery after</small><strong>{candidateEnergy && Number.isFinite(candidateEnergy.remainingBattery) ? `${candidateEnergy.remainingBattery}%` : '—'}</strong></span>
                     <StatusBadge tone={riskTone(candidate.risk)}>{candidate.risk} risk</StatusBadge>
                   </button>
                 );
