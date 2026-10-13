@@ -1,7 +1,6 @@
 import {
   confirmMissionArrivalApi,
   getIncomingMissionsApi,
-  getTechnicianMissionsApi,
 } from "../api/transitApi";
 
 import {
@@ -27,6 +26,10 @@ export type TransitMissionPurpose =
 export type TransitMission = {
   id: string;
 
+  /** Backend mission_id used for API actions. Keep this separate from missionId, which is only the display code. */
+  backendMissionId: string | null;
+
+  /** Human-readable mission code shown in the UI, e.g. MSN-20261007-0004. */
   missionId: string;
   legId: string;
 
@@ -117,6 +120,7 @@ let demoTransitMissions:
   {
     id: "TM-1024",
 
+    backendMissionId: null,
     missionId: "MS-1024",
     legId: "LEG-1024-02",
 
@@ -152,6 +156,7 @@ let demoTransitMissions:
   {
     id: "TM-1034",
 
+    backendMissionId: null,
     missionId: "MS-1034",
     legId: "LEG-1034-RETURN",
 
@@ -187,6 +192,7 @@ let demoTransitMissions:
   {
     id: "TM-1040",
 
+    backendMissionId: null,
     missionId: "MS-1040",
     legId: "LEG-1040-INCIDENT",
 
@@ -321,13 +327,30 @@ function displayId(prefix: string, value: string, width = 4) {
 function mapApiTransitMission(value: unknown): TransitMission | null {
   if (!isRecord(value)) return null;
 
-  // /technician/missions/ returns mission_code, while /fleet/incoming
-  // may return mission_id/id. Support all variants so Transit Missions can
-  // consume the real Backend payload instead of depending on one shape.
-  const missionRaw = pickString(
+  // Swagger source of truth is GET /technician/fleet/incoming.
+  // Keep the backend mission_id separate from the human-readable mission_code:
+  // - backendMissionId -> API actions such as confirm-arrival / battery use
+  // - missionId        -> display/search only
+  const backendMissionIdRaw = pickString(
     value,
-    ["mission_code", "mission_id", "missionId", "id"],
-  );
+    ["mission_id", "missionId"],
+    "",
+  ).trim();
+
+  const missionCodeRaw = pickString(
+    value,
+    ["mission_code", "missionCode", "code"],
+    "",
+  ).trim();
+
+  const fallbackRowId = pickString(
+    value,
+    ["id"],
+    "",
+  ).trim();
+
+  const missionRaw =
+    missionCodeRaw || backendMissionIdRaw || fallbackRowId;
 
   if (!missionRaw) return null;
 
@@ -348,7 +371,10 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     rawDroneCode.match(/(\d+)$/)?.[1] ||
     "0";
 
-  const missionId = displayId("MSN", missionRaw);
+  const backendMissionId = backendMissionIdRaw || null;
+  const missionId = missionCodeRaw
+    ? missionCodeRaw
+    : displayId("MSN", missionRaw);
   const droneId = displayId("DR", derivedDroneId, 3);
   const droneType = (
     rawDroneCode.match(/[A-Za-z]+/)?.[0] ??
@@ -375,6 +401,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   return {
     id: pickString(value, ["transit_id", "id"], `TM-${missionRaw}`),
+    backendMissionId,
     missionId,
     legId: pickString(
       value,
@@ -436,51 +463,19 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 }
 
 export async function refreshTransitMissionsFromApi() {
-  // Transit Missions needs both missions still approaching the hub and missions
-  // already at the hub. The Backend /technician/missions/ endpoint currently
-  // returns that state (mission_code, mission_state, handling_status), while
-  // /fleet/incoming can be empty because it only represents the narrower
-  // incoming-fleet queue. Merge both responses and let the incoming payload
-  // override a mission when it contains richer arrival data.
-  const [missionsResult, incomingResult] = await Promise.allSettled([
-    getTechnicianMissionsApi(),
-    getIncomingMissionsApi(),
-  ]);
+  // Swagger source of truth for Technician Transit Missions:
+  // GET /api/v1/technician/fleet/incoming
+  // Do not call the removed /api/v1/technician/missions/ route here.
+  const payload = await getIncomingMissionsApi();
 
-  const merged = new Map<string, TransitMission>();
+  demoTransitMissions = unwrapList(payload)
+    .map(mapApiTransitMission)
+    .filter((item): item is TransitMission => Boolean(item));
 
-  const addPayload = (payload: unknown) => {
-    unwrapList(payload)
-      .map(mapApiTransitMission)
-      .filter((item): item is TransitMission => Boolean(item))
-      .forEach((mission) => {
-        merged.set(mission.missionId, {
-          ...(merged.get(mission.missionId) ?? {}),
-          ...mission,
-        } as TransitMission);
-      });
-  };
+  window.dispatchEvent(
+    new Event("technician-transit-missions-updated"),
+  );
 
-  if (missionsResult.status === "fulfilled") {
-    addPayload(missionsResult.value);
-  }
-
-  if (incomingResult.status === "fulfilled") {
-    addPayload(incomingResult.value);
-  }
-
-  if (merged.size === 0) {
-    if (missionsResult.status === "rejected") {
-      throw missionsResult.reason;
-    }
-
-    if (incomingResult.status === "rejected") {
-      throw incomingResult.reason;
-    }
-  }
-
-  demoTransitMissions = [...merged.values()];
-  window.dispatchEvent(new Event("technician-transit-missions-updated"));
   return loadTransitMissions();
 }
 

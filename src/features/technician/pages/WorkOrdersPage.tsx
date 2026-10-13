@@ -333,6 +333,7 @@ export function WorkOrdersPage() {
     );
 
   const openCreateModal = () => {
+    setApiError("");
     setForm(initialForm);
     setCreateModalOpen(true);
   };
@@ -1032,9 +1033,8 @@ export function WorkOrdersPage() {
                   </Field>
 
                   <Field label="Test battery ID">
-                    <input
+                    <select
                       required
-                      list="maintenance-test-battery-options"
                       value={form.batteryId}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -1042,17 +1042,24 @@ export function WorkOrdersPage() {
                           batteryId: event.target.value,
                         }))
                       }
-                      placeholder="BAT-001"
                       className="tech-control h-10 w-full px-3 !text-[14px]"
-                    />
-
-                    <datalist id="maintenance-test-battery-options">
+                    >
+                      <option value="">
+                        {batteriesQuery.isPending
+                          ? "Loading Ready batteries..."
+                          : "Select a Ready battery"}
+                      </option>
                       {readyBatteries.map((battery) => (
                         <option key={battery.id} value={battery.id}>
-                          {battery.id} · {battery.chargeLevelPct}% · Ready
+                          {battery.id} · {battery.chargeLevelPct}% · {battery.model ?? "Model not provided"}
                         </option>
                       ))}
-                    </datalist>
+                    </select>
+                    {!batteriesQuery.isPending && readyBatteries.length === 0 && (
+                      <p className="mt-1 text-[11px] text-orange-500">
+                        No Ready battery is available at this hub.
+                      </p>
+                    )}
                   </Field>
                 </div>
 
@@ -1111,9 +1118,17 @@ export function WorkOrdersPage() {
 
                 <Button
                   type="submit"
-                  className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
+                  disabled={
+                    createWorkOrderMutation.isPending ||
+                    !form.droneId.trim() ||
+                    !form.batteryId.trim() ||
+                    !form.title.trim()
+                  }
+                  className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Create work order
+                  {createWorkOrderMutation.isPending
+                    ? "Creating..."
+                    : "Create work order"}
                 </Button>
               </div>
             </form>
