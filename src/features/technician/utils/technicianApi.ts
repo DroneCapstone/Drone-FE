@@ -107,7 +107,7 @@ export async function technicianApiRequest<T = unknown>(
     response = await execute(accessToken);
   } catch (error) {
     throw new TechnicianApiError(
-      "Unable to reach Backend. Check the API URL, Backend availability, or CORS configuration for this endpoint.",
+      `Unable to reach Backend for ${String(init.method ?? "GET").toUpperCase()} ${path}. If other Technician requests work but this one is shown as a CORS error, Backend must allow this method/preflight and return CORS headers even on error responses.`,
       0,
       error,
     );
@@ -539,8 +539,13 @@ export const getDroneMaintenanceHistoryApi = (
 // Technician missions
 // ---------------------------------------------------------------------------
 
+/**
+ * Swagger exposes the shared mission list at GET /api/v1/missions/.
+ * Keep this compatibility helper name because Outbound/Confirmation mapping
+ * still imports it, but do not call the removed /technician/missions/ route.
+ */
 export const getTechnicianMissionsApi = () =>
-  technicianApiRequest("/technician/missions/");
+  technicianApiRequest("/missions/");
 
 // ---------------------------------------------------------------------------
 // Technician AI predictions
@@ -574,14 +579,6 @@ export const confirmMissionArrivalApi = (
 export const getBatteriesApi = () =>
   technicianApiRequest("/technician/fleet/batteries");
 
-export const getBatteryDetailApi = (
-  batteryId: string | number,
-) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/batteries/${id}`,
-    batteryId,
-  );
-
 export const useBatteryApi = (
   batteryId: string | number,
   missionId: string | number,
@@ -592,7 +589,7 @@ export const useBatteryApi = (
     {
       method: "POST",
       body: JSON.stringify({
-        mission_id: toBackendNumericId(missionId),
+        mission_id: String(missionId),
       }),
     },
   );

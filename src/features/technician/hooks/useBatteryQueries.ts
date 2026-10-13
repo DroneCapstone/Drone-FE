@@ -43,7 +43,8 @@ export function useBatteryDetailQuery(
     // automatically reflects charge/status changes without a manual
     // "Mark fully charged" action.
     refetchInterval: 15_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 

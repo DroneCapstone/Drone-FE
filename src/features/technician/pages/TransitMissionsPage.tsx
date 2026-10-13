@@ -8,6 +8,7 @@ import {
 import {
   ArrowRight,
   BatteryCharging,
+  ChevronDown,
   Check,
   CircleAlert,
   Clock3,
@@ -72,7 +73,8 @@ import {
 } from "../utils/batteryStorage";
 
 import {
-  useFirstReadyBatteryMutation,
+  useBatteriesQuery,
+  useBatteryMutation,
 } from "../hooks/useBatteryQueries";
 
 type TransitFilter =
@@ -228,8 +230,11 @@ export function TransitMissionsPage() {
   const confirmArrivalMutation =
     useConfirmTransitArrivalMutation();
 
-  const readyBatteryMutation =
-    useFirstReadyBatteryMutation();
+  const batteriesQuery =
+    useBatteriesQuery();
+
+  const batteryUseMutation =
+    useBatteryMutation();
 
   const [
     missions,
@@ -298,6 +303,11 @@ export function TransitMissionsPage() {
     setHistoryOpen,
   ] = useState(false);
 
+  const [
+    openBatteryDropdownMissionId,
+    setOpenBatteryDropdownMissionId,
+  ] = useState<string | null>(null);
+
   const selectedMission =
     selectedMissionId
       ? missions.find(
@@ -306,6 +316,13 @@ export function TransitMissionsPage() {
             selectedMissionId,
         ) ?? null
       : null;
+
+  const readyBatteries =
+    (batteriesQuery.data ?? []).filter(
+      (battery) =>
+        battery.status === "Ready" &&
+        battery.chargeLevelPct >= 100,
+    );
 
   const persistMissions = (
     next: TransitMission[],
@@ -476,9 +493,18 @@ export function TransitMissionsPage() {
   const confirmArrival = async (
     mission: TransitMission,
   ) => {
+    if (mission.backendMissionId === null) {
+      pushActionMessage(
+        `${getMissionDisplayId(
+          mission.missionId,
+        )} is missing backend mission_id. Confirm Arrival cannot be sent until /technician/fleet/incoming returns mission_id.`,
+      );
+      return;
+    }
+
     try {
       await confirmArrivalMutation.mutateAsync(
-        mission.missionId,
+        mission.backendMissionId,
       );
 
       if (mission.purpose !== "BATTERY_STOP") {
@@ -507,28 +533,35 @@ export function TransitMissionsPage() {
 
   const replaceBattery = async (
     mission: TransitMission,
+    batteryId: string,
   ) => {
     if (mission.purpose !== "BATTERY_STOP") return;
+    if (!batteryId) return;
+
+    const selectedBattery = readyBatteries.find(
+      (battery) => battery.id === batteryId,
+    );
+
+    if (!selectedBattery) {
+      pushActionMessage(
+        "The selected battery is no longer Ready. Refresh the battery list and choose another battery.",
+      );
+      return;
+    }
 
     try {
-      const readyBattery = await readyBatteryMutation.mutateAsync(
-        mission.missionId,
-      );
-
-      if (!readyBattery) {
-        pushActionMessage(
-          "No fully charged battery is available at this hub.",
-        );
-        return;
-      }
+      await batteryUseMutation.mutateAsync({
+        batteryId: selectedBattery.id,
+        missionId: mission.missionId,
+      });
 
       persistMissions(
         missions.map((item) =>
           item.id === mission.id
             ? {
                 ...item,
-                batteryId: readyBattery.id,
-                batteryLevelPct: 100,
+                batteryId: selectedBattery.id,
+                batteryLevelPct: selectedBattery.chargeLevelPct,
                 batteryServiceRequired: false,
                 status: "Ready" as const,
               }
@@ -536,12 +569,12 @@ export function TransitMissionsPage() {
         ),
       );
 
-
       pushActionMessage(
-        `${readyBattery.id} at 100% was assigned to ${getMissionDisplayId(
+        `${selectedBattery.id} was assigned to ${getMissionDisplayId(
           mission.missionId,
-        )}. Mission is ready to dispatch.`,
+        )}.`,
       );
+      setOpenBatteryDropdownMissionId(null);
     } catch (error) {
       pushActionMessage(
         error instanceof Error
@@ -1031,7 +1064,7 @@ export function TransitMissionsPage() {
       )}
 
       {/* SEARCH + FILTER + ACTIVE MISSIONS */}
-      <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+      <Card className="overflow-visible rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[320px] flex-1">
             <Search
@@ -1239,7 +1272,18 @@ export function TransitMissionsPage() {
                               mission,
                             )
                           }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
+                          disabled={
+                            mission.backendMissionId ===
+                              null ||
+                            confirmArrivalMutation.isPending
+                          }
+                          title={
+                            mission.backendMissionId ===
+                            null
+                              ? "Backend response is missing mission_id"
+                              : undefined
+                          }
+                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Check
                             size={14}
@@ -1253,20 +1297,100 @@ export function TransitMissionsPage() {
                         mission.status ===
                           "At Hub" &&
                         mission.batteryServiceRequired && (
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              replaceBattery(
-                                mission,
-                              )
-                            }
-                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                          >
-                            <BatteryCharging
-                              size={14}
-                            />
-                            Replace battery
-                          </Button>
+                          <div className="relative inline-flex shrink-0">
+                            <Button
+                              type="button"
+                              onClick={() =>
+                                setOpenBatteryDropdownMissionId(
+                                  (current) =>
+                                    current === mission.id
+                                      ? null
+                                      : mission.id,
+                                )
+                              }
+                              disabled={
+                                batteriesQuery.isPending ||
+                                batteryUseMutation.isPending ||
+                                readyBatteries.length === 0
+                              }
+                              aria-expanded={
+                                openBatteryDropdownMissionId ===
+                                mission.id
+                              }
+                              aria-haspopup="listbox"
+                              aria-label={`Replace battery for ${getMissionDisplayId(
+                                mission.missionId,
+                              )}`}
+                              title={
+                                readyBatteries.length === 0
+                                  ? "No Ready battery available"
+                                  : "Choose a Ready battery"
+                              }
+                              className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <BatteryCharging size={14} />
+                              {batteryUseMutation.isPending
+                                ? "Replacing..."
+                                : "Replace battery"}
+                              <ChevronDown
+                                size={13}
+                                className={`transition-transform ${
+                                  openBatteryDropdownMissionId ===
+                                  mission.id
+                                    ? "rotate-180"
+                                    : ""
+                                }`}
+                              />
+                            </Button>
+
+                            {openBatteryDropdownMissionId ===
+                              mission.id && (
+                              <div
+                                role="listbox"
+                                aria-label={`Ready batteries for ${getMissionDisplayId(
+                                  mission.missionId,
+                                )}`}
+                                className="absolute right-0 top-[calc(100%+6px)] z-50 max-h-64 min-w-[230px] overflow-y-auto rounded-md border border-zinc-700 bg-[#121419] p-1.5 shadow-xl"
+                              >
+                                {readyBatteries.map((battery) => (
+                                  <button
+                                    key={battery.id}
+                                    type="button"
+                                    role="option"
+                                    onClick={() =>
+                                      void replaceBattery(
+                                        mission,
+                                        battery.id,
+                                      )
+                                    }
+                                    disabled={
+                                      batteryUseMutation.isPending
+                                    }
+                                    className="flex w-full items-center justify-between gap-4 rounded px-3 py-2 text-left hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-[12px] font-semibold text-zinc-100">
+                                        {battery.id}
+                                      </span>
+                                      <span className="block truncate text-[10px] text-zinc-500">
+                                        {battery.model ||
+                                          "Model not provided"}
+                                      </span>
+                                    </span>
+
+                                    <span className="shrink-0 text-right">
+                                      <span className="block text-[11px] font-semibold text-orange-500">
+                                        {battery.chargeLevelPct}%
+                                      </span>
+                                      <span className="block text-[9px] text-zinc-500">
+                                        Ready
+                                      </span>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
 
                       {mission.purpose ===
@@ -1587,6 +1711,22 @@ export function TransitMissionsPage() {
                   <DetailField
                     label="Mission"
                     value={getMissionDisplayId(selectedMission.missionId)}
+                  />
+
+                  <DetailField
+                    label="Backend mission ID"
+                    value={
+                      selectedMission.backendMissionId !==
+                      null
+                        ? String(
+                            selectedMission.backendMissionId,
+                          )
+                        : "Not provided"
+                    }
+                    danger={
+                      selectedMission.backendMissionId ===
+                      null
+                    }
                   />
 
                   <DetailField
