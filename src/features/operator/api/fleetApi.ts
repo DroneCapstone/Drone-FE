@@ -165,7 +165,7 @@ export async function getFleetDroneApi(droneId: string): Promise<OperatorDrone> 
 }
 
 export async function listFleetBatteriesApi(): Promise<OperatorBattery[]> {
-  const payload = await operatorApiRequest<unknown>('/     ');
+  const payload = await operatorApiRequest<unknown>('/operator/fleet/batteries');
   return unwrapList(payload, ['batteries', 'battery'])
     .map(mapFleetBattery)
     .filter((battery): battery is OperatorBattery => Boolean(battery));

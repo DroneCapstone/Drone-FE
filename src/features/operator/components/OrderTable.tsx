@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { operatorHubs } from '../data/hubMockData';
 import type { Mission, Order, PlanningState, Tone } from '../types/operator';
 import {
   formatDeliveryWindow,
@@ -16,9 +15,10 @@ function planningTone(state: PlanningState): Tone {
   return 'neutral';
 }
 
-function hubName(hubId: string) {
+function hubName(hubId: string, apiName?: string) {
+  if (apiName) return apiName;
   if (!hubId) return 'Hub data unavailable';
-  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+  return hubId;
 }
 
 function receivedTime(value: string) {
@@ -68,7 +68,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                 <td className="order-route-cell">
                   <strong>
                     {order.originHubId || order.destinationHubId
-                      ? `${hubName(order.originHubId)} → ${hubName(order.destinationHubId)}`
+                      ? `${hubName(order.originHubId, order.originHubName)} → ${hubName(order.destinationHubId, order.destinationHubName)}`
                       : 'Hub data unavailable'}
                   </strong>
                 </td>

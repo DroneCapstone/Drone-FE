@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, RouteOption, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteOption, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -20,10 +20,11 @@ export interface LiveTrackingDrone {
   alertId?: string;
   anomaly?: string;
   anomalyDuration?: string;
-  battery: number;
-  signal: number;
-  altitudeM: number;
-  speedKmh: number;
+  battery?: number;
+  batteryVoltage?: number;
+  signal?: number;
+  altitudeM?: number;
+  speedKmh?: number;
   detectedAt?: string;
   aiAssessment: string;
   incidentPolicy: 'none' | 'monitor' | 'recommended';
@@ -42,7 +43,10 @@ export interface MissionTelemetryPoint {
   altitudeM?: number;
   speedKmh?: number;
   batteryPct?: number;
+  batteryVoltage?: number;
   signalPct?: number;
+  energyConsumedWh?: number;
+  windSpeed?: number;
   raw: Record<string, unknown>;
 }
 
@@ -101,6 +105,7 @@ export interface CreateMissionInput {
   orderId: string;
   droneId: string;
   routeId: string;
+  batteryPlanId?: string;
 }
 
 export interface AnalyzeMissionPlanningInput {
@@ -239,13 +244,21 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
     case 'IN_PROGRESS':
+    case 'FLYING':
+    case 'ACTIVE':
+    case 'ACTIVE_MISSION':
       return 'In Progress';
     case 'COMPLETED':
+    case 'MISSION_COMPLETED':
       return 'Completed';
     case 'CANCELLED':
       return 'Cancelled';
     case 'FAILED':
+    case 'REJECTED':
       return 'Failed';
+    case 'PENDING_APPROVAL':
+    case 'APPROVED':
+    case 'AWAITING_PAYMENT':
     case 'SCHEDULED':
     default:
       return 'Scheduled';
@@ -317,16 +330,22 @@ function mapMission(raw: unknown): Mission {
   const orderId = pickString(record, ['order_id', 'orderId']);
   const droneId = pickString(record, ['drone_id', 'droneId']);
   const droneName = pickString(record, ['drone', 'drone_name', 'droneName', 'drone_code'], droneId);
+  const routePath = pickString(record, ['route_path_string', 'routePathString']);
   const routeId = pickString(record, ['route_id', 'routeId']);
-  const routeName = pickString(record, ['route', 'route_name', 'routeName'], routeId || 'Route');
-  const plannedStartAt = normalizeIso(pickString(record, ['planned_start_at', 'plannedStartAt'])) ?? new Date().toISOString();
-  const estimatedArrivalAt = normalizeIso(pickString(record, ['estimated_arrival_at', 'estimatedArrivalAt'])) ?? plannedStartAt;
-  const actualStartedAt = normalizeIso(pickString(record, ['actual_started_at', 'actualStartedAt']));
-  const actualCompletedAt = normalizeIso(pickString(record, ['actual_completed_at', 'actualCompletedAt']));
+  const routeName = pickString(record, ['route', 'route_name', 'routeName'], routePath || routeId || '—');
+  const plannedStartAt = normalizeIso(pickString(record, ['planned_start_at', 'plannedStartAt', 'scheduled_time', 'scheduledTime'])) ?? '';
+  const estimatedArrivalAt = normalizeIso(pickString(record, ['estimated_arrival_at', 'estimatedArrivalAt', 'end_time', 'endTime'])) ?? plannedStartAt;
+  const actualStartedAt = normalizeIso(pickString(record, ['actual_started_at', 'actualStartedAt', 'start_time', 'startTime', 'departed_at', 'departedAt']));
+  const actualCompletedAt = normalizeIso(pickString(record, ['actual_completed_at', 'actualCompletedAt', 'end_time', 'endTime', 'arrived_at', 'arrivedAt']));
   const createdAt = normalizeIso(pickString(record, ['created_at', 'createdAt'])) ?? plannedStartAt;
   const relayIds = pickArray(record, ['relay_hub_ids', 'relayHubIds']).map(String);
   const legs = pickArray(record, ['legs', 'mission_legs']).map(mapMissionLeg);
-  const eta = pickString(record, ['eta']) || new Date(estimatedArrivalAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const estimatedArrivalDate = estimatedArrivalAt ? new Date(estimatedArrivalAt) : undefined;
+  const eta = pickString(record, ['eta']) || (
+    estimatedArrivalDate && !Number.isNaN(estimatedArrivalDate.getTime())
+      ? estimatedArrivalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '—'
+  );
 
   return {
     id,
@@ -363,8 +382,8 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
   const health = normalizeHealth(record.health ?? record.status ?? record.alert_level);
-  const latitude = pickNumber(telemetry, ['latitude', 'lat'], Number.NaN);
-  const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon'], Number.NaN);
+  const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
+  const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
   return {
     id: pickString(record, ['drone_id', 'droneId', 'id', 'drone'], `DR-${index + 1}`),
     missionId: pickString(record, ['mission_id', 'missionId']),
@@ -374,11 +393,12 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     alertId: pickString(record, ['alert_id', 'alertId']) || undefined,
     anomaly: pickString(record, ['anomaly', 'alert', 'issue']) || undefined,
     anomalyDuration: pickString(record, ['anomaly_duration', 'anomalyDuration', 'duration']) || undefined,
-    battery: pickNumber(telemetry, ['battery_pct', 'battery', 'battery_level', 'batteryLevel']),
-    signal: pickNumber(telemetry, ['signal_pct', 'signal', 'signal_strength', 'signalStrength']),
-    altitudeM: pickNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM']),
-    speedKmh: pickNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh']),
-    detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt']) || undefined,
+    battery: pickOptionalNumber(telemetry, ['battery_pct', 'battery', 'battery_level', 'batteryLevel']),
+    batteryVoltage: pickOptionalNumber(telemetry, ['latest_battery_voltage', 'latestBatteryVoltage', 'battery_voltage', 'batteryVoltage']),
+    signal: pickOptionalNumber(telemetry, ['signal_pct', 'signal', 'signal_strength', 'signalStrength']),
+    altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
+    speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
+    detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
     aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
@@ -395,7 +415,10 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
   const altitude = pickNumber(record, ['altitude_m', 'altitude', 'altitudeM'], Number.NaN);
   const speed = pickNumber(record, ['speed_kmh', 'speed', 'speedKmh'], Number.NaN);
   const battery = pickNumber(record, ['battery_pct', 'battery', 'battery_level'], Number.NaN);
+  const batteryVoltage = pickNumber(record, ['battery_voltage', 'batteryVoltage'], Number.NaN);
   const signal = pickNumber(record, ['signal_pct', 'signal', 'signal_strength'], Number.NaN);
+  const energyConsumedWh = pickNumber(record, ['energy_consumed_wh', 'energyConsumedWh'], Number.NaN);
+  const windSpeed = pickNumber(record, ['wind_speed', 'windSpeed'], Number.NaN);
   return {
     id: pickString(record, ['id', 'telemetry_id', 'telemetryId'], `${missionId}-${index + 1}`),
     missionId: pickString(record, ['mission_id', 'missionId'], missionId),
@@ -405,7 +428,10 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
     altitudeM: Number.isFinite(altitude) ? altitude : undefined,
     speedKmh: Number.isFinite(speed) ? speed : undefined,
     batteryPct: Number.isFinite(battery) ? battery : undefined,
+    batteryVoltage: Number.isFinite(batteryVoltage) ? batteryVoltage : undefined,
     signalPct: Number.isFinite(signal) ? signal : undefined,
+    energyConsumedWh: Number.isFinite(energyConsumedWh) ? energyConsumedWh : undefined,
+    windSpeed: Number.isFinite(windSpeed) ? windSpeed : undefined,
     raw: record,
   };
 }
@@ -416,8 +442,8 @@ function mapCheckpoint(raw: unknown, index: number): HubCheckpoint {
     id: pickString(record, ['id', 'checkpoint_id', 'checkpointId'], `CHK-${index + 1}`),
     hubId: pickString(record, ['hub_id', 'hubId']),
     hubName: pickString(record, ['hub_name', 'hubName', 'name'], 'Hub'),
-    reachedAt: normalizeIso(pickString(record, ['reached_at', 'arrived_at', 'created_at', 'timestamp'])),
-    sequence: pickNumber(record, ['sequence', 'sequence_no', 'order'], index + 1),
+    reachedAt: normalizeIso(pickString(record, ['reached_at', 'arrived_at', 'created_at', 'timestamp', 'passed_at', 'passedAt'])),
+    sequence: pickNumber(record, ['sequence', 'sequence_no', 'order', 'checkpoint_order', 'checkpointOrder'], index + 1),
     raw: record,
   };
 }
@@ -431,31 +457,68 @@ function normalizeSeverity(value: unknown): IncidentSeverity {
 
 function mapIncident(raw: unknown): OperatorIncident {
   const record = unwrapObject(raw);
+  const description = pickString(record, ['description', 'detail', 'message']);
+  const derivedTitle = description.split(/\r?\n/, 1)[0]?.trim();
   return {
     id: pickString(record, ['id', 'incident_id', 'incidentId']),
     missionId: pickString(record, ['mission_id', 'missionId']),
     droneId: pickString(record, ['drone_id', 'droneId', 'aircraft_id', 'aircraftId']),
-    title: pickString(record, ['title', 'incident_title', 'name'], 'Technical incident'),
-    description: pickString(record, ['description', 'detail', 'message']),
+    title: pickString(record, ['title', 'incident_title', 'name'], derivedTitle || 'Technical incident'),
+    description,
     severity: normalizeSeverity(record.severity ?? record.level),
     status: pickString(record, ['status', 'state'], 'OPEN'),
-    detectedAt: normalizeIso(pickString(record, ['detected_at', 'detectedAt'])),
-    createdAt: normalizeIso(pickString(record, ['created_at', 'createdAt'])),
+    detectedAt: normalizeIso(pickString(record, ['detected_at', 'detectedAt', 'reported_at', 'reportedAt'])),
+    createdAt: normalizeIso(pickString(record, ['created_at', 'createdAt', 'reported_at', 'reportedAt'])),
     updatedAt: normalizeIso(pickString(record, ['updated_at', 'updatedAt'])),
     raw: record,
   };
 }
 
+/** Unknown is deliberately different from false, especially for relay validation. */
+function pickOptionalBoolean(record: Record<string, unknown>, keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    if (record[key] === true || record[key] === 'true') return true;
+    if (record[key] === false || record[key] === 'false') return false;
+  }
+  return undefined;
+}
+
+function mapRouteLeg(raw: unknown): PlannedRouteLeg {
+  const record = asRecord(raw);
+  return {
+    fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']),
+    toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']),
+    predictedEnergyWh: pickOptionalNumber(record, ['predicted_energy_wh', 'predictedEnergyWh']),
+    endingSocPct: pickOptionalNumber(record, ['ending_soc_pct', 'endingSocPct', 'battery_after_pct', 'batteryAfterPct']),
+    minimumReservePct: pickOptionalNumber(record, ['minimum_reserve_pct', 'minimumReservePct']),
+    feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
+  };
+}
+
+function mapRelayBattery(raw: unknown): PlannedRelayBattery {
+  const record = asRecord(raw);
+  return {
+    hubId: pickString(record, ['hub_id', 'hubId', 'relay_hub_id', 'relayHubId']),
+    batteryModel: pickString(record, ['battery_model', 'batteryModel']) || undefined,
+    requiredBatteryCount: pickOptionalNumber(record, ['required_battery_count', 'requiredBatteryCount']),
+    availableBatteryCount: pickOptionalNumber(record, ['available_battery_count', 'availableBatteryCount']),
+    batteryIds: pickArray(record, ['battery_ids', 'batteryIds']).map(String),
+    ready: pickOptionalBoolean(record, ['ready', 'verified', 'is_ready', 'isReady']),
+  };
+}
+
 function mapRouteOption(raw: unknown, index: number): RouteOption {
   const record = asRecord(raw);
-  const relayHubIds = pickArray(record, ['relay_hub_ids', 'relayHubIds', 'relay_hubs']).map((item) => {
+  const relayHubIds = pickArray(record, ['relay_hub_ids', 'relayHubIds', 'relay_hubs', 'relayHubs']).map((item) => {
     if (isRecord(item)) return pickString(item, ['id', 'hub_id', 'hubId']);
     return String(item);
   }).filter(Boolean);
   const reasons = pickArray(record, ['recommendation_reasons', 'recommendationReasons', 'reasons']).map(String);
+  const reason = pickString(record, ['reason']);
+  if (reason) reasons.push(reason);
   return {
     id: pickString(record, ['route_id', 'routeId', 'id'], `ROUTE-${index + 1}`),
-    name: pickString(record, ['route_name', 'routeName', 'name'], `Route ${index + 1}`),
+    name: pickString(record, ['route_name', 'routeName', 'name', 'route_string', 'routeString'], `Route ${index + 1}`),
     distanceKm: pickNumber(record, ['distance_km', 'distanceKm', 'distance']),
     predictedDurationMin: pickNumber(record, ['predicted_duration_min', 'predictedDurationMin', 'duration_min']),
     predictedEnergyWh: pickNumber(record, ['predicted_energy_wh', 'predictedEnergyWh', 'estimated_energy_wh', 'energy_wh']),
@@ -465,6 +528,10 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     weatherImpact: pickString(record, ['weather_impact', 'weatherImpact'], 'Backend weather assessment'),
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
+    feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
+    legs: pickArray(record, ['legs', 'route_legs', 'routeLegs']).map(mapRouteLeg),
+    relayBatteryPlan: pickArray(record, ['relay_battery_plan', 'relayBatteryPlan']).map(mapRelayBattery),
+    batteryPlanId: pickString(record, ['battery_plan_id', 'batteryPlanId']) || undefined,
     recommended: pickBoolean(record, ['recommended', 'is_recommended', 'isRecommended']),
     recommendationReasons: reasons,
     tradeOff: pickString(record, ['trade_off', 'tradeOff'], ''),
@@ -480,7 +547,7 @@ function mapMissionDashboardKpi(payload: unknown): MissionDashboardKpi {
     scheduledMissions: pickOptionalNumber(record, ['scheduled_missions', 'scheduledMissions', 'scheduled']),
     completedMissions: pickOptionalNumber(record, ['completed_missions', 'completedMissions', 'completed']),
     cancelledMissions: pickOptionalNumber(record, ['cancelled_missions', 'canceled_missions', 'cancelledMissions', 'canceledMissions', 'cancelled', 'canceled']),
-    failedMissions: pickOptionalNumber(record, ['failed_missions', 'failedMissions', 'failed']),
+    failedMissions: pickOptionalNumber(record, ['failed_missions', 'failedMissions', 'failed', 'rejected']),
     readyForPlanning: pickOptionalNumber(record, ['ready_for_planning', 'readyForPlanning', 'pending_requests', 'pendingRequests']),
     raw: payload,
   };
@@ -488,6 +555,11 @@ function mapMissionDashboardKpi(payload: unknown): MissionDashboardKpi {
 
 function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   const record = unwrapObject(payload);
+  const statusBreakdown = isRecord(record.status_breakdown)
+    ? record.status_breakdown
+    : isRecord(record.statusBreakdown)
+      ? record.statusBreakdown
+      : {};
   const rows = unwrapArray(payload, ['statuses', 'status_counts', 'statusCounts']);
   const result: MissionDashboardStatus = {
     scheduled: pickOptionalNumber(record, ['scheduled', 'SCHEDULED']),
@@ -502,14 +574,23 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   const applyStatusCount = (statusValue: string, count: number | undefined) => {
     if (count === undefined) return;
     const status = statusValue.trim().toUpperCase().replace(/[\s-]+/g, '_');
-    if (status === 'SCHEDULED') result.scheduled = count;
-    else if (status === 'IN_PROGRESS' || status === 'ACTIVE') result.inProgress = count;
-    else if (status === 'COMPLETED') result.completed = count;
+    if (status === 'SCHEDULED' || status === 'PENDING_APPROVAL' || status === 'APPROVED' || status === 'AWAITING_PAYMENT') result.scheduled = count;
+    else if (status === 'IN_PROGRESS' || status === 'ACTIVE' || status === 'FLYING' || status === 'ACTIVE_MISSION') result.inProgress = count;
+    else if (status === 'COMPLETED' || status === 'MISSION_COMPLETED') result.completed = count;
     else if (status === 'CANCELLED' || status === 'CANCELED') result.cancelled = count;
-    else if (status === 'FAILED') result.failed = count;
+    else if (status === 'FAILED' || status === 'REJECTED') result.failed = count;
   };
 
   for (const [key, value] of Object.entries(record)) {
+    const count = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() && Number.isFinite(Number(value))
+        ? Number(value)
+        : undefined;
+    applyStatusCount(key, count);
+  }
+
+  for (const [key, value] of Object.entries(statusBreakdown)) {
     const count = typeof value === 'number'
       ? value
       : typeof value === 'string' && value.trim() && Number.isFinite(Number(value))
@@ -569,7 +650,7 @@ export async function listMissionMiniHubsApi(): Promise<MissionHubSummary[]> {
 }
 
 export async function getLiveTrackingApi(): Promise<LiveTrackingDrone[]> {
-  const payload = await operatorApiRequest<unknown>('/missions/dashboard/active-flights');
+  const payload = await operatorApiRequest<unknown>('/operator/missions/live-tracking');
   return unwrapArray(payload, ['drones', 'aircraft', 'missions', 'live_tracking', 'liveTracking'])
     .map(mapLiveDrone);
 }
@@ -577,14 +658,10 @@ export async function getLiveTrackingApi(): Promise<LiveTrackingDrone[]> {
 export async function getMissionApi(missionId: string): Promise<Mission> {
   const normalizedMissionId = missionId.trim();
   if (!normalizedMissionId) throw new Error('Mission ID is required.');
-
-  // Current Missions Swagger exposes GET /missions/ rather than a dedicated
-  // mission-detail endpoint. Reuse the authoritative list and resolve the row
-  // client-side so Mission Detail does not call an obsolete Operator route.
-  const missions = await listMissionsApi();
-  const mission = missions.find((item) => item.id === normalizedMissionId);
-  if (!mission) throw new Error(`Mission ${normalizedMissionId} was not found.`);
-  return mission;
+  const payload = await operatorApiRequest<unknown>(
+    `/operator/missions/${encodeURIComponent(normalizedMissionId)}`,
+  );
+  return mapMission(payload);
 }
 
 /**
@@ -593,12 +670,12 @@ export async function getMissionApi(missionId: string): Promise<Mission> {
  */
 export async function collectMissionTelemetryApi(
   missionId: string,
-  telemetry: Record<string, unknown>,
+  telemetry: Record<string, unknown> | Array<Record<string, unknown>>,
 ) {
   if (!missionId.trim()) throw new Error('Mission ID is required.');
   return operatorApiRequest<unknown>(
     `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry`,
-    { method: 'POST', body: JSON.stringify(telemetry) },
+    { method: 'POST', body: JSON.stringify(Array.isArray(telemetry) ? telemetry : [telemetry]) },
   );
 }
 
@@ -636,15 +713,26 @@ export async function getIncidentApi(incidentId: string): Promise<OperatorIncide
 }
 
 export async function createIncidentApi(input: CreateIncidentInput): Promise<OperatorIncident> {
+  const numericDroneId = input.droneId ? Number(input.droneId) : undefined;
+  if (numericDroneId !== undefined && !Number.isInteger(numericDroneId)) {
+    throw new OperatorApiError('Drone ID must be a number.', 400);
+  }
+
+  const severity = input.severity === 'Critical'
+    ? 'High'
+    : input.severity === 'Minor'
+      ? 'Low'
+      : 'Medium';
   const payload = await operatorApiRequest<unknown>('/operator/missions/incidents', {
     method: 'POST',
     body: JSON.stringify({
-      missionId: input.missionId,
-      ...(input.droneId ? { droneId: input.droneId } : {}),
-      severity: input.severity.toUpperCase(),
-      title: input.title,
-      description: input.description,
-      ...(input.detectedAt ? { detectedAt: input.detectedAt } : {}),
+      mission_id: input.missionId || null,
+      ...(numericDroneId !== undefined ? { drone_id: numericDroneId } : {}),
+      severity,
+      description: input.title.trim()
+        ? `${input.title.trim()}\n${input.description}`
+        : input.description,
+      requires_technical_inspection: input.severity !== 'Minor',
     }),
   });
   return mapIncident(payload);
@@ -653,9 +741,10 @@ export async function createIncidentApi(input: CreateIncidentInput): Promise<Ope
 export async function updateIncidentStatusApi(
   input: UpdateIncidentStatusInput,
 ): Promise<OperatorIncident> {
+  const query = new URLSearchParams({ status: input.status });
   const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/incidents/${encodeURIComponent(input.incidentId)}/status`,
-    { method: 'PATCH', body: JSON.stringify({ status: input.status }) },
+    `/operator/missions/incidents/${encodeURIComponent(input.incidentId)}/status?${query.toString()}`,
+    { method: 'PATCH' },
   );
   return mapIncident(payload);
 }
@@ -663,11 +752,16 @@ export async function updateIncidentStatusApi(
 export async function analyzeMissionPlanningApi(
   input: AnalyzeMissionPlanningInput,
 ): Promise<MissionPlanningAnalysis> {
+  const numericDroneId = Number(input.droneId);
+  if (!Number.isInteger(numericDroneId)) {
+    throw new OperatorApiError('Drone ID must be a number.', 400);
+  }
+
   const payload = await operatorApiRequest<unknown>('/operator/missions/mission-planning/analyze', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
-      droneId: input.droneId,
+      droneId: numericDroneId,
     }),
   });
   const root = unwrapObject(payload);
@@ -698,29 +792,19 @@ export async function analyzeMissionPlanningApi(
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
-  const request = (body: Record<string, string>) =>
-    operatorApiRequest<unknown>('/missions/request', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-
-  try {
-    const payload = await request({
-      order_id: input.orderId,
-      drone_id: input.droneId,
-      route_id: input.routeId,
-    });
-    return mapMission(payload);
-  } catch (error) {
-    // Most FastAPI schemas use snake_case. If this deployment still exposes
-    // the older camelCase request model, retry only after a validation 422.
-    if (!(error instanceof OperatorApiError) || error.status !== 422) throw error;
-
-    const payload = await request({
-      orderId: input.orderId,
-      droneId: input.droneId,
-      routeId: input.routeId,
-    });
-    return mapMission(payload);
+  const numericDroneId = Number(input.droneId);
+  if (!Number.isInteger(numericDroneId)) {
+    throw new OperatorApiError('Drone ID must be a number.', 400);
   }
+
+  const payload = await operatorApiRequest<unknown>('/operator/missions', {
+    method: 'POST',
+    body: JSON.stringify({
+      orderId: input.orderId,
+      droneId: numericDroneId,
+      routeId: input.routeId,
+      ...(input.batteryPlanId ? { batteryPlanId: input.batteryPlanId } : {}),
+    }),
+  });
+  return mapMission(payload);
 }

@@ -223,7 +223,7 @@ export function IncidentsPage() {
     try {
       await updateIncidentStatusMutation.mutateAsync({
         incidentId: selectedIncidentId,
-        status: 'RESOLVED',
+        status: 'Closed',
       });
       setMode('list');
     } catch (reason) {
@@ -373,10 +373,10 @@ export function IncidentsPage() {
                   </div>
                   <ActionButton
                     variant="secondary"
-                    disabled={updateIncidentStatusMutation.isPending || detailStatus.toUpperCase() === 'RESOLVED'}
+                    disabled={updateIncidentStatusMutation.isPending || detailStatus.toUpperCase() === 'CLOSED'}
                     onClick={() => void resolveIncident()}
                   >
-                    {updateIncidentStatusMutation.isPending ? 'Updating…' : detailStatus.toUpperCase() === 'RESOLVED' ? 'Resolved' : 'Resolve incident'}
+                    {updateIncidentStatusMutation.isPending ? 'Updating…' : detailStatus.toUpperCase() === 'CLOSED' ? 'Closed' : 'Close incident'}
                   </ActionButton>
                 </div>
 

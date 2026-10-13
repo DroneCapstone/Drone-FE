@@ -57,7 +57,9 @@ export interface Order {
   packageType: string;
   payloadKg: number;
   originHubId: string;
+  originHubName?: string;
   destinationHubId: string;
+  destinationHubName?: string;
   deliveryMode: DeliveryMode;
   requestedDeliveryAt?: string;
   requestedDate: string;
@@ -191,6 +193,26 @@ export interface ShapFactor {
   note: string;
 }
 
+/** One flight leg. Verified results must come from mission-planning/analyze. */
+export interface PlannedRouteLeg {
+  fromHubId: string;
+  toHubId: string;
+  predictedEnergyWh?: number;
+  endingSocPct?: number;
+  minimumReservePct?: number;
+  feasible?: boolean;
+}
+
+/** Technician will swap a compatible spare battery set at this relay hub. */
+export interface PlannedRelayBattery {
+  hubId: string;
+  batteryModel?: string;
+  requiredBatteryCount?: number;
+  availableBatteryCount?: number;
+  batteryIds?: string[];
+  ready?: boolean;
+}
+
 export interface RouteOption {
   id: string;
   name: string;
@@ -204,6 +226,11 @@ export interface RouteOption {
   /** Optional intermediate Hub(s) selected by route planning for long-distance Missions. */
   relayHubIds?: string[];
   relayStopMinutes?: number;
+  /** Optional server-validated planning contract; absent means relay route unverified. */
+  feasible?: boolean;
+  legs?: PlannedRouteLeg[];
+  relayBatteryPlan?: PlannedRelayBattery[];
+  batteryPlanId?: string;
   recommended?: boolean;
   recommendationReasons: string[];
   tradeOff: string;

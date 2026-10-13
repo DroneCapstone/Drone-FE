@@ -1,9 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { missions as allMissions } from '../data/mockOperatorData';
 import type { Mission } from '../types/operator';
 
-export function MissionTable({ compact = false, items = allMissions }: { compact?: boolean; items?: Mission[] }) {
+export function MissionTable({ compact = false, items }: { compact?: boolean; items: Mission[] }) {
   const navigate = useNavigate();
   const rows = compact ? items.slice(0, 3) : items;
 

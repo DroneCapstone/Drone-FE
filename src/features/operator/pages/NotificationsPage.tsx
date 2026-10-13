@@ -40,10 +40,6 @@ export function NotificationsPage() {
     if (planningOrder) values.push({ title: `${planningOrder.id} is ready for Mission planning`, body: `Estimated delivery ${formatDeliveryWindow(planningOrder)}. Create the Mission now; package receipt will be checked later in Final Validation.`, time: 'Now', tone: 'warning', category: 'Planning', read: false, target: `/operator/orders/${planningOrder.id}` });
     if (replanOrder) values.push({ title: `${replanOrder.id} needs replanning`, body: 'The previous Mission was cancelled before delivery. A new customer/system delivery window is required before another Mission is created.', time: 'Now', tone: 'danger', category: 'Planning', read: false, target: `/operator/orders/${replanOrder.id}` });
     if (departureItem) values.push({ title: `${departureItem.mission.id} · ${departureItem.evaluation.state}`, body: departureItem.evaluation.state === 'Ready for Departure' ? 'Final Validation passed. Start Mission is available in the departure window.' : 'One or more Final Validation conditions are not ready. The Mission remains Scheduled.', time: 'Now', tone: departureItem.evaluation.state === 'Departure Hold' ? 'danger' : 'warning', category: 'Departure', read: false, target: `/operator/missions/${departureItem.mission.id}` });
-    values.push(
-      { title: 'Mission incident requires monitoring', body: 'MSN-3110 is continuing with a replacement drone after a serious alert was escalated to a Technical Incident.', time: '2 min ago', tone: 'warning', category: 'Operational', read: false, target: '/operator/missions/MSN-3110' },
-      { title: 'Telemetry log validated', body: 'Flight log FLT-9179 passed all quality checks.', time: '1 hour ago', tone: 'success', category: 'System', read: true },
-    );
     return values;
   }, [departureItem, planningOrder, replanOrder]);
 
