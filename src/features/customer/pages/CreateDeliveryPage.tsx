@@ -5,14 +5,16 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import { useAuth } from "../../auth/hooks/useAuth";
 
 import {
   PACKAGE_CATEGORIES,
   PACKAGE_SIZE_RULES,
-  VIETNAM_LOCATIONS,
 } from "../data/customerData";
 
 import {
@@ -20,18 +22,13 @@ import {
   formatVnd,
 } from "../services/customerDeliveryService";
 
-import {
-  calculateDeliveryPricing,
-  isFragileCategory,
-} from "../services/deliveryPricing";
 import { customerProfileService } from "../services/customerProfileService";
 
-import {
-  resolveCustomerRoute,
-} from "../services/customerRouteService";
 
 import type {
   DeliveryDraft,
+  DeliveryHub,
+  DeliveryPrice,
   PackageSize,
 } from "../types/customer";
 
@@ -51,7 +48,7 @@ type DeliveryDraftWithPricing = Omit<
     | DeliveryDraft["deliveryMode"]
     | "";
   hasInsurance?: boolean;
-  draftVersion: 3;
+  draftVersion: 4;
 };
 
 const steps = ["Details", "Package", "Route", "Schedule"];
@@ -74,7 +71,7 @@ function getDefaultDraft(
     destinationArea: "",
     deliveryMode: "",
     requestedDepartureAt: "",
-    draftVersion: 3,
+    draftVersion: 4,
   };
 }
 
@@ -99,6 +96,7 @@ function getMinimumScheduleValue() {
 
 export function CreateDeliveryPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
   const profile = user
@@ -107,18 +105,48 @@ export function CreateDeliveryPage() {
         phone: "",
       };
 
+  const stepParam =
+    searchParams.get("step");
+
+  const isNewDelivery =
+    searchParams.get("new") === "1";
+
   const storedDraft =
     customerDeliveryService.getDraft() as
       | DeliveryDraftWithPricing
       | null;
 
   const existingDraft =
-    storedDraft?.draftVersion === 3
+    !isNewDelivery &&
+    storedDraft?.draftVersion === 4
       ? storedDraft
       : null;
 
-  const [step, setStep] = useState(0);
+  const requestedStep = Number(
+    stepParam ?? "0",
+  );
+
+  const initialStep =
+    Number.isInteger(requestedStep) &&
+    requestedStep >= 0 &&
+    requestedStep < steps.length
+      ? requestedStep
+      : 0;
+
+  const [step, setStep] = useState(initialStep);
   const [error, setError] = useState("");
+  const [hubs, setHubs] = useState<DeliveryHub[]>(
+    () => customerDeliveryService.getCachedHubs(),
+  );
+  const [hubsLoading, setHubsLoading] = useState(false);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [estimateError, setEstimateError] = useState("");
+  const [preview, setPreview] = useState(
+    () =>
+      isNewDelivery
+        ? null
+        : customerDeliveryService.getCachedEstimate(),
+  );
 
   const [form, setForm] =
     useState<DeliveryDraftWithPricing>(
@@ -130,39 +158,210 @@ export function CreateDeliveryPage() {
     );
 
   useEffect(() => {
+    if (!isNewDelivery) {
+      return;
+    }
+
+    /*
+     * Explicit "Create delivery" entry point.
+     *
+     * Clear the previous order draft and estimate, then start a
+     * completely fresh form. Sender account information can stay
+     * prefilled, while recipient/package/route/schedule fields reset.
+     */
+    customerDeliveryService.clearDraft();
+
+    setForm(
+      getDefaultDraft(
+        user?.name ?? "",
+        profile.phone,
+      ),
+    );
+
+    setPreview(null);
+    setStep(0);
+    setError("");
+    setEstimateError("");
+
+    /*
+     * Remove ?new=1 after the reset. This prevents a refresh from
+     * resetting the form again while the customer is filling it.
+     */
+    navigate(
+      "/customer/deliveries/create",
+      {
+        replace: true,
+      },
+    );
+  }, [
+    isNewDelivery,
+    navigate,
+    profile.phone,
+    user?.name,
+  ]);
+
+  useEffect(() => {
+    /*
+     * Do not save the stale previous-order form during the single
+     * render where ?new=1 is being processed.
+     */
+    if (isNewDelivery) {
+      return;
+    }
+
     customerDeliveryService.saveDraft(
       form as unknown as DeliveryDraft,
     );
-  }, [form]);
+  }, [form, isNewDelivery]);
 
-  const preview = useMemo(() => {
-    return resolveCustomerRoute(
-      form.originArea,
-      form.destinationArea,
-    );
+  useEffect(() => {
+    /*
+     * Only sync the wizard step when the URL explicitly contains
+     * ?step=...
+     *
+     * Without this guard:
+     *   searchParams.get("step") === null
+     *   Number(null) === 0
+     *
+     * so clicking Continue from step 0 -> 1 was immediately reset
+     * back to step 0.
+     */
+    if (
+      isNewDelivery ||
+      stepParam === null
+    ) {
+      return;
+    }
+
+    const nextStep =
+      Number(stepParam);
+
+    if (
+      Number.isInteger(nextStep) &&
+      nextStep >= 0 &&
+      nextStep < steps.length
+    ) {
+      setStep(nextStep);
+      setError("");
+    }
   }, [
-    form.originArea,
-    form.destinationArea,
+    isNewDelivery,
+    stepParam,
   ]);
 
-  const pricing = useMemo(
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHubs() {
+      setHubsLoading(true);
+      try {
+        const next = await customerDeliveryService.loadHubs();
+        if (!cancelled) setHubs(next);
+      } catch (requestError) {
+        if (!cancelled) {
+          setEstimateError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Unable to load hubs.",
+          );
+        }
+      } finally {
+        if (!cancelled) setHubsLoading(false);
+      }
+    }
+
+    loadHubs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    customerProfileService
+      .loadRemote(user.id)
+      .then((remoteProfile) => {
+        if (!form.senderPhone && remoteProfile.phone) {
+          setForm((current) => ({
+            ...current,
+            senderPhone: remoteProfile.phone,
+          }));
+        }
+      })
+      .catch(() => {
+        // Keep cached/local profile when profile API is unavailable.
+      });
+  }, [user]);
+
+  const selectedOriginHub = useMemo(
     () =>
-      calculateDeliveryPricing(
-        form,
-        preview,
-      ),
-    [form, preview],
+      hubs.find((hub) => String(hub.id) === form.originArea) ?? null,
+    [hubs, form.originArea],
   );
 
-  const pricingReady =
-    Boolean(
-      form.packageCategory &&
-        form.weightKg !== "" &&
-        form.packageSize &&
-        form.deliveryMode &&
-        preview &&
-        preview.distanceKm !== null,
-    );
+  const selectedDestinationHub = useMemo(
+    () =>
+      hubs.find((hub) => String(hub.id) === form.destinationArea) ?? null,
+    [hubs, form.destinationArea],
+  );
+
+  const estimateReady = Boolean(
+    form.packageCategory &&
+      form.weightKg !== "" &&
+      form.packageSize &&
+      form.originArea &&
+      form.destinationArea &&
+      form.originArea !== form.destinationArea &&
+      form.deliveryMode &&
+      (form.deliveryMode !== "scheduled" || form.requestedDepartureAt),
+  );
+
+  useEffect(() => {
+    if (!estimateReady) {
+      setPreview(null);
+      setEstimateError("");
+      customerDeliveryService.clearEstimate();
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setEstimateLoading(true);
+      setEstimateError("");
+
+      try {
+        const next = await customerDeliveryService.estimateRemote(
+          form as unknown as DeliveryDraft,
+          hubs,
+        );
+        setPreview(next);
+      } catch (requestError) {
+        setPreview(null);
+        setEstimateError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to estimate this delivery.",
+        );
+      } finally {
+        setEstimateLoading(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    estimateReady,
+    form.packageCategory,
+    form.weightKg,
+    form.packageSize,
+    form.hasInsurance,
+    form.originArea,
+    form.destinationArea,
+    form.deliveryMode,
+    form.requestedDepartureAt,
+    hubs,
+  ]);
+
+  const pricingReady = Boolean(preview);
 
   const update = <
     K extends keyof DeliveryDraftWithPricing,
@@ -215,10 +414,10 @@ export function CreateDeliveryPage() {
       if (
         form.weightKg === "" ||
         form.weightKg <= 0 ||
-        form.weightKg >= 10
+        form.weightKg > 10
       ) {
         setError(
-          "Please enter a package weight greater than 0 kg and less than 10 kg.",
+          "Please enter a package weight greater than 0 kg and less than or equal to 10 kg.",
         );
         return false;
       }
@@ -304,7 +503,7 @@ export function CreateDeliveryPage() {
     return true;
   };
 
-  const next = () => {
+  const next = async () => {
     if (!validateStep()) {
       return;
     }
@@ -313,9 +512,23 @@ export function CreateDeliveryPage() {
       customerProfileService.save(user.id, {
         phone: form.senderPhone.trim(),
       });
+
+      customerProfileService
+        .saveRemote(user.id, form.senderPhone.trim())
+        .catch(() => {
+          // Profile update failure should not block order creation.
+        });
     }
 
     if (step === steps.length - 1) {
+      if (!preview) {
+        setError(
+          estimateError ||
+            "Please wait for the backend delivery estimate before reviewing the order.",
+        );
+        return;
+      }
+
       customerDeliveryService.saveDraft(
         form as unknown as DeliveryDraft,
       );
@@ -500,6 +713,8 @@ export function CreateDeliveryPage() {
               <RouteStep
                 form={form}
                 update={update}
+                hubs={hubs}
+                loading={hubsLoading}
               />
             )}
 
@@ -651,79 +866,27 @@ export function CreateDeliveryPage() {
                 </div>
 
                 <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium text-white/[0.55]">
-                  {form.packageSize &&
-                  form.weightKg !== ""
-                    ? `Tier ${pricing.droneSize}`
-                    : "Tier —"}
+                  {estimateLoading
+                    ? "Calculating…"
+                    : preview
+                      ? "Estimate"
+                      : "Waiting"}
                 </span>
               </div>
 
-              {pricingReady ? (
-                <div className="mt-4 space-y-3 border-t border-white/[0.07] pt-4">
-                <PriceLine
-                  label="Base fee"
-                  value={formatVnd(
-                    pricing.baseFee,
-                  )}
-                />
-
-                <PriceLine
-                  label={
-                    pricing.distanceKm !== null
-                      ? `Distance · ${pricing.distanceKm} km`
-                      : "Distance"
-                  }
-                  value={
-                    pricing.isRoutePriced
-                      ? formatVnd(
-                          pricing.distanceFee,
-                        )
-                      : "Select route"
-                  }
-                  muted={
-                    !pricing.isRoutePriced
-                  }
-                />
-
-                <PriceLine
-                  label={`Payload · ${form.weightKg || 0} kg`}
-                  value={formatVnd(
-                    pricing.payloadFee,
-                  )}
-                />
-
-                {pricing.isFragile && (
-                  <PriceLine
-                    label="Fragile items · 15%"
-                    value={`+${formatVnd(
-                      pricing.fragileSurcharge,
-                    )}`}
+              {pricingReady && preview ? (
+                <div className="mt-4 border-t border-white/[0.07] pt-4">
+                  <CreatePriceBreakdown
+                    price={preview.price}
                   />
-                )}
-
-                {form.hasInsurance && (
-                  <PriceLine
-                    label="Package insurance · 10%"
-                    value={`+${formatVnd(
-                      pricing.insuranceSurcharge,
-                    )}`}
-                  />
-                )}
-
-                {form.deliveryMode ===
-                  "express" && (
-                  <PriceLine
-                    label="Express surcharge · 25%"
-                    value={`+${formatVnd(
-                      pricing.serviceSurcharge,
-                    )}`}
-                  />
-                )}
                 </div>
               ) : (
                 <div className="mt-4 border-t border-white/[0.07] pt-4">
                   <p className="text-[11px] leading-5 text-white/[0.34] sm:text-[12px]">
-                    Select package category, weight, size, route and delivery mode to calculate the price.
+                    {estimateLoading
+                      ? "Calculating delivery estimate…"
+                      : estimateError ||
+                        "Select package details, hubs and delivery mode to calculate the price."}
                   </p>
                 </div>
               )}
@@ -742,10 +905,8 @@ export function CreateDeliveryPage() {
                 </div>
 
                 <p className="text-right text-[22px] font-semibold tracking-[-0.03em] text-white">
-                  {pricingReady
-                    ? formatVnd(
-                        pricing.finalFee,
-                      )
+                  {preview
+                    ? formatVnd(preview.price.total)
                     : "—"}
                 </p>
               </div>
@@ -858,9 +1019,7 @@ function PackageStep({
   update,
 }: StepProps) {
   const fragileSelected =
-    isFragileCategory(
-      form.packageCategory,
-    );
+    form.packageCategory === "fragile";
 
   return (
     <section>
@@ -907,7 +1066,7 @@ function PackageStep({
 
           {fragileSelected && (
             <p className="mt-2 text-[11px] leading-5 text-orange-400/90 sm:text-[12px]">
-              Fragile handling surcharge +15% of Core Fee is applied automatically.
+              Fragile handling will be included automatically in the backend estimate and shown in the price breakdown.
             </p>
           )}
         </label>
@@ -940,7 +1099,7 @@ function PackageStep({
             <input
               type="number"
               min="0.1"
-              max="9.9"
+              max="10"
               step="0.1"
               value={form.weightKg}
               onChange={(event) =>
@@ -969,7 +1128,7 @@ function PackageStep({
             <p
               className={`text-[10px] font-medium sm:text-[11px] ${
                 form.weightKg !== "" &&
-                form.weightKg >= 10
+                form.weightKg > 10
                   ? "text-red-400"
                   : "text-white/[0.72] sm:text-white"
               }`}
@@ -977,7 +1136,7 @@ function PackageStep({
               {form.weightKg === ""
                 ? "—"
                 : form.weightKg}{" "}
-              / {"< 10 kg"}
+              / {"≤ 10 kg"}
             </p>
           </div>
         </div>
@@ -1086,12 +1245,18 @@ function PackageStep({
             </p>
 
             <p className="mt-3 text-[10px] leading-5 text-white/[0.40] sm:text-[11px]">
-              Pricing tier is automatically upgraded when the package weight requires a larger drone capacity.
+              The backend estimate is the source of truth for the final delivery quotation.
             </p>
           </div>
 
           {/* PACKAGE INSURANCE */}
-          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 transition hover:border-white/[0.16] sm:mt-5 sm:p-5">
+          <label
+            className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition sm:mt-5 sm:p-5 ${
+              form.hasInsurance
+                ? "border-orange-500/[0.45] bg-orange-500/[0.05]"
+                : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.16]"
+            }`}
+          >
             <input
               type="checkbox"
               checked={Boolean(
@@ -1113,12 +1278,16 @@ function PackageStep({
                 </p>
 
                 <span className="rounded-full bg-orange-500/[0.08] px-2 py-0.5 text-[10px] font-medium text-orange-400">
-                  +10% Core Fee
+                  +10%
                 </span>
               </div>
 
               <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
-                Optional protection for the shipment. Insurance is calculated from Core Fee.
+                Optional package protection. Insurance is calculated by Backend as 10% of the core fee.
+              </p>
+
+              <p className="mt-1 text-[10px] leading-5 text-white/[0.34] sm:text-[11px]">
+                Turning this option on or off automatically requests a new backend estimate, so the displayed total always follows the latest quotation.
               </p>
             </div>
           </label>
@@ -1135,45 +1304,49 @@ function PackageStep({
 function RouteStep({
   form,
   update,
-}: StepProps) {
-  const preview =
-    resolveCustomerRoute(
-      form.originArea,
-      form.destinationArea,
-    );
+  hubs,
+  loading,
+}: StepProps & {
+  hubs: DeliveryHub[];
+  loading: boolean;
+}) {
+  const originHub =
+    hubs.find(
+      (hub) =>
+        String(hub.id) ===
+        form.originArea,
+    ) ?? null;
+
+  const destinationHub =
+    hubs.find(
+      (hub) =>
+        String(hub.id) ===
+        form.destinationArea,
+    ) ?? null;
 
   return (
     <section>
       <SectionTitle
         title="Delivery route"
-        description="Enter the sending and receiving areas to display the origin and destination hubs for this delivery."
+        description="Choose the origin and destination hubs loaded from the DroneOptAI backend."
       />
 
-      <datalist id="vietnam-locations">
-        {VIETNAM_LOCATIONS.map(
-          (location) => (
-            <option
-              key={location}
-              value={location}
-            />
-          ),
-        )}
-      </datalist>
-
       <div className="mt-5 grid gap-4 sm:mt-8 sm:gap-6 md:grid-cols-2">
-        <LocationField
-          label="Sending area"
+        <HubSelect
+          label="Sending hub"
           value={form.originArea}
-          placeholder="Example: Go Vap, Ho Chi Minh City"
+          hubs={hubs}
+          loading={loading}
           onChange={(value) =>
             update("originArea", value)
           }
         />
 
-        <LocationField
-          label="Receiving area"
+        <HubSelect
+          label="Receiving hub"
           value={form.destinationArea}
-          placeholder="Example: Thu Duc, Ho Chi Minh City"
+          hubs={hubs}
+          loading={loading}
           onChange={(value) =>
             update(
               "destinationArea",
@@ -1183,20 +1356,10 @@ function RouteStep({
         />
       </div>
 
-      {!preview && (
-        <div className="mt-5 rounded-xl border border-dashed border-white/[0.08] px-4 py-6 text-center sm:mt-7 sm:rounded-lg sm:px-5 sm:py-8">
-          <p className="text-[12px] leading-5 text-white/[0.52] sm:text-[13px] sm:text-white">
-            Enter both locations to display the
-            delivery route.
-          </p>
-        </div>
-      )}
-
-      {preview && (
+      {originHub && destinationHub && (
         <div className="mt-6 sm:mt-8">
           <div className="flex items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-orange-500" />
-
             <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-400 sm:text-[11px]">
               Selected route
             </p>
@@ -1205,17 +1368,12 @@ function RouteStep({
           <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 md:grid-cols-[1fr_46px_1fr] md:items-center">
             <HubBlock
               label="Origin hub"
-              name={preview.originHub.name}
-              address={
-                preview.originHub.address
-              }
+              name={originHub.name}
+              address={originHub.address}
             />
 
             <div className="hidden items-center justify-center md:flex">
-              <ArrowRight
-                size={18}
-                className="text-white/[0.58]"
-              />
+              <ArrowRight size={18} className="text-white/[0.58]" />
             </div>
 
             <div className="flex items-center gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/[0.28] md:hidden">
@@ -1226,18 +1384,57 @@ function RouteStep({
 
             <HubBlock
               label="Destination hub"
-              name={
-                preview.destinationHub.name
-              }
-              address={
-                preview.destinationHub
-                  .address
-              }
+              name={destinationHub.name}
+              address={destinationHub.address}
             />
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function HubSelect({
+  label,
+  value,
+  hubs,
+  loading,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  hubs: DeliveryHub[];
+  loading: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+
+      <select
+        value={value}
+        disabled={loading}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 disabled:opacity-60 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
+      >
+        <option value="">
+          {loading
+            ? "Loading hubs…"
+            : "Select hub"}
+        </option>
+
+        {hubs.map((hub) => (
+          <option
+            key={String(hub.id)}
+            value={String(hub.id)}
+          >
+            {hub.name} — {hub.address}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -1475,34 +1672,6 @@ function Field({
    LOCATION FIELD
 ========================================================= */
 
-function LocationField({
-  label,
-  value,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <FieldLabel>{label}</FieldLabel>
-
-      <input
-        list="vietnam-locations"
-        value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
-        }
-        placeholder={placeholder}
-        className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] sm:placeholder:text-white/[0.42]"
-      />
-    </label>
-  );
-}
-
 /* =========================================================
    HUB BLOCK
 ========================================================= */
@@ -1607,26 +1776,157 @@ function SummaryItem({
    PRICE LINE
 ========================================================= */
 
+function CreatePriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <PriceLine
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <PriceLine
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <PriceLine
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <PriceLine
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <PriceLine
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceLine
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <PriceLine
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <PriceLine
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <PriceLine
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <PriceLine
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <PriceLine
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
 function PriceLine({
   label,
   value,
   muted = false,
+  strong = false,
 }: {
   label: string;
   value: string;
   muted?: boolean;
+  strong?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-[11px] leading-5 text-white/[0.42] sm:text-[12px]">
+      <span
+        className={`text-[11px] leading-5 sm:text-[12px] ${
+          strong
+            ? "font-semibold text-white/[0.68]"
+            : "text-white/[0.42]"
+        }`}
+      >
         {label}
       </span>
 
       <span
-        className={`text-right text-[12px] font-medium leading-5 ${
-          muted
-            ? "text-white/[0.30]"
-            : "text-white/[0.78]"
+        className={`text-right text-[12px] leading-5 ${
+          strong
+            ? "font-semibold text-white"
+            : muted
+              ? "font-medium text-white/[0.30]"
+              : "font-medium text-white/[0.78]"
         }`}
       >
         {value}

@@ -1,5 +1,5 @@
 import {
-  DELIVERY_HUBS,
+  PACKAGE_CATEGORIES,
 } from "../data/customerData";
 
 import type {
@@ -8,13 +8,39 @@ import type {
   DeliveryHub,
   DeliveryPreview,
   DeliveryPrice,
+  OrderStatus,
 } from "../types/customer";
+
+import {
+  customerApi,
+  normalizePaymentStatus,
+  type CustomerEstimateResponse,
+  type CustomerHubApi,
+} from "./customerApi";
 
 const DELIVERY_KEY =
   "droneoptai.customer.deliveries";
 
 const DRAFT_KEY =
   "droneoptai.customer.delivery-draft";
+
+const HUBS_KEY =
+  "droneoptai.customer.hubs";
+
+const ESTIMATE_KEY =
+  "droneoptai.customer.delivery-estimate";
+
+/* =========================================================
+   LOCAL CACHE
+
+   NOTE:
+   Swagger currently has POST /customer/orders but no
+   GET /customer/orders or GET /customer/orders/{id}.
+
+   Therefore Dashboard / My Deliveries / Detail keep a local cache
+   of orders created through the backend. Once BE exposes customer
+   order GET endpoints, replace these reads with server queries.
+========================================================= */
 
 function readDeliveries(): CustomerDelivery[] {
   try {
@@ -37,211 +63,235 @@ function writeDeliveries(
   );
 }
 
-function addHours(
-  date: Date,
-  hours: number,
+function upsertDelivery(
+  delivery: CustomerDelivery,
 ) {
-  return new Date(
-    date.getTime() +
-      hours * 60 * 60 * 1000,
+  const current = readDeliveries();
+
+  const exists = current.some(
+    (item) => item.id === delivery.id,
   );
+
+  const next = exists
+    ? current.map((item) =>
+        item.id === delivery.id
+          ? delivery
+          : item,
+      )
+    : [delivery, ...current];
+
+  writeDeliveries(next);
+
+  return delivery;
 }
 
-function addMinutes(
-  date: Date,
-  minutes: number,
-) {
-  return new Date(
-    date.getTime() +
-      minutes * 60 * 1000,
-  );
-}
-
-function createOrderId() {
-  return `DRO-${Date.now()
-    .toString()
-    .slice(-6)}`;
-}
-
-function recommendHub(
-  location: string,
+function normalizeHub(
+  hub: CustomerHubApi,
 ): DeliveryHub {
-  const query =
-    location.toLowerCase();
-
-  if (
-    query.includes("thu duc") ||
-    query.includes("thủ đức")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id === "hub-thu-duc",
-    )!;
-  }
-
-  if (
-    query.includes("go vap") ||
-    query.includes("gò vấp")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id === "hub-go-vap",
-    )!;
-  }
-
-  if (
-    query.includes("district 7") ||
-    query.includes("quận 7")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id ===
-        "hub-district-7",
-    )!;
-  }
-
-  if (
-    query.includes("tan binh") ||
-    query.includes("tân bình")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id ===
-        "hub-tan-binh",
-    )!;
-  }
-
-  if (
-    query.includes("cau giay") ||
-    query.includes("cầu giấy")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id ===
-        "hub-cau-giay",
-    )!;
-  }
-
-  if (
-    query.includes("long bien") ||
-    query.includes("long biên")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id ===
-        "hub-long-bien",
-    )!;
-  }
-
-  if (
-    query.includes("da nang") ||
-    query.includes("đà nẵng") ||
-    query.includes("hai chau")
-  ) {
-    return DELIVERY_HUBS.find(
-      (hub) =>
-        hub.id ===
-        "hub-hai-chau",
-    )!;
-  }
-
-  return DELIVERY_HUBS[0];
-}
-
-function calculatePrice(
-  draft: DeliveryDraft,
-): DeliveryPrice {
-  const baseFee = 65000;
-
-  const weightFee =
-    Math.max(
-      0,
-      draft.weightKg - 1,
-    ) * 8000;
-
-  const sizeFee = {
-    S: 0,
-    M: 10000,
-    L: 20000,
-    XL: 35000,
-  }[draft.packageSize];
-
-  const serviceFee =
-    draft.deliveryMode === "express"
-      ? 30000
-      : 15000;
-
-  const deliveryFee =
-    Math.round(
-      baseFee +
-        weightFee +
-        sizeFee,
-    );
-
   return {
-    deliveryFee,
-    serviceFee,
-    total:
-      deliveryFee + serviceFee,
+    id: hub.id,
+    name: hub.name,
+    address: hub.address ?? "",
+    city: hub.city,
+    area: hub.area,
   };
 }
 
-function buildPreview(
-  draft: DeliveryDraft,
-): DeliveryPreview {
-  const now = new Date();
+function sameHubId(
+  left: string | number,
+  right: string,
+) {
+  return String(left) === right;
+}
 
-  const handoverDeadline =
-    addHours(now, 3);
+function resolveHubFromDraft(
+  hubId: string,
+  hubs: DeliveryHub[],
+) {
+  return (
+    hubs.find((hub) =>
+      sameHubId(hub.id, hubId),
+    ) ?? null
+  );
+}
 
-  let estimatedDeparture: Date;
+function normalizeOrderStatus(
+  rawStatus: unknown,
+): OrderStatus {
+  const normalized = String(
+    rawStatus ?? "",
+  ).toLowerCase();
 
-  if (
-    draft.deliveryMode ===
-      "scheduled" &&
-    draft.requestedDepartureAt
-  ) {
-    estimatedDeparture = new Date(
-      draft.requestedDepartureAt,
-    );
-  } else {
-    estimatedDeparture =
-      addMinutes(
-        handoverDeadline,
-        15,
-      );
+  if (normalized.includes("complete")) {
+    return "completed";
   }
 
-  const estimatedArrival =
-    addMinutes(
-      estimatedDeparture,
-      45,
-    );
+  if (
+    normalized.includes("delivery") ||
+    normalized.includes("transit") ||
+    normalized.includes("in_progress")
+  ) {
+    return "in_delivery";
+  }
 
-  return {
-    originHub: recommendHub(
-      draft.originArea,
+  if (
+    normalized.includes("accept") ||
+    normalized.includes("schedule")
+  ) {
+    return "accepted";
+  }
+
+  if (normalized.includes("reject")) {
+    return "rejected";
+  }
+
+  if (normalized.includes("cancel")) {
+    return "cancelled";
+  }
+
+  return "pending_review";
+}
+
+function categoryLabel(
+  value: DeliveryDraft["packageCategory"],
+) {
+  return (
+    PACKAGE_CATEGORIES.find(
+      (item) => item.value === value,
+    )?.label ?? value
+  );
+}
+
+/**
+ * Pricing contract helper.
+ *
+ * The updated estimate API now accepts package_type so Backend can return
+ * fragile_surcharge in fee_details. We keep the mapping centralized here
+ * so it is easy to adjust if Backend later changes the enum/string values.
+ */
+function backendPackageType(
+  draft: DeliveryDraft,
+) {
+  return draft.packageCategory === "fragile"
+    ? "Fragile"
+    : "Standard";
+}
+
+function backendPackageLabel(
+  draft: DeliveryDraft,
+) {
+  if (
+    draft.packageCategory === "other" &&
+    draft.packageDescription.trim()
+  ) {
+    return draft.packageDescription.trim();
+  }
+
+  return categoryLabel(
+    draft.packageCategory,
+  );
+}
+
+function readEstimate(): DeliveryPreview | null {
+  try {
+    return JSON.parse(
+      localStorage.getItem(
+        ESTIMATE_KEY,
+      ) ?? "null",
+    ) as DeliveryPreview | null;
+  } catch {
+    return null;
+  }
+}
+
+function writeEstimate(
+  preview: DeliveryPreview,
+) {
+  localStorage.setItem(
+    ESTIMATE_KEY,
+    JSON.stringify(preview),
+  );
+}
+
+function clearEstimate() {
+  localStorage.removeItem(
+    ESTIMATE_KEY,
+  );
+}
+
+function readCachedHubs(): DeliveryHub[] {
+  try {
+    return JSON.parse(
+      localStorage.getItem(
+        HUBS_KEY,
+      ) ?? "[]",
+    ) as DeliveryHub[];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeEstimate(
+  response: CustomerEstimateResponse,
+  originHub: DeliveryHub,
+  destinationHub: DeliveryHub,
+): DeliveryPreview {
+  const details =
+    response.fee_details;
+
+  const price: DeliveryPrice = {
+    deliveryFee: Number(
+      response.delivery_fee ?? 0,
+    ),
+    serviceFee: Number(
+      response.service_fee ?? 0,
+    ),
+    total: Number(
+      response.total_fee ?? 0,
     ),
 
-    destinationHub:
-      recommendHub(
-        draft.destinationArea,
-      ),
+    feeDetails: details
+      ? {
+          baseFee: Number(
+            details.base_fee ?? 0,
+          ),
+          distanceFee: Number(
+            details.distance_fee ?? 0,
+          ),
+          payloadFee: Number(
+            details.payload_fee ?? 0,
+          ),
+          insuranceFee: Number(
+            details.insurance_fee ?? 0,
+          ),
+          expressSurcharge: Number(
+            details.express_surcharge ?? 0,
+          ),
+          fragileSurcharge: Number(
+            details.fragile_surcharge ?? 0,
+          ),
+        }
+      : undefined,
+  };
 
+  return {
+    originHub,
+    destinationHub,
     handoverDeadlineAt:
-      handoverDeadline.toISOString(),
-
+      response.handover_deadline,
     estimatedDepartureAt:
-      estimatedDeparture.toISOString(),
-
+      response.estimated_departure,
     estimatedArrivalAt:
-      estimatedArrival.toISOString(),
-
-    price: calculatePrice(draft),
+      response.estimated_arrival,
+    price,
   };
 }
 
 export const customerDeliveryService = {
+  /* =======================================================
+     DRAFT
+  ======================================================== */
+
   saveDraft(
     draft: DeliveryDraft,
   ) {
@@ -251,9 +301,7 @@ export const customerDeliveryService = {
     );
   },
 
-  getDraft():
-    | DeliveryDraft
-    | null {
+  getDraft(): DeliveryDraft | null {
     try {
       return JSON.parse(
         localStorage.getItem(
@@ -269,70 +317,254 @@ export const customerDeliveryService = {
     localStorage.removeItem(
       DRAFT_KEY,
     );
+    clearEstimate();
   },
 
-  preview(
+  getCachedEstimate() {
+    return readEstimate();
+  },
+
+  clearEstimate,
+
+  /* =======================================================
+     HUBS
+  ======================================================== */
+
+  getCachedHubs(): DeliveryHub[] {
+    return readCachedHubs();
+  },
+
+  async loadHubs() {
+    const response =
+      await customerApi.getHubs();
+
+    const hubs = response.map(
+      normalizeHub,
+    );
+
+    localStorage.setItem(
+      HUBS_KEY,
+      JSON.stringify(hubs),
+    );
+
+    return hubs;
+  },
+
+  /* =======================================================
+     ESTIMATE
+
+     Grounded in FE-Customer-APIs.docx:
+     POST /api/v1/customer/orders/estimate
+  ======================================================== */
+
+  async estimateRemote(
     draft: DeliveryDraft,
+    hubs?: DeliveryHub[],
   ) {
-    return buildPreview(draft);
+    const availableHubs =
+      hubs ?? readCachedHubs();
+
+    const originHub =
+      resolveHubFromDraft(
+        draft.originArea,
+        availableHubs,
+      );
+
+    const destinationHub =
+      resolveHubFromDraft(
+        draft.destinationArea,
+        availableHubs,
+      );
+
+    if (!originHub || !destinationHub) {
+      throw new Error(
+        "Please select a valid origin and destination hub.",
+      );
+    }
+
+    const response =
+      await customerApi.estimateOrder({
+        origin_hub_id:
+          originHub.id,
+        destination_hub_id:
+          destinationHub.id,
+        payload_kg:
+          draft.weightKg,
+        package_size:
+          draft.packageSize,
+        package_type:
+          backendPackageType(
+            draft,
+          ),
+        delivery_mode:
+          draft.deliveryMode ===
+          "express"
+            ? "EXPRESS"
+            : "SCHEDULED",
+        requested_delivery_at:
+          draft.deliveryMode ===
+            "scheduled" &&
+          draft.requestedDepartureAt
+            ? new Date(
+                draft.requestedDepartureAt,
+              ).toISOString()
+            : null,
+        has_insurance:
+          Boolean(
+            draft.hasInsurance,
+          ),
+      });
+
+    const preview = normalizeEstimate(
+      response,
+      originHub,
+      destinationHub,
+    );
+
+    writeEstimate(preview);
+
+    return preview;
   },
 
-  create(
+  /**
+   * Retained for pages/components that expect a sync preview.
+   * It now reads the latest backend estimate cache rather than
+   * calculating a fake price in FE.
+   */
+  preview(
+    _draft: DeliveryDraft,
+  ) {
+    const estimate = readEstimate();
+
+    if (!estimate) {
+      throw new Error(
+        "No backend estimate is available yet.",
+      );
+    }
+
+    return estimate;
+  },
+
+  /* =======================================================
+     CREATE ORDER
+
+     Grounded in FE-Customer-APIs.docx:
+     POST /api/v1/customer/orders
+  ======================================================== */
+
+  async createRemote(
     customerId: string,
     draft: DeliveryDraft,
-  ): CustomerDelivery {
-    const preview =
-      buildPreview(draft);
+  ): Promise<CustomerDelivery> {
+    const hubs = readCachedHubs();
 
-    const delivery: CustomerDelivery =
-      {
-        ...draft,
+    const originHub =
+      resolveHubFromDraft(
+        draft.originArea,
+        hubs,
+      );
 
-        id: createOrderId(),
+    const destinationHub =
+      resolveHubFromDraft(
+        draft.destinationArea,
+        hubs,
+      );
 
-        customerId,
+    const estimate = readEstimate();
 
-        originHub:
-          preview.originHub,
+    if (
+      !originHub ||
+      !destinationHub ||
+      !estimate
+    ) {
+      throw new Error(
+        "Delivery estimate is missing. Please return to Create delivery and estimate the order again.",
+      );
+    }
 
-        destinationHub:
-          preview.destinationHub,
+    const response =
+      await customerApi.createOrder({
+        package_type:
+          backendPackageType(
+            draft,
+          ),
+        package_label:
+          backendPackageLabel(
+            draft,
+          ),
 
-        createdAt:
-          new Date().toISOString(),
+        payload_kg:
+          draft.weightKg,
+        package_size:
+          draft.packageSize,
 
-        handoverDeadlineAt:
-          preview.handoverDeadlineAt,
+        origin_hub_id:
+          originHub.id,
+        destination_hub_id:
+          destinationHub.id,
 
-        estimatedDepartureAt:
-          preview.estimatedDepartureAt,
+        delivery_mode:
+          draft.deliveryMode ===
+          "express"
+            ? "EXPRESS"
+            : "SCHEDULED",
 
-        estimatedArrivalAt:
-          preview.estimatedArrivalAt,
+        requested_delivery_at:
+          draft.deliveryMode ===
+            "scheduled" &&
+          draft.requestedDepartureAt
+            ? new Date(
+                draft.requestedDepartureAt,
+              ).toISOString()
+            : null,
 
-        paymentStatus: "pending",
+        sender_phone:
+          draft.senderPhone.trim(),
+        receiver_phone:
+          draft.recipientPhone.trim(),
 
-        orderStatus:
-          "pending_review",
+        has_insurance:
+          Boolean(
+            draft.hasInsurance,
+          ),
+      });
 
-        packageReceivedAtHub:
-          false,
+    const delivery: CustomerDelivery = {
+      ...draft,
+      id: String(response.id),
+      customerId,
+      originHub,
+      destinationHub,
+      createdAt:
+        response.created_at ??
+        new Date().toISOString(),
+      handoverDeadlineAt:
+        estimate.handoverDeadlineAt,
+      estimatedDepartureAt:
+        estimate.estimatedDepartureAt,
+      estimatedArrivalAt:
+        estimate.estimatedArrivalAt,
+      paymentStatus: "pending",
+      orderStatus:
+        normalizeOrderStatus(
+          response.status,
+        ),
+      packageReceivedAtHub: false,
+      price: estimate.price,
+      backendStatus:
+        response.status,
+    };
 
-        price: preview.price,
-      };
-
-    writeDeliveries([
-      delivery,
-      ...readDeliveries(),
-    ]);
-
-    this.clearDraft();
+    upsertDelivery(delivery);
 
     return delivery;
   },
 
-  getAll():
-    CustomerDelivery[] {
+  /* =======================================================
+     LOCAL ORDER CACHE READS
+  ======================================================== */
+
+  getAll(): CustomerDelivery[] {
     return readDeliveries();
   },
 
@@ -346,9 +578,7 @@ export const customerDeliveryService = {
     );
   },
 
-  getById(
-    id: string,
-  ) {
+  getById(id: string) {
     return (
       readDeliveries().find(
         (delivery) =>
@@ -357,21 +587,40 @@ export const customerDeliveryService = {
     );
   },
 
-  markPaid(id: string) {
+  /* =======================================================
+     PAYMENT
+  ======================================================== */
+
+  async refreshPaymentStatus(
+    id: string,
+  ) {
+    const response =
+      await customerApi.getPaymentStatus(
+        id,
+      );
+
+    const status =
+      normalizePaymentStatus(
+        response,
+      );
+
     const deliveries =
       readDeliveries();
 
-    const next =
-      deliveries.map(
-        (delivery) =>
-          delivery.id === id
-            ? {
-                ...delivery,
-                paymentStatus:
-                  "paid" as const,
-              }
-            : delivery,
-      );
+    const next = deliveries.map(
+      (delivery) =>
+        delivery.id === id
+          ? {
+              ...delivery,
+              paymentStatus:
+                status === "paid"
+                  ? ("paid" as const)
+                  : status === "failed"
+                    ? ("failed" as const)
+                    : ("pending" as const),
+            }
+          : delivery,
+    );
 
     writeDeliveries(next);
 
@@ -382,6 +631,35 @@ export const customerDeliveryService = {
       ) ?? null
     );
   },
+
+  markPaid(id: string) {
+    const deliveries =
+      readDeliveries();
+
+    const next = deliveries.map(
+      (delivery) =>
+        delivery.id === id
+          ? {
+              ...delivery,
+              paymentStatus:
+                "paid" as const,
+            }
+          : delivery,
+    );
+
+    writeDeliveries(next);
+
+    return (
+      next.find(
+        (delivery) =>
+          delivery.id === id,
+      ) ?? null
+    );
+  },
+
+  /* =======================================================
+     CUSTOMER STATUS
+  ======================================================== */
 
   getCustomerStatus(
     delivery: CustomerDelivery,
@@ -469,11 +747,21 @@ export function formatVnd(
 export function formatDateTime(
   value: string,
 ) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
   return new Intl.DateTimeFormat(
     "en-GB",
     {
       dateStyle: "medium",
       timeStyle: "short",
     },
-  ).format(new Date(value));
+  ).format(date);
 }

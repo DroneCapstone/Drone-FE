@@ -29,11 +29,11 @@ export type OrderStatus =
   | "cancelled";
 
 export interface DeliveryHub {
-  id: string;
+  id: string | number;
   name: string;
-  city: string;
-  area: string;
   address: string;
+  city?: string;
+  area?: string;
 }
 
 export interface DeliveryDraft {
@@ -49,18 +49,53 @@ export interface DeliveryDraft {
   weightKg: number;
   packageSize: PackageSize;
 
+  /**
+   * Customer hub IDs are stored as strings in the form so native
+   * <select> controls remain simple. The API adapter converts them
+   * back to string | number when sending requests.
+   */
   originArea: string;
   destinationArea: string;
 
   deliveryMode: DeliveryMode;
-
   requestedDepartureAt: string;
+
+  /**
+   * Customer insurance selection.
+   * Sent to both estimate and create-order APIs as has_insurance.
+   */
+  hasInsurance?: boolean;
+  draftVersion?: number;
+}
+
+export interface DeliveryFeeDetails {
+  baseFee: number;
+  distanceFee: number;
+  payloadFee: number;
+  insuranceFee: number;
+  expressSurcharge: number;
+  fragileSurcharge: number;
 }
 
 export interface DeliveryPrice {
+  /**
+   * Backend delivery subtotal.
+   */
   deliveryFee: number;
+
+  /**
+   * Backend service fee. In the current contract this normally matches
+   * expressSurcharge for Express orders.
+   */
   serviceFee: number;
+
   total: number;
+
+  /**
+   * Present on the updated estimate response.
+   * Optional so older locally cached deliveries remain readable.
+   */
+  feeDetails?: DeliveryFeeDetails;
 }
 
 export interface DeliveryPreview {
@@ -68,7 +103,6 @@ export interface DeliveryPreview {
   destinationHub: DeliveryHub;
 
   handoverDeadlineAt: string;
-
   estimatedDepartureAt: string;
   estimatedArrivalAt: string;
 
@@ -78,7 +112,6 @@ export interface DeliveryPreview {
 export interface CustomerDelivery
   extends DeliveryDraft {
   id: string;
-
   customerId: string;
 
   originHub: DeliveryHub;
@@ -87,7 +120,6 @@ export interface CustomerDelivery
   createdAt: string;
 
   handoverDeadlineAt: string;
-
   estimatedDepartureAt: string;
   estimatedArrivalAt: string;
 
@@ -95,6 +127,8 @@ export interface CustomerDelivery
   orderStatus: OrderStatus;
 
   packageReceivedAtHub: boolean;
-
   price: DeliveryPrice;
+
+  /** Raw backend status is kept for debugging / future mapping. */
+  backendStatus?: string;
 }
