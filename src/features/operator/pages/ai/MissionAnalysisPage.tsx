@@ -6,10 +6,8 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
-import { useMissionListQuery } from '../../hooks/useMissionQueries';
+import { useMissionListQuery, useMissionPlanningAnalysisQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
-import { routeAiAnalyses } from '../../data/aiMockData';
-import { routeOptions } from '../../data/routeMockData';
 import type { Tone } from '../../types/operator';
 import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
@@ -50,26 +48,62 @@ export function MissionAnalysisPage() {
   const contextDroneId = hasQueryContext ? queryDroneId : selectedMission?.droneId ?? '';
   const { data: order } = useOperatorOrderQuery(contextOrderId);
   const drone = fleet.find((item) => item.id === contextDroneId);
+  const {
+    data: planningAnalysis,
+    error: planningAnalysisError,
+    isFetching: isPlanningAnalysisFetching,
+  } = useMissionPlanningAnalysisQuery(
+    contextOrderId && contextDroneId
+      ? { orderId: contextOrderId, droneId: contextDroneId }
+      : null,
+  );
+  const routeOptions = planningAnalysis?.routes ?? [];
 
-  const initialRouteId = queryRouteId || selectedMission?.routeId || routeOptions.find((route) => route.recommended)?.id || routeOptions[0].id;
-  const [analysisRouteId, setAnalysisRouteId] = useState(initialRouteId);
+  const [selectedRouteId, setSelectedRouteId] = useState(queryRouteId || selectedMission?.routeId || '');
+  const analysisRouteId = selectedRouteId || routeOptions.find((route) => route.recommended)?.id || routeOptions[0]?.id || '';
   const route = routeOptions.find((item) => item.id === analysisRouteId) ?? routeOptions[0];
-  const analysis = routeAiAnalyses[route.id];
-  const timing = order ? calculateRouteTiming(order, route) : undefined;
-  const energy = drone ? getEnergyFeasibility(route) : undefined;
+  const timing = order && route ? calculateRouteTiming(order, route) : undefined;
+  const energy = drone && route ? getEnergyFeasibility(route) : undefined;
 
   const changeRoute = (routeId: string) => {
-    setAnalysisRouteId(routeId);
+    setSelectedRouteId(routeId);
     const next = new URLSearchParams(searchParams);
     next.set('routeId', routeId);
     setSearchParams(next, { replace: true });
   };
 
   const useThisRoute = () => {
-    if (!returnToMission || !order) return;
+    if (!returnToMission || !order || !route) return;
     updateMissionDraftRoute(order.id, route.id);
     navigate(`/operator/missions/create?orderId=${order.id}&resume=1`);
   };
+
+  if (isPlanningAnalysisFetching && routeOptions.length === 0) {
+    return (
+      <AiPageShell active="/operator/ai/mission-analysis">
+        <OperatorPanel title="Mission analysis">
+          <div className="operator-empty-state">Loading route analysis from Backend…</div>
+        </OperatorPanel>
+      </AiPageShell>
+    );
+  }
+
+  if (planningAnalysisError || !route) {
+    return (
+      <AiPageShell active="/operator/ai/mission-analysis">
+        <OperatorPanel title="Mission analysis">
+          <div className="operator-empty-state">
+            <strong>Unable to load Mission analysis</strong>
+            <span>
+              {planningAnalysisError instanceof Error
+                ? planningAnalysisError.message
+                : 'The Backend did not return any route options for this Order and Drone.'}
+            </span>
+          </div>
+        </OperatorPanel>
+      </AiPageShell>
+    );
+  }
 
   return (
     <AiPageShell active="/operator/ai/mission-analysis">
@@ -184,19 +218,7 @@ export function MissionAnalysisPage() {
       {tab === 'Explainability' && (
         <div className="ai-grid">
           <OperatorPanel title="Why this prediction?" eyebrow="LOCAL SHAP · THIS ROUTE">
-            <p className="panel-intro">Local explanation shows which features pushed the energy prediction up or down for this exact route context.</p>
-            <div className="feature-bars">
-              {analysis.shapFactors.map((factor) => {
-                const width = Math.min(100, Math.max(18, Math.abs(factor.impactWh) * 22));
-                return (
-                  <div key={factor.feature}>
-                    <span>{factor.feature}<small>{factor.direction === 'increase' ? '+' : '−'}{Math.abs(factor.impactWh).toFixed(1)} Wh</small></span>
-                    <div><i className={factor.direction === 'decrease' ? 'decrease' : ''} style={{ width: `${width}%` }} /></div>
-                    <small>{factor.note}</small>
-                  </div>
-                );
-              })}
-            </div>
+            <div className="operator-empty-state">The current Mission Planning API does not return SHAP factors. No mock explanation is displayed.</div>
           </OperatorPanel>
           <OperatorPanel title="Interpretation" eyebrow="DECISION SUPPORT">
             <div className="reasoning-block"><p><strong>{route.id}</strong> is predicted at <strong>{route.predictedEnergyWh.toFixed(1)} Wh</strong>. The explanation is specific to this route and should not be treated as a universal cause across all flights.</p></div>
@@ -208,24 +230,12 @@ export function MissionAnalysisPage() {
       {tab === 'Weather / Risk' && (
         <div className="ai-grid">
           <OperatorPanel title="Weather snapshot" eyebrow="PLANNED FLIGHT WINDOW">
-            <dl className="key-values">
-              <div><dt>Temperature</dt><dd>{analysis.weather.temperatureC} °C</dd></div>
-              <div><dt>Humidity</dt><dd>{analysis.weather.humidityPct}%</dd></div>
-              <div><dt>Wind speed</dt><dd>{analysis.weather.windSpeedMs} m/s</dd></div>
-              <div><dt>Wind gust</dt><dd>{analysis.weather.windGustMs} m/s</dd></div>
-              <div><dt>Wind direction</dt><dd>{analysis.weather.windDirectionDeg}°</dd></div>
-              <div><dt>Relative wind angle</dt><dd>{analysis.weather.relativeWindAngleDeg}°</dd></div>
-              <div><dt>Precipitation</dt><dd>{analysis.weather.precipitationMm} mm</dd></div>
-              <div><dt>Cloud cover</dt><dd>{analysis.weather.cloudCoverPct}%</dd></div>
-            </dl>
+            <div className="operator-empty-state">The current Mission Planning API does not return a weather snapshot. No mock weather is displayed.</div>
           </OperatorPanel>
           <OperatorPanel title="Operational risk" eyebrow="EXPLAINABLE RULE CHECKS">
             <div className="risk-list">
-              {analysis.operationalRisks.map((risk) => (
-                <div key={risk.label}><span><strong>{risk.label}</strong><small>{risk.detail}</small></span><StatusBadge tone={riskTone(risk.level)}>{risk.level}</StatusBadge></div>
-              ))}
+              <div><span><strong>Route risk</strong><small>{route.weatherImpact}</small></span><StatusBadge tone={riskTone(route.risk)}>{route.risk}</StatusBadge></div>
             </div>
-            <div className="confidence-note"><span>Risk labels are shown with a reason. Avoid opaque scores when a threshold or operational rule can explain the warning directly.</span></div>
           </OperatorPanel>
         </div>
       )}

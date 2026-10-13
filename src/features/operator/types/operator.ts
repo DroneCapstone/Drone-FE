@@ -57,7 +57,9 @@ export interface Order {
   packageType: string;
   payloadKg: number;
   originHubId: string;
+  originHubName?: string;
   destinationHubId: string;
+  destinationHubName?: string;
   deliveryMode: DeliveryMode;
   requestedDeliveryAt?: string;
   requestedDate: string;

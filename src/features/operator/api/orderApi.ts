@@ -43,6 +43,11 @@ interface BackendOriginPackage {
   received_at?: string | null;
 }
 
+interface BackendOrderHub {
+  id: string | number;
+  name: string;
+}
+
 export interface BackendOperatorOrder {
   id: string;
   customer_id: string;
@@ -63,6 +68,8 @@ export interface BackendOperatorOrder {
   // Keep them optional so FE is ready when BE adds them.
   origin_hub_id?: string | null;
   destination_hub_id?: string | null;
+  origin_hub?: BackendOrderHub | null;
+  destination_hub?: BackendOrderHub | null;
 
   // Optional fields that may be added by BE later without breaking this mapper.
   customer_name?: string | null;
@@ -244,6 +251,8 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
   const estimatedEnd = validIso(raw.estimated_window_end) ?? estimatedStart;
   const planningAt = validIso(raw.planning_at) ?? estimatedStart;
   const createdAt = validIso(raw.created_at) ?? planningAt;
+  const originHubId = raw.origin_hub?.id ?? raw.origin_hub_id;
+  const destinationHubId = raw.destination_hub?.id ?? raw.destination_hub_id;
 
   return {
     id: String(raw.id),
@@ -252,8 +261,10 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     packageLabel: raw.package_label || '—',
     packageType: raw.package_type || '—',
     payloadKg: Number(raw.payload_kg ?? 0),
-    originHubId: raw.origin_hub_id ? String(raw.origin_hub_id) : '',
-    destinationHubId: raw.destination_hub_id ? String(raw.destination_hub_id) : '',
+    originHubId: originHubId !== null && originHubId !== undefined ? String(originHubId) : '',
+    originHubName: raw.origin_hub?.name?.trim() || undefined,
+    destinationHubId: destinationHubId !== null && destinationHubId !== undefined ? String(destinationHubId) : '',
+    destinationHubName: raw.destination_hub?.name?.trim() || undefined,
     deliveryMode: mapDeliveryMode(raw.delivery_mode),
     requestedDeliveryAt: requested,
     requestedDate: (requested ?? estimatedStart).slice(0, 10),

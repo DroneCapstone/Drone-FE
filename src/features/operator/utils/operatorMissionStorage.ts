@@ -1,4 +1,3 @@
-import { missions as defaultMissions } from '../data/mockOperatorData';
 import type { Mission, MissionLeg, MissionStatus, Tone } from '../types/operator';
 import { calculatePackageReceiveDeadline } from './missionTiming';
 import { loadOperatorOrders, markOrderNeedsReplanning } from './operatorOrderStorage';
@@ -122,18 +121,17 @@ function cancelExpiredPackageWaits(items: Mission[]) {
 }
 
 export function loadOperatorMissions(): Mission[] {
-  if (typeof window === 'undefined') return defaultMissions.map((item) => normalizeMission(item));
+  if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    const parsed: Array<Partial<Mission>> = stored
-      ? JSON.parse(stored) as Array<Partial<Mission>>
-      : defaultMissions as Array<Partial<Mission>>;
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as Array<Partial<Mission>>;
     const normalized = Array.isArray(parsed)
       ? parsed.map(normalizeMission)
-      : defaultMissions.map((item) => normalizeMission(item));
+      : [];
     return cancelExpiredPackageWaits(normalized);
   } catch {
-    return defaultMissions.map((item) => normalizeMission(item));
+    return [];
   }
 }
 

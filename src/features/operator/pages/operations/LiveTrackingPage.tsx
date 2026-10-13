@@ -13,6 +13,12 @@ import { OperationPageShell } from './OperationPageShell';
 import './operations-enhanced.css';
 
 type LiveDroneHealth = LiveTrackingDrone['health'];
+
+function formatBattery(drone: LiveTrackingDrone) {
+  if (drone.battery !== undefined) return `${drone.battery}%`;
+  if (drone.batteryVoltage !== undefined) return `${drone.batteryVoltage} V`;
+  return '—';
+}
 type HealthFilter = 'All' | LiveDroneHealth;
 
 const FILTERS: HealthFilter[] = ['All', 'Critical', 'Attention', 'Normal'];
@@ -200,10 +206,10 @@ export function LiveTrackingPage() {
               </div>
 
               <div className="live-selection-metrics">
-                <span><Icon name="battery" size={16} /><strong>{selectedDrone.battery}%</strong><small>Battery</small></span>
-                <span><Icon name="radar" size={16} /><strong>{selectedDrone.signal}%</strong><small>Signal</small></span>
-                <span><Icon name="pin" size={16} /><strong>{selectedDrone.altitudeM} m</strong><small>Altitude</small></span>
-                <span><Icon name="speed" size={16} /><strong>{selectedDrone.speedKmh} km/h</strong><small>Speed</small></span>
+                <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
+                <span><Icon name="radar" size={16} /><strong>{selectedDrone.signal !== undefined ? `${selectedDrone.signal}%` : '—'}</strong><small>Signal</small></span>
+                <span><Icon name="pin" size={16} /><strong>{selectedDrone.altitudeM !== undefined ? `${selectedDrone.altitudeM} m` : '—'}</strong><small>Altitude</small></span>
+                <span><Icon name="speed" size={16} /><strong>{selectedDrone.speedKmh !== undefined ? `${selectedDrone.speedKmh} km/h` : '—'}</strong><small>Speed</small></span>
               </div>
             </div>
 
@@ -279,8 +285,8 @@ export function LiveTrackingPage() {
                     </em>
                   </span>
                   <span className="live-aircraft-card-metrics">
-                    <span><Icon name="battery" size={14} />{aircraft.battery}%</span>
-                    <span><Icon name="radar" size={14} />{aircraft.signal}%</span>
+                    <span><Icon name="battery" size={14} />{formatBattery(aircraft)}</span>
+                    <span><Icon name="radar" size={14} />{aircraft.signal !== undefined ? `${aircraft.signal}%` : '—'}</span>
                     <Icon name="chevron" size={15} />
                   </span>
                 </button>

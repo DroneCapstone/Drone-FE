@@ -142,8 +142,8 @@ export function CreateMissionPage() {
   const selectedBattery = originCompatibleBatteries.find((battery) => battery.id === selectedBatteryId);
   const routeOptions = planningAnalysis?.routes ?? [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const originHubLabel = originHub?.name || eligibleDronesData?.hub.name || order.originHubId || 'Origin Hub';
-  const destinationHubLabel = destinationHub?.name || order.destinationHubId || 'Destination Hub';
+  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin Hub';
+  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination Hub';
   const hubName = (hubId: string) =>
     networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const selectedTiming = selectedRoute ? calculateRouteTiming(order, selectedRoute) : undefined;
@@ -163,8 +163,12 @@ export function CreateMissionPage() {
     (item) => item.ready && Boolean(relayBatterySelections[item.hubId]),
   );
 
-  const canContinueStep1 = isActionablePlanningState(planningState);
-  const canContinueStep2 = Boolean(originHub && destinationHub && selectedDrone && selectedBattery);
+  const hasOrderHubs = Boolean(order.originHubId && order.destinationHubId);
+  const canContinueStep1 = Boolean(
+    isActionablePlanningState(planningState) &&
+    hasOrderHubs
+  );
+  const canContinueStep2 = Boolean(hasOrderHubs && selectedDrone && selectedBattery);
   const canContinueStep3 = Boolean(
     selectedRoute &&
     selectedDrone &&
@@ -206,7 +210,7 @@ export function CreateMissionPage() {
   };
 
   const handleAssignMission = async () => {
-    if (!originHub || !destinationHub || !selectedDrone || !selectedBattery || !selectedRoute || !selectedTiming) return;
+    if (!hasOrderHubs || !selectedDrone || !selectedBattery || !selectedRoute || !selectedTiming) return;
 
     const energy = getEnergyFeasibility(selectedRoute, DEFAULT_BATTERY_RESERVE_PCT, selectedBattery.chargeLevelPct);
     if (!energy.feasible) {
@@ -268,8 +272,8 @@ export function CreateMissionPage() {
                   readOnly
                 />
               </label>
-              <label><span>Origin Hub</span><input value={originHub?.name ?? order.originHubId} readOnly /></label>
-              <label><span>Destination Hub</span><input value={destinationHub?.name ?? order.destinationHubId} readOnly /></label>
+              <label><span>Origin Hub</span><input value={originHubLabel} readOnly /></label>
+              <label><span>Destination Hub</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
@@ -285,6 +289,11 @@ export function CreateMissionPage() {
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
             </div>
+            {!hasOrderHubs && (
+              <div className="operator-empty-state">
+                This Order does not contain a valid Origin Hub and Destination Hub.
+              </div>
+            )}
           </OperatorPanel>
         )}
 
@@ -424,6 +433,7 @@ export function CreateMissionPage() {
                       feasible={energy.feasible}
                       relayBatteryReady={relayBatteryReady}
                       relayBatterySummary={relayBatterySummary}
+                      resolveHubName={hubName}
                       plannedStartAt={timing.plannedStartAt}
                       estimatedArrivalAt={timing.estimatedArrivalAt}
                       selected={route.id === selectedRouteId}
@@ -487,12 +497,12 @@ export function CreateMissionPage() {
           </OperatorPanel>
         )}
 
-        {step === 4 && originHub && destinationHub && selectedDrone && selectedBattery && selectedRoute && selectedTiming && (
+        {step === 4 && hasOrderHubs && selectedDrone && selectedBattery && selectedRoute && selectedTiming && (
           <OperatorPanel title="Review & assign">
             <div className="mission-review-grid">
               <dl className="review-values">
                 <div><dt>Order</dt><dd>{order.id}</dd></div><div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-                <div><dt>Origin Hub</dt><dd>{originHub.name}</dd></div><div><dt>Destination Hub</dt><dd>{destinationHub.name}</dd></div>
+                <div><dt>Origin Hub</dt><dd>{originHubLabel}</dd></div><div><dt>Destination Hub</dt><dd>{destinationHubLabel}</dd></div>
                 <div>
                   <dt>Origin package</dt>
                   <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
