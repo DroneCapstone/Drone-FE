@@ -294,7 +294,8 @@ export type CustomerCreateOrderRequest = {
   requested_delivery_at: string | null;
 
   sender_phone: string;
-  receiver_phone: string;
+  receiver_name: string;
+  receiver_email: string;
 
   /**
    * New BE field.
@@ -738,6 +739,12 @@ export function extractPaymentCheckoutDetails(
   };
 }
 
+/**
+ * PayOS / backend payment status mapping.
+ * Exact matches matter: "UNPAID" and "NOT_PAID" contain the word "paid",
+ * so includes("paid") must NEVER be used to grant payment success.
+ * An explicit backend status is authoritative over a boolean `paid` flag.
+ */
 export function normalizePaymentStatus(value: PaymentStatusResponse) {
   const raw =
     value.payment_status ??
@@ -745,26 +752,44 @@ export function normalizePaymentStatus(value: PaymentStatusResponse) {
     value.data?.payment_status ??
     value.data?.status;
 
-  if (value.paid === true || value.data?.paid === true) {
-    return "paid" as const;
-  }
-
-  const normalized = String(raw ?? "").toLowerCase();
+  const status = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
 
   if (
-    normalized.includes("paid") ||
-    normalized.includes("success") ||
-    normalized.includes("completed")
+    status === "PAID" ||
+    status === "SUCCESS" ||
+    status === "SUCCEEDED" ||
+    status === "SUCCESSFUL" ||
+    status === "COMPLETED" ||
+    status === "COMPLETE" ||
+    status === "PAYMENT_SUCCESS" ||
+    status === "PAYMENT_COMPLETED"
   ) {
     return "paid" as const;
   }
 
   if (
-    normalized.includes("cancel") ||
-    normalized.includes("expired") ||
-    normalized.includes("failed")
+    status === "CANCELLED" ||
+    status === "CANCELED" ||
+    status === "EXPIRED" ||
+    status === "FAILED" ||
+    status === "FAILURE" ||
+    status === "REJECTED"
   ) {
     return "failed" as const;
+  }
+
+  // Never report PENDING/UNPAID/NOT_PAID as a completed payment.
+  // If an explicit status exists but is unknown, fail closed as pending.
+  if (status) {
+    return "pending" as const;
+  }
+
+  // Legacy responses that only provide a boolean flag.
+  if (value.paid === true || value.data?.paid === true) {
+    return "paid" as const;
   }
 
   return "pending" as const;
