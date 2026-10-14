@@ -6,6 +6,7 @@ import {
 import {
   Link,
   Navigate,
+  useNavigate,
   useParams,
 } from "react-router-dom";
 
@@ -21,6 +22,7 @@ import {
 
 export function PaymentSuccessPage() {
   const { deliveryId } = useParams();
+  const navigate = useNavigate();
 
   const [delivery, setDelivery] =
     useState(() =>
@@ -33,15 +35,31 @@ export function PaymentSuccessPage() {
 
   const [checking, setChecking] =
     useState(true);
+  const [verificationError, setVerificationError] =
+    useState("");
+  const [verificationAttempt, setVerificationAttempt] =
+    useState(0);
 
   useEffect(() => {
     if (!deliveryId) {
       return;
     }
 
-    customerDeliveryService
-      .refreshPaymentStatus(deliveryId)
+    const orderId = deliveryId;
+    let active = true;
+
+    setChecking(true);
+    setVerificationError("");
+    setDelivery(customerDeliveryService.getById(orderId));
+
+    // This URL is for verified payments only. If the backend says
+    // PENDING, go back to the QR automatically, without making the
+    // customer press "Return to payment".
+    void customerDeliveryService
+      .refreshPaymentStatus(orderId)
       .then((next) => {
+        if (!active) return;
+
         setDelivery(next);
 
         if (next?.paymentStatus === "paid") {
@@ -49,12 +67,31 @@ export function PaymentSuccessPage() {
           window.sessionStorage.removeItem(
             "droneoptai.customer.pending-checkout-order",
           );
+          return;
+        }
+
+        navigate(
+          `/customer/payment/${encodeURIComponent(orderId)}`,
+          { replace: true },
+        );
+      })
+      .catch(() => {
+        // Never claim that the payment succeeded when verification
+        // cannot reach the backend. Allow retry or return to QR.
+        if (active) {
+          setVerificationError(
+            "Payment verification is temporarily unavailable. Please try again.",
+          );
         }
       })
       .finally(() => {
-        setChecking(false);
+        if (active) setChecking(false);
       });
-  }, [deliveryId]);
+
+    return () => {
+      active = false;
+    };
+  }, [deliveryId, navigate, verificationAttempt]);
 
   if (!delivery) {
     return (
@@ -65,32 +102,44 @@ export function PaymentSuccessPage() {
     );
   }
 
-  if (
-    checking ||
-    delivery.paymentStatus !== "paid"
-  ) {
+  if (checking || delivery.paymentStatus !== "paid") {
     return (
       <div className="mx-auto max-w-[760px] px-6 py-20 text-center">
         <Loader2
           size={30}
-          className="mx-auto animate-spin text-orange-400"
+          className={
+            checking
+              ? "mx-auto animate-spin text-orange-400"
+              : "mx-auto text-orange-400"
+          }
         />
 
         <h1 className="mt-6 text-3xl font-semibold tracking-[-0.03em]">
-          Verifying payment
+          {verificationError ? "Unable to verify payment" : "Verifying payment"}
         </h1>
 
-        <p className="mx-auto mt-3 max-w-[520px] text-sm leading-6 text-white/40">
-          DroneOptAI is checking the payment status with the backend.
+        <p className="mx-auto mt-3 max-w-[520px] text-sm leading-6 text-white/60">
+          {verificationError ||
+            "DroneOptAI is checking the payment status with the backend."}
         </p>
 
-        {!checking && (
-          <Link
-            to={`/customer/payment/${delivery.id}`}
-            className="mt-7 inline-flex rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black"
-          >
-            Return to payment
-          </Link>
+        {verificationError && (
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setVerificationAttempt((attempt) => attempt + 1)}
+              className="inline-flex rounded-xl border border-white/20 px-6 py-3 text-sm font-semibold text-white"
+            >
+              Try again
+            </button>
+            <Link
+              to={`/customer/payment/${encodeURIComponent(delivery.id)}`}
+              replace
+              className="inline-flex rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black"
+            >
+              Return to payment
+            </Link>
+          </div>
         )}
       </div>
     );
