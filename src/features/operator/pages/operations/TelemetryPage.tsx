@@ -62,7 +62,13 @@ export function TelemetryPage() {
                       </td>
                       <td>{point.altitudeM != null ? `${point.altitudeM} m` : '—'}</td>
                       <td>{point.speedKmh != null ? `${point.speedKmh} km/h` : '—'}</td>
-                      <td>{point.batteryPct != null ? `${point.batteryPct}%` : '—'}</td>
+                      <td>
+                        {point.batteryPct != null
+                          ? `${point.batteryPct}%`
+                          : point.batteryVoltage != null
+                            ? `${point.batteryVoltage} V`
+                            : '—'}
+                      </td>
                       <td>{point.signalPct != null ? `${point.signalPct}%` : '—'}</td>
                     </tr>
                   ))}

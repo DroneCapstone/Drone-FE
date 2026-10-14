@@ -2,7 +2,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
-import { operatorHubs } from '../../data/hubMockData';
 import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { Tone } from '../../types/operator';
@@ -15,8 +14,8 @@ import {
 import { formatMissionTime } from '../../utils/missionTiming';
 import { OrderPageShell } from './OrderPageShell';
 
-function hubName(hubId: string) {
-  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+function hubName(hubId: string, apiName?: string) {
+  return apiName || hubId || 'Hub data unavailable';
 }
 
 function orderTone(status: string): Tone {
@@ -102,8 +101,8 @@ export function OrderDetailPage() {
           <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-              <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId)}</dd></div>
-              <div><dt>Destination Hub</dt><dd>{hubName(order.destinationHubId)}</dd></div>
+              <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
+              <div><dt>Destination Hub</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
               <div>
                 <dt>Origin package</dt>
                 <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
@@ -155,7 +154,7 @@ export function OrderDetailPage() {
           {order.status === 'Delivered to Hub' && (
             <OperatorPanel title="Operator handoff complete" eyebrow="DESTINATION HUB">
               <div className="notification-policy-note">
-                <strong>Package delivered to {hubName(order.destinationHubId)}</strong>
+                <strong>Package delivered to {hubName(order.destinationHubId, order.destinationHubName)}</strong>
                 <span>Operator scope ends after the Destination Hub confirms package receipt. Customer pickup, reminders, and post-delivery handling are managed by the Hub/Technician workflow and automated system notifications.</span>
               </div>
             </OperatorPanel>
