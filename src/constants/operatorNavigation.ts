@@ -18,6 +18,7 @@ export const operatorNavigation: OperatorNavItem[] = [
     children: [
       { label: 'Drone availability', path: '/operator/fleet-hubs/drones' },
       { label: 'Hub network', path: '/operator/fleet-hubs/hubs' },
+      { label: 'Battery inventory', path: '/operator/fleet-hubs/batteries' },
     ],
   },
   {

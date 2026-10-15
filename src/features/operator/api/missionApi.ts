@@ -617,6 +617,7 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   return result;
 }
 
+console.count('[CreateMission] POST mission');
 export async function listMissionsApi(): Promise<Mission[]> {
   const payload = await operatorApiRequest<unknown>('/missions/');
   return unwrapArray(payload, ['missions']).map(mapMission).filter((mission) => mission.id);

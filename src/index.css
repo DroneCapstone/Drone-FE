@@ -10323,3 +10323,131 @@ button.alert-row:last-child {
     flex-direction: column;
   }
 }
+
+/* Operator Fleet & Network: compact clickable counters inside each Hub Card. */
+.hub-network-grid .hub-resource-card {
+  gap: 12px;
+}
+
+.hub-network-grid .hub-resource-card .hub-card-location {
+  margin-top: -6px;
+}
+
+.hub-resource-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 3px;
+}
+
+.hub-resource-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 70px;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.hub-resource-stat small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hub-resource-stat strong {
+  font-size: 17px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-content .hub-network-grid .hub-resource-card:hover {
+  border-color: var(--border-strong);
+}
+
+.page-content .hub-network-grid .hub-resource-stat:hover,
+.page-content .hub-network-grid .hub-resource-stat:focus-visible {
+  border-color: var(--orange);
+  outline: none;
+}
+
+.hub-resource-stat:focus-visible {
+  box-shadow: 0 0 0 2px var(--orange-soft);
+}
+
+.hub-resource-notice {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.battery-inventory-toolbar {
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.battery-inventory-toolbar .filter-search {
+  flex: 0 1 240px;
+  min-width: 180px;
+}
+
+.battery-inventory-detail {
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.battery-inventory-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.battery-inventory-detail-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.battery-inventory-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0;
+}
+
+.battery-inventory-detail-grid dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.battery-inventory-detail-grid dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .battery-inventory-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Keep the parent Hub Card neutral; the individual resource frame is clickable. */
+.page-content .hub-network-grid .hub-resource-card:not(.active):hover,
+.page-content .hub-network-grid .hub-resource-card:not(.active):focus-within {
+  border-color: var(--border-strong) !important;
+}

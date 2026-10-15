@@ -52,6 +52,7 @@ export const missionTabs = [
 export const fleetHubTabs = [
   { label: 'Drone', path: '/operator/fleet-hubs/drones' },
   { label: 'Hub network', path: '/operator/fleet-hubs/hubs' },
+  { label: 'Battery', path: '/operator/fleet-hubs/batteries' },
 ];
 
 export const operationTabs = [

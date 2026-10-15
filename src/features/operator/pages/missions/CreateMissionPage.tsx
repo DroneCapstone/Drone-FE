@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -16,6 +16,7 @@ import {
   useMissionPlanningAnalysisQuery,
 } from '../../hooks/useMissionQueries';
 import type { OperatorDrone, RouteOption } from '../../types/operator';
+
 import {
   formatDeliveryWindow,
   getOrderPlanningBadge,
@@ -27,6 +28,11 @@ import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../uti
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 
 import { MissionPageShell } from './MissionPageShell';
+
+// const assignLockRef = useRef(false);
+
+// const [isAssigning, setIsAssigning] = useState(false);
+// const [needsMissionCheck, setNeedsMissionCheck] = useState(false);
 
 const STEPS = ['Order info', 'Select drone', 'Route, relay battery & energy', 'Review & assign'] as const;
 
@@ -173,7 +179,10 @@ export function CreateMissionPage() {
     navigate(`/operator/ai/mission-analysis?orderId=${order.id}&droneId=${selectedDroneId}&routeId=${routeId}&returnTo=mission-create`);
   };
 
+
+
   const handleAssignMission = async () => {
+    console.count('[CreateMission] Assign clicked');
     if (!canContinueStep3 || !selectedDrone || !selectedRoute) return;
 
     // Re-check drone eligibility and planning. A previously available drone may

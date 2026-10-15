@@ -3,8 +3,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OperatorPagination } from '../../components/OperatorPagination';
-import { useFleetDronesQuery } from '../../hooks/useFleetQueries';
+import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
 import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
+import { countBatteriesAtHub } from '../../utils/fleetInventory';
 import { FleetHubPageShell } from '../fleet/FleetHubPageShell';
 
 const HUBS_PER_PAGE = 9;
@@ -15,28 +16,26 @@ export function HubNetworkPage() {
   const { data: apiHubs, isLoading: hubsLoading, error: hubsError } = useMissionHubsQuery();
   const { data: apiMiniHubs, isLoading: miniHubsLoading, error: miniHubsError } = useMissionMiniHubsQuery();
   const { data: fleet = [], isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
+  const { data: batteries = [], isLoading: batteriesLoading, error: batteriesError } = useFleetBatteriesQuery();
 
+  const batteryCountsReady = !batteriesLoading && !fleetLoading && !batteriesError && !fleetError;
   const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => {
-    const hubFleet = fleet.filter(
-      (drone) => String(drone.hubId) === String(hub.id),
-    );
-    const availableFleet = hubFleet.filter((drone) => drone.technicalStatus === 'Available');
+    const hubFleet = fleet.filter((drone) => drone.hubId === String(hub.id));
     return {
-      id: hub.id,
+      id: String(hub.id),
       name: hub.name,
       area: '',
       address: hub.address ?? '',
       latitude: hub.latitude ?? 0,
       longitude: hub.longitude ?? 0,
       status: 'Active' as const,
-      totalDrones: hub.totalDrones ?? hubFleet.length,
-      availableDrones: hub.availableDrones ?? availableFleet.length,
+      totalDrones: hub.totalDrones ?? (!fleetLoading && !fleetError ? hubFleet.length : null),
+      totalBatteries: batteryCountsReady ? countBatteriesAtHub(batteries, fleet, String(hub.id)) : null,
     };
   });
 
-  const isLoading = hubsLoading || miniHubsLoading || fleetLoading;
-  const error = hubsError ?? miniHubsError ?? fleetError;
-
+  const loading = hubsLoading || miniHubsLoading;
+  const error = hubsError ?? miniHubsError;
   const totalPages = Math.max(1, Math.ceil(hubs.length / HUBS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const paginatedHubs = hubs.slice(
@@ -44,21 +43,17 @@ export function HubNetworkPage() {
     currentPage * HUBS_PER_PAGE,
   );
 
-  const openHubDrones = (hubId: string) => {
-    navigate(`/operator/fleet-hubs/drones?hub=${encodeURIComponent(hubId)}`);
+  const openHubTab = (tab: 'drones' | 'batteries', hubId: string) => {
+    navigate(`/operator/fleet-hubs/${tab}?hub=${encodeURIComponent(hubId)}`);
   };
 
   return (
     <FleetHubPageShell active="/operator/fleet-hubs/hubs">
       <OperatorPanel
         title="Hub network"
-        action={
-          <NavLink className="text-button" to="/operator/fleet-hubs/drones">
-            View all drones
-          </NavLink>
-        }
+        action={<NavLink className="text-button" to="/operator/fleet-hubs/drones">View all drones</NavLink>}
       >
-        {isLoading ? (
+        {loading ? (
           <div className="operator-empty-state">Loading hubs…</div>
         ) : error ? (
           <div className="operator-empty-state">
@@ -68,19 +63,24 @@ export function HubNetworkPage() {
           <div className="operator-empty-state">No hubs were returned by the Backend.</div>
         ) : (
           <>
+            {batteriesError || fleetError ? (
+              <p className="hub-resource-notice" role="status">
+                Battery totals are unavailable because inventory data could not be loaded. Drone and Hub information remains accessible.
+              </p>
+            ) : null}
             <div className="hub-grid hub-network-grid">
               {paginatedHubs.map((hub) => (
                 <HubCard
                   key={hub.id}
                   hub={hub}
                   totalDrones={hub.totalDrones}
-                  readyDrones={hub.availableDrones}
+                  totalBatteries={hub.totalBatteries}
                   showArea={false}
-                  onSelect={() => openHubDrones(hub.id)}
+                  onSelectDrones={() => openHubTab('drones', hub.id)}
+                  onSelectBatteries={() => openHubTab('batteries', hub.id)}
                 />
               ))}
             </div>
-
             <OperatorPagination
               currentPage={currentPage}
               totalItems={hubs.length}
