@@ -14,11 +14,6 @@ import { FleetHubPageShell } from './FleetHubPageShell';
 const ALL_HUBS = 'All hubs';
 const ALL_MODELS = 'All models';
 const ALL_STATUSES = 'All statuses';
-const ALL_PLACEMENTS = 'All placements';
-
-function placement(battery: OperatorBattery) {
-  return battery.droneId ? 'Installed' : battery.currentHubId ? 'In hub storage' : 'Unknown';
-}
 
 function batteryStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
@@ -28,7 +23,7 @@ function batteryStatusTone(status: string) {
   return 'neutral' as const;
 }
 
-function getBatteryLocation(
+function getBatteryHubName(
   battery: OperatorBattery,
   drones: OperatorDrone[],
   hubNameById: Map<string, string>,
@@ -36,7 +31,6 @@ function getBatteryLocation(
   if (battery.droneId) {
     const drone = drones.find((item) => item.id === battery.droneId);
     const hubId = getBatteryHubId(battery, drones);
-    if (drone?.technicalStatus === 'In Flight') return 'In flight';
     return hubId ? hubNameById.get(hubId) ?? drone?.hubName ?? hubId : '—';
   }
   return battery.currentHubId
@@ -49,9 +43,7 @@ export function BatteryInventoryPage() {
   const [search, setSearch] = useState('');
   const [modelFilter, setModelFilter] = useState(ALL_MODELS);
   const [statusFilter, setStatusFilter] = useState(ALL_STATUSES);
-  const [placementFilter, setPlacementFilter] = useState(ALL_PLACEMENTS);
   const [page, setPage] = useState(1);
-  const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const { data: batteries = [], isLoading: batteriesLoading, isFetching: batteriesFetching, error: batteriesError, refetch: refetchBatteries } = useFleetBatteriesQuery();
   const { data: drones = [], isLoading: dronesLoading, error: dronesError, refetch: refetchDrones } = useFleetDronesQuery();
@@ -70,7 +62,8 @@ export function BatteryInventoryPage() {
     ? requestedHubId : ALL_HUBS;
   const selectedHub = hubs.find((hub) => hub.id === hubFilter);
   const models = useMemo(() => [...new Set(batteries.map((item) => item.model).filter((model): model is string => Boolean(model)))].sort(), [batteries]);
-  const statuses = useMemo(() => [...new Set(batteries.map((item) => item.status))].sort(), [batteries]);
+  // Status options are strictly the unique non-empty values returned by the Battery API.
+  const statuses = useMemo(() => [...new Set(batteries.map((item) => item.status).filter(Boolean))].sort(), [batteries]);
 
   const filtered = useMemo(() => batteries.filter((battery) => {
     const matchesQuery = `${battery.id} ${battery.serialNumber} ${battery.model ?? ''} ${battery.droneId ?? ''}`
@@ -78,13 +71,11 @@ export function BatteryInventoryPage() {
     const matchesHub = hubFilter === ALL_HUBS || getBatteryHubId(battery, drones) === hubFilter;
     const matchesModel = modelFilter === ALL_MODELS || battery.model === modelFilter;
     const matchesStatus = statusFilter === ALL_STATUSES || battery.status === statusFilter;
-    const matchesPlacement = placementFilter === ALL_PLACEMENTS || placement(battery) === placementFilter;
-    return matchesQuery && matchesHub && matchesModel && matchesStatus && matchesPlacement;
-  }), [batteries, drones, hubFilter, modelFilter, placementFilter, search, statusFilter]);
+    return matchesQuery && matchesHub && matchesModel && matchesStatus;
+  }), [batteries, drones, hubFilter, modelFilter, search, statusFilter]);
 
   const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE)));
   const visible = filtered.slice((currentPage - 1) * OPERATOR_PAGE_SIZE, currentPage * OPERATOR_PAGE_SIZE);
-  const selectedBattery = filtered.find((battery) => battery.id === detailsId);
   const loading = batteriesLoading || dronesLoading || hubsLoading || miniHubsLoading;
   const error = batteriesError ?? dronesError ?? hubsError ?? miniHubsError;
 
@@ -94,7 +85,6 @@ export function BatteryInventoryPage() {
     else next.set('hub', hubId);
     setSearchParams(next);
     setPage(1);
-    setDetailsId(null);
   };
 
   return (
@@ -107,7 +97,7 @@ export function BatteryInventoryPage() {
               aria-label="Search batteries"
               placeholder="Search batteries…"
               value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(1); setDetailsId(null); }}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             />
           </div>
           <DropdownSelect
@@ -119,20 +109,14 @@ export function BatteryInventoryPage() {
           <DropdownSelect
             value={modelFilter}
             options={[ALL_MODELS, ...models]}
-            onChange={(value) => { setModelFilter(value); setPage(1); setDetailsId(null); }}
+            onChange={(value) => { setModelFilter(value); setPage(1); }}
             ariaLabel="Battery model"
           />
           <DropdownSelect
             value={statusFilter}
             options={[ALL_STATUSES, ...statuses]}
-            onChange={(value) => { setStatusFilter(value); setPage(1); setDetailsId(null); }}
+            onChange={(value) => { setStatusFilter(value); setPage(1); }}
             ariaLabel="Battery status"
-          />
-          <DropdownSelect
-            value={placementFilter}
-            options={[ALL_PLACEMENTS, 'In hub storage', 'Installed', 'Unknown']}
-            onChange={(value) => { setPlacementFilter(value); setPage(1); setDetailsId(null); }}
-            ariaLabel="Battery placement"
           />
           <span className="toolbar-spacer" />
           <small>{batteriesFetching ? 'Refreshing…' : `${selectedHub ? `${selectedHub.name} · ` : ''}${filtered.length} batteries`}</small>
@@ -152,18 +136,24 @@ export function BatteryInventoryPage() {
           <div className="operator-empty-state">No batteries match the current filters.</div>
         ) : (
           <>
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap battery-inventory-table-wrap">
+              <table className="battery-inventory-table">
+                <colgroup>
+                  <col /> {/* Battery ID */}
+                  <col /> {/* Battery model */}
+                  <col /> {/* Hub name */}
+                  <col /> {/* Capacity */}
+                  <col /> {/* Charge */}
+                  <col /> {/* Status */}
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Battery</th>
                     <th>Model</th>
                     <th>Hub</th>
-                    <th>Location</th>
                     <th>Capacity</th>
                     <th>Charge</th>
                     <th>Status</th>
-                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,46 +161,20 @@ export function BatteryInventoryPage() {
                     <tr key={battery.id}>
                       <td><strong>{battery.id}</strong></td>
                       <td>{battery.model || '—'}</td>
-                      <td>{getBatteryLocation(battery, drones, hubNameById)}</td>
-                      <td>{battery.droneId ? `Installed · Drone ${battery.droneId}` : battery.currentHubId ? 'Hub storage' : 'Unknown'}</td>
-                      <td>{battery.capacityWh.toLocaleString()} Wh</td>
-                      <td>{battery.chargeLevelPct}%</td>
-                      <td><StatusBadge tone={batteryStatusTone(battery.status)}>{battery.status}</StatusBadge></td>
-                      <td>
-                        <button
-                          type="button"
-                          className="row-action"
-                          onClick={() => setDetailsId(detailsId === battery.id ? null : battery.id)}
-                          aria-expanded={detailsId === battery.id}
-                        >{detailsId === battery.id ? 'Hide details' : 'View details'}</button>
-                      </td>
+                      <td>{getBatteryHubName(battery, drones, hubNameById)}</td>
+                      <td>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString()} Wh` : '—'}</td>
+                      <td>{Number.isFinite(battery.chargeLevelPct) ? `${battery.chargeLevelPct}%` : '—'}</td>
+                      <td>{battery.status ? <StatusBadge tone={batteryStatusTone(battery.status)}>{battery.status}</StatusBadge> : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            {selectedBattery && (
-              <section className="battery-inventory-detail" aria-label={`Battery ${selectedBattery.id} details`}>
-                <div className="battery-inventory-detail-head">
-                  <h3>{selectedBattery.id}</h3>
-                  <button type="button" className="row-action" onClick={() => setDetailsId(null)}>Close</button>
-                </div>
-                <dl className="battery-inventory-detail-grid">
-                  <div><dt>Serial number</dt><dd>{selectedBattery.serialNumber}</dd></div>
-                  <div><dt>Battery model</dt><dd>{selectedBattery.model || '—'}</dd></div>
-                  <div><dt>Capacity</dt><dd>{selectedBattery.capacityWh.toLocaleString()} Wh</dd></div>
-                  <div><dt>Charge level</dt><dd>{selectedBattery.chargeLevelPct}%</dd></div>
-                  <div><dt>Status</dt><dd>{selectedBattery.status}</dd></div>
-                  <div><dt>Current hub</dt><dd>{getBatteryLocation(selectedBattery, drones, hubNameById)}</dd></div>
-                  <div><dt>Installed on</dt><dd>{selectedBattery.droneId ? `Drone ${selectedBattery.droneId}` : '—'}</dd></div>
-                </dl>
-              </section>
-            )}
             <OperatorPagination
               currentPage={currentPage}
               totalItems={filtered.length}
               itemLabel="batteries"
-              onPageChange={(nextPage) => { setPage(nextPage); setDetailsId(null); }}
+              onPageChange={setPage}
             />
           </>
         )}

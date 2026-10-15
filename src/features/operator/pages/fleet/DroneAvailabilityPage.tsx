@@ -11,11 +11,13 @@ import type { Hub, TechnicalStatus } from '../../types/operator';
 import { FleetHubPageShell } from './FleetHubPageShell';
 
 const ALL_HUBS = 'All hubs';
+const ALL_MODELS = 'All models';
 
 export function DroneAvailabilityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [technicalFilter, setTechnicalFilter] = useState('All status');
+  const [modelFilter, setModelFilter] = useState(ALL_MODELS);
   const [page, setPage] = useState(1);
 
   const {
@@ -58,6 +60,12 @@ export function DroneAvailabilityPage() {
 
   const selectedHub = hubs.find((hub) => hub.id === hubFilter);
 
+  // Only include models reported by the Fleet API; no hardcoded choices.
+  const models = useMemo(
+    () => [...new Set(fleet.map((drone) => drone.model?.trim()).filter((model): model is string => Boolean(model)))].sort((a, b) => a.localeCompare(b)),
+    [fleet],
+  );
+
   const handleHubChange = (hubId: string) => {
     const nextParams = new URLSearchParams(searchParams);
 
@@ -78,14 +86,15 @@ export function DroneAvailabilityPage() {
         .includes(query.toLowerCase());
 
       const matchesHub = hubFilter === ALL_HUBS || drone.hubId === hubFilter;
+      const matchesModel = modelFilter === ALL_MODELS || drone.model?.trim() === modelFilter;
 
       const matchesTechnical =
         technicalFilter === 'All status' ||
         drone.technicalStatus === (technicalFilter as TechnicalStatus);
 
-      return matchesQuery && matchesHub && matchesTechnical;
+      return matchesQuery && matchesHub && matchesModel && matchesTechnical;
     }),
-    [fleet, hubFilter, query, technicalFilter],
+    [fleet, hubFilter, modelFilter, query, technicalFilter],
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE));
@@ -122,6 +131,13 @@ export function DroneAvailabilityPage() {
             ]}
             onChange={handleHubChange}
             ariaLabel="Hub"
+          />
+
+          <DropdownSelect
+            value={modelFilter}
+            options={[ALL_MODELS, ...models]}
+            onChange={(value) => { setModelFilter(value); setPage(1); }}
+            ariaLabel="Drone model"
           />
 
           <DropdownSelect

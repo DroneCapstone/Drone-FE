@@ -34,7 +34,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
         <thead>
           <tr>
             <th>Order</th>
-            <th className="order-route-heading">Origin Hub → Destination Hub</th>
+            <th className="order-route-heading">Drop-off Point → Pick-up Point</th>
             <th>Package</th>
             <th>Estimated delivery</th>
             <th />
@@ -76,7 +76,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                   {order.packageLabel}
                   <small>{order.payloadKg} kg · {order.packageType}</small>
                   <small className={order.originHubReceivedAt ? 'package-received-text' : 'package-awaiting-text'}>
-                    {order.originHubReceivedAt ? `Received at Origin · ${receivedTime(order.originHubReceivedAt)}` : 'Awaiting package at Origin Hub'}
+                    {order.originHubReceivedAt ? `Received at Origin · ${receivedTime(order.originHubReceivedAt)}` : 'Awaiting package at Drop-off Point'}
                   </small>
                 </td>
                 <td>

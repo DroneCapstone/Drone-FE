@@ -11,8 +11,17 @@ export function DroneAvailabilityTable({ drones, hubs }: { drones: OperatorDrone
   const hubNameById = new Map(hubs.map((hub) => [hub.id, hub.name]));
 
   return (
-    <div className="table-wrap">
-      <table>
+    <div className="table-wrap drone-availability-table-wrap">
+      <table className="drone-availability-table">
+        <colgroup>
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+        </colgroup>
         <thead>
           <tr>
             <th>Drone</th>
@@ -27,13 +36,13 @@ export function DroneAvailabilityTable({ drones, hubs }: { drones: OperatorDrone
         <tbody>
           {drones.map((drone) => (
             <tr key={drone.id}>
-              <td><strong>{`${drone.name}-${drone.displayId}`}</strong></td>
-              <td>{drone.model}</td>
-              <td>{drone.hubName || hubNameById.get(drone.hubId) || drone.hubId || '—'}</td>
-              <td><StatusBadge tone={statusTone(drone.technicalStatus)}>{drone.technicalStatus}</StatusBadge></td>
-              <td>{drone.batteryLevelPct === undefined ? '—' : `${drone.batteryLevelPct}%`}</td>
-              <td>{drone.maxPayloadKg} kg</td>
-              <td>{drone.utilizationPct === undefined ? '—' : `${drone.utilizationPct}%`}</td>
+              <td data-label="Drone"><strong>{`${drone.name}-${drone.displayId}`}</strong></td>
+              <td data-label="Model">{drone.model}</td>
+              <td data-label="Hub">{drone.hubName || hubNameById.get(drone.hubId) || drone.hubId || '—'}</td>
+              <td data-label="Status"><StatusBadge tone={statusTone(drone.technicalStatus)}>{drone.technicalStatus}</StatusBadge></td>
+              <td data-label="Battery">{drone.batteryLevelPct === undefined ? '—' : `${drone.batteryLevelPct}%`}</td>
+              <td data-label="Max payload">{drone.maxPayloadKg} kg</td>
+              <td data-label="Utilization">{drone.utilizationPct === undefined ? '—' : `${drone.utilizationPct}%`}</td>
             </tr>
           ))}
         </tbody>

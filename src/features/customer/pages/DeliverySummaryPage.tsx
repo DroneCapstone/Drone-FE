@@ -23,8 +23,8 @@ export function DeliverySummaryPage() {
 
   const delivery = deliveryId
     ? customerDeliveryService.getById(
-        deliveryId,
-      )
+      deliveryId,
+    )
     : null;
 
   if (!delivery) {
@@ -53,7 +53,7 @@ export function DeliverySummaryPage() {
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
         <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-6">
           <RouteRow
-            label="Origin hub"
+            label="Drop-off Point"
             name={delivery.originHub.name}
             address={delivery.originHub.address}
           />
@@ -61,7 +61,7 @@ export function DeliverySummaryPage() {
           <div className="my-5 h-px bg-white/[0.07]" />
 
           <RouteRow
-            label="Destination hub"
+            label="Pick-up Point"
             name={delivery.destinationHub.name}
             address={delivery.destinationHub.address}
           />
@@ -200,7 +200,7 @@ function SummaryPriceBreakdown({
     price.serviceFee > 0 &&
     Math.abs(
       price.serviceFee -
-        details.expressSurcharge,
+      details.expressSurcharge,
     ) > 0.5;
 
   return (

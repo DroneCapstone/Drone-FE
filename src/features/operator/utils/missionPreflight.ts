@@ -34,18 +34,18 @@ export function getMissionPreflight(
 
   const checks: PreflightCheck[] = [
     {
-      label: 'Package at origin hub',
+      label: 'Package at Drop-off Point',
       passed: Boolean(order?.originHubReceivedAt),
       detail: order?.originHubReceivedAt
         ? `Received ${new Date(order.originHubReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
         : 'Waiting for Technician to confirm package receipt.',
     },
     {
-      label: 'Drone ready at origin hub',
+      label: 'Drone ready at Drop-off Point',
       passed: droneReady,
       detail: droneReady
         ? 'Assigned drone is ready for departure.'
-        : 'Assigned drone is not ready at the Origin Hub.',
+        : 'Assigned drone is not ready at the Drop-off Point.',
     },
     {
       label: 'Route & weather',

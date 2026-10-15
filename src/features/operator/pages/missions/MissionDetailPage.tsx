@@ -132,7 +132,7 @@ export function MissionDetailPage() {
           <OperatorPanel title="Mission route" eyebrow={mission.status === 'In Progress' ? 'LIVE DELIVERY PATH' : 'MISSION PLAN'}>
             <div className="mission-route-flow">
               <div className="mission-route-node">
-                <small>Origin Hub</small>
+                <small>Drop-off Point</small>
                 <strong>{originHub?.name || mission.originHubId || '—'}</strong>
               </div>
 
@@ -149,7 +149,7 @@ export function MissionDetailPage() {
 
               <span className="mission-route-arrow">→</span>
               <div className="mission-route-node">
-                <small>Destination Hub</small>
+                <small>Pick-up Point</small>
                 <strong>{destinationHub?.name || mission.destinationHubId || '—'}</strong>
               </div>
             </div>
@@ -207,10 +207,10 @@ export function MissionDetailPage() {
             <dl className="key-values">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
-              <div><dt>Origin Hub</dt><dd>{originHub?.name || mission.originHubId || '—'}</dd></div>
+              <div><dt>Drop-off Point</dt><dd>{originHub?.name || mission.originHubId || '—'}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
               <div><dt>Relay Hub</dt><dd>{relayHubs.length ? relayHubs.map((hub) => hub.name).join(' → ') : 'Not required'}</dd></div>
-              <div><dt>Destination Hub</dt><dd>{destinationHub?.name || mission.destinationHubId || '—'}</dd></div>
+              <div><dt>Pick-up Point</dt><dd>{destinationHub?.name || mission.destinationHubId || '—'}</dd></div>
               <div><dt>Route</dt><dd>{mission.routeId || '—'}{mission.route ? ` · ${mission.route}` : ''}</dd></div>
               <div><dt>Planned start</dt><dd>{formatMissionTime(mission.plannedStartAt)}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>

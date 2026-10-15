@@ -73,16 +73,16 @@ const ARTICLES: HelpArticle[] = [
     summary:
       "Where the sender drops off and the recipient collects the package.",
     content:
-      "DroneOptAI deliveries operate between selected hubs. The sender brings the package to the origin hub, and the recipient collects it at the destination hub.",
+      "DroneOptAI deliveries operate between selected hubs. The sender brings the package to the Drop-off Point, and the recipient collects it at the Pick-up Point.",
   },
   {
     id: "handover-deadline",
     category: "delivery",
     title: "Handover deadline",
     summary:
-      "When your package must reach the origin hub.",
+      "When your package must reach the Drop-off Point.",
     content:
-      "Bring the package to the selected origin hub before the handover deadline shown in your order. Late handover may move the delivery to a later available slot.",
+      "Bring the package to the selected Drop-off Point before the handover deadline shown in your order. Late handover may move the delivery to a later available slot.",
   },
   {
     id: "delivery-modes",
@@ -273,11 +273,10 @@ export function HelpPoliciesPage() {
                         category.id,
                       )
                     }
-                    className={`group min-w-0 overflow-hidden rounded-[22px] border text-left transition ${
-                      active
-                        ? "border-orange-500/[0.34] bg-orange-500/[0.05] shadow-[0_16px_32px_rgba(249,115,22,0.08)]"
-                        : "border-white/[0.09] bg-[#151217]/88 hover:border-white/[0.16]"
-                    }`}
+                    className={`group min-w-0 overflow-hidden rounded-[22px] border text-left transition ${active
+                      ? "border-orange-500/[0.34] bg-orange-500/[0.05] shadow-[0_16px_32px_rgba(249,115,22,0.08)]"
+                      : "border-white/[0.09] bg-[#151217]/88 hover:border-white/[0.16]"
+                      }`}
                   >
                     <div className="relative h-[104px] overflow-hidden">
                       <img
@@ -315,18 +314,17 @@ export function HelpPoliciesPage() {
 
           {isSearching ? (
             <p className="mt-1 text-[12px] leading-6 text-white/[0.82]">
-              {`${visibleArticles.length} result${
-                visibleArticles.length ===
+              {`${visibleArticles.length} result${visibleArticles.length ===
                 1
-                  ? ""
-                  : "s"
-              }`}
+                ? ""
+                : "s"
+                }`}
             </p>
           ) : null}
         </div>
 
         {visibleArticles.length >
-        0 ? (
+          0 ? (
           <div className="overflow-hidden rounded-[20px] border border-white/[0.09] bg-[#151217]/92">
             {visibleArticles.map(
               (
@@ -339,7 +337,7 @@ export function HelpPoliciesPage() {
                   last={
                     index ===
                     visibleArticles.length -
-                      1
+                    1
                   }
                 />
               ),
@@ -403,11 +401,10 @@ function ArticleRow({
   return (
     <details
       id={article.id}
-      className={`group ${
-        last
-          ? ""
-          : "border-b border-white/[0.07]"
-      }`}
+      className={`group ${last
+        ? ""
+        : "border-b border-white/[0.07]"
+        }`}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-[18px] sm:px-5 sm:py-5">
         <div className="min-w-0">

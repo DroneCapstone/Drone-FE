@@ -47,7 +47,7 @@ export function clearOrderReplanning(orderId: string) {
   return updateOperatorOrder(orderId, { replanRequiredAt: undefined });
 }
 
-/** Technician confirms the physical package handoff at the Origin Hub. */
+/** Technician confirms the physical package handoff at the Drop-off Point. */
 export function markOrderReceivedAtOriginHub(orderId: string, receivedAt = new Date()) {
   return updateOperatorOrder(orderId, {
     originHubReceivedAt: receivedAt.toISOString(),
@@ -55,7 +55,7 @@ export function markOrderReceivedAtOriginHub(orderId: string, receivedAt = new D
 }
 
 /**
- * Technician confirms the package at the Destination Hub.
+ * Technician confirms the package at the Pick-up Point.
  * For Operator this is the end of the delivery lifecycle.
  */
 export function markOrderDeliveredToHub(orderId: string, receivedAt = new Date()) {

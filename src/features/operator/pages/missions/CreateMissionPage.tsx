@@ -28,6 +28,7 @@ import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../uti
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 
 import { MissionPageShell } from './MissionPageShell';
+import './create-mission-compact.css';
 
 // const assignLockRef = useRef(false);
 
@@ -128,8 +129,8 @@ export function CreateMissionPage() {
   const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
   const routeOptions = planningAnalysis?.routes ?? [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin Hub';
-  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination Hub';
+  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Drop-off Point';
+  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Pick-up Point';
   const hubName = (hubId: string) =>
     networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const selectedRouteEnergy = selectedRoute
@@ -262,8 +263,8 @@ export function CreateMissionPage() {
                   readOnly
                 />
               </label>
-              <label><span>Origin Hub</span><input value={originHubLabel} readOnly /></label>
-              <label><span>Destination Hub</span><input value={destinationHubLabel} readOnly /></label>
+              <label><span>Drop-off Point</span><input value={originHubLabel} readOnly /></label>
+              <label><span>Pick-up Point</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
@@ -273,7 +274,7 @@ export function CreateMissionPage() {
               </StatusBadge>
               <span>
                 {planningState === 'Ready for Planning'
-                  ? `${order.deliveryMode === 'Express' ? 'Express planning is active.' : 'Planning is open.'} The Mission can be assigned before the package reaches the Origin Hub.`
+                  ? `${order.deliveryMode === 'Express' ? 'Express planning is active.' : 'Planning is open.'} The Mission can be assigned before the package reaches the Drop-off Point.`
                   : planningState === 'Needs Replanning'
                     ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
@@ -281,7 +282,7 @@ export function CreateMissionPage() {
             </div>
             {!hasOrderHubs && (
               <div className="operator-empty-state">
-                This Order does not contain a valid Origin Hub and Destination Hub.
+                This Order does not contain a valid Drop-off Point and Pick-up Point.
               </div>
             )}
           </OperatorPanel>
@@ -292,21 +293,21 @@ export function CreateMissionPage() {
             <OperatorPanel title="Delivery network">
               <div className="delivery-network-strip">
                 <div className="delivery-network-node">
-                  <small>Origin Hub</small>
+                  <small>Drop-off Point</small>
                   <strong>{originHubLabel}</strong>
-                  <span>Customer selected</span>
+                  {/* <span>Customer selected</span> */}
                 </div>
                 <div className="delivery-network-arrow">→</div>
                 <div className="delivery-network-node">
-                  <small>Destination Hub</small>
+                  <small>Pick-up Point</small>
                   <strong>{destinationHubLabel}</strong>
-                  <span>Customer selected</span>
+                  {/* <span>Customer selected</span> */}
                 </div>
               </div>
-              <p className="section-note">Origin and Destination Hubs are fixed by the customer. Route planning may add an intermediate Relay Hub when a long-distance flight requires a technical stop.</p>
+              {/* <p className="section-note">Origin and Pick-up Points are fixed by the customer. Route planning may add an intermediate Relay Hub when a long-distance flight requires a technical stop.</p> */}
             </OperatorPanel>
 
-            <OperatorPanel title="Origin Hub & available drones">
+            <OperatorPanel title="Available drones">
               {isEligibleDronesLoading ? (
                 <div className="operator-empty-state">Loading available drones…</div>
               ) : eligibleDronesError ? (
@@ -317,11 +318,13 @@ export function CreateMissionPage() {
                 </div>
               ) : eligibleDronesData ? (
                 <>
+                  {/* Drop-off Point summary and API explanation hidden by design.
+                      Keep the JSX below commented so it can be restored if needed.
                   <div className="hub-grid hub-grid-select">
                     <div className="hub-card">
                       <div className="hub-card-head">
                         <div>
-                          <span className="eyebrow">Origin Hub</span>
+                          <span className="eyebrow">Drop-off Point</span>
                           <h3>{eligibleDronesData.hub.name}</h3>
                         </div>
                         <StatusBadge tone="success">Active</StatusBadge>
@@ -332,8 +335,8 @@ export function CreateMissionPage() {
                       </div>
                     </div>
                   </div>
-
-                  <p className="section-note">Only drones returned by the Backend eligibility check are shown. The API already filters by Origin Hub, availability, assignment conflict, and payload capacity.</p>
+                  <p className="section-note">Only drones returned by the Backend eligibility check are shown. The API already filters by Drop-off Point, availability, assignment conflict, and payload capacity.</p>
+                  */}
 
                   <div className="eligible-drone-grid">
                     {eligibleDronesAtOrigin.map((drone) => (
@@ -348,7 +351,7 @@ export function CreateMissionPage() {
                   </div>
 
                   {eligibleDronesAtOrigin.length === 0 && (
-                    <div className="operator-empty-state">No eligible drones are currently available at the Origin Hub.</div>
+                    <div className="operator-empty-state">No eligible drones are currently available at the Drop-off Point.</div>
                   )}
                 </>
               ) : (
@@ -363,7 +366,7 @@ export function CreateMissionPage() {
           <div className="mission-step-stack">
             <OperatorPanel title="Route, energy & timing">
               {isPlanningAnalysisFetching && (
-                <p className="section-note">Analyzing route, weather and energy with Backend…</p>
+                <p className="section-note">Analyzing route, weather and energy…</p>
               )}
               {planningAnalysisError && (
                 <p className="section-note danger-note">{planningAnalysisError instanceof Error ? planningAnalysisError.message : 'Unable to analyze mission planning.'}</p>
@@ -467,7 +470,7 @@ export function CreateMissionPage() {
             <div className="mission-review-grid">
               <dl className="review-values">
                 <div><dt>Order</dt><dd>{order.id}</dd></div><div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-                <div><dt>Origin Hub</dt><dd>{originHubLabel}</dd></div><div><dt>Destination Hub</dt><dd>{destinationHubLabel}</dd></div>
+                <div><dt>Drop-off Point</dt><dd>{originHubLabel}</dd></div><div><dt>Pick-up Point</dt><dd>{destinationHubLabel}</dd></div>
                 <div>
                   <dt>Origin package</dt>
                   <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
