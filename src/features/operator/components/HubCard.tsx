@@ -4,29 +4,29 @@ import type { Hub } from '../types/operator';
 
 interface HubCardProps {
   hub: Hub;
-  totalDrones: number;
-  readyDrones: number;
+  totalDrones: number | null;
+  totalBatteries: number | null;
   showArea?: boolean;
-  selected?: boolean;
-  onSelect?: () => void;
+  onSelectDrones: () => void;
+  onSelectBatteries: () => void;
 }
 
+/** Only the two framed figures navigate; the header and status are not buttons. */
 export function HubCard({
   hub,
   totalDrones,
-  readyDrones,
+  totalBatteries,
   showArea = true,
-  selected = false,
-  onSelect,
+  onSelectDrones,
+  onSelectBatteries,
 }: HubCardProps) {
-  const content = (
-    <>
+  return (
+    <article className="hub-card hub-resource-card">
       <div className="hub-card-head">
         <div>
-          {showArea && <span className="eyebrow">{hub.area}</span>}
+          {showArea && hub.area && <span className="eyebrow">{hub.area}</span>}
           <h3>{hub.name}</h3>
         </div>
-
         <StatusBadge tone={hub.status === 'Active' ? 'success' : 'neutral'}>
           {hub.status}
         </StatusBadge>
@@ -34,34 +34,31 @@ export function HubCard({
 
       <div className="hub-card-location">
         <Icon name="pin" size={16} />
-        <span>{hub.address}</span>
+        <span>{hub.address || 'Address unavailable'}</span>
       </div>
 
-      <div className="hub-card-stats">
-        <span>
+      <div className="hub-resource-stats">
+        <button
+          type="button"
+          className="hub-resource-stat"
+          onClick={onSelectDrones}
+          aria-label={`View drones at ${hub.name}`}
+          title={`View drones at ${hub.name}`}
+        >
           <small>Total drones</small>
-          <strong>{totalDrones}</strong>
-        </span>
-        <span>
-          <small>Available now</small>
-          <strong>{readyDrones}</strong>
-        </span>
+          <strong>{totalDrones ?? '—'}</strong>
+        </button>
+        <button
+          type="button"
+          className="hub-resource-stat"
+          onClick={onSelectBatteries}
+          aria-label={`View batteries at ${hub.name}`}
+          title={`View batteries at ${hub.name}`}
+        >
+          <small>Total batteries</small>
+          <strong>{totalBatteries ?? '—'}</strong>
+        </button>
       </div>
-    </>
+    </article>
   );
-
-  if (onSelect) {
-    return (
-      <button
-        type="button"
-        className={`hub-card selectable-card ${selected ? 'active' : ''}`}
-        onClick={onSelect}
-        aria-pressed={selected}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return <div className="hub-card">{content}</div>;
 }
