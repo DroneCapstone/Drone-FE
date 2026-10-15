@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { OperatorPagination } from '../../components/OperatorPagination';
@@ -51,7 +51,7 @@ export function HubNetworkPage() {
     <FleetHubPageShell active="/operator/fleet-hubs/hubs">
       <OperatorPanel
         title="Hub network"
-        action={<NavLink className="text-button" to="/operator/fleet-hubs/drones">View all drones</NavLink>}
+        action={<small className="hub-network-total">{loading ? 'Loading hubs…' : error ? '— hubs' : `${hubs.length} hubs`}</small>}
       >
         {loading ? (
           <div className="operator-empty-state">Loading hubs…</div>

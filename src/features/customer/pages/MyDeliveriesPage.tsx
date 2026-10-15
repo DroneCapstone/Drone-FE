@@ -25,8 +25,8 @@ export function MyDeliveriesPage() {
 
   const deliveries = user
     ? customerDeliveryService.getByCustomer(
-        user.id,
-      )
+      user.id,
+    )
     : [];
 
   useEffect(() => {
@@ -117,13 +117,13 @@ export function MyDeliveriesPage() {
                   </TableHeader>
 
                   <TableHeader>
-                    Origin hub
+                    Drop-off Point
                   </TableHeader>
 
                   <span />
 
                   <TableHeader>
-                    Destination hub
+                    Pick-up Point
                   </TableHeader>
 
                   <TableHeader>

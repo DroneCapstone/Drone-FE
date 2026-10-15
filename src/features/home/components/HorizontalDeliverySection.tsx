@@ -192,8 +192,8 @@ function OrderSlide({
           </p>
 
           <div className="mt-7 overflow-hidden rounded-[22px] border border-white/[0.09] bg-[#111013]/92">
-            <InfoRow label="Origin hub" value="Central Hub" compact />
-            <InfoRow label="Destination hub" value="City Center" compact />
+            <InfoRow label="Drop-off Point" value="Central Hub" compact />
+            <InfoRow label="Pick-up Point" value="City Center" compact />
             <InfoRow label="Package" value="2–5 kg" compact />
             <InfoRow label="Delivery" value="Express" compact />
           </div>
@@ -219,14 +219,14 @@ function OrderSlide({
           </h2>
 
           <p className="mt-7 max-w-[460px] text-[14px] leading-7 text-white/40">
-            Select the origin hub, destination and package information before submitting the delivery request.
+            Select the Drop-off Point, destination and package information before submitting the delivery request.
           </p>
         </div>
 
         <div className="flex h-full items-center justify-center">
           <div className="w-full max-w-[680px] lg:w-[72%]">
-            <InfoRow label="Origin hub" value="Central Hub" />
-            <InfoRow label="Destination hub" value="City Center" />
+            <InfoRow label="Drop-off Point" value="Central Hub" />
+            <InfoRow label="Pick-up Point" value="City Center" />
             <InfoRow label="Package" value="2-5 kg" />
             <InfoRow label="Delivery" value="Express" />
           </div>
@@ -247,7 +247,7 @@ function OriginHubSlide({
     return (
       <article className="relative h-full w-screen shrink-0 overflow-hidden bg-[#080808] px-5 pb-16 pt-8">
         <div className="mx-auto flex h-full max-w-[520px] flex-col">
-          <StepLabel number="02" label="Origin hub" />
+          <StepLabel number="02" label="Drop-off Point" />
 
           <h2 className="mt-5 text-[41px] font-medium leading-[0.94] tracking-[-0.05em]">
             Checked in.
@@ -256,14 +256,14 @@ function OriginHubSlide({
           </h2>
 
           <p className="mt-4 max-w-[390px] text-[13px] leading-6 text-white/62">
-            Your package is checked at the selected origin hub and prepared for aircraft dispatch.
+            Your package is checked at the selected Drop-off Point and prepared for aircraft dispatch.
           </p>
 
           <div className="relative mt-5 min-h-0 flex-1 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0b0b0b]">
             <div className="absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/[0.07] blur-[90px]" />
             <img
               src={hubImage}
-              alt="DroneOptAI origin hub"
+              alt="DroneOptAI Drop-off Point"
               className="absolute inset-0 h-full w-full object-contain p-3"
             />
           </div>
@@ -280,20 +280,20 @@ function OriginHubSlide({
 
           <img
             src={hubImage}
-            alt="DroneOptAI origin hub"
+            alt="DroneOptAI Drop-off Point"
             className="relative z-10 w-[92%] max-w-[940px] object-contain"
           />
 
           <div className="absolute bottom-14 left-12 z-20">
             <div className="mb-3 h-px w-14 bg-white/20" />
             <p className="text-[9px] uppercase tracking-[0.2em] text-white/30">
-              Origin hub
+              Drop-off Point
             </p>
           </div>
         </div>
 
         <div className="px-14 xl:px-20">
-          <StepLabel number="02" label="Origin hub" />
+          <StepLabel number="02" label="Drop-off Point" />
 
           <h2 className="mt-8 text-5xl font-medium leading-[0.96] tracking-[-0.05em] lg:text-[70px]">
             Checked in.
@@ -302,12 +302,12 @@ function OriginHubSlide({
           </h2>
 
           <p className="mt-7 max-w-[440px] text-[14px] leading-7 text-white/40">
-            The sender brings the package to the selected origin hub, where it is checked and prepared for aircraft dispatch.
+            The sender brings the package to the selected Drop-off Point, where it is checked and prepared for aircraft dispatch.
           </p>
         </div>
       </div>
 
-      <SlideFooter current="02" label="Origin hub" />
+      <SlideFooter current="02" label="Drop-off Point" />
     </article>
   );
 }
@@ -388,7 +388,7 @@ function DestinationHubSlide({
     return (
       <article className="relative h-full w-screen shrink-0 overflow-hidden bg-[#080808] px-5 pb-16 pt-8">
         <div className="mx-auto flex h-full max-w-[520px] flex-col">
-          <StepLabel number="04" label="Destination hub" />
+          <StepLabel number="04" label="Pick-up Point" />
 
           <h2 className="mt-5 text-[40px] font-medium leading-[0.94] tracking-[-0.05em]">
             Arrived.
@@ -397,14 +397,14 @@ function DestinationHubSlide({
           </h2>
 
           <p className="mt-4 max-w-[390px] text-[13px] leading-6 text-white/62">
-            The package is processed at the destination hub and prepared for recipient collection.
+            The package is processed at the Pick-up Point and prepared for recipient collection.
           </p>
 
           <div className="relative mt-5 min-h-0 flex-1 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0b0b0b]">
             <div className="absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-500/[0.07] blur-[90px]" />
             <img
               src={droneArrive}
-              alt="DroneOptAI destination hub"
+              alt="DroneOptAI Pick-up Point"
               className="absolute inset-0 h-full w-full object-contain p-3"
             />
           </div>
@@ -417,7 +417,7 @@ function DestinationHubSlide({
     <article className="relative h-full w-screen shrink-0 overflow-hidden bg-[#080808]">
       <div className="mx-auto grid h-full max-w-[1600px] grid-cols-[0.82fr_1.18fr] items-center">
         <div className="px-0 lg:px-12">
-          <StepLabel number="04" label="Destination hub" />
+          <StepLabel number="04" label="Pick-up Point" />
 
           <h2 className="mt-8 text-5xl font-medium leading-[0.96] tracking-[-0.05em] lg:text-[70px]">
             Arrived.
@@ -426,7 +426,7 @@ function DestinationHubSlide({
           </h2>
 
           <p className="mt-7 max-w-[450px] text-[14px] leading-7 text-white/40">
-            The aircraft lands at the destination hub, where the package is processed and prepared for recipient collection.
+            The aircraft lands at the Pick-up Point, where the package is processed and prepared for recipient collection.
           </p>
         </div>
 
@@ -435,13 +435,13 @@ function DestinationHubSlide({
 
           <img
             src={droneArrive}
-            alt="DroneOptAI destination hub"
+            alt="DroneOptAI Pick-up Point"
             className="relative z-10 w-[92%] max-w-[940px] object-contain"
           />
         </div>
       </div>
 
-      <SlideFooter current="04" label="Destination hub" />
+      <SlideFooter current="04" label="Pick-up Point" />
     </article>
   );
 }
@@ -479,23 +479,20 @@ function InfoRow({
 }) {
   return (
     <div
-      className={`flex items-center justify-between gap-6 border-t border-white/[0.09] first:border-t-0 last:border-b-0 ${
-        compact ? "px-4 py-4" : "py-7"
-      }`}
+      className={`flex items-center justify-between gap-6 border-t border-white/[0.09] first:border-t-0 last:border-b-0 ${compact ? "px-4 py-4" : "py-7"
+        }`}
     >
       <div>
         <p
-          className={`uppercase tracking-[0.16em] text-white/38 ${
-            compact ? "text-[9px]" : "text-[10px]"
-          }`}
+          className={`uppercase tracking-[0.16em] text-white/38 ${compact ? "text-[9px]" : "text-[10px]"
+            }`}
         >
           {label}
         </p>
 
         <p
-          className={`font-medium text-white/90 ${
-            compact ? "mt-1.5 text-[15px]" : "mt-3 text-xl"
-          }`}
+          className={`font-medium text-white/90 ${compact ? "mt-1.5 text-[15px]" : "mt-3 text-xl"
+            }`}
         >
           {value}
         </p>

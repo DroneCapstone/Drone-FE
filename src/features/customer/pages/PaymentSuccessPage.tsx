@@ -28,8 +28,8 @@ export function PaymentSuccessPage() {
     useState(() =>
       deliveryId
         ? customerDeliveryService.getById(
-            deliveryId,
-          )
+          deliveryId,
+        )
         : null,
     );
 
@@ -156,7 +156,7 @@ export function PaymentSuccessPage() {
       </h1>
 
       <p className="mx-auto mt-4 max-w-[520px] text-sm leading-6 text-white/40">
-        Your order is confirmed. Bring your package to the origin hub before the handover deadline.
+        Your order is confirmed. Bring your package to the Drop-off Point before the handover deadline.
       </p>
 
       <div className="mx-auto mt-10 max-w-[520px] border-y border-white/10 py-7 text-left">
@@ -165,7 +165,7 @@ export function PaymentSuccessPage() {
           value={delivery.id}
         />
         <SuccessRow
-          label="Origin hub"
+          label="Drop-off Point"
           value={delivery.originHub.name}
         />
         <SuccessRow

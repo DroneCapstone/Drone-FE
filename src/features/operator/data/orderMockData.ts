@@ -52,13 +52,13 @@ export const defaultOrders: Order[] = [
   // Express Order: planning is immediately available.
   makeOrder('ORD-1102', 'HUB-HCM-02', 'HUB-HCM-01', 50, 3.2, 'Medical supplies', 'Trang Le', 'Standard parcel', 'Express', true),
 
-  // Scheduled Mission already exists; package has not reached Origin Hub yet.
+  // Scheduled Mission already exists; package has not reached Drop-off Point yet.
   makeOrder('ORD-1103', 'HUB-HCM-02', 'HUB-HCM-03', 45, 4.1, 'Electronics parcel', 'Khoa Tran'),
 
   // Active delivery Missions.
   makeOrder('ORD-1104', 'HUB-HCM-01', 'HUB-HCM-02', 20, 4.8, 'Retail replenishment', 'Anh Pham', 'Standard parcel', 'Express', true, 'In Delivery'),
 
-  // Delivery completed at Destination Hub. Operator scope ends here.
+  // Delivery completed at Pick-up Point. Operator scope ends here.
   makeOrder('ORD-1105', 'HUB-HCM-02', 'HUB-HCM-01', -60, 2.8, 'Consumer parcel', 'Linh Vo', 'Standard parcel', 'Scheduled', true, 'Delivered to Hub'),
   makeOrder('ORD-1106', 'HUB-HCM-01', 'HUB-HCM-03', -180, 1.9, 'Contract documents', 'Huy Bui', 'Standard parcel', 'Scheduled', true, 'Delivered to Hub'),
   makeOrder('ORD-1107', 'HUB-HCM-03', 'HUB-HCM-02', -180, 2.6, 'Fresh meal box', 'Mai Ho', 'Food & Beverage', 'Scheduled', true, 'Delivered to Hub'),
@@ -81,6 +81,6 @@ export const defaultOrders: Order[] = [
   makeOrder('ORD-1117', 'HUB-HCM-01', 'HUB-HCM-03', 13, 4.6, 'Electronics shipment', 'Duc Nguyen', 'Standard parcel', 'Scheduled', true, 'In Delivery'),
   makeOrder('ORD-1118', 'HUB-HCM-03', 'HUB-HCM-02', 18, 5.4, 'Retail restock package', 'Lan Pham', 'Standard parcel', 'Express', true, 'In Delivery'),
 
-  // Customer cancelled before Origin Hub received the package.
+  // Customer cancelled before Drop-off Point received the package.
   makeOrder('ORD-1119', 'HUB-HCM-01', 'HUB-HCM-04', 240, 2.9, 'Personal parcel', 'My Nguyen', 'Standard parcel', 'Scheduled', false, 'Cancelled'),
 ];

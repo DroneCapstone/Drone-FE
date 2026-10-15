@@ -56,7 +56,7 @@ export function HubShowcaseSection() {
               <HubFeature
                 number="01"
                 title="Package drop-off"
-                description="Senders bring their package to the selected origin hub."
+                description="Senders bring their package to the selected Drop-off Point."
               />
               <HubFeature
                 number="02"
@@ -66,12 +66,12 @@ export function HubShowcaseSection() {
               <HubFeature
                 number="03"
                 title="Package handling"
-                description="Arriving deliveries are processed and secured at the destination hub."
+                description="Arriving deliveries are processed and secured at the Pick-up Point."
               />
               <HubFeature
                 number="04"
                 title="Recipient collection"
-                description="Recipients collect their package from the destination hub."
+                description="Recipients collect their package from the Pick-up Point."
               />
             </div>
           </div>

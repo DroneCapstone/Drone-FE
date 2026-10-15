@@ -525,7 +525,7 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     batteryConsumptionPct: pickNumber(record, ['battery_consumption_pct', 'batteryConsumptionPct', 'battery_use_pct']),
     confidencePct: pickNumber(record, ['confidence_pct', 'confidencePct', 'confidence'], 0),
     risk: normalizeRisk(record.risk_level ?? record.risk),
-    weatherImpact: pickString(record, ['weather_impact', 'weatherImpact'], 'Backend weather assessment'),
+    weatherImpact: pickString(record, ['weather_impact', 'weatherImpact']),
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),

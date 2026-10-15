@@ -241,7 +241,7 @@ export function OutboundDeliveriesPage() {
 
         <div className="grid grid-cols-[130px_1fr_120px_120px_120px_160px_190px] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
           <Header>Order</Header>
-          <Header>Destination Hub</Header>
+          <Header>Pick-up Point</Header>
           <Header>Mission</Header>
           <Header>Drone</Header>
           <Header>Battery</Header>
@@ -421,7 +421,7 @@ export function OutboundDeliveriesPage() {
                   <Header>Mission</Header>
                   <Header>Drone</Header>
                   <Header>Battery</Header>
-                  <Header>Destination Hub</Header>
+                  <Header>Pick-up Point</Header>
                   <Header>Departed at</Header>
                   <Header>Result</Header>
                 </div>
@@ -512,9 +512,8 @@ function Header({
 }) {
   return (
     <span
-      className={`text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)] ${
-        alignRight ? "text-right" : ""
-      }`}
+      className={`text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)] ${alignRight ? "text-right" : ""
+        }`}
     >
       {children}
     </span>
