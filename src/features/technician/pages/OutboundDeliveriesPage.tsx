@@ -31,10 +31,6 @@ import {
 } from "../utils/fleetStorage";
 
 import {
-  useFirstReadyBatteryMutation,
-} from "../hooks/useBatteryQueries";
-
-import {
   applyOperatorMissionAssignment,
   loadOutboundDeliveries,
   type OperatorAssignmentPayload,
@@ -42,7 +38,6 @@ import {
 } from "../utils/outboundDeliveryStorage";
 
 import {
-  useDispatchOutboundMutation,
   useOutboundDeliveriesQuery,
   useOutboundHistoryQuery,
   usePrepareOutboundBatteryMutation,
@@ -94,12 +89,6 @@ export function OutboundDeliveriesPage() {
 
   const prepareMutation =
     usePrepareOutboundBatteryMutation();
-
-  const readyBatteryMutation =
-    useFirstReadyBatteryMutation();
-
-  const dispatchMutation =
-    useDispatchOutboundMutation();
 
   const deliveries: OutboundDelivery[] =
     outboundQuery.data ?? [];
@@ -154,9 +143,8 @@ export function OutboundDeliveriesPage() {
   );
 
   const hubLabel =
-    deliveries[0]?.hub ??
-    history[0]?.hub ??
-    TECHNICIAN_HUB;
+    [deliveries[0]?.hub, history[0]?.hub, TECHNICIAN_HUB]
+      .find((label) => label && label !== "—") ?? "the assigned hub";
 
   const handleReceiveAtHub = async (orderId: string) => {
     try {
@@ -182,36 +170,18 @@ export function OutboundDeliveriesPage() {
       !delivery.missionId
     ) {
       setActionMessage(
-        "This order does not have a valid Operator-assigned mission.",
+        "Backend has not assigned a mission to this order yet.",
       );
       return;
     }
 
     try {
       setActionMessage("");
-
-      const installedBattery =
-        await readyBatteryMutation.mutateAsync(
-          delivery.missionId,
-        );
-
-      if (!installedBattery) {
-        setActionMessage(
-          "No fully charged Ready battery is available at this hub.",
-        );
-        return;
-      }
-
-      await prepareMutation.mutateAsync({
-        orderId: delivery.orderId,
-        installedBatteryId:
-          installedBattery.id,
-      });
-
+      // One API is responsible for preparation. Do not separately reserve
+      // a battery with /batteries/{id}/use; that could double-assign it.
+      await prepareMutation.mutateAsync(delivery.orderId);
       setActionMessage(
-        `${installedBattery.id} at 100% was assigned to ${getMissionDisplayId(
-          delivery.missionId,
-        )}. The mission is Ready to dispatch.`,
+        "Prepare battery request succeeded. Current readiness and assigned battery have been refreshed from Backend.",
       );
     } catch (error) {
       setActionMessage(
@@ -222,32 +192,10 @@ export function OutboundDeliveriesPage() {
     }
   };
 
-  /*
-   * The supplied Backend API document does not define an outbound Dispatch endpoint.
-   * This keeps the current FE dispatch behavior/event until Backend exposes one.
-   */
-  const handleDispatch = async (orderId: string) => {
-    try {
-      await dispatchMutation.mutateAsync(
-        orderId,
-      );
-
-      setActionMessage(
-        "Mission dispatched. Operator was notified immediately.",
-      );
-    } catch (error) {
-      setActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to dispatch this mission.",
-      );
-    }
-  };
-
   return (
     <TechnicianPageShell
       title="Outbound deliveries"
-      description={`Paid customer orders assigned to ${hubLabel}. Destination indicates the hub where the recipient will collect the parcel.`}
+      description={`Paid customer orders handled by ${hubLabel}. Destination indicates the hub where the recipient will collect the parcel.`}
     >
       {outboundQuery.error instanceof Error && (
         <div className="mb-4 rounded-lg border border-red-500/25 bg-[var(--tech-surface)] px-4 py-3 text-[13px] text-red-500">
@@ -272,6 +220,12 @@ export function OutboundDeliveriesPage() {
           </button>
         </div>
       )}
+
+      <p className="mb-3 text-[12px] text-[var(--tech-muted)]">
+        Departure is controlled by Backend/Operator. Technician can receive packages
+        and prepare batteries, but this Swagger version does not expose an outbound
+        dispatch action; the Dispatch control stays disabled to prevent false flight status.
+      </p>
 
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="flex justify-end border-b border-[var(--tech-border)] p-4">
@@ -389,16 +343,22 @@ export function OutboundDeliveriesPage() {
                 )}
 
                 {delivery.status === "Ready" && (
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      handleDispatch(delivery.orderId)
-                    }
-                    className="h-9 rounded-md bg-orange-500 px-3 text-[12px] font-medium text-black hover:bg-orange-600"
-                  >
-                    <PlaneTakeoff size={14} />
-                    Dispatch
-                  </Button>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      type="button"
+                      disabled
+                      title="Awaiting an official Backend dispatch endpoint or Operator flight-launch workflow."
+                      className="h-9 rounded-md bg-orange-500 px-3 text-[12px] font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <PlaneTakeoff size={14} />
+                      Dispatch
+                    </Button>
+                    <p className="max-w-[180px] text-right text-[10px] text-[var(--tech-muted)]">
+                      {delivery.installedBatteryId
+                        ? "Awaiting Operator dispatch API"
+                        : "Battery not confirmed by Backend"}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

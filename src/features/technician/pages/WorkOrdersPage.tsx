@@ -1050,7 +1050,10 @@ export function WorkOrdersPage() {
                           : "Select a Ready battery"}
                       </option>
                       {readyBatteries.map((battery) => (
-                        <option key={battery.id} value={battery.id}>
+                        <option
+                          key={battery.backendId ?? battery.id}
+                          value={battery.backendId ?? battery.id}
+                        >
                           {battery.id} · {battery.chargeLevelPct}% · {battery.model ?? "Model not provided"}
                         </option>
                       ))}
@@ -1089,7 +1092,7 @@ export function WorkOrdersPage() {
                     The selected battery is a temporary test battery for diagnostics and power-on checks.
                   </p>
                   <p className="mt-1 text-[11px] leading-4 text-[var(--tech-muted)]">
-                    Battery inventory and charging remain managed in Battery Management. Priority and technician assignment are returned by Backend and are not submitted by this form.
+                    Battery inventory and charging remain in Battery Management. The selected value is the actual battery identifier returned by Backend, sent as a string. Priority and technician assignment are assigned by Backend.
                   </p>
                 </div>
               </div>

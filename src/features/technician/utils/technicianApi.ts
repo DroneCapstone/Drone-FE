@@ -540,12 +540,12 @@ export const getDroneMaintenanceHistoryApi = (
 // ---------------------------------------------------------------------------
 
 /**
- * Swagger exposes the shared mission list at GET /api/v1/missions/.
- * Keep this compatibility helper name because Outbound/Confirmation mapping
- * still imports it, but do not call the removed /technician/missions/ route.
+ * Current Swagger includes GET /api/v1/technician/missions/.
+ * This Technician-scoped endpoint is used only to enrich delivery rows.
+ * The Transit Missions page continues to use /technician/fleet/incoming.
  */
 export const getTechnicianMissionsApi = () =>
-  technicianApiRequest("/missions/");
+  technicianApiRequest("/technician/missions/");
 
 // ---------------------------------------------------------------------------
 // Technician AI predictions
@@ -680,7 +680,8 @@ export const getWorkOrdersApi = () =>
 
 export const createWorkOrderApi = (payload: {
   drone_id: number;
-  battery_id: number;
+  // Current backend validation requires battery_id as a string.
+  battery_id: string;
   issue_description: string;
 }) =>
   technicianApiRequest("/technician/fleet/work-orders", {
