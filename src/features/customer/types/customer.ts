@@ -102,6 +102,9 @@ export interface DeliveryPreview {
   originHub: DeliveryHub;
   destinationHub: DeliveryHub;
 
+  /** Hub-to-hub distance from backend estimate, in kilometers. */
+  distanceKm?: number;
+
   handoverDeadlineAt: string;
   estimatedDepartureAt: string;
   estimatedArrivalAt: string;
@@ -116,6 +119,9 @@ export interface CustomerDelivery
 
   originHub: DeliveryHub;
   destinationHub: DeliveryHub;
+
+  /** Persisted from the quotation used to create this order. */
+  distanceKm?: number;
 
   createdAt: string;
 

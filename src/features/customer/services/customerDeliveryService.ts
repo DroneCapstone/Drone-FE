@@ -74,10 +74,10 @@ function upsertDelivery(
 
   const next = exists
     ? current.map((item) =>
-      item.id === delivery.id
-        ? delivery
-        : item,
-    )
+        item.id === delivery.id
+          ? delivery
+          : item,
+      )
     : [delivery, ...current];
 
   writeDeliveries(next);
@@ -252,31 +252,40 @@ function normalizeEstimate(
 
     feeDetails: details
       ? {
-        baseFee: Number(
-          details.base_fee ?? 0,
-        ),
-        distanceFee: Number(
-          details.distance_fee ?? 0,
-        ),
-        payloadFee: Number(
-          details.payload_fee ?? 0,
-        ),
-        insuranceFee: Number(
-          details.insurance_fee ?? 0,
-        ),
-        expressSurcharge: Number(
-          details.express_surcharge ?? 0,
-        ),
-        fragileSurcharge: Number(
-          details.fragile_surcharge ?? 0,
-        ),
-      }
+          baseFee: Number(
+            details.base_fee ?? 0,
+          ),
+          distanceFee: Number(
+            details.distance_fee ?? 0,
+          ),
+          payloadFee: Number(
+            details.payload_fee ?? 0,
+          ),
+          insuranceFee: Number(
+            details.insurance_fee ?? 0,
+          ),
+          expressSurcharge: Number(
+            details.express_surcharge ?? 0,
+          ),
+          fragileSurcharge: Number(
+            details.fragile_surcharge ?? 0,
+          ),
+        }
       : undefined,
   };
+
+  const distanceValue = response.distance_km;
+  const distanceKm =
+    typeof distanceValue === "number" &&
+    Number.isFinite(distanceValue) &&
+    distanceValue >= 0
+      ? distanceValue
+      : undefined;
 
   return {
     originHub,
     destinationHub,
+    distanceKm,
     handoverDeadlineAt:
       response.handover_deadline,
     estimatedDepartureAt:
@@ -378,7 +387,7 @@ export const customerDeliveryService = {
 
     if (!originHub || !destinationHub) {
       throw new Error(
-        "Please select a valid origin and Pick-up Point.",
+        "Please select a valid origin and destination hub.",
       );
     }
 
@@ -398,16 +407,16 @@ export const customerDeliveryService = {
           ),
         delivery_mode:
           draft.deliveryMode ===
-            "express"
+          "express"
             ? "EXPRESS"
             : "SCHEDULED",
         requested_delivery_at:
           draft.deliveryMode ===
             "scheduled" &&
-            draft.requestedDepartureAt
+          draft.requestedDepartureAt
             ? new Date(
-              draft.requestedDepartureAt,
-            ).toISOString()
+                draft.requestedDepartureAt,
+              ).toISOString()
             : null,
         has_insurance:
           Boolean(
@@ -510,17 +519,17 @@ export const customerDeliveryService = {
 
         delivery_mode:
           draft.deliveryMode ===
-            "express"
+          "express"
             ? "EXPRESS"
             : "SCHEDULED",
 
         requested_delivery_at:
           draft.deliveryMode ===
             "scheduled" &&
-            draft.requestedDepartureAt
+          draft.requestedDepartureAt
             ? new Date(
-              draft.requestedDepartureAt,
-            ).toISOString()
+                draft.requestedDepartureAt,
+              ).toISOString()
             : null,
 
         sender_phone:
@@ -542,6 +551,7 @@ export const customerDeliveryService = {
       customerId,
       originHub,
       destinationHub,
+      distanceKm: estimate.distanceKm,
       createdAt:
         response.created_at ??
         new Date().toISOString(),
@@ -618,14 +628,14 @@ export const customerDeliveryService = {
       (delivery) =>
         delivery.id === id
           ? {
-            ...delivery,
-            paymentStatus:
-              status === "paid"
-                ? ("paid" as const)
-                : status === "failed"
-                  ? ("failed" as const)
-                  : ("pending" as const),
-          }
+              ...delivery,
+              paymentStatus:
+                status === "paid"
+                  ? ("paid" as const)
+                  : status === "failed"
+                    ? ("failed" as const)
+                    : ("pending" as const),
+            }
           : delivery,
     );
 
@@ -647,10 +657,10 @@ export const customerDeliveryService = {
       (delivery) =>
         delivery.id === id
           ? {
-            ...delivery,
-            paymentStatus:
-              "paid" as const,
-          }
+              ...delivery,
+              paymentStatus:
+                "paid" as const,
+            }
           : delivery,
     );
 
@@ -771,4 +781,19 @@ export function formatDateTime(
       timeStyle: "short",
     },
   ).format(date);
+}
+
+/** Format hub distance without calculating or inventing a route. */
+export function formatDistanceKm(distanceKm?: number | null): string {
+  if (
+    typeof distanceKm !== "number" ||
+    !Number.isFinite(distanceKm) ||
+    distanceKm < 0
+  ) {
+    return "—";
+  }
+
+  return `${distanceKm.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  })} km`;
 }

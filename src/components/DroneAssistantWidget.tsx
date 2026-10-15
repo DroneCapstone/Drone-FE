@@ -102,6 +102,7 @@ export function DroneAssistantWidget() {
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [position, setPosition] =
     useState<Position | null>(null);
+  const hasPosition = position !== null;
   const [isDragging, setIsDragging] =
     useState(false);
   const [isSnapping, setIsSnapping] =
@@ -119,7 +120,8 @@ export function DroneAssistantWidget() {
           "Hi, I’m DroneOptAI assistant. I can help you with deliveries, payment and package handover.",
       },
     ]);
-  const messagesEndRef =
+  // The messages panel itself is the scroll container.
+  const messagesContainerRef =
     useRef<HTMLDivElement | null>(null);
   const chatPanelRef =
     useRef<HTMLDivElement | null>(null);
@@ -251,13 +253,26 @@ export function DroneAssistantWidget() {
   }, [open]);
   /* =======================================================
      AUTO SCROLL
+     Scroll to the latest message whenever the chat is reopened,
+     a new message arrives, or the typing indicator changes.
+     Scroll only inside the chat panel (never the entire page).
   ======================================================== */
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // Synchronous scroll prevents flashing the oldest message on reopen.
+    container.scrollTop = container.scrollHeight;
+
+    // Re-check after layout in case Markdown affects message height.
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
     });
-  }, [messages, isTyping]);
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, hasPosition, messages, isTyping]);
   /* =======================================================
      CHATBOT QUICK QUESTIONS
   ======================================================== */
@@ -751,7 +766,7 @@ export function DroneAssistantWidget() {
               </div>
             </div>
             {/* MESSAGES */}
-            <div className="max-h-[300px] overflow-y-auto px-4 py-4">
+            <div ref={messagesContainerRef} className="max-h-[300px] overflow-y-auto px-4 py-4">
               <div className="space-y-3">
                 {messages.map(
                   (message) => (
@@ -808,7 +823,6 @@ export function DroneAssistantWidget() {
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
               </div>
             </div>
             {/* QUICK ACTIONS + INPUT */}
