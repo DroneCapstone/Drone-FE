@@ -266,6 +266,9 @@ export type CustomerEstimateResponse = {
   service_fee: number;
   total_fee: number;
 
+  /** Distance (km) returned by POST /customer/orders/estimate. */
+  distance_km?: number | null;
+
   /**
    * New detailed backend breakdown.
    */

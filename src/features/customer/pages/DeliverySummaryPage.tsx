@@ -10,6 +10,7 @@ import {
 
 import {
   customerDeliveryService,
+  formatDistanceKm,
   formatDateTime,
   formatVnd,
 } from "../services/customerDeliveryService";
@@ -23,8 +24,8 @@ export function DeliverySummaryPage() {
 
   const delivery = deliveryId
     ? customerDeliveryService.getById(
-      deliveryId,
-    )
+        deliveryId,
+      )
     : null;
 
   if (!delivery) {
@@ -53,7 +54,7 @@ export function DeliverySummaryPage() {
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
         <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-6">
           <RouteRow
-            label="Drop-off Point"
+            label="Origin hub"
             name={delivery.originHub.name}
             address={delivery.originHub.address}
           />
@@ -61,10 +62,19 @@ export function DeliverySummaryPage() {
           <div className="my-5 h-px bg-white/[0.07]" />
 
           <RouteRow
-            label="Pick-up Point"
+            label="Destination hub"
             name={delivery.destinationHub.name}
             address={delivery.destinationHub.address}
           />
+
+          <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-orange-500/[0.18] bg-orange-500/[0.05] px-4 py-3">
+            <span className="text-[12px] font-medium text-white/[0.74]">
+              Distance between hubs
+            </span>
+            <span className="shrink-0 text-[14px] font-semibold text-orange-400">
+              {formatDistanceKm(delivery.distanceKm)}
+            </span>
+          </div>
 
           <div className="mt-6 grid gap-4 border-t border-white/[0.07] pt-5 sm:grid-cols-3">
             <Info
@@ -200,7 +210,7 @@ function SummaryPriceBreakdown({
     price.serviceFee > 0 &&
     Math.abs(
       price.serviceFee -
-      details.expressSurcharge,
+        details.expressSurcharge,
     ) > 0.5;
 
   return (
