@@ -13,10 +13,8 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Mascot } from "page-mascot";
-
 import droneDirections from "../assets/mascot/delivery-drone-directions.webp";
 import droneReactions from "../assets/mascot/delivery-drone-reactions.webp";
-
 import {
   CustomerChatbotApiError,
   getCustomerQuickQuestions,
@@ -29,24 +27,21 @@ import type {
   CustomerChatbotAction,
   QuickQuestion,
 } from "../features/customer/chatbot/customerChatbot.types";
-
+import { CustomerChatMarkdown } from "../features/customer/chatbot/CustomerChatMarkdown";
 type ChatMessage = {
   id: string;
   role: "assistant" | "user";
   content: string;
   actions?: CustomerChatbotAction[];
 };
-
 type Position = {
   x: number;
   y: number;
 };
-
 type Size = {
   width: number;
   height: number;
 };
-
 type PointerStart = {
   pointerId: number;
   clientX: number;
@@ -55,7 +50,6 @@ type PointerStart = {
   originY: number;
   moved: boolean;
 };
-
 const FALLBACK_QUICK_QUESTIONS: QuickQuestion[] = [
   {
     id: "track_delivery",
@@ -78,18 +72,14 @@ const FALLBACK_QUICK_QUESTIONS: QuickQuestion[] = [
     prompt: "Explain package handover instructions",
   },
 ];
-
 const POSITION_STORAGE_KEY =
   "droneoptai-customer-assistant-position";
-
 const EDGE_GAP = 12;
 const CHAT_GAP = 10;
 const DRAG_THRESHOLD = 6;
 const SNAP_DURATION = 220;
-
 /* =========================================================
    DRONEOPT AI ASSISTANT
-
    Behavior:
    - Starts bottom-right
    - Drag freely while holding
@@ -97,13 +87,10 @@ const SNAP_DURATION = 220;
    - Chat panel follows mascot
    - Position persists in localStorage
 ========================================================= */
-
 export function DroneAssistantWidget() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-
   const [mascotSize, setMascotSize] = useState(112);
-
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -113,21 +100,16 @@ export function DroneAssistantWidget() {
     getStoredConversationId(),
   );
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-
   const [position, setPosition] =
     useState<Position | null>(null);
-
   const [isDragging, setIsDragging] =
     useState(false);
-
   const [isSnapping, setIsSnapping] =
     useState(false);
-
   const [chatSize, setChatSize] = useState<Size>({
     width: 360,
     height: 500,
   });
-
   const [messages, setMessages] =
     useState<ChatMessage[]>([
       {
@@ -137,44 +119,32 @@ export function DroneAssistantWidget() {
           "Hi, I’m DroneOptAI assistant. I can help you with deliveries, payment and package handover.",
       },
     ]);
-
   const messagesEndRef =
     useRef<HTMLDivElement | null>(null);
-
   const chatPanelRef =
     useRef<HTMLDivElement | null>(null);
-
   const pointerStartRef =
     useRef<PointerStart | null>(null);
-
   // Prevent a drag release from being interpreted as a mascot click.
   // A normal tap is allowed to reach <Mascot />, so page-mascot
   // can still play its reaction animation.
   const suppressNextClickRef = useRef(false);
-
   const snapTimerRef =
     useRef<number | null>(null);
-
   const chatRequestAbortRef =
     useRef<AbortController | null>(null);
-
   /* =======================================================
      RESPONSIVE SIZE
   ======================================================== */
-
   useEffect(() => {
     const media = window.matchMedia(
       "(max-width: 640px)",
     );
-
     const updateSize = () => {
       setMascotSize(media.matches ? 88 : 108);
     };
-
     updateSize();
-
     media.addEventListener("change", updateSize);
-
     return () => {
       media.removeEventListener(
         "change",
@@ -182,28 +152,22 @@ export function DroneAssistantWidget() {
       );
     };
   }, []);
-
   /* =======================================================
      INITIAL POSITION
   ======================================================== */
-
   useEffect(() => {
     const defaultPosition =
       getDefaultPosition(mascotSize);
-
     try {
       const saved =
         window.localStorage.getItem(
           POSITION_STORAGE_KEY,
         );
-
       if (!saved) {
         setPosition(defaultPosition);
         return;
       }
-
       const parsed = JSON.parse(saved);
-
       if (
         typeof parsed?.x !== "number" ||
         typeof parsed?.y !== "number"
@@ -211,7 +175,6 @@ export function DroneAssistantWidget() {
         setPosition(defaultPosition);
         return;
       }
-
       const safePosition = clampPosition(
         {
           x: parsed.x,
@@ -219,7 +182,6 @@ export function DroneAssistantWidget() {
         },
         mascotSize,
       );
-
       setPosition(
         snapToNearestEdge(
           safePosition,
@@ -230,11 +192,9 @@ export function DroneAssistantWidget() {
       setPosition(defaultPosition);
     }
   }, [mascotSize]);
-
   /* =======================================================
      KEEP INSIDE VIEWPORT
   ======================================================== */
-
   useEffect(() => {
     function handleResize() {
       setPosition((current) => {
@@ -243,24 +203,20 @@ export function DroneAssistantWidget() {
             mascotSize,
           );
         }
-
         const safe = clampPosition(
           current,
           mascotSize,
         );
-
         return snapToNearestEdge(
           safe,
           mascotSize,
         );
       });
     }
-
     window.addEventListener(
       "resize",
       handleResize,
     );
-
     return () => {
       window.removeEventListener(
         "resize",
@@ -268,63 +224,48 @@ export function DroneAssistantWidget() {
       );
     };
   }, [mascotSize]);
-
   /* =======================================================
      CHAT PANEL SIZE
   ======================================================== */
-
   useLayoutEffect(() => {
     if (!open || !chatPanelRef.current) {
       return;
     }
-
     const element = chatPanelRef.current;
-
     const updateSize = () => {
       const rect =
         element.getBoundingClientRect();
-
       setChatSize({
         width: rect.width,
         height: rect.height,
       });
     };
-
     updateSize();
-
     const observer = new ResizeObserver(
       updateSize,
     );
-
     observer.observe(element);
-
     return () => {
       observer.disconnect();
     };
   }, [open]);
-
   /* =======================================================
      AUTO SCROLL
   ======================================================== */
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
     });
   }, [messages, isTyping]);
-
   /* =======================================================
      CHATBOT QUICK QUESTIONS
   ======================================================== */
-
   useEffect(() => {
     if (!open || quickQuestionsLoaded) {
       return;
     }
-
     const controller = new AbortController();
-
     getCustomerQuickQuestions(controller.signal)
       .then((questions) => {
         setQuickQuestions(questions);
@@ -336,7 +277,6 @@ export function DroneAssistantWidget() {
         ) {
           return;
         }
-
         console.error(
           "[DroneAssistantWidget] Failed to load quick questions:",
           error,
@@ -345,36 +285,29 @@ export function DroneAssistantWidget() {
       .finally(() => {
         setQuickQuestionsLoaded(true);
       });
-
     return () => {
       controller.abort();
     };
   }, [open, quickQuestionsLoaded]);
-
   /* =======================================================
      RATE LIMIT COUNTDOWN
   ======================================================== */
-
   useEffect(() => {
     if (cooldownSeconds <= 0) {
       return;
     }
-
     const timer = window.setInterval(() => {
       setCooldownSeconds((current) =>
         Math.max(0, current - 1),
       );
     }, 1000);
-
     return () => {
       window.clearInterval(timer);
     };
   }, [cooldownSeconds]);
-
   /* =======================================================
      CLEANUP
   ======================================================== */
-
   useEffect(() => {
     return () => {
       if (snapTimerRef.current) {
@@ -382,30 +315,24 @@ export function DroneAssistantWidget() {
           snapTimerRef.current,
         );
       }
-
       chatRequestAbortRef.current?.abort();
     };
   }, []);
-
   /* =======================================================
      ROUTE VISIBILITY
   ======================================================== */
-
   const shouldShow = useMemo(() => {
     return (
       pathname === "/" ||
       pathname.startsWith("/customer")
     );
   }, [pathname]);
-
   if (!shouldShow) {
     return null;
   }
-
   /* =======================================================
      POSITION STORAGE
   ======================================================== */
-
   function savePosition(next: Position) {
     try {
       window.localStorage.setItem(
@@ -416,39 +343,32 @@ export function DroneAssistantWidget() {
       // Ignore storage errors.
     }
   }
-
   /* =======================================================
      SNAP ANIMATION
   ======================================================== */
-
   function animateSnap(next: Position) {
     if (snapTimerRef.current) {
       window.clearTimeout(
         snapTimerRef.current,
       );
     }
-
     setIsSnapping(true);
     setPosition(next);
     savePosition(next);
-
     snapTimerRef.current =
       window.setTimeout(() => {
         setIsSnapping(false);
       }, SNAP_DURATION);
   }
-
   /* =======================================================
      DRAG
   ======================================================== */
-
   function handlePointerDown(
     event: React.PointerEvent<HTMLDivElement>,
   ) {
     if (!position) {
       return;
     }
-
     pointerStartRef.current = {
       pointerId: event.pointerId,
       clientX: event.clientX,
@@ -457,40 +377,32 @@ export function DroneAssistantWidget() {
       originY: position.y,
       moved: false,
     };
-
     setIsSnapping(false);
     setIsDragging(true);
   }
-
   function handlePointerMove(
     event: React.PointerEvent<HTMLDivElement>,
   ) {
     const start = pointerStartRef.current;
-
     if (
       !start ||
       start.pointerId !== event.pointerId
     ) {
       return;
     }
-
     const deltaX =
       event.clientX - start.clientX;
-
     const deltaY =
       event.clientY - start.clientY;
-
     const distance = Math.hypot(
       deltaX,
       deltaY,
     );
-
     if (
       distance >= DRAG_THRESHOLD &&
       !start.moved
     ) {
       start.moved = true;
-
       // Capture only after we know this is a drag.
       // Normal taps stay targeted at <Mascot />, preserving reactions.
       try {
@@ -501,11 +413,9 @@ export function DroneAssistantWidget() {
         // Ignore pointer capture errors.
       }
     }
-
     if (!start.moved) {
       return;
     }
-
     setPosition(
       clampPosition(
         {
@@ -516,19 +426,16 @@ export function DroneAssistantWidget() {
       ),
     );
   }
-
   function handlePointerUp(
     event: React.PointerEvent<HTMLDivElement>,
   ) {
     const start = pointerStartRef.current;
-
     if (
       !start ||
       start.pointerId !== event.pointerId
     ) {
       return;
     }
-
     try {
       if (
         event.currentTarget.hasPointerCapture(
@@ -542,30 +449,24 @@ export function DroneAssistantWidget() {
     } catch {
       // Pointer may already be released.
     }
-
     if (start.moved) {
       const current =
         position ??
         getDefaultPosition(mascotSize);
-
       const snapped =
         snapToNearestEdge(
           current,
           mascotSize,
         );
-
       suppressNextClickRef.current = true;
       animateSnap(snapped);
     }
-
     pointerStartRef.current = null;
     setIsDragging(false);
   }
-
   function handlePointerCancel() {
     pointerStartRef.current = null;
     setIsDragging(false);
-
     if (position) {
       animateSnap(
         snapToNearestEdge(
@@ -575,34 +476,28 @@ export function DroneAssistantWidget() {
       );
     }
   }
-
   function handleMascotClickCapture(
     event: React.MouseEvent<HTMLDivElement>,
   ) {
     if (!suppressNextClickRef.current) {
       return;
     }
-
     // A completed drag may emit a click. Stop it before page-mascot
     // can interpret it as a reaction.
     event.preventDefault();
     event.stopPropagation();
     suppressNextClickRef.current = false;
   }
-
   function handleMascotClick() {
     // page-mascot receives the click first, then it bubbles here.
     // Result: one tap shows a reaction and opens/closes the chat.
     setOpen((previous) => !previous);
   }
-
   /* =======================================================
      CHAT — BACKEND API v1.1
   ======================================================== */
-
   async function sendMessage(text: string) {
     const value = text.trim();
-
     if (
       !value ||
       isTyping ||
@@ -610,7 +505,6 @@ export function DroneAssistantWidget() {
     ) {
       return;
     }
-
     const history = messages
       .filter((message) => message.id !== "welcome-1")
       .slice(-10)
@@ -618,7 +512,6 @@ export function DroneAssistantWidget() {
         role: message.role === "assistant" ? "model" as const : "user" as const,
         content: message.content,
       }));
-
     setMessages((previous) => [
       ...previous,
       {
@@ -627,14 +520,11 @@ export function DroneAssistantWidget() {
         content: value,
       },
     ]);
-
     setInput("");
     setIsTyping(true);
-
     chatRequestAbortRef.current?.abort();
     const controller = new AbortController();
     chatRequestAbortRef.current = controller;
-
     try {
       const response = await sendCustomerChatMessage(
         {
@@ -644,12 +534,10 @@ export function DroneAssistantWidget() {
         },
         controller.signal,
       );
-
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
         storeConversationId(response.conversation_id);
       }
-
       setMessages((previous) => [
         ...previous,
         {
@@ -668,7 +556,6 @@ export function DroneAssistantWidget() {
       ) {
         return;
       }
-
       if (error instanceof CustomerChatbotApiError) {
         if (
           error.status === 429 ||
@@ -678,9 +565,7 @@ export function DroneAssistantWidget() {
             1,
             error.retryAfterSeconds ?? 30,
           );
-
           setCooldownSeconds(retrySeconds);
-
           setMessages((previous) => [
             ...previous,
             {
@@ -691,10 +576,8 @@ export function DroneAssistantWidget() {
                 `The assistant is busy. Please try again in ${retrySeconds} seconds.`,
             },
           ]);
-
           return;
         }
-
         setMessages((previous) => [
           ...previous,
           {
@@ -705,15 +588,12 @@ export function DroneAssistantWidget() {
               "I could not connect to DroneOptAI services. Please try again.",
           },
         ]);
-
         return;
       }
-
       console.error(
         "[DroneAssistantWidget] Chat request failed:",
         error,
       );
-
       setMessages((previous) => [
         ...previous,
         {
@@ -727,16 +607,13 @@ export function DroneAssistantWidget() {
       if (chatRequestAbortRef.current === controller) {
         chatRequestAbortRef.current = null;
       }
-
       setIsTyping(false);
     }
   }
-
   function handleAssistantAction(
     action: CustomerChatbotAction,
   ) {
     const payload = action.payload ?? {};
-
     if (action.type === "CREATE_DELIVERY") {
       saveCreateDeliveryPrefill(action.payload);
       setOpen(false);
@@ -745,30 +622,25 @@ export function DroneAssistantWidget() {
       );
       return;
     }
-
     if (action.type === "OPEN_PRICING") {
       setOpen(false);
       navigate("/customer/pricing");
       return;
     }
-
     if (action.type === "OPEN_NOTIFICATIONS") {
       setOpen(false);
       navigate("/customer/notifications");
       return;
     }
-
     if (action.type === "LOGIN_REQUIRED") {
       setOpen(false);
       navigate("/login");
       return;
     }
-
     const orderId =
       readActionValue(payload, "order_id") ||
       readActionValue(payload, "order_code") ||
       getLastPathSegment(action.href);
-
     if (action.type === "OPEN_ORDER_TRACKING" && orderId) {
       setOpen(false);
       navigate(
@@ -776,7 +648,6 @@ export function DroneAssistantWidget() {
       );
       return;
     }
-
     if (action.type === "OPEN_PAYMENT" && orderId) {
       setOpen(false);
       navigate(
@@ -784,7 +655,6 @@ export function DroneAssistantWidget() {
       );
       return;
     }
-
     if (action.href) {
       if (/^https?:\/\//i.test(action.href)) {
         window.open(
@@ -798,11 +668,9 @@ export function DroneAssistantWidget() {
       }
     }
   }
-
   /* =======================================================
      CHAT POSITION
   ======================================================== */
-
   const chatPosition =
     position && open
       ? getChatPosition(
@@ -811,13 +679,11 @@ export function DroneAssistantWidget() {
           chatSize,
         )
       : null;
-
   return (
     <>
       {/* =====================================================
           CHAT PANEL
       ====================================================== */}
-
       {open &&
         position &&
         chatPosition && (
@@ -847,24 +713,20 @@ export function DroneAssistantWidget() {
             }}
           >
             {/* HEADER */}
-
             <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3.5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/[0.10] text-orange-400">
                     <Sparkles size={14} />
                   </div>
-
                   <p className="truncate text-[14px] font-semibold text-white">
                     DroneOptAI Assistant
                   </p>
                 </div>
-
                 <p className="mt-1 text-[12px] text-white/[0.42]">
                   Delivery support · Customer workspace
                 </p>
               </div>
-
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -876,7 +738,6 @@ export function DroneAssistantWidget() {
                 >
                   <ChevronDown size={16} />
                 </button>
-
                 <button
                   type="button"
                   onClick={() =>
@@ -889,9 +750,7 @@ export function DroneAssistantWidget() {
                 </button>
               </div>
             </div>
-
             {/* MESSAGES */}
-
             <div className="max-h-[300px] overflow-y-auto px-4 py-4">
               <div className="space-y-3">
                 {messages.map(
@@ -913,8 +772,11 @@ export function DroneAssistantWidget() {
                             : "border border-white/[0.08] bg-white/[0.03] text-white/[0.86]"
                         }`}
                       >
-                        {message.content}
-
+                        {message.role === "assistant" ? (
+                          <CustomerChatMarkdown content={message.content} />
+                        ) : (
+                          message.content
+                        )}
                         {message.role === "assistant" &&
                           message.actions &&
                           message.actions.length > 0 && (
@@ -937,7 +799,6 @@ export function DroneAssistantWidget() {
                     </div>
                   ),
                 )}
-
                 {isTyping && (
                   <div className="flex justify-start">
                     <div className="inline-flex items-center gap-1 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3">
@@ -947,13 +808,10 @@ export function DroneAssistantWidget() {
                     </div>
                   </div>
                 )}
-
                 <div ref={messagesEndRef} />
               </div>
             </div>
-
             {/* QUICK ACTIONS + INPUT */}
-
             <div className="border-t border-white/[0.08] px-4 py-3">
               <div className="mb-3 flex flex-wrap gap-2">
                 {(quickQuestions.length > 0
@@ -976,13 +834,11 @@ export function DroneAssistantWidget() {
                   </button>
                 ))}
               </div>
-
               {cooldownSeconds > 0 && (
                 <p className="mb-2 text-[11px] text-amber-300/[0.82]">
                   Assistant is busy. Try again in {cooldownSeconds}s.
                 </p>
               )}
-
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -1026,7 +882,6 @@ export function DroneAssistantWidget() {
                     focus:border-orange-500/[0.45]
                   "
                 />
-
                 <button
                   type="submit"
                   disabled={
@@ -1057,11 +912,9 @@ export function DroneAssistantWidget() {
             </div>
           </div>
         )}
-
       {/* =====================================================
           MASCOT
       ====================================================== */}
-
       <div
         onClickCapture={
           handleMascotClickCapture
@@ -1147,11 +1000,9 @@ export function DroneAssistantWidget() {
     </>
   );
 }
-
 /* =========================================================
    MASCOT POSITION HELPERS
 ========================================================= */
-
 function getDefaultPosition(
   mascotSize: number,
 ): Position {
@@ -1166,7 +1017,6 @@ function getDefaultPosition(
       EDGE_GAP,
   };
 }
-
 function clampPosition(
   position: Position,
   mascotSize: number,
@@ -1177,14 +1027,12 @@ function clampPosition(
       mascotSize -
       EDGE_GAP,
   );
-
   const maxY = Math.max(
     EDGE_GAP,
     window.innerHeight -
       mascotSize -
       EDGE_GAP,
   );
-
   return {
     x: Math.min(
       Math.max(
@@ -1202,14 +1050,11 @@ function clampPosition(
     ),
   };
 }
-
 /* =========================================================
    ASSISTIVE-TOUCH STYLE SNAP
-
    Mascot always docks to the nearest LEFT or RIGHT edge.
    Vertical position is preserved.
 ========================================================= */
-
 function snapToNearestEdge(
   position: Position,
   mascotSize: number,
@@ -1218,36 +1063,29 @@ function snapToNearestEdge(
     position,
     mascotSize,
   );
-
   const mascotCenterX =
     safe.x + mascotSize / 2;
-
   const screenCenterX =
     window.innerWidth / 2;
-
   const x =
     mascotCenterX <= screenCenterX
       ? EDGE_GAP
       : window.innerWidth -
         mascotSize -
         EDGE_GAP;
-
   return {
     x,
     y: safe.y,
   };
 }
-
 /* =========================================================
    CHAT POSITION
-
    - Follows mascot
    - Right-side mascot -> panel extends to the left
    - Left-side mascot -> panel extends to the right
    - Prefers above mascot
    - Falls below if there is not enough room
 ========================================================= */
-
 function getChatPosition(
   mascotPosition: Position,
   mascotSize: number,
@@ -1255,24 +1093,19 @@ function getChatPosition(
 ): Position {
   const viewportWidth =
     window.innerWidth;
-
   const viewportHeight =
     window.innerHeight;
-
   const mascotCenterX =
     mascotPosition.x +
     mascotSize / 2;
-
   const mascotOnRight =
     mascotCenterX >
     viewportWidth / 2;
-
   let x = mascotOnRight
     ? mascotPosition.x +
       mascotSize -
       chatSize.width
     : mascotPosition.x;
-
   x = Math.min(
     Math.max(x, EDGE_GAP),
     Math.max(
@@ -1282,19 +1115,15 @@ function getChatPosition(
         EDGE_GAP,
     ),
   );
-
   const aboveY =
     mascotPosition.y -
     chatSize.height -
     CHAT_GAP;
-
   const belowY =
     mascotPosition.y +
     mascotSize +
     CHAT_GAP;
-
   let y: number;
-
   if (aboveY >= EDGE_GAP) {
     y = aboveY;
   } else if (
@@ -1320,39 +1149,32 @@ function getChatPosition(
       ),
     );
   }
-
   return {
     x,
     y,
   };
 }
-
 function readActionValue(
   payload: Record<string, unknown>,
   key: string,
 ) {
   const value = payload[key];
-
   if (
     typeof value === "string" ||
     typeof value === "number"
   ) {
     return String(value);
   }
-
   return "";
 }
-
 function getLastPathSegment(
   href?: string | null,
 ) {
   if (!href) {
     return "";
   }
-
   const segments = href
     .split("/")
     .filter(Boolean);
-
   return segments[segments.length - 1] ?? "";
 }
