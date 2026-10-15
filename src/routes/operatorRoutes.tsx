@@ -112,6 +112,11 @@ const HubNetworkPage = lazyPage(
   "HubNetworkPage",
 );
 
+const BatteryInventoryPage = lazyPage(
+  () => import("../features/operator/pages/fleet/BatteryInventoryPage"),
+  "BatteryInventoryPage",
+);
+
 /* =========================================================
    OPERATIONS
 ========================================================= */
@@ -278,6 +283,11 @@ export const operatorRoutes: RouteObject[] = [
   {
     path: "fleet-hubs/hubs",
     element: <HubNetworkPage />,
+  },
+
+  {
+    path: "fleet-hubs/batteries",
+    element: <BatteryInventoryPage />,
   },
 
   /* =========================
