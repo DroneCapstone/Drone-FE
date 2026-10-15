@@ -41,7 +41,7 @@ export interface DeliveryDraft {
   senderPhone: string;
 
   recipientName: string;
-  recipientPhone: string;
+  recipientEmail: string;
 
   packageCategory: PackageCategory;
   packageDescription: string;

@@ -456,6 +456,11 @@ export const customerDeliveryService = {
     customerId: string,
     draft: DeliveryDraft,
   ): Promise<CustomerDelivery> {
+    const receiverEmail = (draft.recipientEmail ?? "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiverEmail)) {
+      throw new Error("Please enter a valid recipient email address.");
+    }
+
     const hubs = readCachedHubs();
 
     const originHub =
@@ -520,8 +525,10 @@ export const customerDeliveryService = {
 
         sender_phone:
           draft.senderPhone.trim(),
-        receiver_phone:
-          draft.recipientPhone.trim(),
+        receiver_name:
+          draft.recipientName.trim(),
+        receiver_email:
+          receiverEmail,
 
         has_insurance:
           Boolean(
