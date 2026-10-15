@@ -492,7 +492,9 @@ export async function createWorkOrderOnServer(payload: {
 }) {
   const result = await createWorkOrderApi({
     drone_id: toBackendNumericId(payload.droneId),
-    battery_id: toBackendNumericId(payload.batteryId),
+    // A 422 from live Backend says battery_id must be a string.
+    // Pass the battery identifier verbatim, never use toBackendNumericId here.
+    battery_id: String(payload.batteryId).trim(),
     issue_description: payload.issueDescription,
   });
 

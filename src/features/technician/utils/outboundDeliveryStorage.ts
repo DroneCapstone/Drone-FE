@@ -134,7 +134,7 @@ export type OperatorAssignmentPayload = {
 
 };
 
-const TECHNICIAN_HUB = "Hub HCM-02";
+const TECHNICIAN_HUB = "—";
 
 /*
 
@@ -182,75 +182,7 @@ const TECHNICIAN_HUB = "Hub HCM-02";
 
  */
 
-let demoOutboundDeliveries: OutboundDelivery[] = [
-
-  {
-
-    orderId: "ORD-3101",
-
-    customerName: "Customer Demo",
-
-    packageName: "Medical package",
-
-    weightKg: 1.8,
-
-    hub: TECHNICIAN_HUB,
-
-    destination: "Hub HCM-04",
-
-    status: "Awaiting Drop-off",
-
-  },
-
-  {
-
-    orderId: "ORD-3102",
-
-    customerName: "Customer Demo 2",
-
-    packageName: "Document parcel",
-
-    weightKg: 0.7,
-
-    hub: TECHNICIAN_HUB,
-
-    destination: "Hub HCM-07",
-
-    status: "At Hub",
-
-    packageReceivedAt: "24 Sep 2026 · 09:35",
-
-  },
-
-  {
-
-    orderId: "ORD-3103",
-
-    customerName: "Customer Demo 3",
-
-    packageName: "Electronics parcel",
-
-    weightKg: 2.2,
-
-    hub: TECHNICIAN_HUB,
-
-    destination: "Hub HCM-12",
-
-    status: "Mission Assigned",
-
-    missionId: "MS-1103",
-
-    legId: "LEG-1103-01",
-
-    assignedDroneId: "DR-003",
-
-    assignedDroneCode: "AX-03",
-
-    packageReceivedAt: "24 Sep 2026 · 09:10",
-
-  },
-
-];
+let demoOutboundDeliveries: OutboundDelivery[] = [];
 
 let demoOutboundHistory: OutboundDeliveryHistory[] = [];
 
@@ -438,223 +370,9 @@ export function applyOperatorMissionAssignment({
 
 }
 
-export function markOutboundReady({
-
-  orderId,
-
-  batteryId,
-
-}: {
-
-  orderId: string;
-
-  batteryId: string;
-
-}) {
-
-  const current = demoOutboundDeliveries.find(
-
-    (item) => item.orderId === orderId,
-
-  );
-
-  if (
-
-    !current ||
-
-    current.status !== "Mission Assigned" ||
-
-    !current.missionId ||
-
-    !current.assignedDroneId
-
-  ) {
-
-    return undefined;
-
-  }
-
-  const now = formatOutboundTime();
-
-  let updated: OutboundDelivery | undefined;
-
-  demoOutboundDeliveries = demoOutboundDeliveries.map((item) => {
-
-    if (item.orderId !== orderId) {
-
-      return item;
-
-    }
-
-    updated = {
-
-      ...item,
-
-      status: "Ready",
-
-      installedBatteryId: batteryId,
-
-      readyConfirmedAt: now,
-
-    };
-
-    return updated;
-
-  });
-
-  if (updated) {
-
-    window.dispatchEvent(
-
-      new CustomEvent("operator-mission-updated", {
-
-        detail: {
-
-          eventType: "OUTBOUND_READY",
-
-          orderId: updated.orderId,
-
-          missionId: updated.missionId,
-
-          legId: updated.legId,
-
-          droneId: updated.assignedDroneId,
-
-          batteryId,
-
-          status: "READY",
-
-          readyAt: now,
-
-        },
-
-      }),
-
-    );
-
-    notifyOutboundUpdate();
-
-  }
-
-  return updated;
-
-}
-
-export function dispatchOutboundDelivery(orderId: string) {
-
-  const delivery = demoOutboundDeliveries.find(
-
-    (item) => item.orderId === orderId,
-
-  );
-
-  if (
-
-    !delivery ||
-
-    delivery.status !== "Ready" ||
-
-    !delivery.missionId ||
-
-    !delivery.assignedDroneId ||
-
-    !delivery.assignedDroneCode ||
-
-    !delivery.installedBatteryId
-
-  ) {
-
-    return undefined;
-
-  }
-
-  const now = formatOutboundTime();
-
-  const historyItem: OutboundDeliveryHistory = {
-
-    id: `OUT-HIST-${delivery.orderId}-${Date.now()}`,
-
-    orderId: delivery.orderId,
-
-    customerName: delivery.customerName,
-
-    packageName: delivery.packageName,
-
-    weightKg: delivery.weightKg,
-
-    hub: delivery.hub,
-
-    destination: delivery.destination,
-
-    missionId: delivery.missionId,
-
-    legId: delivery.legId,
-
-    droneId: delivery.assignedDroneId,
-
-    droneCode: delivery.assignedDroneCode,
-
-    batteryId: delivery.installedBatteryId,
-
-    departedAt: now,
-
-    result: "Departed",
-
-  };
-
-  demoOutboundHistory = [
-
-    historyItem,
-
-    ...demoOutboundHistory,
-
-  ];
-
-  demoOutboundDeliveries = demoOutboundDeliveries.filter(
-
-    (item) => item.orderId !== orderId,
-
-  );
-
-  clientDispatchedOrderIds.add(orderId);
-
-  window.dispatchEvent(
-
-    new CustomEvent("operator-mission-updated", {
-
-      detail: {
-
-        eventType: "OUTBOUND_DEPARTED",
-
-        orderId: delivery.orderId,
-
-        missionId: delivery.missionId,
-
-        legId: delivery.legId,
-
-        droneId: delivery.assignedDroneId,
-
-        batteryId: delivery.installedBatteryId,
-
-        originHub: delivery.hub,
-
-        destination: delivery.destination,
-
-        status: "IN_PROGRESS",
-
-        departedAt: now,
-
-      },
-
-    }),
-
-  );
-
-  notifyOutboundUpdate();
-
-  return { ...historyItem };
-
-}
+// Dispatch is intentionally not implemented on the frontend:
+// the published Technician Swagger has no departure/dispatch endpoint.
+// Backend must provide an authoritative transition to IN_PROGRESS.
 
 // ---------------------------------------------------------------------------
 
@@ -662,7 +380,6 @@ export function dispatchOutboundDelivery(orderId: string) {
 
 // ---------------------------------------------------------------------------
 
-const clientDispatchedOrderIds = new Set<string>();
 
 function outboundDisplayId(prefix: string, value: string, width = 4) {
 
@@ -718,7 +435,7 @@ function mapApiOutbound(
 
   if (!rawOrderId) return null;
 
-  const orderId = outboundDisplayId("ORD", rawOrderId);
+  const orderId = rawOrderId;
 
   const orderCode =
     pickString(
@@ -904,9 +621,7 @@ export async function refreshOutboundDeliveriesFromApi() {
 
     .map((value) => mapApiOutbound(value, context))
 
-    .filter((item): item is OutboundDelivery => Boolean(item))
-
-    .filter((item) => !clientDispatchedOrderIds.has(item.orderId));
+    .filter((item): item is OutboundDelivery => Boolean(item));
 
   notifyOutboundUpdate();
 
@@ -916,56 +631,15 @@ export async function refreshOutboundDeliveriesFromApi() {
 
 export async function receiveOutboundOrderOnServer(orderId: string) {
 
-  const result = await receiveOutboundOrderApi(orderId);
-
-  await refreshOutboundDeliveriesFromApi();
-
-  return result;
+  return receiveOutboundOrderApi(orderId);
 
 }
 
 export async function prepareOutboundBatteryOnServer(
-
   orderId: string,
-
-  installedBatteryId?: string,
-
 ) {
-
-  const result = await prepareOutboundBatteryApi(orderId);
-
-  await refreshOutboundDeliveriesFromApi();
-
-  if (installedBatteryId) {
-
-    demoOutboundDeliveries = demoOutboundDeliveries.map((item) =>
-
-      item.orderId === orderId
-
-        ? {
-
-            ...item,
-
-            status: "Ready",
-
-            installedBatteryId,
-
-          }
-
-        : item,
-
-    );
-
-    notifyOutboundUpdate();
-
-  }
-
-  return result;
-
-}
-
-export function rememberClientDispatchedOrder(orderId: string) {
-
-  clientDispatchedOrderIds.add(orderId);
-
+  // POST /prepare-battery is the one authoritative Backend operation.
+  // Do not also call /batteries/{id}/use or invent a local Ready status.
+  // The refreshed response determines the new status and assigned battery.
+  return prepareOutboundBatteryApi(orderId);
 }

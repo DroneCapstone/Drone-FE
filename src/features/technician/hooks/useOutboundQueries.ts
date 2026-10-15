@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-query";
 
 import {
-  dispatchOutboundDelivery,
   loadOutboundDeliveryHistory,
   prepareOutboundBatteryOnServer,
   receiveOutboundOrderOnServer,
@@ -79,45 +78,9 @@ export function usePrepareOutboundBatteryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      orderId,
-      installedBatteryId,
-    }: {
-      orderId: string;
-      installedBatteryId?: string;
-    }) =>
-      prepareOutboundBatteryOnServer(
-        orderId,
-        installedBatteryId,
-      ),
+    mutationFn: (orderId: string) =>
+      prepareOutboundBatteryOnServer(orderId),
     onSuccess: () =>
-      invalidateOutboundRelated(
-        queryClient,
-      ),
-  });
-}
-
-export function useDispatchOutboundMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (orderId: string) => {
-      const result =
-        dispatchOutboundDelivery(orderId);
-
-      if (!result) {
-        throw new Error(
-          "This mission is not ready to dispatch yet.",
-        );
-      }
-
-      return result;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey:
-          technicianQueryKeys.outbound(),
-      });
-    },
+      invalidateOutboundRelated(queryClient),
   });
 }
