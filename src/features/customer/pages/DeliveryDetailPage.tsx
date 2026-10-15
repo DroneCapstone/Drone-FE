@@ -31,8 +31,8 @@ export function DeliveryDetailPage() {
     useState(() =>
       deliveryId
         ? customerDeliveryService.getById(
-            deliveryId,
-          )
+          deliveryId,
+        )
         : null,
     );
 
@@ -84,7 +84,7 @@ export function DeliveryDetailPage() {
       complete: paid,
     },
     {
-      label: "Package at origin hub",
+      label: "Package at Drop-off Point",
       complete:
         delivery.packageReceivedAtHub,
     },
@@ -102,7 +102,7 @@ export function DeliveryDetailPage() {
         delivery.orderStatus === "completed",
     },
     {
-      label: "Arrived at destination hub",
+      label: "Arrived at Pick-up Point",
       complete:
         delivery.orderStatus === "completed",
     },
@@ -172,12 +172,12 @@ export function DeliveryDetailPage() {
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <RouteCard
-                label="Origin hub"
+                label="Drop-off Point"
                 name={delivery.originHub.name}
                 address={delivery.originHub.address}
               />
               <RouteCard
-                label="Destination hub"
+                label="Pick-up Point"
                 name={delivery.destinationHub.name}
                 address={delivery.destinationHub.address}
               />
@@ -286,32 +286,29 @@ function TimelineStep({
     <div className="flex gap-4">
       <div className="flex flex-col items-center">
         <div
-          className={`flex h-6 w-6 items-center justify-center rounded-full border ${
-            complete
-              ? "border-orange-500 bg-orange-500 text-black"
-              : "border-white/[0.14] bg-[#161217]"
-          }`}
+          className={`flex h-6 w-6 items-center justify-center rounded-full border ${complete
+            ? "border-orange-500 bg-orange-500 text-black"
+            : "border-white/[0.14] bg-[#161217]"
+            }`}
         >
           {complete && <Check size={13} />}
         </div>
 
         {!last && (
           <div
-            className={`h-12 w-px ${
-              complete
-                ? "bg-orange-500/40"
-                : "bg-white/[0.09]"
-            }`}
+            className={`h-12 w-px ${complete
+              ? "bg-orange-500/40"
+              : "bg-white/[0.09]"
+              }`}
           />
         )}
       </div>
 
       <p
-        className={`pt-1 text-[13px] ${
-          complete
-            ? "font-medium text-white/[0.88]"
-            : "text-white/[0.34]"
-        }`}
+        className={`pt-1 text-[13px] ${complete
+          ? "font-medium text-white/[0.88]"
+          : "text-white/[0.34]"
+          }`}
       >
         {label}
       </p>
@@ -358,11 +355,10 @@ function DetailItem({
         {label}
       </p>
       <p
-        className={`mt-2 text-[13px] font-medium leading-5 ${
-          emphasized
-            ? "text-orange-400"
-            : "text-white/[0.78]"
-        }`}
+        className={`mt-2 text-[13px] font-medium leading-5 ${emphasized
+          ? "text-orange-400"
+          : "text-white/[0.78]"
+          }`}
       >
         {value}
       </p>
@@ -406,7 +402,7 @@ function DetailPriceBreakdown({
     price.serviceFee > 0 &&
     Math.abs(
       price.serviceFee -
-        details.expressSurcharge,
+      details.expressSurcharge,
     ) > 0.5;
 
   return (

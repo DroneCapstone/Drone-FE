@@ -101,8 +101,8 @@ export function OrderDetailPage() {
           <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-              <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
-              <div><dt>Destination Hub</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
+              <div><dt>Drop-off Point</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
+              <div><dt>Pick-up Point</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
               <div>
                 <dt>Origin package</dt>
                 <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
@@ -114,7 +114,7 @@ export function OrderDetailPage() {
               <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>
               <div><dt>Planning state</dt><dd>{planning ?? 'Closed'}</dd></div>
               {order.destinationHubReceivedAt && (
-                <div><dt>Received at Destination Hub</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
+                <div><dt>Received at Pick-up Point</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
               )}
             </dl>
           </OperatorPanel>
@@ -152,10 +152,10 @@ export function OrderDetailPage() {
           </OperatorPanel>
 
           {order.status === 'Delivered to Hub' && (
-            <OperatorPanel title="Operator handoff complete" eyebrow="DESTINATION HUB">
+            <OperatorPanel title="Operator handoff complete" eyebrow="Pick-up Point">
               <div className="notification-policy-note">
                 <strong>Package delivered to {hubName(order.destinationHubId, order.destinationHubName)}</strong>
-                <span>Operator scope ends after the Destination Hub confirms package receipt. Customer pickup, reminders, and post-delivery handling are managed by the Hub/Technician workflow and automated system notifications.</span>
+                <span>Operator scope ends after the Pick-up Point confirms package receipt. Customer pickup, reminders, and post-delivery handling are managed by the Hub/Technician workflow and automated system notifications.</span>
               </div>
             </OperatorPanel>
           )}

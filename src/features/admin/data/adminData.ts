@@ -109,7 +109,7 @@ export const adminPayments: AdminPayment[] = [
 ];
 
 export const adminRefunds: AdminRefund[] = [
-  { id: "REF-1008", paymentId: "PAY-24027", orderId: "ORD-6298", customerName: "Minh Nguyen", amountVnd: 520000, reason: "Order cancelled before origin hub receive", status: "COMPLETED", requestedAt: "2026-10-04T09:05:00+07:00", processedAt: "2026-10-04T09:20:00+07:00" },
+  { id: "REF-1008", paymentId: "PAY-24027", orderId: "ORD-6298", customerName: "Minh Nguyen", amountVnd: 520000, reason: "Order cancelled before Drop-off Point receive", status: "COMPLETED", requestedAt: "2026-10-04T09:05:00+07:00", processedAt: "2026-10-04T09:20:00+07:00" },
   { id: "REF-1009", paymentId: "PAY-24021", orderId: "ORD-6292", customerName: "Vy Le", amountVnd: 440000, reason: "Duplicate payment", status: "PENDING", requestedAt: "2026-10-04T10:18:00+07:00" },
 ];
 

@@ -136,7 +136,8 @@ function mapFleetBattery(raw: unknown): OperatorBattery | null {
     id,
     serialNumber: pickString(raw, ['serial_number', 'serialNumber'], `BAT-${id}`),
     capacityWh: pickNumber(raw, ['capacity_wh', 'capacityWh'], 0),
-    status: pickString(raw, ['status'], 'Unknown'),
+    // Keep only the value supplied by BE; an absent status is not a synthetic category.
+    status: pickString(raw, ['status']),
     droneId: droneId && droneId !== '0' ? droneId : undefined,
     currentHubId: pickString(raw, ['current_hub_id', 'currentHubId', 'hub_id', 'hubId']),
     hubName: pickString(raw, ['hub_name', 'hubName']),

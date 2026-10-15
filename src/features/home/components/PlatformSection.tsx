@@ -9,7 +9,7 @@ const capabilities = [
     number: "02",
     title: "Hub network",
     description:
-      "Manage origin hubs, destination hubs and delivery capacity across the network.",
+      "Manage Drop-off Points, Pick-up Points and delivery capacity across the network.",
   },
   {
     number: "03",

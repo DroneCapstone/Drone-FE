@@ -26,7 +26,7 @@ export type CustomerContactOutcome =
 
 /**
  * Operator-facing Order lifecycle.
- * Operator scope ends when the package is received at the Destination Hub.
+ * Operator scope ends when the package is received at the Pick-up Point.
  */
 export type OrderStatus =
   | 'Pending'
@@ -70,9 +70,9 @@ export interface Order {
   planningState?: PlanningState;
   status: OrderStatus;
 
-  /** Technician event at the Origin Hub. Null/undefined means Awaiting package. */
+  /** Technician event at the Drop-off Point. Null/undefined means Awaiting package. */
   originHubReceivedAt?: string;
-  /** Technician event at the Destination Hub. Completing this event closes Operator scope. */
+  /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
   /** Set when a Mission is cancelled/failed and a new customer delivery window is required. */
   replanRequiredAt?: string;
@@ -112,7 +112,7 @@ export interface Mission {
   eta: string;
   battery: number;
   plannedStartAt: string;
-  /** Customer has 3 hours after Mission assignment to hand the package to the Origin Hub. */
+  /** Customer has 3 hours after Mission assignment to hand the package to the Drop-off Point. */
   packageReceiveDeadlineAt?: string;
   actualStartedAt?: string;
   actualCompletedAt?: string;

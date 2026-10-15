@@ -199,7 +199,7 @@ export function DashboardPage() {
           label="Completed missions"
           value={String(completedCount)}
           delta="Current"
-          note="Delivered to Destination Hub"
+          note="Delivered to Pick-up Point"
         />
       </div>
 
