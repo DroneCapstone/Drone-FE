@@ -14,7 +14,6 @@ import {
   Clock3,
   Eye,
   History,
-  PlaneTakeoff,
   Search,
   ShieldCheck,
   X,
@@ -37,21 +36,14 @@ import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
 
-import {
-  saveFleet,
-  TECHNICIAN_HUB,
-  type FleetDrone,
-} from "../utils/fleetStorage";
-
-import {
-  useFleetQuery,
-} from "../hooks/useFleetQueries";
+import { TECHNICIAN_HUB } from "../utils/fleetStorage";
+import { useNavigate } from "react-router-dom";
 
 import {
   formatTransitTime,
   loadTransitMissionHistory,
   saveTransitMissionHistory,
-  saveTransitMissions,
+  isContinuationMission,
   type TransitMission,
   type TransitMissionHistory,
   type TransitMissionPurpose,
@@ -62,15 +54,6 @@ import {
   useConfirmTransitArrivalMutation,
   useTransitMissionsQuery,
 } from "../hooks/useTransitQueries";
-
-import {
-  createMaintenanceAlert,
-} from "../utils/maintenanceAlertStorage";
-
-import {
-  getBatteryForDrone,
-  installFullBatteryOnDrone,
-} from "../utils/batteryStorage";
 
 import {
   useBatteriesQuery,
@@ -160,7 +143,8 @@ function getPurposeLabel(
     return "Return to hub";
   }
 
-  return "Incident return";
+  if (purpose === "INCIDENT_RETURN") return "Incident return";
+  return "Needs classification";
 }
 
 function getMissionStateLabel(
@@ -174,11 +158,9 @@ function getMissionStateLabel(
     return "Active mission";
   }
 
-  if (mission.purpose === "RETURN_TO_HUB") {
-    return "Mission completed";
-  }
-
-  return "Incident return";
+  if (mission.purpose === "RETURN_TO_HUB") return "Mission completed";
+  if (mission.purpose === "INCIDENT_RETURN") return "Incident return";
+  return "Unknown mission state";
 }
 
 function getMissionStateHint(
@@ -197,20 +179,17 @@ function getMissionStateHint(
   return "";
 }
 
-function getPurposeDescription(
-  purpose: TransitMissionPurpose,
-) {
+function getPurposeDescription(purpose: TransitMissionPurpose) {
   if (purpose === "BATTERY_STOP") {
-    return "Active delivery mission. The drone is stopping at this hub for battery service before continuing.";
+    return "Active mission stopping at a transit hub. After arrival confirmation, Technician may select a Ready battery for the next leg. Departure remains Backend/Operator-controlled.";
   }
-
-  if (
-    purpose === "RETURN_TO_HUB"
-  ) {
-    return "Delivery mission is already complete. After arrival confirmation, the current battery is removed for charging and the drone is stored in Hub Fleet without a battery installed.";
+  if (purpose === "RETURN_TO_HUB") {
+    return "Mission completed. Confirm the drone arrival, perform the initial inspection in Hub Fleet, and check Battery Management for detached/charging battery status. No battery replacement for this mission.";
   }
-
-  return "Operator/System reported an in-flight incident. After arrival confirmation, the current battery is removed and the drone enters Hub Fleet with Maintenance status and no battery installed.";
+  if (purpose === "INCIDENT_RETURN") {
+    return "Incident return. After confirming arrival, inspect the drone in Hub Fleet, handle the incident through Maintenance and check the battery in Battery Management. Do not continue this mission.";
+  }
+  return "Backend has not identified this arrival as a transit battery stop, completed return or incident return. Only confirm physical arrival; battery replacement and dispatch are blocked until the mission is classified.";
 }
 
 function getHistoryResultLabel(
@@ -221,11 +200,9 @@ function getHistoryResultLabel(
 }
 
 export function TransitMissionsPage() {
+  const navigate = useNavigate();
   const transitQuery =
     useTransitMissionsQuery();
-
-  const fleetQuery =
-    useFleetQuery();
 
   const confirmArrivalMutation =
     useConfirmTransitArrivalMutation();
@@ -240,11 +217,6 @@ export function TransitMissionsPage() {
     missions,
     setMissions,
   ] = useState<TransitMission[]>([]);
-
-  const [
-    fleet,
-    setFleet,
-  ] = useState<FleetDrone[]>([]);
 
   const [
     missionHistory,
@@ -324,20 +296,6 @@ export function TransitMissionsPage() {
         battery.chargeLevelPct >= 100,
     );
 
-  const persistMissions = (
-    next: TransitMission[],
-  ) => {
-    setMissions(next);
-    saveTransitMissions(next);
-  };
-
-  const persistFleet = (
-    next: FleetDrone[],
-  ) => {
-    setFleet(next);
-    saveFleet(next);
-  };
-
   const persistHistory = (
     next:
       TransitMissionHistory[],
@@ -351,44 +309,15 @@ export function TransitMissionsPage() {
 
   useEffect(() => {
     if (transitQuery.data) {
-      setMissions(
-        transitQuery.data.map(
-          (mission) =>
-            mission.status ===
-            "Replacement Requested"
-              ? {
-                  ...mission,
-                  status:
-                    "Cannot Continue" as const,
-                }
-              : mission,
-        ),
-      );
+      setMissions(transitQuery.data);
     }
   }, [transitQuery.data]);
 
   useEffect(() => {
-    if (fleetQuery.data) {
-      setFleet(
-        fleetQuery.data,
-      );
+    if (transitQuery.error instanceof Error) {
+      pushActionMessage(transitQuery.error.message);
     }
-  }, [fleetQuery.data]);
-
-  useEffect(() => {
-    const error =
-      transitQuery.error ??
-      fleetQuery.error;
-
-    if (error instanceof Error) {
-      pushActionMessage(
-        error.message,
-      );
-    }
-  }, [
-    transitQuery.error,
-    fleetQuery.error,
-  ]);
+  }, [transitQuery.error]);
 
 
   const visibleMissions =
@@ -507,12 +436,12 @@ export function TransitMissionsPage() {
         mission.backendMissionId,
       );
 
-      if (mission.purpose !== "BATTERY_STOP") {
+      if (!isContinuationMission(mission)) {
+        // This records the confirmed arrival, not an unverified inspection
+        // or battery detachment/charging operation.
         addHistory(
           mission,
-          mission.purpose === "RETURN_TO_HUB"
-            ? "Returned to hub"
-            : "Sent to maintenance",
+          "Arrival confirmed",
           formatTransitTime(),
           mission.batteryLevelPct,
         );
@@ -520,7 +449,9 @@ export function TransitMissionsPage() {
 
       setSelectedMissionId(null);
       pushActionMessage(
-        `${getMissionDisplayId(mission.missionId)} arrival confirmed by backend.`,
+        isContinuationMission(mission)
+          ? `${getMissionDisplayId(mission.missionId)} arrival confirmed. Check the drone before replacing its mission battery.`
+          : `${getMissionDisplayId(mission.missionId)} arrival confirmed. Inspect the drone in Hub Fleet and verify battery handling in Battery Management.`,
       );
     } catch (error) {
       pushActionMessage(
@@ -535,8 +466,15 @@ export function TransitMissionsPage() {
     mission: TransitMission,
     batteryId: string,
   ) => {
-    if (mission.purpose !== "BATTERY_STOP") return;
+    if (!isContinuationMission(mission) || mission.status !== "At Hub") {
+      pushActionMessage("Only an active transit stop at hub can replace a mission battery.");
+      return;
+    }
     if (!batteryId) return;
+    if (!mission.backendMissionId) {
+      pushActionMessage("Backend mission_id is missing; cannot safely assign a battery to this mission.");
+      return;
+    }
 
     const selectedBattery = readyBatteries.find(
       (battery) => battery.id === batteryId,
@@ -552,29 +490,18 @@ export function TransitMissionsPage() {
     try {
       await batteryUseMutation.mutateAsync({
         batteryId: selectedBattery.id,
-        missionId: mission.missionId,
+        missionId: mission.backendMissionId,
       });
 
-      persistMissions(
-        missions.map((item) =>
-          item.id === mission.id
-            ? {
-                ...item,
-                batteryId: selectedBattery.id,
-                batteryLevelPct: selectedBattery.chargeLevelPct,
-                batteryServiceRequired: false,
-                status: "Ready" as const,
-              }
-            : item,
-        ),
-      );
-
-      pushActionMessage(
-        `${selectedBattery.id} was assigned to ${getMissionDisplayId(
-          mission.missionId,
-        )}.`,
-      );
+      // A 2xx from /batteries/{id}/use confirms the assignment request;
+      // it does not guarantee Backend has approved departure or marked Ready.
       setOpenBatteryDropdownMissionId(null);
+      const refreshed = await transitQuery.refetch();
+      pushActionMessage(
+        refreshed.isError
+          ? `Battery assignment was accepted for ${getMissionDisplayId(mission.missionId)}, but the latest mission status could not be loaded. Please refresh.`
+          : `Battery assignment was accepted for ${getMissionDisplayId(mission.missionId)}. Readiness is based on the Backend status.`,
+      );
     } catch (error) {
       pushActionMessage(
         error instanceof Error
@@ -584,438 +511,9 @@ export function TransitMissionsPage() {
     }
   };
 
-  const markReady = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const fleetDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId,
-      );
-
-    if (
-      !fleetDrone ||
-      fleetDrone.status !==
-        "Available"
-    ) {
-      pushActionMessage(
-        "Drone must be Available before it can continue the mission.",
-      );
-
-      return;
-    }
-
-    const installedBattery =
-      getBatteryForDrone(
-        fleetDrone.id,
-      );
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "A fully charged battery must be installed before the mission can continue.",
-      );
-
-      return;
-    }
-
-    persistMissions(
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                batteryId:
-                  installedBattery.id,
-                batteryLevelPct:
-                  installedBattery.chargeLevelPct,
-                status:
-                  "Ready" as const,
-              }
-            : item,
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} passed the hub readiness check.`,
-    );
-  };
-
-  /* Backend document has no Cannot Continue / replacement endpoint yet. */
-  const markCannotContinue = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const now =
-      formatTransitTime();
-
-    const nextFleet =
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                status:
-                  "Maintenance" as const,
-              }
-            : drone,
-      );
-
-    const nextMissions =
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                status:
-                  "Cannot Continue" as const,
-                cannotContinueReason:
-                  "Drone failed the technician hub readiness check and cannot safely continue this active mission.",
-                replacementRequestedAt:
-                  now,
-                replacementReason:
-                  "TECHNICAL_FAILURE",
-              }
-            : item,
-      );
-
-    persistFleet(
-      nextFleet,
-    );
-
-    persistMissions(
-      nextMissions,
-    );
-
-    const maintenanceAlert =
-      createMaintenanceAlert({
-        drone:
-          getMissionDroneCode(
-            mission,
-          ),
-        droneId:
-          mission.currentDroneId,
-        title:
-          "Failed hub readiness inspection",
-        source:
-          "Hub inspection",
-        missionId:
-          mission.missionId,
-        legId:
-          mission.legId,
-        reason:
-          "Drone failed the technician hub readiness check and requires maintenance before further flight.",
-      });
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "operator-replacement-requested",
-        {
-          detail: {
-            missionId:
-              mission.missionId,
-            legId:
-              mission.legId,
-            hub:
-              mission.hub,
-            failedDroneId:
-              mission.currentDroneId,
-            reason:
-              "TECHNICAL_FAILURE",
-            requestedAt:
-              now,
-          },
-        },
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} moved to Maintenance. ${maintenanceAlert.id} was created and Operator was automatically notified to assign a replacement drone.`,
-    );
-  };
-
-  const confirmReplacementReady = (
-    mission: TransitMission,
-  ) => {
-    if (
-      !mission.replacementDroneId
-    ) {
-      pushActionMessage(
-        "Operator has not assigned a replacement drone yet.",
-      );
-
-      return;
-    }
-
-    const replacementDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.replacementDroneId,
-      );
-
-    if (!replacementDrone) {
-      pushActionMessage(
-        "Assigned replacement drone was not found in this Hub Fleet.",
-      );
-
-      return;
-    }
-
-    if (
-      replacementDrone.status !==
-      "Available"
-    ) {
-      pushActionMessage(
-        "Assigned replacement drone must be Available.",
-      );
-
-      return;
-    }
-
-    let installedBattery =
-      getBatteryForDrone(
-        replacementDrone.id,
-      );
-
-    if (!installedBattery) {
-      installedBattery =
-        installFullBatteryOnDrone({
-          droneId:
-            replacementDrone.id,
-          hub:
-            TECHNICIAN_HUB,
-          missionId:
-            mission.missionId,
-        }) ?? undefined;
-    }
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "No fully charged battery is available for the replacement drone.",
-      );
-
-      return;
-    }
-
-    const replacementType =
-      replacementDrone.name
-        .match(/[A-Za-z]+/)?.[0]
-        ?.toUpperCase() ??
-      mission.droneType;
-
-    persistFleet(
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          replacementDrone.id
-            ? {
-                ...drone,
-                battery: 100,
-              }
-            : drone,
-      ),
-    );
-
-    persistMissions(
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                currentDroneId:
-                  replacementDrone.id,
-                droneType:
-                  replacementType,
-                droneModel:
-                  replacementDrone.model,
-                batteryId:
-                  installedBattery.id,
-                batteryLevelPct:
-                  100,
-                batteryServiceRequired:
-                  false,
-                status:
-                  "Ready" as const,
-              }
-            : item,
-      ),
-    );
-
-    pushActionMessage(
-      `${getDroneCode(
-        replacementType,
-        replacementDrone.id,
-      )} confirmed ready with ${installedBattery.id} at 100%.`,
-    );
-  };
-
-  /* Backend document has no Transit Dispatch endpoint yet. */
-  const dispatchMission = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const currentDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId,
-      );
-
-    if (!currentDrone) {
-      pushActionMessage(
-        "Current mission drone was not found in the Hub Fleet.",
-      );
-
-      return;
-    }
-
-    if (
-      currentDrone.status !==
-      "Available"
-    ) {
-      pushActionMessage(
-        "Only an Available drone can continue the mission.",
-      );
-
-      return;
-    }
-
-    const installedBattery =
-      getBatteryForDrone(
-        currentDrone.id,
-      );
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "Drone must have a fully charged battery installed before continuing the mission.",
-      );
-
-      return;
-    }
-
-    const now =
-      formatTransitTime();
-
-    const nextFleet =
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                location: `In transit to ${mission.destination}`,
-              }
-            : drone,
-      );
-
-    const nextMissions =
-      missions.filter(
-        (item) =>
-          item.id !==
-          mission.id,
-      );
-
-    persistFleet(
-      nextFleet,
-    );
-
-    persistMissions(
-      nextMissions,
-    );
-
-    addHistory(
-      mission,
-      "Continued",
-      now,
-      installedBattery.chargeLevelPct,
-    );
-
-    setSelectedMissionId(null);
-
-    /*
-     * Manual Dispatch by Technician:
-     * - the Ready mission leaves the active Transit list immediately;
-     * - the drone continues the flight without waiting for Operator approval;
-     * - Operator is notified at the same time through MISSION_CONTINUED.
-     */
-    window.dispatchEvent(
-      new CustomEvent(
-        "operator-mission-updated",
-        {
-          detail: {
-            eventType:
-              "MISSION_CONTINUED",
-            missionId:
-              mission.missionId,
-            legId:
-              mission.legId,
-            droneId:
-              mission.currentDroneId,
-            batteryId:
-              installedBattery.id,
-            hub:
-              mission.hub,
-            destination:
-              mission.destination,
-            status:
-              "IN_TRANSIT",
-            departedAt:
-              now,
-            message:
-              `${getMissionDisplayId(
-                mission.missionId,
-              )} dispatched from ${mission.hub} and continued toward ${mission.destination}.`,
-          },
-        },
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDisplayId(
-        mission.missionId,
-      )} dispatched from ${TECHNICIAN_HUB}. Operator has been notified.`,
-    );
-  };
+  // No Technician dispatch/continue/cannot-continue endpoint exists in the
+  // supplied Swagger. Do not mutate local fleet/mission state as if a flight
+  // or maintenance escalation happened on Backend.
 
 
   return (
@@ -1159,8 +657,7 @@ export function TransitMissionsPage() {
                 );
 
               const batteryNeedsService =
-                mission.purpose ===
-                  "BATTERY_STOP" &&
+                isContinuationMission(mission) &&
                 mission.status ===
                   "At Hub" &&
                 mission.batteryServiceRequired;
@@ -1202,8 +699,7 @@ export function TransitMissionsPage() {
                           mission.purpose ===
                           "INCIDENT_RETURN"
                             ? "text-[13px] font-semibold text-red-500"
-                            : mission.purpose ===
-                                "BATTERY_STOP"
+                            : isContinuationMission(mission)
                               ? "text-[13px] font-medium text-orange-500"
                               : "text-[13px] font-medium text-[var(--tech-text-secondary)]"
                         }
@@ -1292,8 +788,7 @@ export function TransitMissionsPage() {
                         </Button>
                       )}
 
-                      {mission.purpose ===
-                        "BATTERY_STOP" &&
+                      {isContinuationMission(mission) &&
                         mission.status ===
                           "At Hub" &&
                         mission.batteryServiceRequired && (
@@ -1311,7 +806,8 @@ export function TransitMissionsPage() {
                               disabled={
                                 batteriesQuery.isPending ||
                                 batteryUseMutation.isPending ||
-                                readyBatteries.length === 0
+                                readyBatteries.length === 0 ||
+                                !mission.backendMissionId
                               }
                               aria-expanded={
                                 openBatteryDropdownMissionId ===
@@ -1322,9 +818,11 @@ export function TransitMissionsPage() {
                                 mission.missionId,
                               )}`}
                               title={
-                                readyBatteries.length === 0
-                                  ? "No Ready battery available"
-                                  : "Choose a Ready battery"
+                                !mission.backendMissionId
+                                  ? "Backend mission_id is missing"
+                                  : readyBatteries.length === 0
+                                    ? "No Ready battery available"
+                                    : "Choose a Ready battery"
                               }
                               className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                             >
@@ -1393,71 +891,38 @@ export function TransitMissionsPage() {
                           </div>
                         )}
 
-                      {mission.purpose ===
-                        "BATTERY_STOP" &&
-                        mission.status ===
-                          "At Hub" &&
+                      {isContinuationMission(mission) &&
+                        mission.status === "At Hub" &&
                         !mission.batteryServiceRequired && (
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              markReady(
-                                mission,
-                              )
-                            }
-                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                          >
-                            <ShieldCheck
-                              size={14}
-                            />
-                            Ready
-                          </Button>
-                        )}
-
-                      {mission.status ===
-                        "Cannot Continue" &&
-                        !mission.replacementDroneId && (
-                          <span className="text-[13px] font-medium text-[var(--tech-muted)]">
-                            Waiting for Operator
+                          <span className="text-[12px] text-[var(--tech-muted)]">
+                            Waiting for Backend readiness
                           </span>
                         )}
 
-                      {mission.status ===
-                        "Cannot Continue" &&
-                        mission.replacementDroneId && (
+                      {mission.status === "Cannot Continue" && (
+                        <span className="text-[12px] text-[var(--tech-muted)]">
+                          Needs Operator / Maintenance
+                        </span>
+                      )}
+
+                      {isContinuationMission(mission) &&
+                        mission.status === "Ready" && (
+                        <span className="text-[12px] text-[var(--tech-muted)]">
+                          Ready · waiting for Operator
+                        </span>
+                      )}
+
+                      {mission.status === "At Hub" &&
+                        !isContinuationMission(mission) && (
                           <Button
                             type="button"
-                            onClick={() =>
-                              confirmReplacementReady(
-                                mission,
-                              )
-                            }
+                            onClick={() => navigate("/technician/fleet")}
                             className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
                           >
-                            <ShieldCheck
-                              size={14}
-                            />
-                            Confirm ready
+                            <ShieldCheck size={14} />
+                            Inspect in Hub Fleet
                           </Button>
                         )}
-
-                      {mission.status ===
-                        "Ready" && (
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            dispatchMission(
-                              mission,
-                            )
-                          }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                        >
-                          <PlaneTakeoff
-                            size={14}
-                          />
-                          Dispatch
-                        </Button>
-                      )}
 
                       <button
                         type="button"
@@ -1637,7 +1102,7 @@ export function TransitMissionsPage() {
                     </p>
 
                     <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-                      Confirmed returns and dispatched transit missions will appear here.
+                      Confirmed arrivals for completed and incident-return missions appear here during this session.
                     </p>
                   </div>
                 )}
@@ -1802,7 +1267,7 @@ export function TransitMissionsPage() {
                     />
 
                     <DetailField
-                      label="Status"
+                      label="Arrival handling"
                       value={
                         selectedMission.status
                       }
@@ -1900,7 +1365,7 @@ export function TransitMissionsPage() {
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailField
                       label="Battery swap policy"
-                      value="Required on every hub arrival"
+                      value="Transit stops only"
                     />
 
                     <DetailField
@@ -1908,7 +1373,7 @@ export function TransitMissionsPage() {
                       value={
                         selectedMission.batteryServiceRequired
                           ? "Required"
-                          : "Completed"
+                          : "Not required / reported complete"
                       }
                       danger={
                         selectedMission.batteryServiceRequired
@@ -1918,10 +1383,11 @@ export function TransitMissionsPage() {
                     <DetailField
                       label="Can continue"
                       value={
-                        selectedMission.status ===
-                          "Cannot Continue"
-                          ? "No"
-                          : "Yes"
+                        selectedMission.status === "Ready"
+                          ? "Ready, awaiting Operator"
+                          : selectedMission.status === "Cannot Continue"
+                            ? "No"
+                            : "Pending Backend verification"
                       }
                       danger={
                         selectedMission.status ===
@@ -1956,11 +1422,11 @@ export function TransitMissionsPage() {
 
                   <div className="mt-4 rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
                     <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                      Maintenance Alert already created by Operator/System
+                      Review maintenance alerts after arrival
                     </p>
 
                     <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                      Confirm Arrival confirms the drone is physically at this hub. The battery ID carried by the mission is verified, the battery is removed and added to Battery Management as Charging. The drone enters Hub Fleet with Maintenance status and no battery installed.
+                      Confirm Arrival records physical arrival with Backend. Carry out initial inspection in Hub Fleet, check maintenance status and verify battery removal/charging in Battery Management. These inventory changes must be confirmed by Backend; the FE does not perform them automatically.
                     </p>
 
                     {selectedMission.incidentAlertId && (
@@ -1984,7 +1450,7 @@ export function TransitMissionsPage() {
                   </h3>
 
                   <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
-                    This delivery mission is already completed. After Confirm Arrival, Technician verifies the mission battery ID, removes that battery into Battery Management as Charging, stores the drone in Hub Fleet without a battery, and moves this row to Mission History.
+                    This mission is completed. Confirm Arrival first, then perform initial inspection in Hub Fleet and verify battery removal and charging in Battery Management. The arrival appears in local history, but actual drone and battery records remain Backend-controlled.
                   </p>
                 </section>
               )}
@@ -2018,7 +1484,7 @@ export function TransitMissionsPage() {
                               </p>
 
                               <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                                Operator was notified automatically when Technician marked Cannot Continue. Operator selects the next drone.
+                                The mission requires Operator review. Replacement assignment must be recorded by Backend before the Technician can proceed.
                               </p>
                             </div>
                           </div>
@@ -2085,8 +1551,8 @@ export function TransitMissionsPage() {
                     />
                   )}
 
-                  {selectedMission.status ===
-                    "Ready" && (
+                  {isContinuationMission(selectedMission) &&
+                    selectedMission.status === "Ready" && (
                     <ActivityRow
                       label="Readiness"
                       value="Ready to continue"
@@ -2095,40 +1561,36 @@ export function TransitMissionsPage() {
                 </div>
               </section>
 
-              {/* HUB READINESS EXCEPTION */}
-              {selectedMission.purpose ===
-                "BATTERY_STOP" &&
-                (selectedMission.status ===
-                  "At Hub" ||
-                  selectedMission.status ===
-                    "Ready") &&
-                !selectedMission.replacementDroneId && (
-                  <section className="border-t border-[var(--tech-border)] pt-5">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                          Hub readiness check
-                        </h3>
-
-                        <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
-                          Use Cannot continue only if Technician discovers a technical problem while this active mission is stopped at the hub. The system will create a Hub inspection Maintenance Alert.
-                        </p>
-                      </div>
-
-                      <Button
-                        type="button"
-                        onClick={() =>
-                          markCannotContinue(
-                            selectedMission,
-                          )
-                        }
-                        className="h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] hover:!border-red-500/50 hover:!bg-transparent hover:!text-red-500"
-                      >
-                        Cannot continue
-                      </Button>
-                    </div>
-                  </section>
-                )}
+              {/* HUB INSPECTION / EXCEPTION SUPPORT */}
+              <section className="border-t border-[var(--tech-border)] pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                      {isContinuationMission(selectedMission)
+                        ? "Hub readiness & inspection"
+                        : "Initial inspection"}
+                    </h3>
+                    <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
+                      {isContinuationMission(selectedMission)
+                        ? "For a technical fault, use Maintenance Alerts/Work Orders. Flight continuation and drone replacement require Backend/Operator actions."
+                        : "Inspect the arrived drone in Hub Fleet and verify the removed battery in Battery Management. Arrival confirmation alone does not certify inspection or charging."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => navigate(
+                      isContinuationMission(selectedMission)
+                        ? "/technician/maintenance/alerts"
+                        : "/technician/fleet",
+                    )}
+                    className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
+                  >
+                    {isContinuationMission(selectedMission)
+                      ? "Open maintenance alerts"
+                      : "Open Hub Fleet"}
+                  </Button>
+                </div>
+              </section>
             </div>
           </div>
         </div>

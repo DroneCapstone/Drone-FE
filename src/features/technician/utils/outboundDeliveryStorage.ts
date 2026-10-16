@@ -2,10 +2,6 @@ import {
 
   getOutboundDeliveriesApi,
 
-  prepareOutboundBatteryApi,
-
-  receiveOutboundOrderApi,
-
 } from "../api/outboundApi";
 
 import {
@@ -15,6 +11,8 @@ import {
   pickNumber,
 
   pickString,
+
+  technicianApiRequest,
 
   unwrapList,
 
@@ -45,7 +43,9 @@ export type OutboundDeliveryStatus =
 
   | "Mission Assigned"
 
-  | "Ready";
+  | "Ready"
+
+  | "Needs Review";
 
 export type OutboundDelivery = {
 
@@ -64,6 +64,31 @@ export type OutboundDelivery = {
 
   weightKg: number;
 
+  /** True only when Backend provided the payload's weight. */
+  weightProvided?: boolean;
+
+  packageType?: string;
+
+  deliveryMode?: "EXPRESS" | "SCHEDULED" | string;
+
+  /** Backend-provided drop-off deadline. Never infer a policy deadline on FE. */
+  dropoffDeadline?: string;
+
+  /** Backend-provided scheduled flight/delivery time (NOT the drop-off deadline). */
+  scheduledAt?: string;
+
+  createdAt?: string;
+  paidAt?: string;
+  receiverPhone?: string;
+
+  /** Preserve independent Backend lifecycles for display/audit. */
+  orderStatus?: string;
+  handlingStatus?: string;
+  missionStatus?: string;
+
+  batteryChargePct?: number;
+  batteryStatus?: string;
+
   hub: string;
 
   destination: string;
@@ -72,6 +97,9 @@ export type OutboundDelivery = {
 
   missionId?: string;
 
+  /** Exact Backend mission_id passed to battery-use API; never reconstructed from display labels. */
+  backendMissionId?: string;
+
   missionCode?: string;
 
   legId?: string;
@@ -79,6 +107,9 @@ export type OutboundDelivery = {
   assignedDroneId?: string;
 
   assignedDroneCode?: string;
+
+  /** Explicit drone model supplied by Backend when available. */
+  assignedDroneModel?: string;
 
   packageReceivedAt?: string;
 
@@ -393,30 +424,143 @@ function outboundDisplayId(prefix: string, value: string, width = 4) {
 
 }
 
+/**
+ * Resolve the Technician handoff from all available Backend fields.
+ * `status` is usually an order-lifecycle status, while `handling_status`
+ * tracks handoff. The backend may return contradictory/stale values; proof
+ * that the package has arrived must win over "PENDING" or "INCOMING".
+ * Unknown/terminal statuses must not silently enable Receive at hub.
+ */
 function normalizeOutboundStatus(
-
-  raw: string,
-
+  record: Record<string, unknown>,
   hasMission: boolean,
-
   hasDrone: boolean,
-
 ): OutboundDeliveryStatus {
+  const normalize = (raw: string) =>
+    raw.trim().toUpperCase().replace(/[\s-]+/g, "_");
 
-  const key = raw.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const handling = normalize(
+    pickString(record, ["handling_status", "handlingStatus"], ""),
+  );
+  const packageStatus = normalize(
+    pickString(record, ["package_status", "packageStatus"], ""),
+  );
+  const lifecycle = normalize(
+    pickString(record, ["order_status", "orderStatus", "status"], ""),
+  );
+  const alternateLifecycle = normalize(
+    pickString(record, ["status"], ""),
+  );
 
-  if (key === "READY") return "Ready";
+  const statuses = [handling, packageStatus, lifecycle, alternateLifecycle].filter(Boolean);
 
-  if (key === "MISSION_ASSIGNED" || (hasMission && hasDrone && key === "AT_HUB")) {
-
-    return "Mission Assigned";
-
+  // A completed/cancelled/in-flight order cannot be received again.
+  if (statuses.some((value) => [
+    "CANCELLED", "CANCELED", "EXPIRED", "FAILED", "REJECTED",
+    "COMPLETED", "DELIVERED", "DELIVERY_COMPLETE", "IN_PROGRESS",
+    "IN_TRANSIT", "IN_FLIGHT", "DISPATCHED",
+  ].includes(value))) {
+    return "Needs Review";
   }
 
-  if (key === "AT_HUB" || key === "RECEIVED") return "At Hub";
+  if (statuses.includes("READY") || statuses.includes("READY_TO_DISPATCH")) {
+    return "Ready";
+  }
 
-  return "Awaiting Drop-off";
+  if (statuses.includes("MISSION_ASSIGNED")) {
+    return "Mission Assigned";
+  }
 
+  const originPackage =
+    isRecord(record.originPackage)
+      ? record.originPackage
+      : isRecord(record.origin_package)
+        ? record.origin_package
+        : null;
+
+  const receivedFlag =
+    record.origin_package_received === true ||
+    record.package_received === true ||
+    record.is_received === true ||
+    originPackage?.received === true;
+
+  const receivedAt =
+    pickString(record, [
+      "package_received_at", "received_at", "origin_received_at",
+    ], "") ||
+    (originPackage
+      ? pickString(originPackage, ["received_at", "receivedAt"], "")
+      : "");
+
+  const isAtHub =
+    statuses.some((value) => [
+      "AT_HUB", "RECEIVED", "RECEIVED_AT_HUB", "PACKAGE_AT_HUB",
+    ].includes(value)) ||
+    receivedFlag ||
+    Boolean(receivedAt);
+
+  if (isAtHub) {
+    return hasMission && hasDrone ? "Mission Assigned" : "At Hub";
+  }
+
+  const awaitingStates = [
+    "INCOMING", "PENDING", "AWAITING_DROP_OFF", "AWAITING_DROPOFF",
+    "WAITING_FOR_DROP_OFF", "NOT_RECEIVED",
+    "SCHEDULED", "PAID", "CONFIRMED", "BOOKED",
+  ];
+
+  // If Backend explicitly supplies an unknown handling/package state, do not
+  // override it with a generic lifecycle status like SCHEDULED or PAID.
+  if (
+    (handling && !awaitingStates.includes(handling)) ||
+    (packageStatus && !awaitingStates.includes(packageStatus))
+  ) {
+    return "Needs Review";
+  }
+
+  return statuses.some((value) => awaitingStates.includes(value))
+    ? "Awaiting Drop-off"
+    : "Needs Review";
+}
+
+/** Support API fields that may be either a display string or an object. */
+function readableEntity(
+  record: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+    if (isRecord(value)) {
+      const label = pickString(
+        value,
+        ["name", "label", "code", "battery_code", "serial_number", "model", "id"],
+        "",
+      );
+      if (label.trim()) return label.trim();
+    }
+  }
+  return "";
+}
+
+function optionalNumeric(
+  record: Record<string, unknown>,
+  keys: string[],
+): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+  }
+  return undefined;
+}
+
+function normalizeDeliveryMode(value: string): string | undefined {
+  const mode = value.trim().toUpperCase().replace(/[ -]+/g, "_");
+  return mode || undefined;
 }
 
 function mapApiOutbound(
@@ -431,11 +575,16 @@ function mapApiOutbound(
    * value; using ORD-TECH-OUT-3 as the API id could incorrectly resolve to 3
    * even when the actual backend order id is 24.
    */
-  const rawOrderId = pickString(value, ["order_id", "orderId", "id"]);
+  // order_id is typically the database key; if it is a display code and
+  // a separate record id exists, use the record id for POST actions.
+  // Never infer a database id by extracting digits from an ORD-... code.
+  const orderIdField = pickString(value, ["order_id", "orderId"], "");
+  const recordId = pickString(value, ["id"], "");
+  const orderId = /^ORD[-_]/i.test(orderIdField)
+    ? (recordId || orderIdField)
+    : (orderIdField || recordId);
 
-  if (!rawOrderId) return null;
-
-  const orderId = rawOrderId;
+  if (!orderId) return null;
 
   const orderCode =
     pickString(
@@ -448,7 +597,7 @@ function mapApiOutbound(
     getMissionInfoForDelivery(value, context);
 
   const rawMissionId =
-    pickString(value, ["mission_id", "missionId"], "") ||
+    pickString(value, ["mission_id", "missionId", "mission_code", "missionCode"], "") ||
     missionInfo?.missionId ||
     "";
 
@@ -462,11 +611,7 @@ function mapApiOutbound(
     "";
 
   const rawBatteryId =
-    pickString(
-      value,
-      ["battery_id", "installed_battery_id"],
-      "",
-    ) ||
+    readableEntity(value, ["battery_code", "installed_battery", "battery", "battery_id", "installed_battery_id"]) ||
     missionInfo?.batteryId ||
     "";
 
@@ -483,9 +628,8 @@ function mapApiOutbound(
     missionInfo?.missionCode ||
     missionId;
 
-  const assignedDroneId = rawDroneId
-    ? outboundDisplayId("DR", rawDroneId, 3)
-    : undefined;
+  // Keep the genuine Backend ID; never fabricate a DR- serial from its digits.
+  const assignedDroneId = rawDroneId || undefined;
 
   const assignedDroneCode =
     pickString(
@@ -493,8 +637,9 @@ function mapApiOutbound(
       ["drone_code", "assigned_drone_code", "drone_name"],
       "",
     ) ||
+    readableEntity(value, ["drone", "assigned_drone"]) ||
     missionInfo?.droneCode ||
-    assignedDroneId;
+    (assignedDroneId ? `Drone #${assignedDroneId}` : undefined);
 
   const hub = resolveHubLabel(
     value,
@@ -504,12 +649,8 @@ function mapApiOutbound(
     true,
   );
 
-  const destination = resolveHubLabel(
-    value,
-    "destination",
-    context,
-    missionInfo?.destinationHub,
-  );
+  const destination = readableEntity(value, ["destination_hub", "destinationHub"]) ||
+    resolveHubLabel(value, "destination", context, missionInfo?.destinationHub);
 
   return {
 
@@ -525,40 +666,67 @@ function mapApiOutbound(
 
     packageName: pickString(
       value,
-      ["package_name", "package_type", "parcel_name"],
-      "Package",
+      ["package_label", "package_name", "parcel_name", "package_type"],
+      "",
     ),
 
     weightKg: pickNumber(
       value,
-      ["weight_kg", "package_weight_kg", "weight"],
+      ["payload_kg", "weight_kg", "package_weight_kg", "weight"],
       0,
     ),
+
+    weightProvided: optionalNumeric(
+      value,
+      ["payload_kg", "weight_kg", "package_weight_kg", "weight"],
+    ) !== undefined,
+
+    packageType: pickString(value, ["package_type", "parcel_type"], "") || undefined,
+
+    deliveryMode: normalizeDeliveryMode(
+      pickString(value, ["delivery_mode", "deliveryMode", "service_type"], ""),
+    ),
+
+    dropoffDeadline: pickString(
+      value,
+      ["dropoff_deadline", "drop_off_deadline", "dropoff_deadline_at", "dropoff_due_at", "drop_off_due_at", "dropoff_by"],
+      "",
+    ) || undefined,
+
+    // A Scheduled delivery time is not a drop-off deadline.
+    scheduledAt: pickString(
+      value,
+      ["scheduled_at", "scheduled_for", "scheduled_delivery_at", "scheduled_departure_at"],
+      "",
+    ) || undefined,
+
+    createdAt: pickString(value, ["created_at", "createdAt"], "") || undefined,
+    paidAt: pickString(value, ["paid_at", "payment_completed_at"], "") || undefined,
+    receiverPhone: pickString(value, ["receiver_phone", "recipient_phone"], "") || undefined,
+    orderStatus: pickString(value, ["order_status", "orderStatus", "status"], "") || undefined,
+    handlingStatus: pickString(value, ["handling_status", "handlingStatus", "package_status"], "") || undefined,
+    missionStatus: pickString(value, ["mission_status", "mission_state", "missionStatus"], "") || undefined,
+    batteryChargePct: optionalNumeric(value, ["battery_percent", "battery_charge_pct", "battery_level_pct"]),
+    batteryStatus: pickString(value, ["battery_status"], "") || undefined,
 
     hub,
 
     destination,
 
-    /*
-     * `status` is the order lifecycle (e.g. Scheduled/In Progress), while
-     * `handling_status` describes the Technician handoff state
-     * (Incoming/At hub/Ready). This page must use handling_status first.
-     */
+    // Match the latest Backend handoff state instead of blindly preferring
+    // handling_status (which may still say PENDING after status becomes AT_HUB).
     status: normalizeOutboundStatus(
-
-      pickString(
-        value,
-        ["handling_status", "package_status", "status"],
-        "INCOMING",
-      ),
-
+      value,
       Boolean(missionId),
-
-      Boolean(assignedDroneId),
-
+      Boolean(assignedDroneCode),
     ),
 
     missionId,
+
+    backendMissionId:
+      pickString(value, ["mission_id", "missionId"], "") ||
+      missionInfo?.missionId ||
+      undefined,
 
     missionCode: missionCode || undefined,
 
@@ -571,15 +739,25 @@ function mapApiOutbound(
     assignedDroneCode:
       assignedDroneCode || undefined,
 
+    assignedDroneModel:
+      pickString(value, ["drone_model", "assigned_drone_model", "drone_type"], "") ||
+      undefined,
+
+    // The receipt timestamp must be saved and returned by Backend. Some
+    // versions nest it under originPackage; never substitute Date.now() here.
     packageReceivedAt:
-      pickString(
-        value,
-        ["package_received_at", "received_at"],
-        "",
-      ) || undefined,
+      pickString(value, [
+        "package_received_at", "received_at", "receivedAt", "origin_received_at",
+      ], "") ||
+      (isRecord(value.originPackage)
+        ? pickString(value.originPackage, ["received_at", "receivedAt"], "")
+        : isRecord(value.origin_package)
+          ? pickString(value.origin_package, ["received_at", "receivedAt"], "")
+          : "") ||
+      undefined,
 
     installedBatteryId: rawBatteryId
-      ? outboundDisplayId("BAT", rawBatteryId, 3)
+      ? (/^BAT[-_]/i.test(rawBatteryId) ? rawBatteryId : `Battery #${rawBatteryId}`)
       : undefined,
 
     readyConfirmedAt:
@@ -629,17 +807,27 @@ export async function refreshOutboundDeliveriesFromApi() {
 
 }
 
+/**
+ * Use exactly the canonical orderId supplied in the outbound list.
+ * The generic flexible-ID helper retries with a numeric suffix derived from
+ * strings such as ORD-20261014-0023, which can target the wrong order.
+ */
 export async function receiveOutboundOrderOnServer(orderId: string) {
+  if (!orderId.trim()) throw new Error("Backend order ID is missing.");
 
-  return receiveOutboundOrderApi(orderId);
-
+  return technicianApiRequest(
+    `/technician/deliveries/outbound/${encodeURIComponent(orderId)}/receive`,
+    { method: "POST" },
+  );
 }
 
-export async function prepareOutboundBatteryOnServer(
-  orderId: string,
-) {
-  // POST /prepare-battery is the one authoritative Backend operation.
-  // Do not also call /batteries/{id}/use or invent a local Ready status.
-  // The refreshed response determines the new status and assigned battery.
-  return prepareOutboundBatteryApi(orderId);
+export async function prepareOutboundBatteryOnServer(orderId: string) {
+  if (!orderId.trim()) throw new Error("Backend order ID is missing.");
+
+  // This is the authoritative Backend operation. Do not reserve a battery
+  // locally or retry using an inferred numeric suffix.
+  return technicianApiRequest(
+    `/technician/deliveries/outbound/${encodeURIComponent(orderId)}/prepare-battery`,
+    { method: "POST" },
+  );
 }

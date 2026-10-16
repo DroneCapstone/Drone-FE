@@ -23,8 +23,8 @@ export function useTransitMissionsQuery() {
       technicianQueryKeys.transit(),
     queryFn:
       refreshTransitMissionsFromApi,
-    // Transit data changes often enough to poll, but 30 seconds avoids
-    // avoid hammering /technician/fleet/incoming while keeping operational data fresh.
+    // Poll /technician/fleet/incoming once every 30s while the page is active.
+    // A successful arrival confirmation invalidates the related caches.
     staleTime: 15_000,
     refetchInterval:
       TRANSIT_POLL_INTERVAL_MS,
@@ -53,9 +53,7 @@ export function useConfirmTransitArrivalMutation() {
 
   return useMutation({
     mutationFn: (missionId: string) =>
-      confirmTransitArrivalOnServer(
-        missionId,
-      ),
+      confirmTransitArrivalOnServer(missionId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({

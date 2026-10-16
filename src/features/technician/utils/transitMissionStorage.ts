@@ -21,7 +21,8 @@ export type TransitMissionStatus =
 export type TransitMissionPurpose =
   | "BATTERY_STOP"
   | "RETURN_TO_HUB"
-  | "INCIDENT_RETURN";
+  | "INCIDENT_RETURN"
+  | "UNKNOWN";
 
 export type TransitMission = {
   id: string;
@@ -112,122 +113,12 @@ export type TransitMissionHistory = {
   outcome:
     | "Continued"
     | "Returned to hub"
-    | "Sent to maintenance";
+    | "Sent to maintenance"
+    | "Arrival confirmed";
 };
 
-let demoTransitMissions:
-  TransitMission[] = [
-  {
-    id: "TM-1024",
-
-    backendMissionId: null,
-    missionId: "MS-1024",
-    legId: "LEG-1024-02",
-
-    purpose:
-      "BATTERY_STOP",
-
-    currentDroneId:
-      "DR-002",
-    droneType: "CX",
-    droneModel:
-      "DJI Matrice 300 RTK",
-
-    batteryId:
-      "BAT-006",
-    batteryLevelPct: 61,
-
-    requiredDepartureBatteryPct:
-      80,
-
-    batteryServiceRequired:
-      false,
-
-    origin:
-      "Hub HCM-01",
-    hub:
-      "Hub HCM-02",
-    destination:
-      "Customer Zone 08",
-
-    status: "Incoming",
-  },
-
-  {
-    id: "TM-1034",
-
-    backendMissionId: null,
-    missionId: "MS-1034",
-    legId: "LEG-1034-RETURN",
-
-    purpose:
-      "RETURN_TO_HUB",
-
-    currentDroneId:
-      "DR-005",
-    droneType: "AX",
-    droneModel:
-      "Autel EVO Max 4T",
-
-    batteryId:
-      "BAT-007",
-    batteryLevelPct: 84,
-
-    requiredDepartureBatteryPct:
-      0,
-
-    batteryServiceRequired:
-      false,
-
-    origin:
-      "Customer Zone 07",
-    hub:
-      "Hub HCM-02",
-    destination:
-      "Hub HCM-02",
-
-    status: "Incoming",
-  },
-
-  {
-    id: "TM-1040",
-
-    backendMissionId: null,
-    missionId: "MS-1040",
-    legId: "LEG-1040-INCIDENT",
-
-    purpose:
-      "INCIDENT_RETURN",
-
-    currentDroneId:
-      "DR-006",
-    droneType: "CX",
-    droneModel:
-      "DJI Matrice 30",
-
-    batteryId:
-      "BAT-008",
-    batteryLevelPct: 68,
-
-    requiredDepartureBatteryPct:
-      0,
-
-    batteryServiceRequired:
-      false,
-
-    origin:
-      "In-flight route segment",
-    hub:
-      "Hub HCM-02",
-    destination:
-      "Hub HCM-02",
-
-    status: "Incoming",
-
-    incidentAlertId:
-      "ALT-301",
-  },
-];
+// Backend is authoritative: do not display fictitious incoming missions.
+let demoTransitMissions: TransitMission[] = [];
 
 let demoTransitHistory:
   TransitMissionHistory[] = [];
@@ -310,11 +201,50 @@ function normalizeTransitStatus(value: string): TransitMissionStatus {
   return "Incoming";
 }
 
-function normalizeTransitPurpose(value: string): TransitMissionPurpose {
-  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
-  if (key === "RETURN_TO_HUB") return "RETURN_TO_HUB";
-  if (key === "INCIDENT_RETURN") return "INCIDENT_RETURN";
-  return "BATTERY_STOP";
+/** Only a genuinely active transit stop can receive another mission battery. */
+function normalizedKey(value: string) {
+  return value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+}
+
+export function isCompletedMissionState(value?: string) {
+  return [
+    "COMPLETED", "COMPLETE", "FINISHED", "SUCCEEDED", "SUCCESS",
+    "MISSION_COMPLETED", "DELIVERED",
+  ].includes(normalizedKey(value ?? ""));
+}
+
+export function isIncidentMissionState(value?: string) {
+  return [
+    "ABORTED", "FAILED", "EMERGENCY", "INCIDENT",
+    "INCIDENT_RETURN", "RETURNING_FOR_MAINTENANCE",
+  ].includes(normalizedKey(value ?? ""));
+}
+
+export function isContinuationMission(mission: TransitMission) {
+  return (
+    mission.purpose === "BATTERY_STOP" &&
+    !isCompletedMissionState(mission.missionState) &&
+    !isIncidentMissionState(mission.missionState)
+  );
+}
+
+function normalizeTransitPurpose(
+  value: string,
+  missionState?: string,
+): TransitMissionPurpose {
+  // Explicit incident or incident lifecycle must never become a normal return.
+  const key = normalizedKey(value);
+  if (key === "INCIDENT_RETURN" || key === "INCIDENT" || isIncidentMissionState(missionState))
+    return "INCIDENT_RETURN";
+  // Terminal mission lifecycle overrides a stale BATTERY_STOP flag.
+  if (isCompletedMissionState(missionState)) return "RETURN_TO_HUB";
+  if (key === "RETURN_TO_HUB" || key === "MISSION_RETURN")
+    return "RETURN_TO_HUB";
+  if (["BATTERY_STOP", "TRANSIT_STOP", "BATTERY_SWAP", "TRANSIT"].includes(key))
+    return "BATTERY_STOP";
+
+  // Missing purpose cannot safely be treated as BATTERY_STOP.
+  return "UNKNOWN";
 }
 
 function displayId(prefix: string, value: string, width = 4) {
@@ -385,12 +315,19 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     pickString(value, ["handling_status", "status"], "INCOMING"),
   );
 
+  const missionState = pickString(
+    value,
+    ["mission_state", "mission_status", "flight_status"],
+    "",
+  );
+
   const purpose = normalizeTransitPurpose(
     pickString(
       value,
       ["purpose", "mission_purpose", "arrival_reason"],
-      "BATTERY_STOP",
+      "",
     ),
+    missionState,
   );
 
   const batteryCode = pickString(
@@ -408,9 +345,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       ["leg_id", "mission_leg_id"],
       `LEG-${missionRaw}`,
     ),
-    missionState:
-      pickString(value, ["mission_state", "mission_status"], "") ||
-      undefined,
+    missionState: missionState || undefined,
     droneCode: rawDroneCode || undefined,
     purpose,
     currentDroneId: droneId,
@@ -433,7 +368,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       value,
       ["battery_service_required", "requires_battery_service"],
       status === "At Hub" && purpose === "BATTERY_STOP",
-    ),
+    ) && purpose === "BATTERY_STOP",
     origin: pickString(value, ["origin", "origin_hub_name", "origin_name"], "—"),
     hub: pickString(value, ["hub", "hub_name", "target_hub_name"], "Hub"),
     destination: pickString(
@@ -480,6 +415,9 @@ export async function refreshTransitMissionsFromApi() {
 }
 
 export async function confirmTransitArrivalOnServer(missionId: string) {
+  if (!missionId?.trim()) {
+    throw new Error("Cannot confirm arrival: Backend mission_id was not provided.");
+  }
   // Do not refetch here. The TanStack mutation invalidates the transit query
   // after a successful confirmation, which produces one fresh request cycle.
   // Refetching here as well caused duplicate missions/incoming requests.

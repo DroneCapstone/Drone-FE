@@ -540,12 +540,12 @@ export const getDroneMaintenanceHistoryApi = (
 // ---------------------------------------------------------------------------
 
 /**
- * Current Swagger includes GET /api/v1/technician/missions/.
- * This Technician-scoped endpoint is used only to enrich delivery rows.
- * The Transit Missions page continues to use /technician/fleet/incoming.
+ * Swagger exposes the shared mission list at GET /api/v1/missions/.
+ * Keep this compatibility helper name because Outbound/Confirmation mapping
+ * still imports it, but do not call the removed /technician/missions/ route.
  */
 export const getTechnicianMissionsApi = () =>
-  technicianApiRequest("/technician/missions/");
+  technicianApiRequest("/missions/");
 
 // ---------------------------------------------------------------------------
 // Technician AI predictions
@@ -583,9 +583,11 @@ export const useBatteryApi = (
   batteryId: string | number,
   missionId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/batteries/${id}/use`,
-    batteryId,
+  // The selected battery uses its *actual Backend id* from GET /batteries.
+  // Do not retry POST with a guessed numeric suffix or display serial: that
+  // could accidentally assign another physical battery.
+  technicianApiRequest(
+    `/technician/fleet/batteries/${encodeURIComponent(String(batteryId))}/use`,
     {
       method: "POST",
       body: JSON.stringify({
@@ -680,8 +682,7 @@ export const getWorkOrdersApi = () =>
 
 export const createWorkOrderApi = (payload: {
   drone_id: number;
-  // Current backend validation requires battery_id as a string.
-  battery_id: string;
+  battery_id: number;
   issue_description: string;
 }) =>
   technicianApiRequest("/technician/fleet/work-orders", {

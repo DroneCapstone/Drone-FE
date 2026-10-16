@@ -25,6 +25,12 @@ export type HubBattery = {
 
   serialNumber?: string;
   model?: string;
+  /** True only when an actual charge percentage was returned by Backend. */
+  chargeReportedByBackend?: boolean;
+  /** Unmodified Backend status, used to exclude installed/in-use batteries. */
+  backendStatus?: string;
+  /** Explicit compatibility provided by Backend, when available. */
+  compatibleDroneModels?: string[];
   capacityWh?: number;
   droneId?: string;
   hubId?: string;
@@ -875,6 +881,27 @@ function toBatteryDisplayId(value: string) {
   return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${value}`;
 }
 
+function extractCompatibleDroneModels(record: Record<string, unknown>): string[] {
+  for (const field of [
+    "compatible_drone_models",
+    "supported_drone_models",
+    "compatible_models",
+    "supported_models",
+  ]) {
+    const raw = record[field];
+    if (!Array.isArray(raw)) continue;
+    return raw.flatMap((item): string[] => {
+      if (typeof item === "string" && item.trim()) return [item.trim()];
+      if (isRecord(item)) {
+        const model = pickString(item, ["model", "name", "drone_model", "code"], "");
+        return model ? [model] : [];
+      }
+      return [];
+    });
+  }
+  return [];
+}
+
 function mapApiBattery(value: unknown): HubBattery | null {
   if (!isRecord(value)) return null;
 
@@ -998,6 +1025,17 @@ function mapApiBattery(value: unknown): HubBattery | null {
         ["model", "battery_model", "model_code", "battery_model_code"],
         "",
       ) || undefined,
+    chargeReportedByBackend: [
+      "charge_level_pct", "battery_level_pct", "charge_pct", "charge_level",
+      "level", "soc", "state_of_charge", "percentage",
+    ].some((key) => {
+      const reading = value[key];
+      return (typeof reading === "number" && Number.isFinite(reading)) ||
+        (typeof reading === "string" && reading.trim() !== "" &&
+         Number.isFinite(Number(reading)));
+    }),
+    backendStatus: rawStatus || undefined,
+    compatibleDroneModels: extractCompatibleDroneModels(value),
     capacityWh: pickNumber(value, ["capacity_wh", "energy_capacity_wh"], 0),
     droneId:
       pickString(value, ["drone_id", "installed_drone_id"], "") ||
