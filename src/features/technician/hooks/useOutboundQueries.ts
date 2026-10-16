@@ -21,6 +21,12 @@ export function useOutboundDeliveriesQuery() {
       technicianQueryKeys.outbound(),
     queryFn:
       refreshOutboundDeliveriesFromApi,
+    // New paid orders may be added while Technician is on this page.
+    // Keep refresh moderate; the loader also fetches hub/mission context.
+    staleTime: 15_000,
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 
