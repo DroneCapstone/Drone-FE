@@ -22,7 +22,11 @@ export function useBatteriesQuery() {
     queryKey:
       technicianQueryKeys.batteries(),
     queryFn: refreshBatteriesFromApi,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    refetchInterval: 90_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -77,8 +81,8 @@ export function useBatteryMutation() {
         batteryId,
         missionId,
       ),
-    onSuccess: async (_, variables) => {
-      await Promise.all([
+    onSuccess: (_, variables) => {
+      void Promise.all([
         queryClient.invalidateQueries({
           queryKey:
             technicianQueryKeys.batteries(),

@@ -21,10 +21,11 @@ export function useOutboundDeliveriesQuery() {
       technicianQueryKeys.outbound(),
     queryFn:
       refreshOutboundDeliveriesFromApi,
-    // New paid orders may be added while Technician is on this page.
-    // Keep refresh moderate; the loader also fetches hub/mission context.
-    staleTime: 15_000,
-    refetchInterval: 45_000,
+    // Reuse cached data when returning to the page. Only the Outbound GET is
+    // required for the list; unrelated auth/mission requests no longer block it.
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    refetchInterval: 90_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
@@ -73,10 +74,11 @@ export function useReceiveOutboundMutation() {
       receiveOutboundOrderOnServer(
         orderId,
       ),
-    onSuccess: () =>
-      invalidateOutboundRelated(
-        queryClient,
-      ),
+    onSuccess: () => {
+      // A successful POST is authoritative; refresh related screens in the
+      // background rather than delaying success until slow GETs finish.
+      void invalidateOutboundRelated(queryClient);
+    },
   });
 }
 

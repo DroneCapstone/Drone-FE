@@ -383,7 +383,7 @@ export function OutboundDeliveriesPage() {
       if (alreadyReceived) {
         setActionMessage("Backend confirms this package is already at hub (AT_HUB). Receive has been disabled to prevent duplicate receipt.");
       } else if (/not found|\b404\b/i.test(message)) {
-        setActionMessage(`Backend could not find ${delivery.orderCode ?? orderId}. Check order_id in the GET Outbound response; no alternate ID was generated.`);
+        setActionMessage(`Backend returned 404 for order_id ${orderId}. FE sent the canonical order_id; Backend must verify the Orders lookup and the Technician's origin hub access.`);
       } else {
         setActionMessage(message);
       }
@@ -509,7 +509,7 @@ export function OutboundDeliveriesPage() {
         <CardContent className="border-b border-[var(--tech-border)] px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--tech-muted)]">
-              <span><strong className="font-semibold text-[var(--tech-text)]">{normalizedDeliveries.length}</strong> total</span>
+              <span><strong className="font-semibold text-[var(--tech-text)]">{outboundQuery.isPending ? "—" : normalizedDeliveries.length}</strong> total</span>
               <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{awaitingCount}</strong> awaiting</span>
               <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{atHubCount}</strong> at hub</span>
               <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{assignedCount}</strong> assigned</span>
@@ -593,10 +593,14 @@ export function OutboundDeliveriesPage() {
                   </p>
                   <div className="min-w-0">
                     <p className="truncate text-[12px] font-medium text-[var(--tech-text-secondary)]" title={delivery.missionCode ?? delivery.missionId ?? ""}>
-                      {display(delivery.missionCode ?? delivery.missionId)}
+                      {delivery.prematureMissionAssignment
+                        ? "—"
+                        : display(delivery.missionCode ?? delivery.missionId)}
                     </p>
                     <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneCode ?? ""}>
-                      {delivery.assignedDroneCode ? delivery.assignedDroneCode : "Drone not assigned"}
+                      {delivery.prematureMissionAssignment
+                        ? "Awaiting package receipt"
+                        : delivery.assignedDroneCode || "Drone not assigned"}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -621,7 +625,14 @@ export function OutboundDeliveriesPage() {
                       <span className="text-[12px] text-[var(--tech-muted)]">—</span>
                     )}
                   </div>
-                  <StatusLabel status={delivery.status} missionStatus={delivery.missionStatus} receivedAt={delivery.packageReceivedAt} />
+                  <div className="min-w-0">
+                    <StatusLabel status={delivery.status} missionStatus={delivery.prematureMissionAssignment ? undefined : delivery.missionStatus} receivedAt={delivery.packageReceivedAt} />
+                    {delivery.prematureMissionAssignment && (
+                      <p className="mt-1 text-[10px] text-orange-500" title="Backend assigned a mission before Technician received the package. Needs Backend review.">
+                        Early mission in Backend
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center justify-end gap-2">
                     {delivery.status === "Awaiting Drop-off" && (
                       <Button
@@ -822,7 +833,14 @@ export function OutboundDeliveriesPage() {
                 <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
                   <DetailField label="Order status (Backend)" value={readableStatus(selectedDelivery.orderStatus)} />
                   <DetailField label="Handling status (Backend)" value={readableStatus(selectedDelivery.handlingStatus)} />
-                  <DetailField label="Mission" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
+                  {selectedDelivery.prematureMissionAssignment && (
+                    <p className="col-span-full rounded-md border border-orange-500/30 p-3 text-[12px] text-orange-500">
+                      Backend has already scheduled a mission before this order was received at the hub.
+                      This violates the agreed workflow and requires Backend correction; the table hides this
+                      premature assignment, but the raw mission is retained here for diagnosis.
+                    </p>
+                  )}
+                  <DetailField label="Mission (Backend)" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
                   <DetailField label="Mission state" value={readableStatus(selectedDelivery.missionStatus)} />
                   <DetailField label="Drone" value={display(selectedDelivery.assignedDroneCode)} />
                   <DetailField label="Battery" value={selectedDelivery.installedBatteryId ? `${selectedDelivery.installedBatteryId}${selectedDelivery.batteryChargePct !== undefined ? ` · ${selectedDelivery.batteryChargePct}%` : ""}${selectedDelivery.batteryStatus ? ` · ${selectedDelivery.batteryStatus}` : ""}` : "—"} />

@@ -59,10 +59,24 @@ import {
   useBatteriesQuery,
   useBatteryMutation,
 } from "../hooks/useBatteryQueries";
+import type { HubBattery } from "../utils/batteryStorage";
 
 type TransitFilter =
   | "All transit"
   | TransitMissionStatus;
+
+/** Only Backend-verified drone ↔ battery compatibility may enable assignment. */
+function compatibleBatteryForTransit(battery: HubBattery, mission: TransitMission) {
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
+  const droneModel = norm(mission.droneModel);
+  if (!droneModel || droneModel === "—") return false;
+  const compatibility = battery.compatibleDroneModels ?? [];
+  if (compatibility.length) return compatibility.some((m) => norm(m) === droneModel);
+  // Only exact names qualify when a separate compatibility map is absent.
+  const batteryModel = battery.model;
+  if (!batteryModel) return false;
+  return norm(batteryModel) === droneModel;
+}
 
 function getIdNumber(
   droneId: string,
@@ -181,7 +195,7 @@ function getMissionStateHint(
 
 function getPurposeDescription(purpose: TransitMissionPurpose) {
   if (purpose === "BATTERY_STOP") {
-    return "Active mission stopping at a transit hub. After arrival confirmation, Technician may select a Ready battery for the next leg. Departure remains Backend/Operator-controlled.";
+    return "Active mission stopping at a transit hub. After arrival confirmation, Technician may select a Ready battery for the next leg. Technician may dispatch the continuation when a backend dispatch action is available; Operator is notified of the departure.";
   }
   if (purpose === "RETURN_TO_HUB") {
     return "Mission completed. Confirm the drone arrival, perform the initial inspection in Hub Fleet, and check Battery Management for detached/charging battery status. No battery replacement for this mission.";
@@ -216,7 +230,11 @@ export function TransitMissionsPage() {
   const [
     missions,
     setMissions,
-  ] = useState<TransitMission[]>([]);
+  ] = useState<TransitMission[]>(() => transitQuery.data ?? []);
+
+  // UI-only acknowledgement: a confirmed completed/incident return leaves
+  // the active list during this page session. Backend must also stop returning it.
+  const [confirmedReturnIds, setConfirmedReturnIds] = useState<string[]>([]);
 
   const [
     missionHistory,
@@ -292,8 +310,12 @@ export function TransitMissionsPage() {
   const readyBatteries =
     (batteriesQuery.data ?? []).filter(
       (battery) =>
+        Boolean(battery.backendId) &&
         battery.status === "Ready" &&
-        battery.chargeLevelPct >= 100,
+        battery.chargeReportedByBackend === true &&
+        battery.chargeLevelPct >= 100 &&
+        !battery.droneId &&
+        !/^(IN_USE|INSTALLED|ASSIGNED|RESERVED|MAINTENANCE|CHARGING)$/i.test(battery.backendStatus ?? ""),
     );
 
   const persistHistory = (
@@ -329,6 +351,10 @@ export function TransitMissionsPage() {
 
       return missions.filter(
         (mission) => {
+          if (!isContinuationMission(mission) &&
+              (mission.arrivalConfirmedAt || confirmedReturnIds.includes(mission.id))) {
+            return false;
+          }
           const code =
             getMissionDroneCode(
               mission,
@@ -366,6 +392,7 @@ export function TransitMissionsPage() {
       );
     }, [
       missions,
+      confirmedReturnIds,
       searchQuery,
       statusFilter,
     ]);
@@ -437,6 +464,7 @@ export function TransitMissionsPage() {
       );
 
       if (!isContinuationMission(mission)) {
+        setConfirmedReturnIds((ids) => ids.includes(mission.id) ? ids : [...ids, mission.id]);
         // This records the confirmed arrival, not an unverified inspection
         // or battery detachment/charging operation.
         addHistory(
@@ -480,9 +508,9 @@ export function TransitMissionsPage() {
       (battery) => battery.id === batteryId,
     );
 
-    if (!selectedBattery) {
+    if (!selectedBattery || !compatibleBatteryForTransit(selectedBattery, mission)) {
       pushActionMessage(
-        "The selected battery is no longer Ready. Refresh the battery list and choose another battery.",
+        "Battery is not verified as Ready, fully charged and compatible with this drone. Check Backend battery model/compatibility data.",
       );
       return;
     }
@@ -558,6 +586,13 @@ export function TransitMissionsPage() {
               Dismiss
             </button>
           </div>
+        </div>
+      )}
+
+      {transitQuery.isError && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          Cannot load transit missions.
+          <button type="button" className="ml-3 font-semibold underline" onClick={() => void transitQuery.refetch()}>Retry</button>
         </div>
       )}
 
@@ -656,6 +691,9 @@ export function TransitMissionsPage() {
                   mission,
                 );
 
+              const compatibleReadyBatteries = readyBatteries.filter(
+                (battery) => compatibleBatteryForTransit(battery, mission),
+              );
               const batteryNeedsService =
                 isContinuationMission(mission) &&
                 mission.status ===
@@ -759,8 +797,10 @@ export function TransitMissionsPage() {
 
                     {/* ACTIONS */}
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-                      {mission.status ===
-                        "Incoming" && (
+                      {(mission.status === "Incoming" ||
+                        (mission.status === "At Hub" &&
+                         !isContinuationMission(mission) &&
+                         !mission.arrivalConfirmedAt)) && (
                         <Button
                           type="button"
                           onClick={() =>
@@ -806,7 +846,7 @@ export function TransitMissionsPage() {
                               disabled={
                                 batteriesQuery.isPending ||
                                 batteryUseMutation.isPending ||
-                                readyBatteries.length === 0 ||
+                                compatibleReadyBatteries.length === 0 ||
                                 !mission.backendMissionId
                               }
                               aria-expanded={
@@ -820,7 +860,7 @@ export function TransitMissionsPage() {
                               title={
                                 !mission.backendMissionId
                                   ? "Backend mission_id is missing"
-                                  : readyBatteries.length === 0
+                                  : compatibleReadyBatteries.length === 0
                                     ? "No Ready battery available"
                                     : "Choose a Ready battery"
                               }
@@ -850,7 +890,7 @@ export function TransitMissionsPage() {
                                 )}`}
                                 className="absolute right-0 top-[calc(100%+6px)] z-50 max-h-64 min-w-[230px] overflow-y-auto rounded-md border border-zinc-700 bg-[#121419] p-1.5 shadow-xl"
                               >
-                                {readyBatteries.map((battery) => (
+                                {compatibleReadyBatteries.map((battery) => (
                                   <button
                                     key={battery.id}
                                     type="button"
@@ -908,12 +948,13 @@ export function TransitMissionsPage() {
                       {isContinuationMission(mission) &&
                         mission.status === "Ready" && (
                         <span className="text-[12px] text-[var(--tech-muted)]">
-                          Ready · waiting for Operator
+                          Ready · dispatch API needed
                         </span>
                       )}
 
                       {mission.status === "At Hub" &&
-                        !isContinuationMission(mission) && (
+                        !isContinuationMission(mission) &&
+                        Boolean(mission.arrivalConfirmedAt) && (
                           <Button
                             type="button"
                             onClick={() => navigate("/technician/fleet")}
@@ -945,15 +986,14 @@ export function TransitMissionsPage() {
             },
           )}
 
-          {visibleMissions.length ===
-            0 && (
+          {visibleMissions.length === 0 && (
             <div className="px-5 py-14 text-center">
               <p className="text-[15px] font-medium text-[var(--tech-text-secondary)]">
-                No incoming missions found
+                {transitQuery.isPending ? "Loading transit missions..." : transitQuery.isError ? "Unable to load transit missions" : "No incoming missions found"}
               </p>
 
               <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                No drones currently require handling at this hub.
+                {transitQuery.isPending ? "Fetching data from Backend." : transitQuery.isError ? "Check the Backend connection and retry." : "No drones currently require handling at this hub."}
               </p>
             </div>
           )}
@@ -1384,7 +1424,7 @@ export function TransitMissionsPage() {
                       label="Can continue"
                       value={
                         selectedMission.status === "Ready"
-                          ? "Ready, awaiting Operator"
+                          ? "Ready, waiting for dispatch API"
                           : selectedMission.status === "Cannot Continue"
                             ? "No"
                             : "Pending Backend verification"
