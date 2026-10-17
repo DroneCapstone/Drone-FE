@@ -301,7 +301,17 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     rawDroneCode.match(/(\d+)$/)?.[1] ||
     "0";
 
-  const backendMissionId = backendMissionIdRaw || null;
+  // Some versions of GET /technician/fleet/incoming return the mission
+  // identifier under `id` / `mission_code`, without a `mission_id` field.
+  // Use it ONLY when it is explicitly a mission code (MSN-...), never a
+  // transit-row, drone or order ID. Avoid inventing a numeric suffix.
+  const fallbackMissionId =
+    /^MSN[-_]/i.test(fallbackRowId)
+      ? fallbackRowId
+      : /^MSN[-_]/i.test(missionCodeRaw)
+        ? missionCodeRaw
+        : "";
+  const backendMissionId = backendMissionIdRaw || fallbackMissionId || null;
   const missionId = missionCodeRaw
     ? missionCodeRaw
     : displayId("MSN", missionRaw);

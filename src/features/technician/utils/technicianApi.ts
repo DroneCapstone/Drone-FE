@@ -566,9 +566,11 @@ export const getIncomingMissionsApi = () =>
 export const confirmMissionArrivalApi = (
   missionId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/missions/${id}/confirm-arrival`,
-    missionId,
+  // Mutating a mission must use the exact ID provided by Backend.
+  // Do not retry with the trailing numeric suffix of MSN-...: that could
+  // target another mission.
+  technicianApiRequest(
+    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-arrival`,
     { method: "POST" },
   );
 

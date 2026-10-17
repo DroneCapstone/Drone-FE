@@ -191,6 +191,7 @@ export function FleetPage() {
       {queryError && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {queryError}
+          <button type="button" onClick={() => void fleetQuery.refetch()} className="ml-3 font-semibold underline">Retry</button>
         </div>
       )}
 
@@ -347,11 +348,11 @@ export function FleetPage() {
                     colSpan={5}
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
-                    No drones are currently assigned to{" "}
-                    {
-                      TECHNICIAN_HUB
-                    }
-                    .
+                    {fleetQuery.isPending
+                      ? "Loading drones..."
+                      : fleetQuery.isError
+                        ? "Unable to load Hub Fleet."
+                        : `No drones are currently assigned to ${TECHNICIAN_HUB}.`}
                   </TableCell>
                 </TableRow>
               )}
