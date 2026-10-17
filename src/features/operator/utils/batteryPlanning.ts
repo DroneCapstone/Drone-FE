@@ -17,11 +17,6 @@ export function getBatteryCompatibility(
       : 'incompatible';
   }
 
-  // Current Operator Battery API only exposes drone_id as a compatibility relation.
-  if (battery.droneId) {
-    return battery.droneId === drone.id ? 'compatible' : 'incompatible';
-  }
-
   return 'unknown';
 }
 
@@ -32,7 +27,7 @@ export function getCompatibleBatteriesAtHub(
 ) {
   return batteries
     .filter((battery) => battery.currentHubId === hubId)
-    .filter(isActiveBattery)
+    .filter((battery) => !battery.droneId && isActiveBattery(battery) && battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'compatible')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }
@@ -44,7 +39,7 @@ export function getUnknownCompatibilityBatteriesAtHub(
 ) {
   return batteries
     .filter((battery) => battery.currentHubId === hubId)
-    .filter(isActiveBattery)
+    .filter((battery) => !battery.droneId && isActiveBattery(battery) && battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'unknown')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }

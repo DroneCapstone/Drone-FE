@@ -10,7 +10,7 @@ import { useOperatorOrdersQuery } from '../../hooks/useOrderQueries';
 import type { OrderStatus } from '../../types/operator';
 import {
   getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
   sortOrdersByPlanningPriority,
 } from '../../utils/deliveryPlanning';
 import { OrderPageShell } from './OrderPageShell';
@@ -57,7 +57,7 @@ export function AllOrdersPage() {
       deliveryMode === 'All delivery modes' || order.deliveryMode === deliveryMode;
     const matchesReady =
       !readyOnly ||
-      isActionablePlanningState(getOrderPlanningBadge(order, missions));
+      canCreateMissionForOrder(order, missions);
 
     return matchesMode && matchesReady;
   });

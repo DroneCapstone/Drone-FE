@@ -35,10 +35,10 @@ export function getMissionPreflight(
   const checks: PreflightCheck[] = [
     {
       label: 'Package at Drop-off Point',
-      passed: Boolean(order?.originHubReceivedAt),
+      passed: Boolean(order?.originPackageReceived || order?.originHubReceivedAt),
       detail: order?.originHubReceivedAt
         ? `Received ${new Date(order.originHubReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
-        : 'Waiting for Technician to confirm package receipt.',
+        : order?.originPackageReceived ? 'Technician receipt confirmed.' : 'Waiting for Technician to confirm package receipt.',
     },
     {
       label: 'Drone ready at Drop-off Point',
@@ -69,7 +69,7 @@ export function getMissionPreflight(
   const withinStartWindow = now.getTime() >= windowOpensMs;
   const minutesToStart = Math.ceil((plannedStartMs - now.getTime()) / 60_000);
   const packageDeadlineExpired = Boolean(
-    !order?.originHubReceivedAt &&
+    !(order?.originPackageReceived || order?.originHubReceivedAt) &&
     mission.packageReceiveDeadlineAt &&
     now.getTime() >= new Date(mission.packageReceiveDeadlineAt).getTime(),
   );
@@ -82,7 +82,9 @@ export function getMissionPreflight(
     checks,
     allPassed,
     withinStartWindow,
-    canStart: withinStartWindow && allPassed && !packageDeadlineExpired,
+    // Advisory UI only. Earliest valid planned start is not 15 minutes early.
+    // Actual automatic launch permission must be issued by Backend/flight control.
+    canStart: now.getTime() >= plannedStartMs && allPassed && !packageDeadlineExpired,
     minutesToStart,
     packageDeadlineExpired,
   };

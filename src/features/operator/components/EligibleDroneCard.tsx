@@ -29,8 +29,9 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
         </StatusBadge>
       </div>
 
-      <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr' }}>
+      <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <span><small>Max payload</small><strong>{drone.maxPayloadKg} kg</strong></span>
+        <span><small>Required battery</small><strong>{drone.batteryModel || '—'}</strong></span>
       </div>
 
       {!eligibility.eligible && eligibility.reasons.length > 0 && (

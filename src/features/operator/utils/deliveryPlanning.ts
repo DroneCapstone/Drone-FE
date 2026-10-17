@@ -72,6 +72,15 @@ export function isActionablePlanningState(state: PlanningState | undefined) {
   return state === 'Ready for Planning';
 }
 
+/** Both Express and Scheduled Orders can be assigned only AFTER Technician receipt. */
+export function canCreateMissionForOrder(order: Order, missions: Mission[] = []) {
+  return order.status === 'Pending' &&
+    getOrderPlanningBadge(order, missions) === 'Ready for Planning' &&
+    (order.originPackageReceived === true || Boolean(order.originHubReceivedAt)) &&
+    Boolean(order.originHubId && order.destinationHubId) &&
+    !hasDeliveryMission(order.id, missions);
+}
+
 export function getPlanningPriority(state: PlanningState | undefined) {
   if (!state) return 5;
   return {

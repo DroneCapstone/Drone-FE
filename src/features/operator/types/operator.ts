@@ -70,7 +70,9 @@ export interface Order {
   planningState?: PlanningState;
   status: OrderStatus;
 
-  /** Technician event at the Drop-off Point. Null/undefined means Awaiting package. */
+  /** Authoritative Technician receipt flag; may be true before received_at is available. */
+  originPackageReceived?: boolean;
+  /** Technician event time at the Drop-off Point, when provided by BE. */
   originHubReceivedAt?: string;
   /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
