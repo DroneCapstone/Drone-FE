@@ -251,6 +251,8 @@ export function unwrapList<T = unknown>(
     "rows",
     "drones",
     "missions",
+    "history",
+    "transit_history",
     "batteries",
     "hub_batteries",
     "battery_inventory",
@@ -563,16 +565,39 @@ export const getTechnicianAiPredictionsApi = () =>
 export const getIncomingMissionsApi = () =>
   technicianApiRequest("/technician/fleet/incoming");
 
+/** Final destination: one physical receipt + preliminary inspection. */
 export const confirmMissionArrivalApi = (
   missionId: string | number,
-) =>
-  // Mutating a mission must use the exact ID provided by Backend.
-  // Do not retry with the trailing numeric suffix of MSN-...: that could
-  // target another mission.
+  inspection: { has_issue: boolean; notes: string } = { has_issue: false, notes: "" },
+) => technicianApiRequest(
+  `/technician/fleet/${encodeURIComponent(String(missionId))}/confirm-arrival`,
+  { method: "POST", body: JSON.stringify(inspection) },
+);
+
+/** Relay handling is a DIFFERENT flow from final-destination arrival. */
+export const confirmRelayArrivalApi = (missionId: string | number) =>
   technicianApiRequest(
-    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-arrival`,
+    `/technician/fleet/${encodeURIComponent(String(missionId))}/confirm-relay-arrival`,
     { method: "POST" },
   );
+
+export const swapRelayBatteryApi = (
+  missionId: string | number,
+  payload: { new_battery_id: number; old_battery_has_issue: boolean; issue_notes: string },
+) => technicianApiRequest(
+  `/technician/fleet/${encodeURIComponent(String(missionId))}/swap-battery`,
+  { method: "POST", body: JSON.stringify(payload) },
+);
+
+export const dispatchRelayMissionApi = (missionId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/${encodeURIComponent(String(missionId))}/dispatch`,
+    { method: "POST" },
+  );
+
+/** Real server history replaces browser-only arrival history. */
+export const getTransitHistoryApi = () =>
+  technicianApiRequest("/technician/fleet/history");
 
 // ---------------------------------------------------------------------------
 // Battery management
