@@ -21,15 +21,6 @@ import {
 import { markOrderReceivedAtOriginHub } from "../../operator/utils/operatorOrderStorage";
 
 import {
-  getTechnicianAuthApi,
-} from "../api/authApi";
-
-import {
-  getTechnicianMissionsApi,
-} from "../api/transitApi";
-
-import {
-  buildDeliveryBackendContext,
   getMissionInfoForDelivery,
   resolveHubLabel,
   type DeliveryBackendContext,
@@ -85,6 +76,9 @@ export type OutboundDelivery = {
   orderStatus?: string;
   handlingStatus?: string;
   missionStatus?: string;
+
+  /** Backend has scheduled/assigned a mission before package receipt (contract violation). */
+  prematureMissionAssignment?: boolean;
 
   batteryChargePct?: number;
   batteryStatus?: string;
@@ -201,15 +195,9 @@ const TECHNICIAN_HUB = "—";
 
  \*
 
- \* 5) Technician confirms physical departure
+ \* 5) Departure for the initial outbound mission is controlled by the
 
- \*    -> Dispatch
-
- \*    -> active row disappears
-
- \*    -> saved to Outbound History
-
- \*    -> Operator receives IN_PROGRESS
+ \*    existing Operator/Backend flow. No fake FE-only dispatch.
 
  */
 
@@ -570,21 +558,20 @@ function mapApiOutbound(
 
   if (!isRecord(value)) return null;
 
-  /*
-   * Keep the database id as the action id. `order_code` is only a display
-   * value; using ORD-TECH-OUT-3 as the API id could incorrectly resolve to 3
-   * even when the actual backend order id is 24.
-   */
-  // order_id is typically the database key; if it is a display code and
-  // a separate record id exists, use the record id for POST actions.
-  // Never infer a database id by extracting digits from an ORD-... code.
-  const orderIdField = pickString(value, ["order_id", "orderId"], "");
-  const recordId = pickString(value, ["id"], "");
-  const orderId = /^ORD[-_]/i.test(orderIdField)
-    ? (recordId || orderIdField)
-    : (orderIdField || recordId);
+  // GET /technician/deliveries/outbound may have id = MSN-... (mission row id).
+  // The receive URL MUST use the genuine order_id, never the mission row's id.
+  const canonicalOrderId = pickString(value, ["order_id", "orderId"], "").trim();
+  const recordId = pickString(value, ["id"], "").trim();
+  const orderCodeField = pickString(value, ["order_code", "orderCode"], "").trim();
+  const orderId = canonicalOrderId ||
+    (recordId && !/^MSN[-_]|^MISSION[-_]/i.test(recordId) ? recordId : "") ||
+    (/^ORD[-_]/i.test(orderCodeField) ? orderCodeField : "");
 
-  if (!orderId) return null;
+  if (!orderId) {
+    // Never send an MSN-... id to a receive endpoint that expects an order id.
+    console.warn("Outbound row has no usable order_id", value);
+    return null;
+  }
 
   const orderCode =
     pickString(
@@ -706,6 +693,9 @@ function mapApiOutbound(
     orderStatus: pickString(value, ["order_status", "orderStatus", "status"], "") || undefined,
     handlingStatus: pickString(value, ["handling_status", "handlingStatus", "package_status"], "") || undefined,
     missionStatus: pickString(value, ["mission_status", "mission_state", "missionStatus"], "") || undefined,
+    prematureMissionAssignment:
+      normalizeOutboundStatus(value, Boolean(missionId), Boolean(assignedDroneCode)) === "Awaiting Drop-off" &&
+      Boolean(missionId || assignedDroneId || assignedDroneCode),
     batteryChargePct: optionalNumeric(value, ["battery_percent", "battery_charge_pct", "battery_level_pct"]),
     batteryStatus: pickString(value, ["battery_status"], "") || undefined,
 
@@ -772,39 +762,15 @@ function mapApiOutbound(
 }
 
 export async function refreshOutboundDeliveriesFromApi() {
-
+  // Show primary response as soon as it arrives: do not block Outbound on
+  // /missions and /auth (both can add several seconds of server latency).
+  // The live Outbound response already contains order/mission/drone/hub names.
   const payload = await getOutboundDeliveriesApi();
-
-  /*
-   * Outbound rows currently expose hub/order ids but may omit readable hub
-   * names, mission and drone fields. Enrich from other Technician-scoped
-   * Backend endpoints when available. Enrichment is best-effort so a failure
-   * in /missions or /auth never hides the outbound list itself.
-   */
-  const [missionsResult, authResult] = await Promise.allSettled([
-    getTechnicianMissionsApi(),
-    getTechnicianAuthApi(),
-  ]);
-
-  const context = buildDeliveryBackendContext(
-    missionsResult.status === "fulfilled"
-      ? missionsResult.value
-      : null,
-    authResult.status === "fulfilled"
-      ? authResult.value
-      : null,
-  );
-
   demoOutboundDeliveries = unwrapList(payload)
-
-    .map((value) => mapApiOutbound(value, context))
-
+    .map((value) => mapApiOutbound(value))
     .filter((item): item is OutboundDelivery => Boolean(item));
-
   notifyOutboundUpdate();
-
   return loadOutboundDeliveries();
-
 }
 
 /**

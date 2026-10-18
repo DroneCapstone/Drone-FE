@@ -1096,12 +1096,9 @@ export async function useBatteryOnServer(
   batteryId: string,
   missionId: string,
 ) {
-  const result = await useBatteryApi(
-    resolveBackendBatteryId(batteryId),
-    missionId,
-  );
-  await refreshBatteriesFromApi();
-  return result;
+  // React Query invalidates the battery list when the mutation succeeds.
+  // Avoid a second blocking GET here, especially on high-latency servers.
+  return useBatteryApi(resolveBackendBatteryId(batteryId), missionId);
 }
 
 export async function markBatteryChargedOnServer(
