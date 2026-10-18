@@ -70,9 +70,7 @@ export interface Order {
   planningState?: PlanningState;
   status: OrderStatus;
 
-  /** Authoritative Technician receipt flag; may be true before received_at is available. */
-  originPackageReceived?: boolean;
-  /** Technician event time at the Drop-off Point, when provided by BE. */
+  /** Technician event at the Drop-off Point. Null/undefined means Awaiting package. */
   originHubReceivedAt?: string;
   /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
@@ -162,8 +160,11 @@ export interface OperatorBattery {
   id: string;
   serialNumber: string;
   capacityWh: number;
+  /** Technical/health status returned as `status` (e.g. Active). */
   status: string;
-  /** Current API exposes drone_id; FE uses it as the only available compatibility link. */
+  /** Inventory availability returned as `available_status` (Ready, Charging, In Use, etc.). */
+  availableStatus?: string;
+  /** `drone_id` indicates installation, not model compatibility. */
   droneId?: string;
   currentHubId: string;
   hubName: string;

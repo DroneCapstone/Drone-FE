@@ -2,9 +2,11 @@ import type { OperatorBattery, OperatorDrone, RouteOption } from '../types/opera
 
 export type BatteryCompatibility = 'compatible' | 'incompatible' | 'unknown';
 
-export function isActiveBattery(battery: OperatorBattery) {
-  const status = battery.status.trim().toUpperCase().replace(/[\s-]+/g, '_');
-  return status === 'ACTIVE' || status === 'AVAILABLE' || status === 'READY';
+/** Pin sẵn sàng thay, theo availability do BE trả; Active đơn thuần là chưa đủ. */
+export function isReadyBattery(battery: OperatorBattery) {
+  const availability = (battery.availableStatus ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const technical = (battery.status ?? '').trim().toUpperCase();
+  return availability === 'READY' && technical === 'ACTIVE';
 }
 
 export function getBatteryCompatibility(
@@ -17,17 +19,30 @@ export function getBatteryCompatibility(
       : 'incompatible';
   }
 
+  // drone_id indicates an installed battery, not compatibility with this drone.
+  // No model/compatibility mapping from BE means compatibility is unknown.
   return 'unknown';
 }
 
+/** Only physically spare batteries count: installed packs are NOT hub inventory. */
+export function getSpareBatteriesAtHub(
+  batteries: OperatorBattery[],
+  hubId: string,
+): OperatorBattery[] {
+  return batteries.filter((battery) =>
+    battery.currentHubId === hubId && !battery.droneId
+  );
+}
+
+/** UI candidates only; backend must still validate reservation & swap eligibility. */
 export function getCompatibleBatteriesAtHub(
   batteries: OperatorBattery[],
   drone: OperatorDrone,
   hubId: string,
 ) {
-  return batteries
-    .filter((battery) => battery.currentHubId === hubId)
-    .filter((battery) => !battery.droneId && isActiveBattery(battery) && battery.chargeLevelPct >= 100)
+  return getSpareBatteriesAtHub(batteries, hubId)
+    .filter(isReadyBattery)
+    .filter((battery) => battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'compatible')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }
@@ -37,9 +52,9 @@ export function getUnknownCompatibilityBatteriesAtHub(
   drone: OperatorDrone,
   hubId: string,
 ) {
-  return batteries
-    .filter((battery) => battery.currentHubId === hubId)
-    .filter((battery) => !battery.droneId && isActiveBattery(battery) && battery.chargeLevelPct >= 100)
+  return getSpareBatteriesAtHub(batteries, hubId)
+    .filter(isReadyBattery)
+    .filter((battery) => battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'unknown')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }

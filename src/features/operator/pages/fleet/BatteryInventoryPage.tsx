@@ -17,9 +17,9 @@ const ALL_STATUSES = 'All statuses';
 
 function batteryStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
-  if (['active', 'available', 'ready'].includes(normalized)) return 'success' as const;
-  if (['charging', 'reserved'].includes(normalized)) return 'info' as const;
-  if (['inactive', 'damaged', 'faulty', 'retired'].includes(normalized)) return 'danger' as const;
+  if (normalized === 'ready') return 'success' as const;
+  if (['charging', 'in use', 'reserved'].includes(normalized)) return 'info' as const;
+  if (['replaced', 'inactive', 'damaged', 'faulty', 'retired'].includes(normalized)) return 'danger' as const;
   return 'neutral' as const;
 }
 
@@ -62,15 +62,16 @@ export function BatteryInventoryPage() {
     ? requestedHubId : ALL_HUBS;
   const selectedHub = hubs.find((hub) => hub.id === hubFilter);
   const models = useMemo(() => [...new Set(batteries.map((item) => item.model).filter((model): model is string => Boolean(model)))].sort(), [batteries]);
-  // Status options are strictly the unique non-empty values returned by the Battery API.
-  const statuses = useMemo(() => [...new Set(batteries.map((item) => item.status).filter(Boolean))].sort(), [batteries]);
+  // Operational availability is separate from the technical `status` field.
+  // Do not label `Active` as `Ready`: BE reports them independently.
+  const statuses = useMemo(() => [...new Set(batteries.map((item) => item.availableStatus).filter((value): value is string => Boolean(value)))].sort(), [batteries]);
 
   const filtered = useMemo(() => batteries.filter((battery) => {
     const matchesQuery = `${battery.id} ${battery.serialNumber} ${battery.model ?? ''} ${battery.droneId ?? ''}`
       .toLowerCase().includes(search.trim().toLowerCase());
     const matchesHub = hubFilter === ALL_HUBS || getBatteryHubId(battery, drones) === hubFilter;
     const matchesModel = modelFilter === ALL_MODELS || battery.model === modelFilter;
-    const matchesStatus = statusFilter === ALL_STATUSES || battery.status === statusFilter;
+    const matchesStatus = statusFilter === ALL_STATUSES || battery.availableStatus === statusFilter;
     return matchesQuery && matchesHub && matchesModel && matchesStatus;
   }), [batteries, drones, hubFilter, modelFilter, search, statusFilter]);
 
@@ -116,7 +117,7 @@ export function BatteryInventoryPage() {
             value={statusFilter}
             options={[ALL_STATUSES, ...statuses]}
             onChange={(value) => { setStatusFilter(value); setPage(1); }}
-            ariaLabel="Battery status"
+            ariaLabel="Battery availability"
           />
           <span className="toolbar-spacer" />
           <small>{batteriesFetching ? 'Refreshing…' : `${selectedHub ? `${selectedHub.name} · ` : ''}${filtered.length} batteries`}</small>
@@ -153,7 +154,7 @@ export function BatteryInventoryPage() {
                     <th>Hub</th>
                     <th>Capacity</th>
                     <th>Charge</th>
-                    <th>Status</th>
+                    <th>Availability</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,7 +165,11 @@ export function BatteryInventoryPage() {
                       <td>{getBatteryHubName(battery, drones, hubNameById)}</td>
                       <td>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString()} Wh` : '—'}</td>
                       <td>{Number.isFinite(battery.chargeLevelPct) ? `${battery.chargeLevelPct}%` : '—'}</td>
-                      <td>{battery.status ? <StatusBadge tone={batteryStatusTone(battery.status)}>{battery.status}</StatusBadge> : '—'}</td>
+                      <td title={`Technical status: ${battery.status || 'Unknown'}`}>
+                        {battery.availableStatus
+                          ? <StatusBadge tone={batteryStatusTone(battery.availableStatus)}>{battery.availableStatus}</StatusBadge>
+                          : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

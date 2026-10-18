@@ -7,7 +7,7 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
-import { getCompatibleBatteriesAtHub } from '../../utils/batteryPlanning';
+import { getBatteryCompatibility, getCompatibleBatteriesAtHub, getSpareBatteriesAtHub, isReadyBattery } from '../../utils/batteryPlanning';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
@@ -78,7 +78,13 @@ export function CreateMissionPage() {
   // Fleet records may provide batteryModel when eligible-drones omits it.
   // Only the battery MODEL is shown; Available already implies full batteries.
   const { data: fleetDrones } = useFleetDronesQuery();
-  const { data: fleetBatteries } = useFleetBatteriesQuery();
+  const {
+    data: fleetBatteries,
+    isLoading: batteriesLoading,
+    isFetching: batteriesFetching,
+    error: batteriesError,
+    refetch: refetchBatteries,
+  } = useFleetBatteriesQuery();
   const {
     data: planningAnalysis,
     error: planningAnalysisError,
@@ -160,6 +166,11 @@ export function CreateMissionPage() {
   const selectedRelayHubIds = selectedRoute
     ? getRouteRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)
     : [];
+  // A Hub can only be selected if BE Analyze has returned a route through it.
+  // Selecting a Hub here actually selects the matching AI route/routeId.
+  const relayRouteOptions = routeOptions.filter((route) =>
+    getRouteRelayHubIds(route, order.originHubId, order.destinationHubId).length > 0
+  );
 
   const hasOrderHubs = Boolean(order.originHubId && order.destinationHubId);
   const canContinueStep1 = Boolean(
@@ -441,22 +452,109 @@ export function CreateMissionPage() {
 
             {selectedRoute && selectedRelayHubIds.length > 0 && (
               <OperatorPanel title="Relay Hub battery plan">
-                <p className="section-note">The Backend checks compatible spare batteries and predicted energy for each leg. Battery swaps are performed by the Technician at each Relay Hub.</p>
+                <p className="section-note">
+                  Select one of the Relay Hubs returned by AI route analysis, then inspect live Operator Battery Inventory.
+                  The Technician chooses the actual battery at the relay stop; BE verifies the plan before Assign.
+                </p>
+                <div className="relay-hub-choice">
+                  <label htmlFor="relay-ai-route-choice">Relay Hub · AI route options</label>
+                  <select
+                    id="relay-ai-route-choice"
+                    value={selectedRoute.id}
+                    onChange={(event) => setSelectedRouteId(event.target.value)}
+                    disabled={isPlanningAnalysisFetching || relayRouteOptions.length < 2}
+                  >
+                    {relayRouteOptions.map((route) => (
+                      <option value={route.id} key={route.id}>
+                        {getRouteRelayHubIds(route, order.originHubId, order.destinationHubId)
+                          .map(hubName).join(' → ')} · {route.id}
+                      </option>
+                    ))}
+                  </select>
+                  {relayRouteOptions.length < 2 && (
+                    <small>Only one Relay route was returned by Analyze. Another Hub requires another route from Backend.</small>
+                  )}
+                </div>
                 {selectedRelayHubIds.map((hubId) => {
                   const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
-                  const inventoryCandidates = selectedDrone.batteryModel
-                    ? getCompatibleBatteriesAtHub(fleetBatteries ?? [], selectedDrone, hubId)
-                    : [];
+                  const spare = getSpareBatteriesAtHub(fleetBatteries ?? [], hubId);
+                  const compatibleReady = getCompatibleBatteriesAtHub(fleetBatteries ?? [], selectedDrone, hubId);
+                  const requiredModel = selectedDrone.batteryModel?.trim() || '';
+                  const preview = [...compatibleReady, ...spare.filter((battery) => !compatibleReady.some((item) => item.id === battery.id))].slice(0, 6);
+                  const inventoryLoaded = fleetBatteries !== undefined && !batteriesError;
                   return (
-                    <div key={hubId} className="relay-route-note">
-                      <strong>{hubName(hubId)}</strong>
-                      <span>
+                    <div key={hubId} className="relay-hub-inventory">
+                      <div className="relay-hub-inventory-head">
+                        <strong>{hubName(hubId)}</strong>
+                        <a
+                          className="text-button"
+                          href={`/operator/fleet-hubs/batteries?hub=${encodeURIComponent(hubId)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View Battery Inventory ↗
+                        </a>
+                      </div>
+                      <div className="relay-hub-inventory-summary">
+                        <span>Drone required battery: <strong>{requiredModel || 'Unknown from API'}</strong></span>
+                        <span>Spare batteries at Hub: <strong>{inventoryLoaded ? spare.length : '—'}</strong></span>
+                        <span>Ready 100% matching candidates: <strong>{inventoryLoaded && requiredModel ? compatibleReady.length : '—'}</strong></span>
+                      </div>
+                      {batteriesError ? (
+                        <div className="relay-hub-inventory-message">
+                          <strong>Battery API could not load.</strong>
+                          <span>{batteriesError instanceof Error ? batteriesError.message : 'Please retry.'}</span>
+                          <button type="button" className="row-action" onClick={() => void refetchBatteries()}>Retry inventory</button>
+                        </div>
+                      ) : batteriesLoading || !inventoryLoaded ? (
+                        <p className="section-note">Loading real Battery Inventory from Backend…</p>
+                      ) : (
+                        <>
+                          {batteriesFetching && <p className="section-note">Refreshing Battery Inventory…</p>}
+                          {!requiredModel && (
+                            <p className="section-note danger-note">Required battery model is missing for the selected drone. Cannot verify compatibility.</p>
+                          )}
+                          {spare.length === 0 ? (
+                            <p className="section-note">No spare batteries are recorded at this Hub in the current Battery API response. Check Hub ID and inventory.</p>
+                          ) : (
+                            <div className="relay-hub-battery-list">
+                              {preview.map((battery) => {
+                                const isCandidate = compatibleReady.some((item) => item.id === battery.id);
+                                const matchingModel = getBatteryCompatibility(battery, selectedDrone);
+                                const reason = isCandidate
+                                  ? '100% candidate · not yet reserved'
+                                  : !isReadyBattery(battery)
+                                    ? `Not ready · ${battery.availableStatus || 'Availability unknown'}`
+                                    : battery.chargeLevelPct < 100
+                                      ? 'Needs 100% charge'
+                                      : matchingModel === 'incompatible'
+                                        ? 'Different battery model'
+                                        : 'Compatibility not confirmed';
+                                return (
+                                  <div key={battery.id} className="relay-hub-battery-row">
+                                    <strong>{battery.serialNumber || battery.id}</strong>
+                                    <span>{battery.model || 'Model unknown'}</span>
+                                    <span>{battery.chargeLevelPct}% · {battery.availableStatus || 'Availability unknown'}</span>
+                                    <small className={isCandidate ? 'relay-candidate' : ''}>{reason}</small>
+                                  </div>
+                                );
+                              })}
+                              {spare.length > preview.length && (
+                                <small>Showing {preview.length} of {spare.length} spare batteries. View Inventory for more.</small>
+                              )}
+                            </div>
+                          )}
+                          {requiredModel && compatibleReady.length === 0 && spare.length > 0 && (
+                            <p className="section-note danger-note">No compatible spare batteries at 100% charge were found in this Hub inventory.</p>
+                          )}
+                        </>
+                      )}
+                      <p className="section-note">
+                        <strong>Backend relay validation: </strong>
                         {plan
-                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} compatible spares · ${plan.ready === true ? 'Verified by Backend' : 'Not verified'}`
-                          : selectedDrone.batteryModel
-                            ? `${inventoryCandidates.length} matching spare battery candidate(s) in inventory · Awaiting Backend verification`
-                            : 'Required battery model unavailable · Awaiting Backend verification'}
-                      </span>
+                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} required battery set · ${plan.ready === true ? 'Verified' : 'Not verified'}`
+                          : 'Not provided by Analyze. Inventory candidates do not prove flight readiness.'}
+                      </p>
                     </div>
                   );
                 })}
