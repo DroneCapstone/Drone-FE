@@ -5,8 +5,8 @@ export type BatteryCompatibility = 'compatible' | 'incompatible' | 'unknown';
 /** Pin sẵn sàng thay, theo availability do BE trả; Active đơn thuần là chưa đủ. */
 export function isReadyBattery(battery: OperatorBattery) {
   const availability = (battery.availableStatus ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
-  const technical = (battery.status ?? '').trim().toUpperCase();
-  return availability === 'READY' && technical === 'ACTIVE';
+  // BE contract: Ready already means the pack is fully charged and usable.
+  return availability === 'READY';
 }
 
 export function getBatteryCompatibility(
@@ -42,7 +42,6 @@ export function getCompatibleBatteriesAtHub(
 ) {
   return getSpareBatteriesAtHub(batteries, hubId)
     .filter(isReadyBattery)
-    .filter((battery) => battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'compatible')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }
@@ -54,7 +53,6 @@ export function getUnknownCompatibilityBatteriesAtHub(
 ) {
   return getSpareBatteriesAtHub(batteries, hubId)
     .filter(isReadyBattery)
-    .filter((battery) => battery.chargeLevelPct >= 100)
     .filter((battery) => getBatteryCompatibility(battery, drone) === 'unknown')
     .sort((a, b) => b.chargeLevelPct - a.chargeLevelPct);
 }
