@@ -60,7 +60,6 @@ export function BatteryInventoryPage() {
   const requestedHubId = searchParams.get('hub');
   const hubFilter = requestedHubId && hubs.some((hub) => hub.id === requestedHubId)
     ? requestedHubId : ALL_HUBS;
-  const selectedHub = hubs.find((hub) => hub.id === hubFilter);
   const models = useMemo(() => [...new Set(batteries.map((item) => item.model).filter((model): model is string => Boolean(model)))].sort(), [batteries]);
   // Operational availability is separate from the technical `status` field.
   // Do not label `Active` as `Ready`: BE reports them independently.
@@ -120,7 +119,7 @@ export function BatteryInventoryPage() {
             ariaLabel="Battery availability"
           />
           <span className="toolbar-spacer" />
-          <small>{batteriesFetching ? 'Refreshing…' : `${selectedHub ? `${selectedHub.name} · ` : ''}${filtered.length} batteries`}</small>
+          <small>{batteriesFetching ? 'Refreshing…' : `Total batteries: ${filtered.length}`}</small>
         </div>
 
         {error ? (

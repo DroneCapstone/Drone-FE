@@ -27,221 +27,136 @@
   }
 }
 
-/* Operator-only Relay Hub selection and real Battery Inventory preview. */
-.page-content .mission-builder .relay-hub-choice {
+/* Step 3 only — compact, expandable route options (no duplicate summary panel). */
+.mission-builder .mission-route-option-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin: 12px 0 16px;
+  gap: 12px;
+  margin-top: 10px;
 }
-.page-content .mission-builder .relay-hub-choice label {
-  font-weight: 600;
-  font-size: 13px;
-}
-.page-content .mission-builder .relay-hub-choice select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #d9dce4);
+.mission-builder .mission-route-card {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border, #e2e5ea);
+  border-radius: 11px;
   background: #fff;
-  border-radius: 8px;
-  color: inherit;
-  font: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
-.page-content .mission-builder .relay-hub-choice select:focus-visible,
-.page-content .mission-builder .relay-hub-inventory a:focus-visible {
-  outline: 2px solid #f97316;
-  outline-offset: 2px;
+.mission-builder .mission-route-card.is-selected {
+  border-color: #f97316;
 }
-.page-content .mission-builder .relay-hub-choice small,
-.page-content .mission-builder .relay-hub-battery-list > small {
-  color: #87909f;
+.mission-builder .mission-route-card:hover {
+  border-color: #f8ac78;
 }
-.page-content .mission-builder .relay-hub-inventory {
-  border: 1px solid var(--border, #d9dce4);
-  border-radius: 10px;
-  padding: 13px 14px;
-  margin-bottom: 12px;
-}
-.page-content .mission-builder .relay-hub-inventory-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.page-content .mission-builder .relay-hub-inventory-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin: 12px 0;
-  font-size: 13px;
-  color: #717a8b;
-}
-.page-content .mission-builder .relay-hub-inventory-summary strong {
-  color: #202737;
-}
-.page-content .mission-builder .relay-hub-battery-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.page-content .mission-builder .relay-hub-battery-row {
-  display: grid;
-  grid-template-columns: minmax(100px, 1.2fr) minmax(100px, 1fr) minmax(80px, .85fr) minmax(160px, 1.4fr);
-  align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--border, #eceef1);
-  font-size: 12px;
-}
-.page-content .mission-builder .relay-hub-battery-row small { color: #8a94a4; }
-.page-content .mission-builder .relay-hub-battery-row .relay-candidate { color: #17995c; }
-.page-content .mission-builder .relay-hub-inventory-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 0;
-}
-@media (max-width: 850px) {
-  .page-content .mission-builder .relay-hub-battery-row {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-/* Layout reinforcement for Relay Hub UI. Intentionally only affects Step 3. */
-.mission-builder .relay-hub-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin: 16px 0;
-  min-width: 0;
-}
-.mission-builder .relay-hub-choice label {
-  display: block;
-  color: var(--text, #202737);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
-}
-.mission-builder .relay-hub-choice select {
-  display: block;
+.mission-builder .mission-route-select {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
-  min-width: 0;
-  min-height: 42px;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #d9dce4);
-  border-radius: 9px;
-  background: var(--surface, #fff);
-  color: var(--text, #202737);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.4;
-}
-.mission-builder .relay-hub-choice select:disabled { opacity: .66; cursor: not-allowed; }
-.mission-builder .relay-hub-choice small {
-  display: block;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--muted, #87909f);
-}
-.mission-builder .relay-hub-inventory {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  min-width: 0;
-  margin: 0 0 16px;
-  padding: 16px;
-  border: 1px solid var(--border, #d9dce4);
-  border-radius: 10px;
-  background: var(--surface, #fff);
-  overflow-wrap: anywhere;
-}
-.mission-builder .relay-hub-inventory-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  min-width: 0;
-}
-.mission-builder .relay-hub-inventory-head strong { font-size: 14px; line-height: 1.5; }
-.mission-builder .relay-hub-inventory-head a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--orange, #f97316);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.mission-builder .relay-hub-inventory-head a:hover { text-decoration: underline; }
-.mission-builder .relay-hub-inventory-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  padding: 16px 18px;
   margin: 0;
+  background: transparent;
+  border: 0;
+  appearance: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
-.mission-builder .relay-hub-inventory-summary > span {
+.mission-builder .mission-route-select:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: -3px;
+  border-radius: 10px;
+}
+.mission-builder .mission-route-head,
+.mission-builder .mission-route-heading,
+.mission-builder .mission-route-tags,
+.mission-builder .mission-route-footer,
+.mission-builder .mission-route-section-head,
+.mission-builder .mission-route-battery-hub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.mission-builder .mission-route-heading { justify-content: flex-start; align-items: flex-start; }
+.mission-builder .mission-route-heading-text,
+.mission-builder .mission-route-key-metrics > span,
+.mission-builder .mission-route-detail-grid > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mission-builder .mission-route-heading-text > strong { font-size: 14px; line-height: 1.4; color: #17212f; }
+.mission-builder .mission-route-heading-text > small { font-size: 11px; color: #8a95a7; overflow-wrap: anywhere; }
+.mission-builder .mission-route-radio {
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--border, #e2e5eb);
-  border-radius: 8px;
-  background: var(--surface-2, #fafbfc);
-  color: var(--muted, #717a8b);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.mission-builder .relay-hub-inventory-summary > span strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text, #202737);
-  overflow-wrap: anywhere;
-}
-.mission-builder .relay-hub-inventory-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.6;
-}
-.mission-builder .relay-hub-inventory > .section-note { margin: 0; line-height: 1.6; }
-.mission-builder .relay-hub-battery-list { display: flex; flex-direction: column; gap: 0; min-width: 0; }
-.mission-builder .relay-hub-battery-list > small { margin-top: 9px; color: var(--muted, #87909f); }
-.mission-builder .relay-hub-battery-row {
-  display: grid;
-  grid-template-columns: minmax(105px, 1fr) minmax(120px, 1.15fr) minmax(115px, 1fr) minmax(160px, 1.3fr);
   align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-  border-top: 1px solid var(--border, #eceef1);
-  color: var(--text, #202737);
-  font-size: 12px;
-  line-height: 1.5;
+  justify-content: center;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  margin-top: 1px;
+  border: 1px solid #b8bfca;
+  border-radius: 50%;
+  color: #fff;
 }
-.mission-builder .relay-hub-battery-row > * { min-width: 0; overflow-wrap: anywhere; }
-.mission-builder .relay-hub-battery-row small { color: var(--muted, #8a94a4); }
-.mission-builder .relay-hub-battery-row .relay-candidate { color: #178953; }
-.mission-builder .relay-route-note { min-width: 0; flex-wrap: wrap; gap: 8px 18px; }
-.mission-builder .relay-route-note > * { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 950px) {
-  .mission-builder .relay-hub-inventory-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mission-builder .relay-hub-battery-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mission-builder .mission-route-radio.is-checked { background: #f97316; border-color: #f97316; }
+.mission-builder .mission-route-chevron { display: inline-flex; transform: rotate(90deg); color: #929bab; }
+.mission-builder .mission-route-chevron.is-open { transform: rotate(-90deg); }
+.mission-builder .mission-route-tags { justify-content: flex-end; flex-wrap: wrap; }
+.mission-builder .mission-route-path { font-size: 13px; color: #687486; line-height: 1.5; overflow-wrap: anywhere; }
+.mission-builder .mission-route-key-metrics,
+.mission-builder .mission-route-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; width: 100%; }
+.mission-builder .mission-route-key-metrics small,
+.mission-builder .mission-route-detail-grid small,
+.mission-builder .mission-route-battery-metrics small { color: #909aaa; font-size: 12px; }
+.mission-builder .mission-route-key-metrics strong,
+.mission-builder .mission-route-detail-grid strong,
+.mission-builder .mission-route-battery-metrics strong { color: #1d2531; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.mission-builder .mission-route-detail { padding: 18px; border-top: 1px solid #eceef2; display: flex; flex-direction: column; gap: 18px; }
+.mission-builder .mission-route-section-head { align-items: baseline; }
+.mission-builder .mission-route-section-head > strong { font-size: 14px; color: #1e2835; }
+.mission-builder .mission-route-section-head > small { font-size: 12px; color: #919aa9; }
+.mission-builder .mission-route-legs { border: 1px solid #e6e8ed; border-radius: 9px; overflow: hidden; background: #fafbfd; }
+.mission-builder .mission-route-leg { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.mission-builder .mission-route-leg + .mission-route-leg { border-top: 1px solid #e6e8ed; }
+.mission-builder .mission-route-leg-number { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; background: #fff; border: 1px solid #e7e9ee; border-radius: 7px; font-size: 12px; color: #293344; font-weight: 600; }
+.mission-builder .mission-route-leg-places { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.mission-builder .mission-route-leg-places strong { font-size: 13px; overflow-wrap: anywhere; }
+.mission-builder .mission-route-leg-places span { display: flex; gap: 7px; align-items: center; font-size: 13px; color: #697486; overflow-wrap: anywhere; }
+.mission-builder .mission-route-leg-places span svg { flex-shrink: 0; }
+.mission-builder .mission-route-leg-places small { font-size: 12px; color: #808a9b; }
+.mission-builder .mission-route-leg-distance { white-space: nowrap; color: #3a4656; font-size: 12px; font-weight: 600; }
+.mission-builder .mission-route-battery-section,
+.mission-builder .mission-route-energy-section { display: flex; flex-direction: column; gap: 12px; }
+.mission-builder .mission-route-battery-hub { border: 1px solid #e6e8ed; border-radius: 9px; padding: 14px; min-width: 0; }
+.mission-builder .mission-route-battery-hub-head { align-items: flex-start; flex-wrap: wrap; }
+.mission-builder .mission-route-battery-hub-head strong { font-size: 13px; }
+.mission-builder .mission-route-battery-hub-head .text-button { color: #ff6b00; font-size: 12px; text-decoration: none; }
+.mission-builder .mission-route-battery-hub-head .text-button:hover { text-decoration: underline; }
+.mission-builder .mission-route-battery-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.mission-builder .mission-route-battery-metrics > div { min-width: 0; background: #fafbfd; border: 1px solid #e7e9ee; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.mission-builder .mission-route-muted { margin: 6px 0 0; color: #7f8a9a; font-size: 12px; line-height: 1.5; }
+.mission-builder .mission-route-footer { border-top: 1px solid #eceef2; padding: 11px 18px; }
+.mission-builder .mission-route-footer > strong { font-size: 12px; }
+.mission-builder .mission-route-footer .text-button { color: #ff6b00; font-size: 12px; cursor: pointer; }
+.mission-builder .mission-route-unavailable { color: #bc584a; font-size: 12px; margin: 12px 0 0; }
+@media (max-width: 700px) {
+  .mission-builder .mission-route-select,
+  .mission-builder .mission-route-detail { padding: 13px; }
+  .mission-builder .mission-route-key-metrics,
+  .mission-builder .mission-route-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mission-builder .mission-route-battery-metrics { grid-template-columns: 1fr; }
+  .mission-builder .mission-route-head { align-items: flex-start; }
+  .mission-builder .mission-route-footer { padding: 11px 13px; }
 }
-@media (max-width: 620px) {
-  .mission-builder .relay-hub-inventory { padding: 12px; }
-  .mission-builder .relay-hub-inventory-summary { grid-template-columns: 1fr; }
-  .mission-builder .relay-hub-battery-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .mission-builder .relay-hub-inventory-head a { white-space: normal; }
-  .mission-builder .relay-route-note span { text-align: left; }
+@media (max-width: 410px) {
+  .mission-builder .mission-route-head { flex-wrap: wrap; }
+  .mission-builder .mission-route-key-metrics { grid-template-columns: 1fr; }
 }
