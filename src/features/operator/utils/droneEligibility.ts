@@ -51,33 +51,17 @@ export function getEnergyFeasibility(
       route.batteryConsumptionPct <= 100;
     return {
       remainingBattery,
-      feasible: metricsValid && route.feasible !== false && remainingBattery >= minimumReservePct,
+      feasible: metricsValid && route.feasible === true && remainingBattery >= minimumReservePct,
     };
   }
 
-  const relayIds = route.relayHubIds;
-  const legs = route.legs ?? [];
-  const relayPlan = route.relayBatteryPlan ?? [];
-  const legsVerified = legs.length === relayIds.length + 1 && legs.every((leg, index) =>
-    Boolean(leg.fromHubId && leg.toHubId) &&
-    (index === 0 || legs[index - 1].toHubId === leg.fromHubId) &&
-    (index >= relayIds.length || leg.toHubId === relayIds[index]) &&
-    leg.feasible === true &&
-    Number.isFinite(leg.predictedEnergyWh) && (leg.predictedEnergyWh ?? 0) > 0 &&
-    Number.isFinite(leg.endingSocPct) &&
-    (leg.endingSocPct ?? -1) >= (leg.minimumReservePct ?? minimumReservePct)
-  );
-  const relaysVerified = relayIds.every((hubId) => {
-    const relay = relayPlan.find((item) => item.hubId === hubId);
-    return Boolean(relay && relay.ready === true &&
-      Number.isInteger(relay.requiredBatteryCount) && (relay.requiredBatteryCount ?? 0) > 0 &&
-      Number.isInteger(relay.availableBatteryCount) &&
-      (relay.availableBatteryCount ?? 0) >= (relay.requiredBatteryCount ?? 1));
-  });
-
+  // The updated Analyze contract exposes BE-computed `feasible`; its detailed
+  // per-leg energy and battery status shapes are optional/undocumented.
+  // Never invent a local positive validation from aggregate route %.
+  // BE MUST guarantee that feasible=true incorporates all legs + relay inventory,
+  // and recheck the availability atomically on POST /operator/missions.
   return {
     remainingBattery,
-    // Planning must supply a persisted/reservable plan, not just a visual forecast.
-    feasible: route.feasible === true && Boolean(route.batteryPlanId) && legsVerified && relaysVerified,
+    feasible: route.feasible === true,
   };
 }

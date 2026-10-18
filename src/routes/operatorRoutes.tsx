@@ -18,10 +18,11 @@ const lazyPage = <
    GENERAL
 ========================================================= */
 
-const AnalyticsPage = lazyPage(
-  () => import("../features/operator/pages/AnalyticsPage"),
-  "AnalyticsPage",
-);
+// ANALYTICS TEMPORARILY DISABLED — preserve original lazy import.
+// const AnalyticsPage = lazyPage(
+//   () => import("../features/operator/pages/AnalyticsPage"),
+//   "AnalyticsPage",
+// );
 
 const DashboardPage = lazyPage(
   () => import("../features/operator/pages/DashboardPage"),
@@ -363,10 +364,11 @@ export const operatorRoutes: RouteObject[] = [
      OTHER
   ========================= */
 
-  {
-    path: "analytics",
-    element: <AnalyticsPage />,
-  },
+  // ANALYTICS TEMPORARILY DISABLED — preserve original route.
+  // {
+  //   path: "analytics",
+  //   element: <AnalyticsPage />,
+  // },
 
   // REPORT FEATURE DISABLED — keep route code for future re-enable.
   // {

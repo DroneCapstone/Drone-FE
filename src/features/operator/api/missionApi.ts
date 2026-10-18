@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteOption, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -80,6 +80,13 @@ export interface MissionPlanningAnalysis {
   raw: unknown;
 }
 
+/** GET /missions/dashboard/active-flights provides an active_count and mission IDs (strings). */
+export interface MissionActiveFlightsSnapshot {
+  activeCount: number;
+  missionIds: string[];
+  missions: Mission[];
+}
+
 export interface MissionDashboardKpi {
   totalMissions?: number;
   activeMissions?: number;
@@ -105,7 +112,12 @@ export interface CreateMissionInput {
   orderId: string;
   droneId: string;
   routeId: string;
-  batteryPlanId?: string;
+  /** Exact selected Analyze route snapshot accepted by the updated Create Mission schema. */
+  routeString: string;
+  legDetails: RouteLegSnapshot[];
+  distanceKm: number;
+  predictedEnergyWh: number;
+  predictedDurationMin: number;
 }
 
 export interface AnalyzeMissionPlanningInput {
@@ -325,21 +337,37 @@ function mapMissionLeg(raw: unknown, index: number): MissionLeg {
 
 function mapMission(raw: unknown): Mission {
   const record = unwrapObject(raw);
+  const scheduledRoute = asRecord(record.scheduled_route ?? record.scheduledRoute);
+  // New BE GET Mission Detail may store the snapshot under scheduled_route or top-level.
+  const routeRecord = Object.keys(scheduledRoute).length > 0 ? scheduledRoute : record;
   const status = normalizeMissionStatus(record.status);
   const id = pickString(record, ['id', 'mission_id', 'missionId']);
   const orderId = pickString(record, ['order_id', 'orderId']);
   const droneId = pickString(record, ['drone_id', 'droneId']);
   const droneName = pickString(record, ['drone', 'drone_name', 'droneName', 'drone_code'], droneId);
-  const routePath = pickString(record, ['route_path_string', 'routePathString']);
-  const routeId = pickString(record, ['route_id', 'routeId']);
+  const routePath = pickString(record, ['route_string', 'route_path_string', 'routePathString']) ||
+    pickString(routeRecord, ['route_string', 'routeString', 'route_path_string']);
+  const routeId = pickString(record, ['route_id', 'routeId']) || pickString(routeRecord, ['routeId', 'route_id']);
   const routeName = pickString(record, ['route', 'route_name', 'routeName'], routePath || routeId || '—');
+
   const plannedStartAt = normalizeIso(pickString(record, ['planned_start_at', 'plannedStartAt', 'scheduled_time', 'scheduledTime'])) ?? '';
-  const estimatedArrivalAt = normalizeIso(pickString(record, ['estimated_arrival_at', 'estimatedArrivalAt', 'end_time', 'endTime'])) ?? plannedStartAt;
+  const predictedDuration = pickOptionalNumber(routeRecord, ['predictedDurationMin', 'predicted_duration_min', 'duration_min']) ??
+    pickOptionalNumber(record, ['predictedDurationMin', 'predicted_duration_min', 'duration_min']);
+  const explicitEstimatedArrival = normalizeIso(pickString(record, ['estimated_arrival_at', 'estimatedArrivalAt']));
+  const calculatedArrival = plannedStartAt && predictedDuration !== undefined && predictedDuration > 0
+    ? new Date(new Date(plannedStartAt).getTime() + predictedDuration * 60_000).toISOString()
+    : undefined;
+  const estimatedArrivalAt = explicitEstimatedArrival ?? calculatedArrival ?? '';
   const actualStartedAt = normalizeIso(pickString(record, ['actual_started_at', 'actualStartedAt', 'start_time', 'startTime', 'departed_at', 'departedAt']));
   const actualCompletedAt = normalizeIso(pickString(record, ['actual_completed_at', 'actualCompletedAt', 'end_time', 'endTime', 'arrived_at', 'arrivedAt']));
   const createdAt = normalizeIso(pickString(record, ['created_at', 'createdAt'])) ?? plannedStartAt;
-  const relayIds = pickArray(record, ['relay_hub_ids', 'relayHubIds']).map(String);
-  const legs = pickArray(record, ['legs', 'mission_legs']).map(mapMissionLeg);
+
+  const rawLegs = pickArray(record, ['legs_detail', 'legs', 'mission_legs']);
+  const legsRecords = rawLegs.length > 0 ? rawLegs : pickArray(routeRecord, ['legs_detail', 'legs']);
+  const legs = legsRecords.map(mapMissionLeg);
+  const relayHubIds = legs.length > 1
+    ? legs.slice(0, -1).map((leg) => leg.toHubId).filter(Boolean)
+    : pickArray(record, ['relay_hub_ids', 'relayHubIds']).map(String);
   const estimatedArrivalDate = estimatedArrivalAt ? new Date(estimatedArrivalAt) : undefined;
   const eta = pickString(record, ['eta']) || (
     estimatedArrivalDate && !Number.isNaN(estimatedArrivalDate.getTime())
@@ -347,33 +375,33 @@ function mapMission(raw: unknown): Mission {
       : '—'
   );
 
+  const predictedEnergy = pickOptionalNumber(routeRecord, ['predictedEnergyWh', 'predicted_energy_wh', 'estimated_energy_wh', 'energy_wh']) ??
+    pickOptionalNumber(record, ['predictedEnergyWh', 'predicted_energy_wh', 'estimated_energy_wh', 'energy_wh']);
+  const batteryUse = pickOptionalNumber(routeRecord, ['batteryConsumptionPct', 'battery_consumption_pct']) ??
+    pickOptionalNumber(record, ['batteryConsumptionPct', 'battery_consumption_pct']);
+  const batteryRemaining = pickOptionalNumber(routeRecord, ['remainingBatteryPct', 'remaining_battery_pct', 'predicted_remaining_battery_pct']) ??
+    pickOptionalNumber(record, ['remainingBatteryPct', 'remaining_battery_pct', 'predicted_remaining_battery_pct', 'battery_pct']);
+  const riskRaw = pickString(routeRecord, ['risk', 'risk_level']) || pickString(record, ['risk', 'risk_level']);
+
   return {
-    id,
-    orderId,
-    type: 'Delivery',
+    id, orderId, type: 'Delivery',
     name: pickString(record, ['name', 'mission_name', 'missionName'], `Delivery ${orderId || id}`),
-    droneId,
-    drone: droneName,
+    droneId, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
     destinationHubId: pickString(record, ['destination_hub_id', 'destinationHubId']),
-    relayHubIds: relayIds,
-    legs,
-    routeId,
-    route: routeName,
-    status,
-    tone: missionTone(status),
-    eta,
-    battery: pickNumber(record, ['predicted_remaining_battery_pct', 'remaining_battery_pct', 'battery', 'battery_pct']),
+    relayHubIds, legs, routeId, route: routeName,
+    status, tone: missionTone(status), eta,
+    // NaN is a missing-metric sentinel; UI must display —, never invented 0%/0 Wh.
+    battery: batteryRemaining ?? Number.NaN,
     plannedStartAt,
     packageReceiveDeadlineAt: normalizeIso(pickString(record, ['package_receive_deadline_at', 'packageReceiveDeadlineAt'])),
-    actualStartedAt,
-    actualCompletedAt,
-    estimatedArrivalAt,
-    predictedDurationMin: pickNumber(record, ['predicted_duration_min', 'predictedDurationMin', 'duration_min']),
-    estimatedEnergyWh: pickNumber(record, ['estimated_energy_wh', 'estimatedEnergyWh', 'energy_wh']),
-    batteryConsumptionPct: pickNumber(record, ['battery_consumption_pct', 'batteryConsumptionPct']),
-    confidencePct: pickNumber(record, ['confidence_pct', 'confidencePct'], Number.NaN),
-    risk: normalizeRisk(record.risk_level ?? record.risk),
+    actualStartedAt, actualCompletedAt, estimatedArrivalAt,
+    predictedDurationMin: predictedDuration ?? Number.NaN,
+    estimatedEnergyWh: predictedEnergy ?? Number.NaN,
+    batteryConsumptionPct: batteryUse ?? Number.NaN,
+    confidencePct: pickOptionalNumber(routeRecord, ['confidencePct', 'confidence_pct']) ??
+      pickOptionalNumber(record, ['confidencePct', 'confidence_pct']),
+    risk: riskRaw ? normalizeRisk(riskRaw) : undefined,
     createdAt,
   };
 }
@@ -507,18 +535,49 @@ function mapRelayBattery(raw: unknown): PlannedRelayBattery {
   };
 }
 
+function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
+  const item = asRecord(raw);
+  const from = pickString(item, ['from_hub_code', 'fromHubCode']);
+  const to = pickString(item, ['to_hub_code', 'toHubCode']);
+  const distance = pickOptionalNumber(item, ['distance_km', 'distanceKm']);
+  if (!from || !to || distance === undefined) return null;
+  return {
+    from_hub_code: from,
+    to_hub_code: to,
+    distance_km: distance,
+    sequence_no: pickOptionalNumber(item, ['sequence_no', 'sequenceNo']),
+    from_hub_id: pickOptionalNumber(item, ['from_hub_id', 'fromHubId']),
+    to_hub_id: pickOptionalNumber(item, ['to_hub_id', 'toHubId']),
+    from_hub_name: pickString(item, ['from_hub_name', 'fromHubName']) || undefined,
+    to_hub_name: pickString(item, ['to_hub_name', 'toHubName']) || undefined,
+  };
+}
+
 function mapRouteOption(raw: unknown, index: number): RouteOption {
   const record = asRecord(raw);
-  const relayHubIds = pickArray(record, ['relay_hub_ids', 'relayHubIds', 'relay_hubs', 'relayHubs']).map((item) => {
-    if (isRecord(item)) return pickString(item, ['id', 'hub_id', 'hubId']);
-    return String(item);
-  }).filter(Boolean);
+  const legRecords = pickArray(record, ['legs_detail', 'legsDetail', 'legs', 'route_legs', 'routeLegs']);
+  const legDetails = legRecords.map(mapRouteLegSnapshot).filter((leg): leg is RouteLegSnapshot => Boolean(leg));
+  // relayHubs is an array of NAMES in BE's new response, not IDs.
+  // Use intermediate leg.to_hub_id instead, so Hub + Battery lookups work.
+  const derivedRelayIds = legRecords.length > 1
+    ? legRecords.slice(0, -1).map((leg) => pickString(asRecord(leg), ['to_hub_id', 'toHubId'])).filter(Boolean)
+    : [];
+  const explicitRelayIds = pickArray(record, ['relay_hub_ids', 'relayHubIds']).map((hub) =>
+    isRecord(hub) ? pickString(hub, ['id', 'hub_id', 'hubId']) : String(hub),
+  ).filter(Boolean);
+  const relayHubIds = derivedRelayIds.length ? derivedRelayIds : explicitRelayIds;
+
   const reasons = pickArray(record, ['recommendation_reasons', 'recommendationReasons', 'reasons']).map(String);
   const reason = pickString(record, ['reason']);
   if (reason) reasons.push(reason);
+  const relayBatteryStatus = pickArray(record, ['relay_battery_status', 'relayBatteryStatus']);
+  const detailedPlan = pickArray(record, ['relay_battery_plan', 'relayBatteryPlan']);
+  const routeString = pickString(record, ['route_string', 'routeString']);
   return {
     id: pickString(record, ['route_id', 'routeId', 'id'], `ROUTE-${index + 1}`),
-    name: pickString(record, ['route_name', 'routeName', 'name', 'route_string', 'routeString'], `Route ${index + 1}`),
+    name: pickString(record, ['route_name', 'routeName', 'name'], routeString || `Route ${index + 1}`),
+    routeString,
+    legDetails,
     distanceKm: pickNumber(record, ['distance_km', 'distanceKm', 'distance']),
     predictedDurationMin: pickNumber(record, ['predicted_duration_min', 'predictedDurationMin', 'duration_min']),
     predictedEnergyWh: pickNumber(record, ['predicted_energy_wh', 'predictedEnergyWh', 'estimated_energy_wh', 'energy_wh']),
@@ -529,8 +588,10 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
-    legs: pickArray(record, ['legs', 'route_legs', 'routeLegs']).map(mapRouteLeg),
-    relayBatteryPlan: pickArray(record, ['relay_battery_plan', 'relayBatteryPlan']).map(mapRelayBattery),
+    infeasibleReason: pickString(record, ['infeasible_reason', 'infeasibleReason']) || undefined,
+    legs: legRecords.map(mapRouteLeg),
+    relayBatteryPlan: (detailedPlan.length > 0 ? detailedPlan : relayBatteryStatus).map(mapRelayBattery),
+    rawRelayBatteryStatus: relayBatteryStatus,
     batteryPlanId: pickString(record, ['battery_plan_id', 'batteryPlanId']) || undefined,
     recommended: pickBoolean(record, ['recommended', 'is_recommended', 'isRecommended']),
     recommendationReasons: reasons,
@@ -617,7 +678,6 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   return result;
 }
 
-console.count('[CreateMission] POST mission');
 export async function listMissionsApi(): Promise<Mission[]> {
   const payload = await operatorApiRequest<unknown>('/missions/');
   return unwrapArray(payload, ['missions']).map(mapMission).filter((mission) => mission.id);
@@ -633,11 +693,20 @@ export async function getMissionDashboardStatusApi(): Promise<MissionDashboardSt
   return mapMissionDashboardStatus(payload);
 }
 
-export async function getMissionActiveFlightsApi(): Promise<Mission[]> {
+export async function getMissionActiveFlightsApi(): Promise<MissionActiveFlightsSnapshot> {
   const payload = await operatorApiRequest<unknown>('/missions/dashboard/active-flights');
-  return unwrapArray(payload, ['active_flights', 'activeFlights', 'flights', 'missions'])
-    .map(mapMission)
-    .filter((mission) => mission.id);
+  const root = unwrapObject(payload);
+  const items = unwrapArray(payload, ['missions', 'active_flights', 'activeFlights', 'flights']);
+  const missionIds = items
+    .map((item) => typeof item === 'string' ? item : pickString(asRecord(item), ['id', 'mission_id', 'missionId']))
+    .filter(Boolean);
+  // Swagger declares missions: string[]. Do not parse a string as a full Mission object.
+  const missions = items.filter(isRecord).map(mapMission).filter((mission) => mission.id);
+  return {
+    activeCount: pickOptionalNumber(root, ['active_count', 'activeCount']) ?? missionIds.length,
+    missionIds,
+    missions,
+  };
 }
 
 export async function listMissionHubsApi(): Promise<MissionHubSummary[]> {
@@ -804,7 +873,15 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
       orderId: input.orderId,
       droneId: numericDroneId,
       routeId: input.routeId,
-      ...(input.batteryPlanId ? { batteryPlanId: input.batteryPlanId } : {}),
+      route_string: input.routeString,
+      legs_detail: input.legDetails.map((leg) => ({
+        from_hub_code: leg.from_hub_code,
+        to_hub_code: leg.to_hub_code,
+        distance_km: leg.distance_km,
+      })),
+      distance_km: input.distanceKm,
+      predicted_energy_wh: input.predictedEnergyWh,
+      predicted_duration_min: input.predictedDurationMin,
     }),
   });
   return mapMission(payload);
