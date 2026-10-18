@@ -47,7 +47,7 @@ export function DashboardPage() {
   const activeCount =
     missionKpi?.activeMissions ??
     missionStatus?.inProgress ??
-    activeFlights?.length ??
+    activeFlights?.activeCount ??
     activeMissions.length;
   const scheduledCount =
     missionKpi?.scheduledMissions ?? missionStatus?.scheduled ?? scheduledMissions.length;

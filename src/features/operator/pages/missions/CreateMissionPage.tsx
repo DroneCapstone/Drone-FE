@@ -250,13 +250,24 @@ export function CreateMissionPage() {
         return;
       }
 
+      if (!currentRoute.routeString || !currentRoute.legDetails?.length ||
+        !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
+        !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
+        !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
+        setStep(3);
+        showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
+        return;
+      }
+
       const mission = await createMissionMutation.mutateAsync({
         orderId: order.id,
         droneId: selectedDrone.id,
         routeId: currentRoute.id,
-        ...(currentRoute.relayHubIds?.length && currentRoute.batteryPlanId
-          ? { batteryPlanId: currentRoute.batteryPlanId }
-          : {}),
+        routeString: currentRoute.routeString || currentRoute.name,
+        legDetails: currentRoute.legDetails ?? [],
+        distanceKm: currentRoute.distanceKm,
+        predictedEnergyWh: currentRoute.predictedEnergyWh,
+        predictedDurationMin: currentRoute.predictedDurationMin,
       });
 
       clearMissionDraft(order.id);
@@ -292,7 +303,14 @@ export function CreateMissionPage() {
         </div>
 
         {step === 1 && (
-          <OperatorPanel title="Order information">
+          <OperatorPanel
+            title="Order information"
+            action={
+              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
+                {planningState ?? 'Closed'}
+              </StatusBadge>
+            }
+          >
             <div className="fields two">
               <label><span>Order</span><input value={order.id} readOnly /></label>
               <label><span>Customer</span><input value={order.customerName} readOnly /></label>
@@ -309,10 +327,7 @@ export function CreateMissionPage() {
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
-            <div className="mission-planning-note">
-              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
-                {planningState ?? 'Closed'}
-              </StatusBadge>
+            {/* <div className="mission-planning-note">
               <span>
                 {planningState === 'Ready for Planning'
                   ? canContinueStep1 ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
@@ -320,7 +335,7 @@ export function CreateMissionPage() {
                     ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
-            </div>
+            </div> */}
             {!hasOrderHubs && (
               <div className="operator-empty-state">
                 This Order does not contain a valid Drop-off Point and Pick-up Point.
@@ -444,7 +459,7 @@ export function CreateMissionPage() {
                   {isPlanningAnalysisFetching
                     ? 'Updating route analysis…'
                     : selectedRelayHubIds.length > 0
-                      ? 'Relay route is not yet verified by Backend. Every flight leg must meet the energy reserve, and each relay must have a compatible available battery set with a confirmed battery plan.'
+                      ? selectedRoute.infeasibleReason || 'Relay route is not verified by Backend. Check the feasibility flag, each leg energy reserve, and relay battery availability.'
                       : 'This route does not meet the required energy reserve or is not verified. Choose another route.'}
                 </p>
               )}
@@ -552,8 +567,10 @@ export function CreateMissionPage() {
                       <p className="section-note">
                         <strong>Backend relay validation: </strong>
                         {plan
-                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} required battery set · ${plan.ready === true ? 'Verified' : 'Not verified'}`
-                          : 'Not provided by Analyze. Inventory candidates do not prove flight readiness.'}
+                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} battery set · ${plan.ready === true ? 'Ready' : 'Details not confirmed'}`
+                          : selectedRoute.feasible === true
+                            ? 'Route feasible per Backend. Per-Hub battery breakdown was not returned.'
+                            : 'Not provided by Analyze. Inventory candidates do not prove flight readiness.'}
                       </p>
                     </div>
                   );
@@ -563,7 +580,7 @@ export function CreateMissionPage() {
                     {selectedRoute.legs.map((leg, index) => (
                       <div key={`${leg.fromHubId}-${leg.toHubId}-${index}`} className="relay-route-note">
                         <strong>Leg {index + 1}: {hubName(leg.fromHubId)} → {hubName(leg.toHubId)}</strong>
-                        <span>{leg.predictedEnergyWh ?? '—'} Wh · Battery after {leg.endingSocPct ?? '—'}% · {leg.feasible === true ? 'Feasible' : 'Not verified'}</span>
+                        <span>{leg.predictedEnergyWh ?? '—'} Wh · Battery after {leg.endingSocPct ?? '—'}% · {leg.feasible === true ? 'Leg feasible' : leg.feasible === false ? 'Leg infeasible' : 'Per-leg validation details not returned'}</span>
                       </div>
                     ))}
                   </div>

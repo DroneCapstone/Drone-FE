@@ -1,6 +1,6 @@
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance';
+export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unknown';
 
 export type MissionStatus =
   | 'Scheduled'
@@ -70,7 +70,9 @@ export interface Order {
   planningState?: PlanningState;
   status: OrderStatus;
 
-  /** Technician event at the Drop-off Point. Null/undefined means Awaiting package. */
+  /** Authoritative package receipt flag from originPackage.received (independent of received_at). */
+  originPackageReceived?: boolean;
+  /** Technician receipt timestamp; may be absent even when received is true. */
   originHubReceivedAt?: string;
   /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
@@ -216,9 +218,23 @@ export interface PlannedRelayBattery {
   ready?: boolean;
 }
 
+/** Snapshot of the exact BE leg geometry used for Create Mission and Mission Detail. */
+export interface RouteLegSnapshot {
+  from_hub_code: string;
+  to_hub_code: string;
+  distance_km: number;
+  sequence_no?: number;
+  from_hub_id?: number;
+  to_hub_id?: number;
+  from_hub_name?: string;
+  to_hub_name?: string;
+}
+
 export interface RouteOption {
   id: string;
   name: string;
+  routeString?: string;
+  legDetails?: RouteLegSnapshot[];
   distanceKm: number;
   predictedDurationMin: number;
   predictedEnergyWh: number;
@@ -229,8 +245,11 @@ export interface RouteOption {
   /** Optional intermediate Hub(s) selected by route planning for long-distance Missions. */
   relayHubIds?: string[];
   relayStopMinutes?: number;
-  /** Optional server-validated planning contract; absent means relay route unverified. */
+  /** BE-authoritative feasibility flag. Only BE can validate reserve/availability atomically. */
   feasible?: boolean;
+  infeasibleReason?: string;
+  /** Optional FE display of the new BE relay_battery_status payload (schema not documented). */
+  rawRelayBatteryStatus?: unknown[];
   legs?: PlannedRouteLeg[];
   relayBatteryPlan?: PlannedRelayBattery[];
   batteryPlanId?: string;

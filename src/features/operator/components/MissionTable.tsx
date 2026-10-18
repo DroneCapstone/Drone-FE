@@ -18,7 +18,7 @@ export function MissionTable({ compact = false, items }: { compact?: boolean; it
             <td>{mission.route}</td>
             <td><StatusBadge tone={mission.tone}>{mission.status}</StatusBadge>{mission.scheduleState === 'Delayed' && <small className="table-substatus">Delayed</small>}</td>
             <td>{mission.eta}</td>
-            <td><strong>{mission.estimatedEnergyWh.toFixed(1)} Wh</strong><small>{mission.battery}% battery after</small></td>
+            <td><strong>{Number.isFinite(mission.estimatedEnergyWh) ? `${mission.estimatedEnergyWh.toFixed(1)} Wh` : '—'}</strong><small>{Number.isFinite(mission.battery) ? `${mission.battery}% battery after` : 'Battery not reported'}</small></td>
             <td><button className="row-action" aria-label={`Open ${mission.id}`}>Open</button></td>
           </tr>
         ))}</tbody>

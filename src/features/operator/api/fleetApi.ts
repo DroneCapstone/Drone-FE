@@ -76,7 +76,8 @@ function normalizeDroneStatus(value: unknown): TechnicalStatus {
     return 'In Flight';
   }
 
-  return 'Available';
+  if (status === 'AVAILABLE' || status === 'READY' || status === 'STANDBY') return 'Available';
+  return 'Unknown';
 }
 
 function normalizeDisplayId(rawId: string, explicitDisplayId: string) {

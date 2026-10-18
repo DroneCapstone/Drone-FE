@@ -41,7 +41,8 @@ export const operatorNavigation: OperatorNavItem[] = [
       { label: 'Model insights', path: '/operator/ai/model-insights' },
     ],
   },
-  { label: 'Analytics', path: '/operator/analytics', icon: 'chart' },
+  // ANALYTICS TEMPORARILY DISABLED — restore when real analytics API is integrated.
+  // { label: 'Analytics', path: '/operator/analytics', icon: 'chart' },
 
   // REPORT FEATURE DISABLED — keep this code for future re-enable.
   // { label: 'Reports', path: '/operator/reports', icon: 'file' },
