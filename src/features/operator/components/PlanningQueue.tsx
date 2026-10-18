@@ -1,12 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Mission, Order } from '../types/operator';
-import { formatDeliveryWindow, getOrderPlanningBadge, isActionablePlanningState, sortOrdersByPlanningPriority } from '../utils/deliveryPlanning';
+import { formatDeliveryWindow, getOrderPlanningBadge, canCreateMissionForOrder, sortOrdersByPlanningPriority } from '../utils/deliveryPlanning';
 
 export function PlanningQueue({ orders, missions, limit = 4 }: { orders: Order[]; missions: Mission[]; limit?: number }) {
   const navigate = useNavigate();
   const actionable = sortOrdersByPlanningPriority(orders, missions)
-    .filter((order) => isActionablePlanningState(getOrderPlanningBadge(order, missions)))
+    .filter((order) => canCreateMissionForOrder(order, missions))
     .slice(0, limit);
 
   if (actionable.length === 0) {

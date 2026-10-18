@@ -9,7 +9,7 @@ import {
   formatDeliveryWindow,
   getDeliveryMission,
   getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
 } from '../../utils/deliveryPlanning';
 import { formatMissionTime } from '../../utils/missionTiming';
 import { OrderPageShell } from './OrderPageShell';
@@ -74,7 +74,7 @@ export function OrderDetailPage() {
 
   const deliveryMission = getDeliveryMission(order.id, missions);
   const planning = getOrderPlanningBadge(order, missions);
-  const actionable = isActionablePlanningState(planning);
+  const actionable = canCreateMissionForOrder(order, missions);
 
   return (
     <OrderPageShell active="/operator/orders/all">
@@ -105,7 +105,7 @@ export function OrderDetailPage() {
               <div><dt>Pick-up Point</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
               <div>
                 <dt>Origin package</dt>
-                <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
+                <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
               </div>
               <div><dt>Package</dt><dd>{order.packageLabel}</dd></div>
               <div><dt>Package type</dt><dd>{order.packageType}</dd></div>
@@ -126,7 +126,7 @@ export function OrderDetailPage() {
                   <strong>{planning ?? 'No active Mission'}</strong>
                   <small>
                     {planning === 'Ready for Planning'
-                      ? 'Planning is open. Operator can create the Mission now.'
+                      ? actionable ? 'The package has been received. Operator can create the Mission now.' : 'Awaiting Technician package receipt before Mission creation.'
                       : planning === 'Needs Replanning'
                         ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
                         : planning === 'Future'

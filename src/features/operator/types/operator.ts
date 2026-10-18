@@ -160,8 +160,11 @@ export interface OperatorBattery {
   id: string;
   serialNumber: string;
   capacityWh: number;
+  /** Technical/health status returned as `status` (e.g. Active). */
   status: string;
-  /** Current API exposes drone_id; FE uses it as the only available compatibility link. */
+  /** Inventory availability returned as `available_status` (Ready, Charging, In Use, etc.). */
+  availableStatus?: string;
+  /** `drone_id` indicates installation, not model compatibility. */
   droneId?: string;
   currentHubId: string;
   hubName: string;

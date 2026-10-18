@@ -5,7 +5,7 @@ import {
   formatDeliveryWindow,
   getDeliveryMission,
   getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
 } from '../utils/deliveryPlanning';
 
 function planningTone(state: PlanningState): Tone {
@@ -44,7 +44,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
           {orders.map((order) => {
             const planning = getOrderPlanningBadge(order, missions);
             const deliveryMission = getDeliveryMission(order.id, missions);
-            const canCreate = isActionablePlanningState(planning);
+            const canCreate = canCreateMissionForOrder(order, missions);
 
             let action = 'Open';
             let target = `/operator/orders/${order.id}`;
@@ -75,8 +75,8 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                 <td>
                   {order.packageLabel}
                   <small>{order.payloadKg} kg · {order.packageType}</small>
-                  <small className={order.originHubReceivedAt ? 'package-received-text' : 'package-awaiting-text'}>
-                    {order.originHubReceivedAt ? `Received at Origin · ${receivedTime(order.originHubReceivedAt)}` : 'Awaiting package at Drop-off Point'}
+                  <small className={(order.originPackageReceived || order.originHubReceivedAt) ? 'package-received-text' : 'package-awaiting-text'}>
+                    {(order.originPackageReceived || order.originHubReceivedAt) ? `Received at Drop-off Point${order.originHubReceivedAt ? ` · ${receivedTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package at Drop-off Point'}
                   </small>
                 </td>
                 <td>

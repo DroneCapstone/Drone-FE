@@ -46,17 +46,16 @@ export function getPlanningState(
   missions: Mission[],
   now = new Date(),
 ): PlanningState {
-  // API-backed Orders already receive the authoritative Planning State from BE.
-  if (order.planningState) return order.planningState;
-
+  // Mission records are stronger evidence that an Order is already planned.
+  // BE's planningState can lag behind the Mission creation response.
   const orderMissions = getMissionsForOrder(order.id, missions);
-  if (order.replanRequiredAt) return 'Needs Replanning';
-
   const activeMission = orderMissions.find(
     (mission) => mission.status === 'Scheduled' || mission.status === 'In Progress',
   );
-
   if (activeMission) return 'Planned';
+  if (order.replanRequiredAt) return 'Needs Replanning';
+  if (orderMissions.some((mission) => mission.status === 'Completed')) return 'Planned';
+  if (order.planningState) return order.planningState;
 
 
   const planningAt = new Date(order.planningAt).getTime();
@@ -72,6 +71,15 @@ export function isActionablePlanningState(state: PlanningState | undefined) {
   return state === 'Ready for Planning';
 }
 
+/** Both Express and Scheduled Orders can be assigned only AFTER Technician receipt. */
+export function canCreateMissionForOrder(order: Order, missions: Mission[] = []) {
+  return order.status === 'Pending' &&
+    getOrderPlanningBadge(order, missions) === 'Ready for Planning' &&
+    (order.originPackageReceived === true || Boolean(order.originHubReceivedAt)) &&
+    Boolean(order.originHubId && order.destinationHubId) &&
+    !hasDeliveryMission(order.id, missions);
+}
+
 export function getPlanningPriority(state: PlanningState | undefined) {
   if (!state) return 5;
   return {
@@ -82,13 +90,40 @@ export function getPlanningPriority(state: PlanningState | undefined) {
   }[state];
 }
 
+/** A missing/invalid time must not move an Order ahead of an actionable Order. */
+function sortTimestamp(value?: string) {
+  const timestamp = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Operator priority:
+ * 1. Orders eligible for Create Mission (Technician already received package).
+ * 2. Existing planning-state priority for other Orders.
+ * 3. Earlier estimated delivery deadline, then planning time.
+ *
+ * The page must filter received Orders before sorting and pagination.
+ */
 export function sortOrdersByPlanningPriority(orders: Order[], missions: Mission[]) {
   return [...orders].sort((a, b) => {
+    const aCanCreate = canCreateMissionForOrder(a, missions);
+    const bCanCreate = canCreateMissionForOrder(b, missions);
+    if (aCanCreate !== bCanCreate) return aCanCreate ? -1 : 1;
+
     const aState = getOrderPlanningBadge(a, missions);
     const bState = getOrderPlanningBadge(b, missions);
     const priority = getPlanningPriority(aState) - getPlanningPriority(bState);
     if (priority !== 0) return priority;
-    return new Date(a.planningAt).getTime() - new Date(b.planningAt).getTime();
+
+    const aDeadline = sortTimestamp(a.currentEstimatedWindow?.end ?? a.requestedDeliveryAt);
+    const bDeadline = sortTimestamp(b.currentEstimatedWindow?.end ?? b.requestedDeliveryAt);
+    if (aDeadline !== bDeadline) return aDeadline < bDeadline ? -1 : 1;
+
+    const aPlanning = sortTimestamp(a.planningAt);
+    const bPlanning = sortTimestamp(b.planningAt);
+    if (aPlanning !== bPlanning) return aPlanning < bPlanning ? -1 : 1;
+
+    return a.id.localeCompare(b.id);
   });
 }
 

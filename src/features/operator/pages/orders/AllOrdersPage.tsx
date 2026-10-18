@@ -9,8 +9,7 @@ import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../../hooks/useOrderQueries';
 import type { OrderStatus } from '../../types/operator';
 import {
-  getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
   sortOrdersByPlanningPriority,
 } from '../../utils/deliveryPlanning';
 import { OrderPageShell } from './OrderPageShell';
@@ -52,15 +51,20 @@ export function AllOrdersPage() {
     status: STATUS_TO_API[status],
   });
 
-  const filtered = sortOrdersByPlanningPriority(orders, missions).filter((order) => {
-    const matchesMode =
-      deliveryMode === 'All delivery modes' || order.deliveryMode === deliveryMode;
-    const matchesReady =
-      !readyOnly ||
-      isActionablePlanningState(getOrderPlanningBadge(order, missions));
+  // All orders: display every Order returned by the API, including unreceived packages.
+  // Ready for planning: show only Orders eligible for Create Mission (receipt required).
+  // Sort after filtering and before pagination so actionable Orders appear first.
+  const filtered = sortOrdersByPlanningPriority(
+    orders.filter((order) => {
+      const matchesMode =
+        deliveryMode === 'All delivery modes' || order.deliveryMode === deliveryMode;
+      const matchesReady =
+        !readyOnly || canCreateMissionForOrder(order, missions);
 
-    return matchesMode && matchesReady;
-  });
+      return matchesMode && matchesReady;
+    }),
+    missions,
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -127,7 +131,11 @@ export function AllOrdersPage() {
         ) : isLoading ? (
           <div className="operator-empty-state">Loading Orders…</div>
         ) : filtered.length === 0 ? (
-          <div className="operator-empty-state">No Orders match the current filters.</div>
+          <div className="operator-empty-state">
+            {readyOnly
+              ? 'No Orders are ready to create a Mission. The package must be received at the Drop-off Point first.'
+              : 'No Orders match the current filters.'}
+          </div>
         ) : (
           <>
             <OrderTable orders={paginatedOrders} missions={missions} />
