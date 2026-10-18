@@ -57,9 +57,10 @@ export function RouteOptionCard({
         <div className="route-option-badges">
           {route.recommended && <StatusBadge tone="success">AI Recommended</StatusBadge>}
           {route.relayHubIds?.length ? <StatusBadge tone="info">Relay route</StatusBadge> : null}
+          {feasible && route.feasible === true && <StatusBadge tone="success">BE feasible</StatusBadge>}
           {!feasible && (
             <StatusBadge tone={route.relayHubIds?.length ? 'warning' : 'danger'}>
-              {route.relayHubIds?.length ? 'Relay unverified' : 'Low reserve'}
+              {route.infeasibleReason ? 'Not feasible' : route.relayHubIds?.length ? 'Relay unverified' : 'Not verified'}
             </StatusBadge>
           )}
         </div>

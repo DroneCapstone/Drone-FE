@@ -95,6 +95,11 @@ interface BackendEligibleDrone {
   id: string | number;
   model: string;
   maxPayloadKg: number;
+  /** Optional when provided by the eligibility endpoint. */
+  battery_model?: string | null;
+  batteryModel?: string | null;
+  required_battery_model?: string | null;
+  requiredBatteryModel?: string | null;
 }
 
 interface BackendEligibleDronesResponse {
@@ -279,6 +284,7 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     planningAt,
     planningState: mapPlanningState(raw.planningState),
     status: mapStatus(raw.status),
+    originPackageReceived: raw.originPackage?.received === true,
     originHubReceivedAt:
       raw.originPackage?.received
         ? validIso(raw.originPackage.received_at) ?? undefined
@@ -349,6 +355,12 @@ export async function getEligibleDronesApi(
       hubId,
       technicalStatus: 'Available',
       maxPayloadKg: Number(drone.maxPayloadKg ?? 0),
+      batteryModel:
+        drone.requiredBatteryModel?.trim() ||
+        drone.required_battery_model?.trim() ||
+        drone.batteryModel?.trim() ||
+        drone.battery_model?.trim() ||
+        undefined,
     })),
   };
 }

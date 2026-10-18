@@ -8,7 +8,7 @@ import { useFleetDronesQuery } from '../hooks/useFleetQueries';
 import { useMissionListQuery } from '../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../hooks/useOrderQueries';
 import type { Tone } from '../types/operator';
-import { formatDeliveryWindow, getOrderPlanningBadge, isActionablePlanningState } from '../utils/deliveryPlanning';
+import { formatDeliveryWindow, getOrderPlanningBadge, canCreateMissionForOrder } from '../utils/deliveryPlanning';
 import { getMissionPreflight } from '../utils/missionPreflight';
 
 export function NotificationsPage() {
@@ -17,7 +17,7 @@ export function NotificationsPage() {
   const { data: missions = [] } = useMissionListQuery();
   const { data: fleet = [] } = useFleetDronesQuery();
 
-  const planningOrder = orders.find((order) => isActionablePlanningState(getOrderPlanningBadge(order, missions)));
+  const planningOrder = orders.find((order) => canCreateMissionForOrder(order, missions));
   const replanOrder = orders.find((order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning');
   const departureItem = useMemo(
     () => missions
@@ -37,9 +37,9 @@ export function NotificationsPage() {
 
   const initial = useMemo(() => {
     const values: Array<{ title: string; body: string; time: string; tone: Tone; category: string; read: boolean; target?: string }> = [];
-    if (planningOrder) values.push({ title: `${planningOrder.id} is ready for Mission planning`, body: `Estimated delivery ${formatDeliveryWindow(planningOrder)}. Create the Mission now; package receipt will be checked later in Final Validation.`, time: 'Now', tone: 'warning', category: 'Planning', read: false, target: `/operator/orders/${planningOrder.id}` });
+    if (planningOrder) values.push({ title: `${planningOrder.id} is ready for Mission planning`, body: `Estimated delivery ${formatDeliveryWindow(planningOrder)}. Package has been received. You can create the Mission now.`, time: 'Now', tone: 'warning', category: 'Planning', read: false, target: `/operator/orders/${planningOrder.id}` });
     if (replanOrder) values.push({ title: `${replanOrder.id} needs replanning`, body: 'The previous Mission was cancelled before delivery. A new customer/system delivery window is required before another Mission is created.', time: 'Now', tone: 'danger', category: 'Planning', read: false, target: `/operator/orders/${replanOrder.id}` });
-    if (departureItem) values.push({ title: `${departureItem.mission.id} · ${departureItem.evaluation.state}`, body: departureItem.evaluation.state === 'Ready for Departure' ? 'Final Validation passed. Start Mission is available in the departure window.' : 'One or more Final Validation conditions are not ready. The Mission remains Scheduled.', time: 'Now', tone: departureItem.evaluation.state === 'Departure Hold' ? 'danger' : 'warning', category: 'Departure', read: false, target: `/operator/missions/${departureItem.mission.id}` });
+    if (departureItem) values.push({ title: `${departureItem.mission.id} · ${departureItem.evaluation.state}`, body: departureItem.evaluation.state === 'Ready for Departure' ? 'Preflight checks passed. Backend controls automatic departure at the permitted time.' : 'One or more Final Validation conditions are not ready. The Mission remains Scheduled.', time: 'Now', tone: departureItem.evaluation.state === 'Departure Hold' ? 'danger' : 'warning', category: 'Departure', read: false, target: `/operator/missions/${departureItem.mission.id}` });
     return values;
   }, [departureItem, planningOrder, replanOrder]);
 

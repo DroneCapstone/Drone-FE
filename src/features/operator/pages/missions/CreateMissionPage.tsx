@@ -6,6 +6,8 @@ import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
+import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
+import { getBatteryCompatibility, getCompatibleBatteriesAtHub, getSpareBatteriesAtHub, isReadyBattery } from '../../utils/batteryPlanning';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
@@ -20,7 +22,7 @@ import type { OperatorDrone, RouteOption } from '../../types/operator';
 import {
   formatDeliveryWindow,
   getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
 } from '../../utils/deliveryPlanning';
 import { DEFAULT_BATTERY_RESERVE_PCT, getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
@@ -49,6 +51,7 @@ function getRouteRelayHubIds(
 
 export function CreateMissionPage() {
   const navigate = useNavigate();
+  const assignLockRef = useRef(false);
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId') ?? '';
 
@@ -72,6 +75,16 @@ export function CreateMissionPage() {
   const [selectedDroneId, setSelectedDroneId] = useState(restoredDraft?.selectedDroneId || '');
   const [selectedRouteId, setSelectedRouteId] = useState(restoredDraft?.selectedRouteId || '');
   const { data: apiHubs } = useMissionHubsQuery();
+  // Fleet records may provide batteryModel when eligible-drones omits it.
+  // Only the battery MODEL is shown; Available already implies full batteries.
+  const { data: fleetDrones } = useFleetDronesQuery();
+  const {
+    data: fleetBatteries,
+    isLoading: batteriesLoading,
+    isFetching: batteriesFetching,
+    error: batteriesError,
+    refetch: refetchBatteries,
+  } = useFleetBatteriesQuery();
   const {
     data: planningAnalysis,
     error: planningAnalysisError,
@@ -125,7 +138,20 @@ export function CreateMissionPage() {
   const networkHubs = apiHubs ?? [];
   const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
   const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
-  const eligibleDronesAtOrigin = eligibleDronesData?.drones ?? [];
+  const eligibleDronesAtOrigin = (eligibleDronesData?.drones ?? []).map((drone) => {
+    const fleetDrone = fleetDrones?.find((item) => item.id === drone.id);
+    const installedBatteryModels = (fleetBatteries ?? [])
+      .filter((battery) => battery.droneId === drone.id && Boolean(battery.model))
+      .map((battery) => battery.model!.trim());
+    const distinctModels = [...new Set(installedBatteryModels.map((model) => model.toLowerCase()))];
+    const installedModel = distinctModels.length === 1 ? installedBatteryModels[0] : undefined;
+    return {
+      ...drone,
+      // Installed batteries prove their model is currently used by this drone.
+      // Never infer compatibility with other battery models from drone_id.
+      batteryModel: drone.batteryModel || fleetDrone?.batteryModel || installedModel,
+    };
+  });
   const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
   const routeOptions = planningAnalysis?.routes ?? [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
@@ -140,10 +166,15 @@ export function CreateMissionPage() {
   const selectedRelayHubIds = selectedRoute
     ? getRouteRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)
     : [];
+  // A Hub can only be selected if BE Analyze has returned a route through it.
+  // Selecting a Hub here actually selects the matching AI route/routeId.
+  const relayRouteOptions = routeOptions.filter((route) =>
+    getRouteRelayHubIds(route, order.originHubId, order.destinationHubId).length > 0
+  );
 
   const hasOrderHubs = Boolean(order.originHubId && order.destinationHubId);
   const canContinueStep1 = Boolean(
-    isActionablePlanningState(planningState) &&
+    canCreateMissionForOrder(order) &&
     hasOrderHubs
   );
   // Backend guarantees that an eligible/available drone is equipped with its full battery set.
@@ -184,11 +215,19 @@ export function CreateMissionPage() {
 
   const handleAssignMission = async () => {
     console.count('[CreateMission] Assign clicked');
-    if (!canContinueStep3 || !selectedDrone || !selectedRoute) return;
+    if (assignLockRef.current || !canContinueStep3 || !selectedDrone || !selectedRoute) return;
+    assignLockRef.current = true;
 
     // Re-check drone eligibility and planning. A previously available drone may
     // have been assigned elsewhere while the Operator was reviewing the route.
     try {
+      // Re-fetch authoritative receipt/planning state just before assignment.
+      const latestOrder = await refetchOrder();
+      if (latestOrder.error || !latestOrder.data || !canCreateMissionForOrder(latestOrder.data)) {
+        setStep(1);
+        showToast('Package receipt or planning status is not valid. Refresh the Order before assigning.');
+        return;
+      }
       const eligibleNow = await refetchEligibleDrones();
       if (eligibleNow.error || !eligibleNow.data?.drones.some((drone) => drone.id === selectedDrone.id)) {
         setStep(2);
@@ -211,13 +250,24 @@ export function CreateMissionPage() {
         return;
       }
 
+      if (!currentRoute.routeString || !currentRoute.legDetails?.length ||
+        !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
+        !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
+        !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
+        setStep(3);
+        showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
+        return;
+      }
+
       const mission = await createMissionMutation.mutateAsync({
         orderId: order.id,
         droneId: selectedDrone.id,
         routeId: currentRoute.id,
-        ...(currentRoute.relayHubIds?.length && currentRoute.batteryPlanId
-          ? { batteryPlanId: currentRoute.batteryPlanId }
-          : {}),
+        routeString: currentRoute.routeString || currentRoute.name,
+        legDetails: currentRoute.legDetails ?? [],
+        distanceKm: currentRoute.distanceKm,
+        predictedEnergyWh: currentRoute.predictedEnergyWh,
+        predictedDurationMin: currentRoute.predictedDurationMin,
       });
 
       clearMissionDraft(order.id);
@@ -225,6 +275,8 @@ export function CreateMissionPage() {
       window.setTimeout(() => navigate(`/operator/missions/${mission.id}`), 500);
     } catch (reason) {
       showToast(reason instanceof Error ? reason.message : 'Unable to create Mission.');
+    } finally {
+      assignLockRef.current = false;
     }
   };
 
@@ -251,7 +303,14 @@ export function CreateMissionPage() {
         </div>
 
         {step === 1 && (
-          <OperatorPanel title="Order information">
+          <OperatorPanel
+            title="Order information"
+            action={
+              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
+                {planningState ?? 'Closed'}
+              </StatusBadge>
+            }
+          >
             <div className="fields two">
               <label><span>Order</span><input value={order.id} readOnly /></label>
               <label><span>Customer</span><input value={order.customerName} readOnly /></label>
@@ -259,7 +318,7 @@ export function CreateMissionPage() {
               <label>
                 <span>Origin package</span>
                 <input
-                  value={order.originHubReceivedAt ? `Received at Hub · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}
+                  value={order.originPackageReceived || order.originHubReceivedAt ? `Received at Hub${order.originHubReceivedAt ? ` · ${formatMissionTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package'}
                   readOnly
                 />
               </label>
@@ -268,18 +327,15 @@ export function CreateMissionPage() {
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
-            <div className="mission-planning-note">
-              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
-                {planningState ?? 'Closed'}
-              </StatusBadge>
+            {/* <div className="mission-planning-note">
               <span>
                 {planningState === 'Ready for Planning'
-                  ? `${order.deliveryMode === 'Express' ? 'Express planning is active.' : 'Planning is open.'} The Mission can be assigned before the package reaches the Drop-off Point.`
+                  ? canContinueStep1 ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
                   : planningState === 'Needs Replanning'
                     ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
-            </div>
+            </div> */}
             {!hasOrderHubs && (
               <div className="operator-empty-state">
                 This Order does not contain a valid Drop-off Point and Pick-up Point.
@@ -403,7 +459,7 @@ export function CreateMissionPage() {
                   {isPlanningAnalysisFetching
                     ? 'Updating route analysis…'
                     : selectedRelayHubIds.length > 0
-                      ? 'Relay route is not yet verified by Backend. Every flight leg must meet the energy reserve, and each relay must have a compatible available battery set with a confirmed battery plan.'
+                      ? selectedRoute.infeasibleReason || 'Relay route is not verified by Backend. Check the feasibility flag, each leg energy reserve, and relay battery availability.'
                       : 'This route does not meet the required energy reserve or is not verified. Choose another route.'}
                 </p>
               )}
@@ -411,17 +467,111 @@ export function CreateMissionPage() {
 
             {selectedRoute && selectedRelayHubIds.length > 0 && (
               <OperatorPanel title="Relay Hub battery plan">
-                <p className="section-note">The Backend checks compatible spare batteries and predicted energy for each leg. Battery swaps are performed by the Technician at each Relay Hub.</p>
+                <p className="section-note">
+                  Select one of the Relay Hubs returned by AI route analysis, then inspect live Operator Battery Inventory.
+                  The Technician chooses the actual battery at the relay stop; BE verifies the plan before Assign.
+                </p>
+                <div className="relay-hub-choice">
+                  <label htmlFor="relay-ai-route-choice">Relay Hub · AI route options</label>
+                  <select
+                    id="relay-ai-route-choice"
+                    value={selectedRoute.id}
+                    onChange={(event) => setSelectedRouteId(event.target.value)}
+                    disabled={isPlanningAnalysisFetching || relayRouteOptions.length < 2}
+                  >
+                    {relayRouteOptions.map((route) => (
+                      <option value={route.id} key={route.id}>
+                        {getRouteRelayHubIds(route, order.originHubId, order.destinationHubId)
+                          .map(hubName).join(' → ')} · {route.id}
+                      </option>
+                    ))}
+                  </select>
+                  {relayRouteOptions.length < 2 && (
+                    <small>Only one Relay route was returned by Analyze. Another Hub requires another route from Backend.</small>
+                  )}
+                </div>
                 {selectedRelayHubIds.map((hubId) => {
                   const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
+                  const spare = getSpareBatteriesAtHub(fleetBatteries ?? [], hubId);
+                  const compatibleReady = getCompatibleBatteriesAtHub(fleetBatteries ?? [], selectedDrone, hubId);
+                  const requiredModel = selectedDrone.batteryModel?.trim() || '';
+                  const preview = [...compatibleReady, ...spare.filter((battery) => !compatibleReady.some((item) => item.id === battery.id))].slice(0, 6);
+                  const inventoryLoaded = fleetBatteries !== undefined && !batteriesError;
                   return (
-                    <div key={hubId} className="relay-route-note">
-                      <strong>{hubName(hubId)}</strong>
-                      <span>
+                    <div key={hubId} className="relay-hub-inventory">
+                      <div className="relay-hub-inventory-head">
+                        <strong>{hubName(hubId)}</strong>
+                        <a
+                          className="text-button"
+                          href={`/operator/fleet-hubs/batteries?hub=${encodeURIComponent(hubId)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          View Battery Inventory ↗
+                        </a>
+                      </div>
+                      <div className="relay-hub-inventory-summary">
+                        <span>Drone required battery: <strong>{requiredModel || 'Unknown from API'}</strong></span>
+                        <span>Spare batteries at Hub: <strong>{inventoryLoaded ? spare.length : '—'}</strong></span>
+                        <span>Ready 100% matching candidates: <strong>{inventoryLoaded && requiredModel ? compatibleReady.length : '—'}</strong></span>
+                      </div>
+                      {batteriesError ? (
+                        <div className="relay-hub-inventory-message">
+                          <strong>Battery API could not load.</strong>
+                          <span>{batteriesError instanceof Error ? batteriesError.message : 'Please retry.'}</span>
+                          <button type="button" className="row-action" onClick={() => void refetchBatteries()}>Retry inventory</button>
+                        </div>
+                      ) : batteriesLoading || !inventoryLoaded ? (
+                        <p className="section-note">Loading real Battery Inventory from Backend…</p>
+                      ) : (
+                        <>
+                          {batteriesFetching && <p className="section-note">Refreshing Battery Inventory…</p>}
+                          {!requiredModel && (
+                            <p className="section-note danger-note">Required battery model is missing for the selected drone. Cannot verify compatibility.</p>
+                          )}
+                          {spare.length === 0 ? (
+                            <p className="section-note">No spare batteries are recorded at this Hub in the current Battery API response. Check Hub ID and inventory.</p>
+                          ) : (
+                            <div className="relay-hub-battery-list">
+                              {preview.map((battery) => {
+                                const isCandidate = compatibleReady.some((item) => item.id === battery.id);
+                                const matchingModel = getBatteryCompatibility(battery, selectedDrone);
+                                const reason = isCandidate
+                                  ? '100% candidate · not yet reserved'
+                                  : !isReadyBattery(battery)
+                                    ? `Not ready · ${battery.availableStatus || 'Availability unknown'}`
+                                    : battery.chargeLevelPct < 100
+                                      ? 'Needs 100% charge'
+                                      : matchingModel === 'incompatible'
+                                        ? 'Different battery model'
+                                        : 'Compatibility not confirmed';
+                                return (
+                                  <div key={battery.id} className="relay-hub-battery-row">
+                                    <strong>{battery.serialNumber || battery.id}</strong>
+                                    <span>{battery.model || 'Model unknown'}</span>
+                                    <span>{battery.chargeLevelPct}% · {battery.availableStatus || 'Availability unknown'}</span>
+                                    <small className={isCandidate ? 'relay-candidate' : ''}>{reason}</small>
+                                  </div>
+                                );
+                              })}
+                              {spare.length > preview.length && (
+                                <small>Showing {preview.length} of {spare.length} spare batteries. View Inventory for more.</small>
+                              )}
+                            </div>
+                          )}
+                          {requiredModel && compatibleReady.length === 0 && spare.length > 0 && (
+                            <p className="section-note danger-note">No compatible spare batteries at 100% charge were found in this Hub inventory.</p>
+                          )}
+                        </>
+                      )}
+                      <p className="section-note">
+                        <strong>Backend relay validation: </strong>
                         {plan
-                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} compatible spares · ${plan.ready === true ? 'Verified by Backend' : 'Not verified'}`
-                          : 'Awaiting Backend battery availability verification'}
-                      </span>
+                          ? `${plan.availableBatteryCount ?? '—'} / ${plan.requiredBatteryCount ?? '—'} battery set · ${plan.ready === true ? 'Ready' : 'Details not confirmed'}`
+                          : selectedRoute.feasible === true
+                            ? 'Route feasible per Backend. Per-Hub battery breakdown was not returned.'
+                            : 'Not provided by Analyze. Inventory candidates do not prove flight readiness.'}
+                      </p>
                     </div>
                   );
                 })}
@@ -430,7 +580,7 @@ export function CreateMissionPage() {
                     {selectedRoute.legs.map((leg, index) => (
                       <div key={`${leg.fromHubId}-${leg.toHubId}-${index}`} className="relay-route-note">
                         <strong>Leg {index + 1}: {hubName(leg.fromHubId)} → {hubName(leg.toHubId)}</strong>
-                        <span>{leg.predictedEnergyWh ?? '—'} Wh · Battery after {leg.endingSocPct ?? '—'}% · {leg.feasible === true ? 'Feasible' : 'Not verified'}</span>
+                        <span>{leg.predictedEnergyWh ?? '—'} Wh · Battery after {leg.endingSocPct ?? '—'}% · {leg.feasible === true ? 'Leg feasible' : leg.feasible === false ? 'Leg infeasible' : 'Per-leg validation details not returned'}</span>
                       </div>
                     ))}
                   </div>
@@ -473,7 +623,7 @@ export function CreateMissionPage() {
                 <div><dt>Drop-off Point</dt><dd>{originHubLabel}</dd></div><div><dt>Pick-up Point</dt><dd>{destinationHubLabel}</dd></div>
                 <div>
                   <dt>Origin package</dt>
-                  <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
+                  <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
                 </div>
                 <div><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></div>
                 <div><dt>Route</dt><dd>{selectedRoute.id} · {selectedRoute.name}</dd></div>
@@ -487,7 +637,7 @@ export function CreateMissionPage() {
               <div className="mission-review-side">
                 <div className="review-readiness">
                   <StatusBadge tone="info">Mission plan ready</StatusBadge>
-                  <small>Assign Mission creates a Scheduled Mission. Package receipt is checked later in Final Validation before the Mission can start.</small>
+                  <small>Package receipt has been confirmed. Assign Mission creates a Scheduled Mission; departure conditions are validated separately by Backend.</small>
                 </div>
                 <EnergyPredictionSummary route={selectedRoute} plannedStartAt={selectedTiming.plannedStartAt} estimatedArrivalAt={selectedTiming.estimatedArrivalAt} />
               </div>

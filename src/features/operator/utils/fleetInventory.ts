@@ -23,5 +23,18 @@ export function countBatteriesAtHub(
   drones: OperatorDrone[],
   hubId: string,
 ): number {
-  return batteries.filter((battery) => getBatteryHubId(battery, drones) === hubId).length;
+  return batteries.filter((battery) => {
+    // A drone in flight is not physically at any hub, even when a battery
+    // record still references the drone's previous hub.
+    const mountedDrone = battery.droneId
+      ? drones.find((drone) => drone.id === battery.droneId)
+      : undefined;
+    if (mountedDrone?.technicalStatus === 'In Flight') return false;
+
+    // Prefer the drone's actual hub when known; otherwise use the explicit
+    // current_hub_id supplied by the battery API.  This keeps Hub totals
+    // usable even if the Fleet request is still loading or has failed.
+    const actualHubId = mountedDrone?.hubId || battery.currentHubId || undefined;
+    return actualHubId === hubId;
+  }).length;
 }

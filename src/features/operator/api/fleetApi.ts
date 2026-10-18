@@ -76,7 +76,8 @@ function normalizeDroneStatus(value: unknown): TechnicalStatus {
     return 'In Flight';
   }
 
-  return 'Available';
+  if (status === 'AVAILABLE' || status === 'READY' || status === 'STANDBY') return 'Available';
+  return 'Unknown';
 }
 
 function normalizeDisplayId(rawId: string, explicitDisplayId: string) {
@@ -138,6 +139,7 @@ function mapFleetBattery(raw: unknown): OperatorBattery | null {
     capacityWh: pickNumber(raw, ['capacity_wh', 'capacityWh'], 0),
     // Keep only the value supplied by BE; an absent status is not a synthetic category.
     status: pickString(raw, ['status']),
+    availableStatus: pickString(raw, ['available_status', 'availableStatus']) || undefined,
     droneId: droneId && droneId !== '0' ? droneId : undefined,
     currentHubId: pickString(raw, ['current_hub_id', 'currentHubId', 'hub_id', 'hubId']),
     hubName: pickString(raw, ['hub_name', 'hubName']),

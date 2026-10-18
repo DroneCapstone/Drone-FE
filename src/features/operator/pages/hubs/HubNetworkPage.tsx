@@ -7,6 +7,7 @@ import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFlee
 import { useMissionHubsQuery, useMissionMiniHubsQuery } from '../../hooks/useMissionQueries';
 import { countBatteriesAtHub } from '../../utils/fleetInventory';
 import { FleetHubPageShell } from '../fleet/FleetHubPageShell';
+import './hub-network-cards.css';
 
 const HUBS_PER_PAGE = 9;
 
@@ -18,7 +19,7 @@ export function HubNetworkPage() {
   const { data: fleet = [], isLoading: fleetLoading, error: fleetError } = useFleetDronesQuery();
   const { data: batteries = [], isLoading: batteriesLoading, error: batteriesError } = useFleetBatteriesQuery();
 
-  const batteryCountsReady = !batteriesLoading && !fleetLoading && !batteriesError && !fleetError;
+  const batteryCountsReady = !batteriesLoading && !batteriesError;
   const hubs = [...(apiHubs ?? []), ...(apiMiniHubs ?? [])].map((hub) => {
     const hubFleet = fleet.filter((drone) => drone.hubId === String(hub.id));
     return {
@@ -65,7 +66,7 @@ export function HubNetworkPage() {
           <>
             {batteriesError || fleetError ? (
               <p className="hub-resource-notice" role="status">
-                Battery totals are unavailable because inventory data could not be loaded. Drone and Hub information remains accessible.
+                Some inventory data could not be loaded. Hub and available resource information remain visible.
               </p>
             ) : null}
             <div className="hub-grid hub-network-grid">

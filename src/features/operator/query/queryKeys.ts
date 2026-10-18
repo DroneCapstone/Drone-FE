@@ -3,6 +3,12 @@ import type { ListOperatorOrdersParams } from '../api/orderApi';
 export const operatorQueryKeys = {
   all: ['operator'] as const,
 
+  operatorDashboard: () => [...operatorQueryKeys.all, 'dashboard'] as const,
+
+  operatorAiPredictions: () => [...operatorQueryKeys.all, 'ai-predictions'] as const,
+
+  aiExplanation: (predictionId: string) => [...operatorQueryKeys.operatorAiPredictions(), 'explain', predictionId] as const,
+
   orders: () => [...operatorQueryKeys.all, 'orders'] as const,
 
   orderList: (params: ListOperatorOrdersParams = {}) =>
