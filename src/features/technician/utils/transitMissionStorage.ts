@@ -1,5 +1,7 @@
 import {
   confirmMissionArrivalApi,
+  confirmRelayArrivalApi,
+  getTransitHistoryApi,
   getIncomingMissionsApi,
 } from "../api/transitApi";
 
@@ -36,6 +38,8 @@ export type TransitMission = {
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
   missionState?: string;
+  /** Exact Backend handling enum, not the mission flight status. */
+  handlingStatus?: string;
 
   /** Backend drone display code/name when provided. */
   droneCode?: string;
@@ -70,6 +74,10 @@ export type TransitMission = {
     TransitMissionStatus;
 
   arrivalConfirmedAt?: string;
+  /** Confirmed arrival is NOT the same as inspection/battery detachment completion. */
+  arrivalConfirmed: boolean;
+  /** Only Backend can declare that the post-flight intake process is complete. */
+  intakeCompleted: boolean;
 
   cannotContinueReason?: string;
 
@@ -90,6 +98,8 @@ export type TransitMissionHistory = {
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
   missionState?: string;
+  /** Exact Backend handling enum, not the mission flight status. */
+  handlingStatus?: string;
 
   /** Backend drone display code/name when provided. */
   droneCode?: string;
@@ -117,75 +127,6 @@ export type TransitMissionHistory = {
     | "Arrival confirmed";
 };
 
-// Backend is authoritative: do not display fictitious incoming missions.
-let demoTransitMissions: TransitMission[] = [];
-
-let demoTransitHistory:
-  TransitMissionHistory[] = [];
-
-export function formatTransitTime() {
-  return new Intl.DateTimeFormat(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    },
-  )
-    .format(new Date())
-    .replace(",", " ·");
-}
-
-export function loadTransitMissions():
-  TransitMission[] {
-  return demoTransitMissions.map(
-    (mission) => ({
-      ...mission,
-    }),
-  );
-}
-
-export function saveTransitMissions(
-  missions: TransitMission[],
-) {
-  demoTransitMissions =
-    missions.map(
-      (mission) => ({
-        ...mission,
-      }),
-    );
-
-  window.dispatchEvent(
-    new Event(
-      "technician-transit-missions-updated",
-    ),
-  );
-}
-
-export function loadTransitMissionHistory():
-  TransitMissionHistory[] {
-  return demoTransitHistory.map(
-    (item) => ({
-      ...item,
-    }),
-  );
-}
-
-export function saveTransitMissionHistory(
-  history:
-    TransitMissionHistory[],
-) {
-  demoTransitHistory =
-    history.map(
-      (item) => ({
-        ...item,
-      }),
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Backend API integration
 // ---------------------------------------------------------------------------
@@ -194,16 +135,33 @@ export function saveTransitMissionHistory(
 function normalizeTransitStatus(value: string): TransitMissionStatus {
   const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
 
-  if (key === "AT_HUB") return "At Hub";
-  if (key === "READY") return "Ready";
+  if (["WAITING_BATTERY_SWAP", "AT_HUB"].includes(key)) return "At Hub";
+  if (["READY_FOR_RELAUNCH", "READY"].includes(key)) return "Ready";
+  if (["AT_RELAY_HUB", "ARRIVED_AT_HUB"].includes(key)) return "Incoming";
   if (key === "CANNOT_CONTINUE") return "Cannot Continue";
   if (key === "REPLACEMENT_REQUESTED") return "Cannot Continue";
   return "Incoming";
 }
 
-/** Only a genuinely active transit stop can receive another mission battery. */
+/**
+ * The mission flight state is not a Technician handling state.
+ * Scheduled/Ready belong to Outbound (preflight), even if an older
+ * /fleet/incoming response mistakenly attaches a hub/ready label.
+ */
 function normalizedKey(value: string) {
   return value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+}
+
+const RELAY_HANDLING_STATES = [
+  "AT_RELAY_HUB",
+  "WAITING_BATTERY_SWAP",
+  "READY_FOR_RELAUNCH",
+];
+
+function isPreflightMissionState(value?: string) {
+  return ["SCHEDULED", "READY", "PLANNED", "PENDING", "NOT_STARTED"].includes(
+    normalizedKey(value ?? ""),
+  );
 }
 
 export function isCompletedMissionState(value?: string) {
@@ -220,12 +178,53 @@ export function isIncidentMissionState(value?: string) {
   ].includes(normalizedKey(value ?? ""));
 }
 
+/** Relay is a specific hub-handling step, not an arbitrary BATTERY_STOP label. */
 export function isContinuationMission(mission: TransitMission) {
   return (
     mission.purpose === "BATTERY_STOP" &&
+    RELAY_HANDLING_STATES.includes(normalizedKey(mission.handlingStatus ?? "")) &&
+    !isPreflightMissionState(mission.missionState) &&
     !isCompletedMissionState(mission.missionState) &&
     !isIncidentMissionState(mission.missionState)
   );
+}
+
+/**
+ * Single rule for the active Transit page, regardless of what GET /incoming
+ * includes. Scheduled/Ready missions are prepared in Outbound, never here.
+ * A confirmed/processed final landing belongs to GET /fleet/history.
+ */
+export function isActiveTechnicianTransitMission(mission: TransitMission): boolean {
+  if (isPreflightMissionState(mission.missionState) || mission.intakeCompleted) {
+    return false;
+  }
+
+  const handling = normalizedKey(mission.handlingStatus ?? "");
+  if (RELAY_HANDLING_STATES.includes(handling)) {
+    // Incident landings remain visible for inspection; no battery swap action.
+    return isContinuationMission(mission) || mission.purpose === "INCIDENT_RETURN";
+  }
+
+  if (handling === "ARRIVED_AT_HUB") {
+    return !mission.arrivalConfirmed && (
+      isCompletedMissionState(mission.missionState) ||
+      isIncidentMissionState(mission.missionState) ||
+      mission.purpose === "INCIDENT_RETURN" ||
+      mission.purpose === "RETURN_TO_HUB"
+    );
+  }
+
+  // Compatibility for legacy data. "At Hub" was used ambiguously; show a
+  // final landing only if it is NOT already marked received by Backend.
+  if (handling === "AT_HUB") {
+    return !mission.arrivalConfirmed && (
+      isCompletedMissionState(mission.missionState) ||
+      mission.purpose === "INCIDENT_RETURN"
+    );
+  }
+
+  // null/Ready is not evidence of a drone arriving at this hub.
+  return false;
 }
 
 function normalizeTransitPurpose(
@@ -286,7 +285,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   const rawDroneCode = pickString(
     value,
-    ["drone_code", "drone_name", "name"],
+    ["drone_code", "drone_name", "drone", "name"],
     "",
   );
 
@@ -321,24 +320,43 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     pickString(value, ["drone_type"], "DR")
   ).toUpperCase();
 
-  const status = normalizeTransitStatus(
-    pickString(value, ["handling_status", "status"], "INCOMING"),
-  );
+  const rawHandlingStatus = pickString(value, ["handling_status", "handlingStatus"], "");
+  const status = normalizeTransitStatus(rawHandlingStatus || "INCOMING");
 
-  const missionState = pickString(
+  const explicitMissionState = pickString(
     value,
     ["mission_state", "mission_status", "flight_status"],
     "",
   );
+  // Some Incoming responses use `status: Completed` for the flight and
+  // `handling_status: At hub` for the drone's arrival. Do not treat the
+  // generic status as a mission lifecycle if it is actually a handling state.
+  const rawStatus = pickString(value, ["status"], "");
+  const missionState = explicitMissionState ||
+    (["COMPLETED", "COMPLETE", "IN_PROGRESS", "SCHEDULED", "FAILED",
+      "ABORTED", "CANCELLED", "CANCELED", "ACTIVE", "FLYING"].includes(normalizedKey(rawStatus))
+      ? rawStatus
+      : "");
 
-  const purpose = normalizeTransitPurpose(
-    pickString(
-      value,
-      ["purpose", "mission_purpose", "arrival_reason"],
-      "",
-    ),
-    missionState,
+  // Backend handling enum determines the step; explicit incident signals
+  // take precedence over a relay/battery-stop fallback.
+  const handlingKey = normalizedKey(rawHandlingStatus);
+  const rawPurpose = pickString(
+    value, ["purpose", "mission_purpose", "arrival_reason"], "",
   );
+  const incidentReported = (
+    ["INCIDENT", "INCIDENT_RETURN"].includes(normalizedKey(rawPurpose)) ||
+    isIncidentMissionState(missionState) ||
+    pickBoolean(value, ["is_incident", "has_incident", "has_issue"], false) ||
+    Boolean(pickString(value, ["incident_id", "incident_alert_id", "maintenance_alert_id"], ""))
+  );
+  const purpose: TransitMissionPurpose = incidentReported
+    ? "INCIDENT_RETURN"
+    : RELAY_HANDLING_STATES.includes(handlingKey)
+      ? "BATTERY_STOP"
+      : handlingKey === "ARRIVED_AT_HUB"
+        ? "RETURN_TO_HUB"
+        : normalizeTransitPurpose(rawPurpose, missionState);
 
   const batteryCode = pickString(
     value,
@@ -356,6 +374,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       `LEG-${missionRaw}`,
     ),
     missionState: missionState || undefined,
+    handlingStatus: rawHandlingStatus || undefined,
     droneCode: rawDroneCode || undefined,
     purpose,
     currentDroneId: droneId,
@@ -377,7 +396,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     batteryServiceRequired: pickBoolean(
       value,
       ["battery_service_required", "requires_battery_service"],
-      status === "At Hub" && purpose === "BATTERY_STOP",
+      handlingKey === "WAITING_BATTERY_SWAP",
     ) && purpose === "BATTERY_STOP",
     origin: pickString(value, ["origin", "origin_hub_name", "origin_name"], "—"),
     hub: pickString(value, ["hub", "hub_name", "target_hub_name"], "Hub"),
@@ -388,7 +407,21 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     ),
     status,
     arrivalConfirmedAt:
-      pickString(value, ["arrival_confirmed_at"], "") || undefined,
+      pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "") || undefined,
+    // In the currently deployed Incoming API `handling_status: At Hub` is
+    // returned for a mission that POST confirm-arrival says is already
+    // confirmed (400). Treat it as an ARRIVAL acknowledgment only; do not
+    // infer that inspection, battery removal or availability is completed.
+    arrivalConfirmed: (
+      pickBoolean(value, ["arrival_confirmed", "is_arrival_confirmed"], false) ||
+      Boolean(pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "")) ||
+      handlingKey === "WAITING_BATTERY_SWAP" ||
+      (handlingKey === "AT_HUB" && purpose !== "BATTERY_STOP")
+    ),
+    intakeCompleted: (
+      pickBoolean(value, ["intake_completed", "inspection_completed", "hub_intake_completed"], false) ||
+      Boolean(pickString(value, ["intake_completed_at", "hub_intake_completed_at"], ""))
+    ),
     cannotContinueReason:
       pickString(value, ["cannot_continue_reason"], "") || undefined,
     replacementRequestedAt:
@@ -413,23 +446,64 @@ export async function refreshTransitMissionsFromApi() {
   // Do not call the removed /api/v1/technician/missions/ route here.
   const payload = await getIncomingMissionsApi();
 
-  demoTransitMissions = unwrapList(payload)
+  // React Query owns the cache. Never invent local history or overwrite the
+  // real GET /incoming result with browser-memory state.
+  return unwrapList(payload)
     .map(mapApiTransitMission)
-    .filter((item): item is TransitMission => Boolean(item));
-
-  window.dispatchEvent(
-    new Event("technician-transit-missions-updated"),
-  );
-
-  return loadTransitMissions();
+    .filter((item): item is TransitMission =>
+      item !== null && isActiveTechnicianTransitMission(item),
+    );
 }
 
-export async function confirmTransitArrivalOnServer(missionId: string) {
-  if (!missionId?.trim()) {
-    throw new Error("Cannot confirm arrival: Backend mission_id was not provided.");
-  }
-  // Do not refetch here. The TanStack mutation invalidates the transit query
-  // after a successful confirmation, which produces one fresh request cycle.
-  // Refetching here as well caused duplicate missions/incoming requests.
-  return confirmMissionArrivalApi(missionId);
+export async function confirmTransitArrivalOnServer(input: {
+  missionId: string;
+  relay: boolean;
+  hasIssue?: boolean;
+  notes?: string;
+}) {
+  if (!input.missionId.trim()) throw new Error("Backend mission ID is missing.");
+  if (input.relay) return confirmRelayArrivalApi(input.missionId);
+  return confirmMissionArrivalApi(input.missionId, {
+    has_issue: input.hasIssue === true,
+    notes: input.notes?.trim() ?? "",
+  });
+}
+
+/** GET /fleet/history is the single source of truth, including after reload. */
+export async function refreshTransitMissionHistoryFromApi(): Promise<TransitMissionHistory[]> {
+  const result = await getTransitHistoryApi();
+  return unwrapList(result).map(mapApiTransitHistory).filter(
+    (item): item is TransitMissionHistory => item !== null,
+  );
+}
+
+export function mapApiTransitHistory(value: unknown): TransitMissionHistory | null {
+  if (!isRecord(value)) return null;
+  const id = pickString(value, ["mission_id", "mission_code", "id"], "");
+  if (!id) return null;
+  const state = pickString(value, ["status", "mission_status", "mission_state"], "");
+  const purpose = normalizeTransitPurpose(
+    pickString(value, ["purpose", "mission_purpose", "arrival_reason"], ""), state,
+  );
+  const droneId = pickString(value, ["drone_id", "drone_code", "drone"], "");
+  const batteryId = pickString(value, ["battery_code", "battery_id", "battery"], "");
+  const outcome = isIncidentMissionState(state) ? "Sent to maintenance" :
+    isCompletedMissionState(state) ? "Returned to hub" : "Continued";
+  return {
+    id: `BE-${id}-${pickString(value, ["arrival_confirmed_at", "handled_at", "id"], "")}`,
+    missionId: id,
+    legId: pickString(value, ["leg_id", "mission_leg_id"], ""),
+    missionState: state || undefined,
+    droneCode: pickString(value, ["drone_code", "drone"], "") || undefined,
+    purpose,
+    droneId, droneType: pickString(value, ["drone_type"], "DR"),
+    droneModel: pickString(value, ["drone_model"], "—"),
+    batteryId: batteryId || undefined,
+    batteryLevelPct: pickNumber(value, ["battery_level_pct", "battery_percent", "battery_pct"], 0),
+    origin: pickString(value, ["origin_hub", "origin", "origin_hub_name"], "—"),
+    hub: pickString(value, ["hub", "hub_name"], "—"),
+    destination: pickString(value, ["destination_hub", "destination", "destination_hub_name"], "—"),
+    handledAt: pickString(value, ["arrival_confirmed_at", "handled_at", "completed_at", "updated_at"], "—"),
+    outcome,
+  };
 }

@@ -56,13 +56,18 @@ function normalizeStatus(value: unknown, pickupConfirmedAt: string): DeliverySta
   const pickupStatus = pickString(value, ["pickup_status", "confirmation_status"], "");
   const orderStatus = pickString(value, ["order_status", "delivery_status", "package_status"], "");
   const normalize = (text: string) => text.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  // `status: Completed` is historically a MISSION state. However the new
+  // Backend can use order.status = DELIVERED / ARRIVED_AT_HUB / CANCELLED.
+  const genericStatus = normalize(pickString(value, ["status"], ""));
+  const explicitOrderEnum = ["AWAITING_DROP_OFF", "AT_HUB", "IN_DELIVERY", "ARRIVED_AT_HUB", "DELIVERED", "CANCELLED"];
   const statuses = [normalize(pickupStatus), normalize(orderStatus)];
+  if (explicitOrderEnum.includes(genericStatus)) statuses.push(genericStatus);
   // Generic `status: Completed` is often MISSION status, not customer pickup.
   if (statuses.some((key) => ["CANCELLED", "CANCELED", "PICKUP_TIMEOUT", "EXPIRED"].includes(key)) ||
       pickString(value, ["cancelled_at", "canceled_at"], "")) return "Cancelled";
   if (
     pickupConfirmedAt ||
-    statuses.some((key) => ["COMPLETED", "PICKED_UP", "PICKUP_CONFIRMED", "COLLECTED", "RECEIVED_BY_CUSTOMER"].includes(key))
+    statuses.some((key) => ["DELIVERED", "COMPLETED", "PICKED_UP", "PICKUP_CONFIRMED", "COLLECTED", "RECEIVED_BY_CUSTOMER"].includes(key))
   ) return "Completed";
   return "Delivered";
 }
@@ -102,7 +107,7 @@ export function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation
 
   const deliveredAtIso = validIso(pickString(value, [
     "pickup_available_at", "destination_received_at", "parcel_arrived_at",
-    "delivered_at", "arrived_at", "arrival_at",
+    "delivered_at", "arrived_at", "arrival_at", "order_arrived_at",
   ], ""));
 
   const fromBackend = validIso(pickString(value, [

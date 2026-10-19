@@ -446,7 +446,7 @@ function normalizeOutboundStatus(
   if (statuses.some((value) => [
     "CANCELLED", "CANCELED", "EXPIRED", "FAILED", "REJECTED",
     "COMPLETED", "DELIVERED", "DELIVERY_COMPLETE", "IN_PROGRESS",
-    "IN_TRANSIT", "IN_FLIGHT", "DISPATCHED",
+    "IN_TRANSIT", "IN_DELIVERY", "ARRIVED_AT_HUB", "IN_FLIGHT", "DISPATCHED",
   ].includes(value))) {
     return "Needs Review";
   }
