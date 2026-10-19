@@ -96,13 +96,16 @@ export function CreateMissionPage() {
   );
   const createMissionMutation = useCreateMissionMutation();
 
-  // Recommend a route visually without expanding it. Operator can click to inspect.
-  // This effect must stay above the conditional early returns (React hooks rule).
+  // AI recommends; the Operator remains free to select and review any proposed route.
+  // Default to AI Recommended for convenience, not as an assignment/approval decision.
+  // This effect must stay above early returns (React hooks rule).
   useEffect(() => {
-    if (isPlanningAnalysisFetching || !planningAnalysis?.routes.length) return;
+    if (isPlanningAnalysisFetching || !planningAnalysis) return;
     if (planningAnalysis.routes.some((route) => route.id === selectedRouteId)) return;
     const recommended = planningAnalysis.routes.find((route) => route.recommended);
-    setSelectedRouteId((recommended ?? planningAnalysis.routes[0]).id);
+    const nextRouteId = (recommended ?? planningAnalysis.routes[0])?.id ?? '';
+    if (nextRouteId === selectedRouteId) return;
+    setSelectedRouteId(nextRouteId);
     setExpandedRouteId(null);
   }, [planningAnalysis, isPlanningAnalysisFetching, selectedRouteId]);
 
@@ -182,10 +185,14 @@ export function CreateMissionPage() {
   );
   // Backend guarantees that an eligible/available drone is equipped with its full battery set.
   const canContinueStep2 = Boolean(hasOrderHubs && selectedDrone);
-  const canContinueStep3 = Boolean(
+  // Step 3 -> Step 4 is a review/navigation action, not a flight safety approval.
+  // Reviewing is allowed for any chosen route, including one with warnings.
+  const canReviewMission = Boolean(
     canContinueStep1 && selectedRoute && selectedDrone && selectedTiming &&
-    !isPlanningAnalysisFetching && !planningAnalysisError && selectedRouteEnergy?.feasible
+    !isPlanningAnalysisFetching && !planningAnalysisError
   );
+  // Only final Assign is guarded by the authoritative Analyze feasibility result.
+  const canAssignMission = canReviewMission && selectedRouteEnergy?.feasible === true;
 
   const handleDroneSelect = (drone: OperatorDrone) => {
     if (drone.id === selectedDroneId) return;
@@ -219,7 +226,7 @@ export function CreateMissionPage() {
 
   const handleAssignMission = async () => {
     console.count('[CreateMission] Assign clicked');
-    if (assignLockRef.current || !canContinueStep3 || !selectedDrone || !selectedRoute) return;
+    if (assignLockRef.current || !canAssignMission || !selectedDrone || !selectedRoute) return;
     assignLockRef.current = true;
 
     // Re-check drone eligibility and planning. A previously available drone may
@@ -255,9 +262,9 @@ export function CreateMissionPage() {
       }
 
       if (!currentRoute.routeString || !currentRoute.legDetails?.length ||
-          !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
-          !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
-          !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
+        !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
+        !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
+        !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
         setStep(3);
         showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
         return;
@@ -334,7 +341,7 @@ export function CreateMissionPage() {
             <div className="mission-planning-note">
               <span>
                 {planningState === 'Ready for Planning'
-                  ? canContinueStep1 ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
+                  ? canContinueStep1 ? '' : ''
                   : planningState === 'Needs Replanning'
                     ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
@@ -347,7 +354,6 @@ export function CreateMissionPage() {
             )}
           </OperatorPanel>
         )}
-
         {step === 2 && (
           <div className="mission-step-stack">
             <OperatorPanel title="Delivery network">
@@ -463,6 +469,7 @@ export function CreateMissionPage() {
                       selected={route.id === selectedRouteId}
                       expanded={route.id === expandedRouteId}
                       onSelect={() => {
+                        // Selection and expansion are Operator choices, independent of AI feasibility.
                         setSelectedRouteId(route.id);
                         setExpandedRouteId((current) => current === route.id ? null : route.id);
                       }}
@@ -471,9 +478,9 @@ export function CreateMissionPage() {
                   );
                 })}
               </div>
-              {selectedRoute && !canContinueStep3 && !isPlanningAnalysisFetching && (
+              {selectedRoute && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
                 <p className="mission-route-unavailable" role="status">
-                  This route cannot be reviewed yet. Choose another route.
+                  This route has flight planning warnings. You can review the plan, but Assign will require a valid route.
                 </p>
               )}
             </OperatorPanel>
@@ -486,7 +493,7 @@ export function CreateMissionPage() {
           </OperatorPanel>
         )}
 
-        {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canContinueStep3 && (
+        {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canReviewMission && (
           <OperatorPanel title="Review & assign">
             <div className="mission-review-grid">
               <dl className="review-values">
@@ -507,8 +514,14 @@ export function CreateMissionPage() {
               </dl>
               <div className="mission-review-side">
                 <div className="review-readiness">
-                  <StatusBadge tone="info">Mission plan ready</StatusBadge>
-                  <small>Package receipt has been confirmed. Assign Mission creates a Scheduled Mission; departure conditions are validated separately by Backend.</small>
+                  <StatusBadge tone={canAssignMission ? 'info' : 'warning'}>
+                    {canAssignMission ? 'Mission plan ready' : 'Route needs attention'}
+                  </StatusBadge>
+                  <small>
+                    {canAssignMission
+                      ? 'Review the selected route before assigning this Mission.'
+                      : 'You can review this route, but assignment is unavailable until the route meets flight requirements.'}
+                  </small>
                 </div>
                 <EnergyPredictionSummary route={selectedRoute} plannedStartAt={selectedTiming.plannedStartAt} estimatedArrivalAt={selectedTiming.estimatedArrivalAt} />
               </div>
@@ -520,8 +533,8 @@ export function CreateMissionPage() {
           {step > 1 && <ActionButton variant="secondary" onClick={() => { const next = Math.max(1, step - 1); setStep(next); persistDraft(next); }}>Back</ActionButton>}
           {step === 1 && <ActionButton disabled={!canContinueStep1} onClick={() => { setStep(2); persistDraft(2); }}>Continue</ActionButton>}
           {step === 2 && <ActionButton disabled={!canContinueStep2} onClick={() => { setStep(3); persistDraft(3); }}>Continue</ActionButton>}
-          {step === 3 && <ActionButton disabled={!canContinueStep3} onClick={() => { setStep(4); persistDraft(4); }}>Review mission</ActionButton>}
-          {step === 4 && <ActionButton icon="check" disabled={createMissionMutation.isPending || isPlanningAnalysisFetching || !canContinueStep3} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
+          {step === 3 && <ActionButton disabled={!canReviewMission} onClick={() => { setStep(4); persistDraft(4); }}>Review mission</ActionButton>}
+          {step === 4 && <ActionButton icon="check" disabled={createMissionMutation.isPending || isPlanningAnalysisFetching || !canAssignMission} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
         </div>
       </div>
       {toast && <div className="operator-toast">{toast}</div>}

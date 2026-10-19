@@ -131,7 +131,7 @@ export function RouteOptionCard({
           {hasRelay && (
             <section className="mission-route-battery-section">
               <div className="mission-route-section-head">
-                <strong>Matching Ready batteries</strong>
+                <strong>Matching batteries</strong>
               </div>
               {relayHubs.map((hub) => (
                 <div className="mission-route-battery-hub" key={hub.hubId}>
@@ -144,7 +144,7 @@ export function RouteOptionCard({
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      View Battery Inventory ↗
+                      View Battery
                     </a>
                   </div>
                   <div className="mission-route-battery-metrics">
@@ -161,7 +161,7 @@ export function RouteOptionCard({
                   {hub.inventoryState === 'error' && <p className="mission-route-muted">Could not load battery availability.</p>}
                   {hub.inventoryState === 'loading' && <p className="mission-route-muted">Loading batteries…</p>}
                   {hub.inventoryState === 'ready' && !hub.requiredModel && <p className="mission-route-muted">Battery model unavailable.</p>}
-                  {hub.inventoryState === 'ready' && hub.requiredModel && hub.readyCount === 0 && <p className="mission-route-muted">No matching Ready batteries at this Hub.</p>}
+                  {hub.inventoryState === 'ready' && hub.requiredModel && hub.readyCount === 0 && <p className="mission-route-muted"></p>}
                 </div>
               ))}
             </section>
