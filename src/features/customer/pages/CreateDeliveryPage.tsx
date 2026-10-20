@@ -34,6 +34,8 @@ import {
 
   customerDeliveryService,
 
+  formatDeliveryMode,
+
   formatDistanceKm,
 
   formatVnd,
@@ -90,7 +92,7 @@ type DeliveryDraftWithPricing = Omit<
 
 };
 
-const steps = ["Details", "Package", "Route", "Schedule"];
+const steps = ["Details", "Package", "Route", "Delivery mode"];
 
 const PENDING_CHECKOUT_KEY =
   "droneoptai.customer.pending-checkout-order";
@@ -1004,7 +1006,7 @@ export function CreateDeliveryPage() {
 
           <p className="mt-2 max-w-[680px] text-[13px] leading-5 text-white/[0.48] sm:hidden">
 
-            Enter package details, choose your route and schedule a hub-to-hub delivery.
+            Enter package details, choose your route and select a hub-to-hub delivery service.
 
           </p>
 
@@ -1476,17 +1478,7 @@ export function CreateDeliveryPage() {
 
                 value={
 
-                  !form.deliveryMode
-
-                    ? "—"
-
-                    : form.deliveryMode ===
-
-                        "express"
-
-                      ? "Express"
-
-                      : "Scheduled"
+                  formatDeliveryMode(form.deliveryMode)
 
                 }
 
@@ -2606,13 +2598,20 @@ function ScheduleStep({
 
       <SectionTitle
 
-        title="Delivery time"
+        title="Delivery Options"
 
-        description="Choose Express for the earliest available delivery or schedule a preferred departure time."
+        description=""
 
       />
 
-      <div className="mt-5 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4">
+      <div className="mt-5 grid gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
+
+        <ModeButton
+          active={form.deliveryMode === "normal"}
+          title="Normal"
+          description="Standard delivery in available slots. No service surcharge."
+          onClick={() => update("deliveryMode", "normal")}
+        />
 
         <ModeButton
 

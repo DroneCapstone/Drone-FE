@@ -87,11 +87,11 @@ const ARTICLES: HelpArticle[] = [
   {
     id: "delivery-modes",
     category: "delivery",
-    title: "Scheduled and Express delivery",
+    title: "Normal, Express and Scheduled delivery",
     summary:
       "Choose the service that fits the urgency of your shipment.",
     content:
-      "Scheduled delivery is intended for flexible shipments. Express delivery prioritizes time-sensitive shipments and currently adds a 25% surcharge based on the core fee.",
+       "Normal delivery is a standard service without a delivery-mode surcharge; the backend schedules it using available capacity. Express prioritizes time-sensitive shipments and currently adds a 25% surcharge based on the core fee. Scheduled lets customers request a departure time in advance without a delivery-mode surcharge.",
   },
   {
     id: "package-limits",

@@ -52,32 +52,24 @@ export function CustomerDashboardPage() {
     : [];
 
   useEffect(() => {
-    const pendingIds =
-      deliveries
-        .filter(
-          (item) =>
-            item.paymentStatus ===
-            "pending",
-        )
-        .map((item) => item.id);
+    if (!user?.id) return;
+    let active = true;
 
-    if (
-      pendingIds.length === 0
-    ) {
-      return;
-    }
+    // Sync via the order-list endpoint instead of N payment-status requests.
+    void customerDeliveryService
+      .syncOrdersFromBackend(user.id)
+      .then(() => {
+        if (active) setRevision((value) => value + 1);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          console.warn("[CustomerDashboard] Could not refresh orders", error);
+        }
+      });
 
-    Promise.allSettled(
-      pendingIds.map((id) =>
-        customerDeliveryService.refreshPaymentStatus(
-          id,
-        ),
-      ),
-    ).then(() => {
-      setRevision(
-        (value) => value + 1,
-      );
-    });
+    return () => {
+      active = false;
+    };
   }, [user?.id]);
 
   const activeDeliveries =
@@ -176,7 +168,16 @@ export function CustomerDashboardPage() {
 
       <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8 xl:px-10">
         {/* DELIVERY OPTIONS */}
-      <section className="mt-4 grid gap-4 sm:mt-5 lg:grid-cols-2 lg:gap-5">
+      <section className="mt-4 grid gap-4 sm:mt-5 md:grid-cols-2 xl:grid-cols-3 lg:gap-5">
+        <DeliveryOptionCard
+          to="/customer/pricing"
+          image={activeDeliveryImage}
+          icon={<Package size={21} />}
+          title="Normal delivery"
+          description="Standard service, using available flight slots."
+          badge="0% mode surcharge"
+        />
+
         <DeliveryOptionCard
           to="/customer/pricing"
           image={

@@ -29,30 +29,29 @@ export function MyDeliveriesPage() {
     )
     : [];
 
+  const [syncError, setSyncError] = useState(false);
+
   useEffect(() => {
-    const pendingIds = deliveries
-      .filter(
-        (item) =>
-          item.paymentStatus ===
-          "pending",
-      )
-      .map((item) => item.id);
+    if (!user?.id) return;
+    let active = true;
 
-    if (pendingIds.length === 0) {
-      return;
-    }
+    // One order-list request, NO payment-status request per pending order.
+    void customerDeliveryService
+      .syncOrdersFromBackend(user.id)
+      .then(() => {
+        if (!active) return;
+        setSyncError(false);
+        setRevision((value) => value + 1);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.warn("[MyDeliveries] Unable to refresh orders", error);
+        setSyncError(true); // Show cached orders, never discard them.
+      });
 
-    Promise.allSettled(
-      pendingIds.map((id) =>
-        customerDeliveryService.refreshPaymentStatus(
-          id,
-        ),
-      ),
-    ).then(() => {
-      setRevision(
-        (value) => value + 1,
-      );
-    });
+    return () => {
+      active = false;
+    };
   }, [user?.id]);
 
   return (
@@ -100,6 +99,11 @@ export function MyDeliveriesPage() {
         ====================================================== */}
 
         <section className="mt-7 lg:mt-9">
+          {syncError && (
+            <p role="status" className="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-[12px] text-amber-200">
+              Could not refresh deliveries right now. Showing saved order information.
+            </p>
+          )}
           {deliveries.length === 0 ? (
             <div className="overflow-hidden rounded-2xl border border-white/[0.12] bg-[#151318]/95 shadow-[0_14px_36px_rgba(0,0,0,0.25)] backdrop-blur-sm">
               <EmptyDeliveries />
