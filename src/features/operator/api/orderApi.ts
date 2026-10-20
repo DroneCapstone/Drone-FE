@@ -24,6 +24,8 @@ export class OperatorApiError extends Error {
 }
 
 type BackendOrderStatus =
+  | 'AWAITING_DROP_OFF'
+  | 'AT_HUB'
   | 'PENDING'
   | 'IN_DELIVERY'
   | 'DELIVERED_TO_HUB'
@@ -32,6 +34,7 @@ type BackendOrderStatus =
 type BackendDeliveryMode = 'EXPRESS' | 'SCHEDULED';
 
 type BackendPlanningState =
+  | 'WAITING_PACKAGE'
   | 'FUTURE'
   | 'READY_FOR_PLANNING'
   | 'PLANNED'
@@ -56,7 +59,9 @@ export interface BackendOperatorOrder {
   payload_kg: number;
   delivery_mode: BackendDeliveryMode;
   status: BackendOrderStatus;
-  planningState: BackendPlanningState;
+  planningState?: BackendPlanningState | null;
+  planning_state_label?: string | null;
+  can_create_mission?: boolean | null;
   originPackage?: BackendOriginPackage | null;
   requested_delivery_at?: string | null;
   estimated_window_start?: string | null;
@@ -207,6 +212,10 @@ function unwrapOrderList(payload: unknown): BackendOperatorOrder[] {
 
 function mapStatus(status: BackendOrderStatus): OrderStatus {
   switch (status) {
+    case 'AWAITING_DROP_OFF':
+      return 'Awaiting Drop-off';
+    case 'AT_HUB':
+      return 'At Hub';
     case 'IN_DELIVERY':
       return 'In Delivery';
     case 'DELIVERED_TO_HUB':
@@ -223,10 +232,13 @@ function mapDeliveryMode(mode: BackendDeliveryMode): DeliveryMode {
   return mode === 'EXPRESS' ? 'Express' : 'Scheduled';
 }
 
-function mapPlanningState(value: BackendPlanningState): PlanningState | undefined {
+function mapPlanningState(value?: BackendPlanningState | null): PlanningState | undefined {
+  if (value == null || !String(value).trim()) return undefined;
   const normalized = String(value).trim().toUpperCase().replace(/[\s-]+/g, '_');
 
   switch (normalized) {
+    case 'WAITING_PACKAGE':
+      return 'Waiting for package';
     case 'FUTURE':
       return 'Future';
     case 'READY_FOR_PLANNING':
@@ -248,13 +260,11 @@ function validIso(value?: string | null) {
 
 function toOperatorOrder(raw: BackendOperatorOrder): Order {
   const requested = validIso(raw.requested_delivery_at);
-  const estimatedStart =
-    validIso(raw.estimated_window_start) ??
-    requested ??
-    validIso(raw.planning_at) ??
-    new Date().toISOString();
-  const estimatedEnd = validIso(raw.estimated_window_end) ?? estimatedStart;
-  const planningAt = validIso(raw.planning_at) ?? estimatedStart;
+  // Never synthesize an estimated window from requested/planning times.
+  // If BE did not return an endpoint, show '—' instead of a zero-minute trip.
+  const estimatedStart = validIso(raw.estimated_window_start) ?? '';
+  const estimatedEnd = validIso(raw.estimated_window_end) ?? '';
+  const planningAt = validIso(raw.planning_at) ?? estimatedStart ?? '';
   const createdAt = validIso(raw.created_at) ?? planningAt;
   const originHubId = raw.origin_hub?.id ?? raw.origin_hub_id;
   const destinationHubId = raw.destination_hub?.id ?? raw.destination_hub_id;
@@ -272,7 +282,7 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     destinationHubName: raw.destination_hub?.name?.trim() || undefined,
     deliveryMode: mapDeliveryMode(raw.delivery_mode),
     requestedDeliveryAt: requested,
-    requestedDate: (requested ?? estimatedStart).slice(0, 10),
+    requestedDate: (requested || estimatedStart || createdAt).slice(0, 10),
     initialEstimatedWindow: {
       start: estimatedStart,
       end: estimatedEnd,
@@ -283,6 +293,8 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     },
     planningAt,
     planningState: mapPlanningState(raw.planningState),
+    planningStateLabel: raw.planning_state_label?.trim() || undefined,
+    canCreateMission: raw.can_create_mission === true,
     status: mapStatus(raw.status),
     originPackageReceived: raw.originPackage?.received === true,
     originHubReceivedAt:

@@ -93,7 +93,7 @@ export function MissionDetailPage() {
                     variant="secondary"
                     onClick={() =>
                       navigate(
-                        `/operator/ai/mission-analysis?orderId=${mission.orderId}&droneId=${mission.droneId}&routeId=${mission.routeId}`,
+                        `/operator/ai/mission-analysis?${new URLSearchParams({ orderId: mission.orderId, droneId: mission.droneId, ...(mission.batteryId ? { batteryId: mission.batteryId } : {}), routeId: mission.routeId }).toString()}`,
                       )
                     }
                   >
@@ -112,7 +112,7 @@ export function MissionDetailPage() {
                       {status}
                       <small>
                         {status === 'Scheduled'
-                          ? mission.plannedStartAt ? `Plan ${formatMissionTime(mission.plannedStartAt)}` : 'Awaiting plan'
+                          ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                           : status === 'In Progress'
                             ? mission.actualStartedAt
                               ? `Started ${new Date(mission.actualStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -208,16 +208,16 @@ export function MissionDetailPage() {
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Drop-off Point</dt><dd>{originHub?.name || mission.originHubId || '—'}</dd></div>
-              <div><dt>Origin package</dt><dd>{order?.originPackageReceived || order?.originHubReceivedAt ? `Received${order.originHubReceivedAt ? ` · ${formatMissionTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package'}</dd></div>
+              <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
               <div><dt>Relay Hub</dt><dd>{relayHubs.length ? relayHubs.map((hub) => hub.name).join(' → ') : 'Not required'}</dd></div>
               <div><dt>Pick-up Point</dt><dd>{destinationHub?.name || mission.destinationHubId || '—'}</dd></div>
-              <div><dt>Route</dt><dd>{[mission.routeId, mission.route !== '—' ? mission.route : ''].filter(Boolean).join(' · ') || '—'}</dd></div>
-              <div><dt>Planned start</dt><dd>{mission.plannedStartAt ? formatMissionTime(mission.plannedStartAt) : '—'}</dd></div>
-              <div><dt>Estimated arrival</dt><dd>{mission.estimatedArrivalAt ? formatMissionTime(mission.estimatedArrivalAt) : '—'}</dd></div>
-              <div><dt>Predicted duration</dt><dd>{Number.isFinite(mission.predictedDurationMin) ? `${mission.predictedDurationMin} min` : '—'}</dd></div>
-              <div><dt>Energy</dt><dd>{Number.isFinite(mission.estimatedEnergyWh) ? `${mission.estimatedEnergyWh.toFixed(1)} Wh` : '—'}</dd></div>
-              <div><dt>Battery use</dt><dd>{Number.isFinite(mission.batteryConsumptionPct) ? `${mission.batteryConsumptionPct}%` : '—'}</dd></div>
-              <div><dt>Battery after</dt><dd>{Number.isFinite(mission.battery) ? `${mission.battery}%` : '—'}</dd></div>
+              <div><dt>Route</dt><dd>{mission.routeId || '—'}{mission.route ? ` · ${mission.route}` : ''}</dd></div>
+              <div><dt>Planned start</dt><dd>{formatMissionTime(mission.plannedStartAt)}</dd></div>
+              <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>
+              <div><dt>Predicted duration</dt><dd>{mission.predictedDurationMin} min</dd></div>
+              <div><dt>Energy</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
+              <div><dt>Battery use</dt><dd>{mission.batteryConsumptionPct}%</dd></div>
+              <div><dt>Battery after</dt><dd>{mission.battery}%</dd></div>
             </dl>
           </OperatorPanel>
         </aside>

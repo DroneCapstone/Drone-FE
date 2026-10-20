@@ -30,6 +30,8 @@ export type CustomerContactOutcome =
  */
 export type OrderStatus =
   | 'Pending'
+  | 'Awaiting Drop-off'
+  | 'At Hub'
   | 'In Delivery'
   | 'Delivered to Hub'
   | 'Cancelled';
@@ -39,6 +41,7 @@ export type OrderStatus =
  * It only answers whether Operator needs to create/re-create a Mission.
  */
 export type PlanningState =
+  | 'Waiting for package'
   | 'Future'
   | 'Ready for Planning'
   | 'Planned'
@@ -68,6 +71,10 @@ export interface Order {
   planningAt: string;
   /** Planning State returned/computed by Backend for API-backed Orders. */
   planningState?: PlanningState;
+  /** BE localization of the planning state, for optional tooltip/detail. */
+  planningStateLabel?: string;
+  /** Official permission returned by BE. Never infer true from a date. */
+  canCreateMission?: boolean;
   status: OrderStatus;
 
   /** Authoritative package receipt flag from originPackage.received (independent of received_at). */
@@ -102,6 +109,7 @@ export interface Mission {
   type: MissionType;
   name: string;
   droneId: string;
+  batteryId?: string;
   drone: string;
   originHubId: string;
   destinationHubId: string;

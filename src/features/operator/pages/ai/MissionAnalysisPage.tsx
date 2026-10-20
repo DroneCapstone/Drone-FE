@@ -11,7 +11,7 @@ import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { Tone } from '../../types/operator';
 import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { getDroneDisplayCode } from '../../utils/droneDisplay';
-import { updateMissionDraftRoute } from '../../utils/missionDraftStorage';
+import { loadMissionDraft, updateMissionDraftRoute } from '../../utils/missionDraftStorage';
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 import { AiPageShell } from './AiPageShell';
 
@@ -33,6 +33,7 @@ export function MissionAnalysisPage() {
   const queryOrderId = searchParams.get('orderId') ?? '';
   const queryDroneId = searchParams.get('droneId') ?? '';
   const queryRouteId = searchParams.get('routeId') ?? '';
+  const queryBatteryId = searchParams.get('batteryId') ?? '';
   const hasQueryContext = Boolean(queryOrderId && queryDroneId);
 
   const missionOptions = missions
@@ -46,6 +47,7 @@ export function MissionAnalysisPage() {
   const selectedMission = missions.find((mission) => mission.id === selectedMissionId);
   const contextOrderId = hasQueryContext ? queryOrderId : selectedMission?.orderId ?? '';
   const contextDroneId = hasQueryContext ? queryDroneId : selectedMission?.droneId ?? '';
+  const contextBatteryId = queryBatteryId || (returnToMission ? loadMissionDraft(queryOrderId)?.selectedBatteryId : '') || selectedMission?.batteryId || queryMission?.batteryId || '';
   const { data: order } = useOperatorOrderQuery(contextOrderId);
   const drone = fleet.find((item) => item.id === contextDroneId);
   const {
@@ -53,8 +55,8 @@ export function MissionAnalysisPage() {
     error: planningAnalysisError,
     isFetching: isPlanningAnalysisFetching,
   } = useMissionPlanningAnalysisQuery(
-    contextOrderId && contextDroneId
-      ? { orderId: contextOrderId, droneId: contextDroneId }
+    contextOrderId && contextDroneId && contextBatteryId
+      ? { orderId: contextOrderId, droneId: contextDroneId, batteryId: contextBatteryId }
       : null,
   );
   const routeOptions = planningAnalysis?.routes ?? [];
@@ -97,7 +99,7 @@ export function MissionAnalysisPage() {
             <span>
               {planningAnalysisError instanceof Error
                 ? planningAnalysisError.message
-                : 'The Backend did not return any route options for this Order and Drone.'}
+                : !contextBatteryId ? 'Battery ID is required for the updated AI analysis. Open a Mission with a selected battery.' : 'The Backend did not return any route options for this Order, Drone, and Battery.'}
             </span>
           </div>
         </OperatorPanel>

@@ -53,7 +53,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
               action = 'View mission';
               target = `/operator/missions/${deliveryMission.id}`;
             } else if (canCreate) {
-              action = 'Create mission';
+              action = planning === 'Needs Replanning' ? 'Replan mission' : 'Create mission';
               target = `/operator/missions/create?orderId=${order.id}`;
             } else if (order.status === 'Delivered to Hub' || order.status === 'Cancelled') {
               action = 'View';
