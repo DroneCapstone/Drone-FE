@@ -124,6 +124,45 @@
             animation: pulse-border 1.4s infinite;
         }
     </style>
+
+    <!-- Hybrid Operator layout: use original AERO-LINK 3D *map*, no duplicate HUD. -->
+    <style>
+      header, #left-panel, #right-panel, footer, #live-status, #btn-exit-3d { display:none !important; }
+      body, html, #canvas-container { background:#060b14; }
+      #labels-container { z-index: 8; }
+      .scanline-overlay { opacity:.22; }
+      .world-label.drone-tag { pointer-events:auto; transform:translate(-50%,-60%); z-index:10; }
+      .live-marker { --health:#34d399; --shadow:rgba(52,211,153,.28); position:relative; display:flex; align-items:center;
+        gap:5px; border:1px solid var(--health); color:var(--health); background:rgba(7,13,25,.95); padding:4px 7px;
+        border-radius:10px; box-shadow:0 2px 14px var(--shadow); cursor:pointer; font:600 11px 'Inter',sans-serif;
+        transition:transform .2s ease, box-shadow .2s ease; }
+      .live-marker::before { content:""; position:absolute; inset:-7px; border:2px solid var(--health);
+        border-radius:14px; opacity:.65; animation: live-pulse 2.3s ease-out infinite; pointer-events:none; }
+      .drone-tag.health-attention .live-marker { --health:#fbbf24; --shadow:rgba(251,191,36,.27); }
+      .drone-tag.health-critical .live-marker { --health:#f43f5e; --shadow:rgba(244,63,94,.28); }
+      .drone-tag.health-critical .live-marker::before {animation-duration:.85s;}
+      .drone-tag.is-selected .live-marker, .drone-tag:hover .live-marker, .drone-tag:focus-visible .live-marker {
+        transform:scale(1.12); box-shadow:0 3px 21px var(--shadow),0 0 0 2px var(--health); }
+      .drone-tag:focus-visible { outline:none; }
+      .live-marker svg { width:17px; height:17px; flex:none; }
+      .live-marker-id { color:#f8fafc; white-space:nowrap; }
+      .live-hover-card { display:none; position:absolute; bottom:calc(100% + 15px); left:50%; transform:translateX(-50%);
+        min-width:206px; padding:12px 13px; border-radius:12px; border:1px solid rgba(148,163,184,.3);
+        background:rgba(7,16,30,.98); box-shadow:0 12px 36px rgba(0,0,0,.55); color:#e2e8f0;
+        text-align:left; font:400 11px/1.55 'Inter',sans-serif; pointer-events:none; }
+      .drone-tag:hover .live-hover-card, .drone-tag:focus-visible .live-hover-card, .drone-tag.is-hovered .live-hover-card {display:block;}
+      .live-hover-card strong { font-size:13px; color:#fff; }
+      .live-hover-card .hover-state { float:right; color:var(--health); font-weight:700; }
+      .live-hover-card .hover-separator { height:1px; background:#334155; margin:8px 0; }
+      .live-hover-card dl { margin:0; display:grid; grid-template-columns:1fr auto; gap:4px 8px; }
+      .live-hover-card dt { color:#94a3b8; } .live-hover-card dd {margin:0; color:#f8fafc; font-family: 'JetBrains Mono',monospace; }
+      .drone-tag.tooltip-below .live-hover-card { bottom:auto; top:calc(100% + 15px); }
+      .live-hover-card .hover-hint { margin-top:8px; color:#7dd3fc; font-size:10px; }
+      @keyframes live-pulse { 0% {transform:scale(.9);opacity:.75;} 80%,100% {transform:scale(1.22);opacity:0;} }
+      @media (prefers-reduced-motion:reduce) { .live-marker::before {animation:none;opacity:.35;} }
+      .world-label:not(.drone-tag) { pointer-events:none; }
+      .world-label:not(.drone-tag) > div {background:rgba(10,20,36,.91)!important;}
+    </style>
 </head>
 <body class="relative select-none">
 
@@ -136,6 +175,9 @@
     <!-- Dynamic 3D World Labels Container (Hubs & Drones) -->
     <div id="labels-container" class="fixed inset-0 z-10 pointer-events-none overflow-hidden"></div>
 
+    <div id="live-map-fallback" style="display:none;position:absolute;top:15%;left:50%;transform:translateX(-50%);z-index:99;max-width:80%;padding:16px 22px;background:#0b1728;color:#fca5a5;border:1px solid #7f1d1d;border-radius:12px;font:13px Inter,sans-serif;text-align:center">
+      Không tải được Three.js / OrbitControls. Kiểm tra kết nối CDN hoặc cấu hình CSP.
+    </div>
     <!-- ================= TOP COMMAND BAR ================= -->
     <header class="fixed top-0 left-0 right-0 z-20 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
         <!-- Brand & System Status -->
@@ -518,6 +560,7 @@
     <script>
         // Maintain the reference UI if a remote Three.js/OrbitControls CDN fails.
         if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+            document.getElementById('live-map-fallback').style.display = 'block';
             document.getElementById('live-status').textContent = 'Không tải được Three.js / OrbitControls — kiểm tra kết nối CDN.';
             document.getElementById('live-status').classList.add('text-rose-300');
             document.getElementById('btn-exit-3d').onclick = () => window.parent.postMessage({type:'DRONEOPTAI_3D_NAVIGATE',path:'/operator/dashboard'}, '*');
@@ -561,7 +604,7 @@
         scene.background = new THREE.Color(0x060b14);
         scene.fog = new THREE.FogExp2(0x060b14, 0.0028);
 
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 650);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1500);
         camera.position.set(0, 125, 165);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -576,7 +619,7 @@
         controls.dampingFactor = 0.05;
         controls.maxPolarAngle = Math.PI / 2 - 0.04;
         controls.minDistance = 22;
-        controls.maxDistance = 320;
+        controls.maxDistance = 900;
         controls.target.set(0, 8, 0);
 
         // Lighting
@@ -1740,6 +1783,8 @@
         let lastHubKey = '';
         let liveCheckpoints = [];
         let liveLastMission = null;
+        let hasInitialFit = false;
+        let hoverMissionId = null;
         const checkpointLogKeys = new Set();
         const safeText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const fmt = (value, digits = 1) => typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '—';
@@ -1803,6 +1848,7 @@
             }));
             buildLogisticsHubs();
             createHubLabels();
+            if (valid.length && !hasInitialFit) { fitAllLiveObjects(); hasInitialFit = true; }
             // Reproject existing live drones and trails when hub coordinates change.
             liveModels.forEach(d => {
                 if (d.liveSnapshot) {
@@ -1824,7 +1870,11 @@
             d.routeLine.visible = false; // Do not fabricate a future flight corridor.
             const tag = document.createElement('div');
             tag.className = 'world-label drone-tag';
+            tag.setAttribute('role','button');
+            tag.tabIndex = 0;
+            tag.setAttribute('aria-label', 'Xem chi tiết drone ' + d.liveId);
             tag.addEventListener('click', () => selectDrone(d.id));
+            tag.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectDrone(d.id); } });
             labelsContainer.appendChild(tag);
             d.domLabel = tag;
             d.meshGroup.position.copy(worldAt(item.latitude, item.longitude, item.altitude));
@@ -1909,7 +1959,23 @@
                 d.domLabel.style.opacity = p.z > 1 ? '0' : '1';
                 d.domLabel.style.left = `${p.x * w + w}px`;
                 d.domLabel.style.top = `${-p.y * h + h}px`;
-                d.domLabel.innerHTML = `<div class="px-2 py-0.5 rounded-md bg-slate-950/90 border ${isStale(item.lastUpdated) ? 'border-rose-400 alert-pulse' : d.id === simState.selectedDroneId ? 'border-sky-400' : 'border-slate-700'} text-[10px] mono flex items-center gap-1.5 shadow-md"><strong class="text-white">${safeText(d.liveId)}</strong><span class="text-sky-300">${fmt(item.altitude)}m</span><span class="${isStale(item.lastUpdated) ? 'text-rose-400' : 'text-emerald-400'}">${fmt(item.batteryVoltage)}V</span></div>`;
+                const health = item.health === 'Critical' ? 'critical' : (item.health === 'Attention' || isStale(item.lastUpdated)) ? 'attention' : 'normal';
+                const healthLabel = health === 'critical' ? 'Critical' : health === 'attention' ? 'Attention' : 'Normal';
+                const selected = d.id === simState.selectedDroneId;
+                d.domLabel.className = 'world-label drone-tag health-' + health + (selected ? ' is-selected' : '') + (hoverMissionId === d.liveMissionId ? ' is-hovered' : '') + (p.y < -0.55 ? ' tooltip-below' : '');
+                // Use the SAME quadcopter SVG path as src/components/ui/Icon.tsx (drone), not an emoji.
+                d.domLabel.innerHTML = `<div class="live-marker">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h8M10 12v4h4v-4M7 8 4 5M17 8l3-3M7 16l-3 3M17 16l3 3"/><circle cx="6" cy="8" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="6" cy="16" r="2"/><circle cx="18" cy="16" r="2"/></svg>
+                    <span class="live-marker-id">${safeText(d.liveId)}</span>
+                    <div class="live-hover-card" role="tooltip">
+                        <strong>${safeText(d.liveId)}</strong><span class="hover-state">${healthLabel}</span>
+                        <div class="hover-separator"></div>
+                        <dl><dt>Mission</dt><dd>${safeText(item.missionId)}</dd>
+                            <dt>Điện áp pin</dt><dd>${fmt(item.batteryVoltage)} V</dd>
+                            <dt>Độ cao</dt><dd>${fmt(item.altitude)} m</dd>
+                            <dt>Tốc độ (API)</dt><dd>${fmt(item.speed)}</dd></dl>
+                        ${item.anomaly ? `<div class="hover-hint">${safeText(item.anomaly)}</div>` : '<div class="hover-hint">Nhấp để xem chi tiết bên dưới ↗</div>'}
+                    </div></div>`;
             });
         }
 
@@ -2012,8 +2078,15 @@
                 const d = liveModels.get(item.missionId) || registerLiveDrone(item);
                 d.liveSnapshot = item;
                 d.targetPosition = worldAt(item.latitude, item.longitude, item.altitude);
-                d.visorMat.color.setHex(isStale(item.lastUpdated) ? 0xf43f5e : 0x34d399);
+                d.visorMat.color.setHex(item.health === 'Critical' ? 0xf43f5e : item.health === 'Attention' || isStale(item.lastUpdated) ? 0xfbbf24 : 0x34d399);
             });
+            if (payload.selectedMissionId && liveModels.has(payload.selectedMissionId)) {
+                const selected = liveModels.get(payload.selectedMissionId);
+                if (selected.id !== simState.selectedDroneId) {
+                    simState.selectedDroneId = selected.id;
+                    liveLastMission = selected.liveMissionId; // avoid redundant postMessage bounce
+                }
+            }
             if (simState.selectedDroneId == null && activeDrones.length) selectDrone(activeDrones[0].id);
             const trails = payload.trails || {};
             for (const [missionId, points] of Object.entries(trails)) renderLiveTrail(missionId, points);
@@ -2035,6 +2108,82 @@
             updateLiveInspector();
         });
 
+
+        // FPT-inspired camera / map controls, controlling the ORIGINAL AERO-LINK scene.
+        function fitAllLiveObjects() {
+            const points = HUBS.map(h => new THREE.Vector3(h.x, 7, h.z));
+            activeDrones.forEach(d => { if (d.isLive) points.push(d.meshGroup.position.clone()); });
+            if (!points.length) { controls.target.set(0, 8, 0); camera.position.set(0, 165, 205); controls.update(); return; }
+            const bounds = new THREE.Box3().setFromPoints(points);
+            const center = bounds.getCenter(new THREE.Vector3());
+            const size = bounds.getSize(new THREE.Vector3());
+            const radius = Math.max(size.x, size.z, size.y, 42) * .5;
+            const vertical = THREE.MathUtils.degToRad(camera.fov);
+            const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
+            const minAngle = Math.min(vertical, horizontal);
+            const distance = Math.min(800, Math.max(85, radius / Math.sin(minAngle / 2) * 1.2));
+            simState.cameraMode = 'orbit';
+            controls.target.copy(center);
+            camera.position.set(center.x + distance * .34, center.y + distance * .67, center.z + distance * .74);
+            camera.lookAt(center);
+            controls.update();
+        }
+        function focusLiveMission(missionId) {
+            const model = liveModels.get(missionId);
+            if (!model) return;
+            simState.selectedDroneId = model.id;
+            liveLastMission = model.liveMissionId;
+            // Highlight and center without automatically switching to camera-follow mode.
+            const target = model.meshGroup.position;
+            const offset = camera.position.clone().sub(controls.target);
+            controls.target.copy(target);
+            camera.position.copy(target.clone().add(offset));
+            controls.update();
+        }
+        window.addEventListener('message', (event) => {
+            if (event.source !== window.parent || !event.data) return;
+            const message = event.data;
+            if (message.type === 'DRONEOPTAI_3D_FIT') fitAllLiveObjects();
+            if (message.type === 'DRONEOPTAI_3D_FOCUS' && typeof message.missionId === 'string') focusLiveMission(message.missionId);
+            if (message.type === 'DRONEOPTAI_3D_ZOOM') {
+                const f = message.direction === 'in' ? .73 : 1.37;
+                const offset = camera.position.clone().sub(controls.target).multiplyScalar(f);
+                offset.clampLength(20, 850);
+                camera.position.copy(controls.target.clone().add(offset));
+                controls.update();
+            }
+            if (message.type === 'DRONEOPTAI_3D_CAMERA') {
+                if (message.mode === 'top') {
+                    const origin = controls.target.clone();
+                    camera.position.set(origin.x, origin.y + Math.max(110, camera.position.distanceTo(origin)), origin.z + .2);
+                    simState.cameraMode = 'top'; controls.update();
+                } else if (message.mode === 'orbit') fitAllLiveObjects();
+                else if (message.mode === 'follow') simState.cameraMode = 'follow';
+            }
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') window.parent.postMessage({type:'DRONEOPTAI_3D_ESCAPE'}, '*');
+        });
+        // Raycast hover on 3D drone bodies, in addition to hover on map labels.
+        let lastHovered = null;
+        renderer.domElement.addEventListener('pointermove', event => {
+            if (event.buttons) { hoverMissionId = null; return; }
+            const rect = renderer.domElement.getBoundingClientRect();
+            const pos = new THREE.Vector2(
+                (event.clientX - rect.left) / rect.width * 2 - 1,
+                -((event.clientY - rect.top) / rect.height * 2 - 1)
+            );
+            raycaster.setFromCamera(pos, camera);
+            const hit = raycaster.intersectObjects(clickableMeshes, false)[0];
+            const model = hit && activeDrones.find(d => d.id === hit.object.userData.droneId);
+            hoverMissionId = model?.liveMissionId || null;
+            if (lastHovered !== hoverMissionId) renderer.domElement.style.cursor = hoverMissionId ? 'pointer' : 'grab';
+            lastHovered = hoverMissionId;
+        });
+        renderer.domElement.addEventListener('pointerleave', () => {
+            hoverMissionId = null; renderer.domElement.style.cursor = 'grab';
+        });
         } // End Three.js dependency guard.
     </script>
 </body>

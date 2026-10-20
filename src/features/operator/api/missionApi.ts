@@ -430,7 +430,7 @@ function mapMission(raw: unknown): Mission {
 function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
-  const health = normalizeHealth(record.health ?? record.status ?? record.alert_level);
+  const health = normalizeHealth(record.health ?? record.alert_level ?? record.status);
   const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
   const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
   return {
@@ -448,7 +448,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
     speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
-    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
+    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Backend chưa cung cấp AI assessment cho chuyến bay này.'),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
