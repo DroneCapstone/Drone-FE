@@ -42,7 +42,6 @@ import {
 import {
   TECHNICIAN_HUB,
   type DroneStatus,
-  type FleetDrone,
 } from "../utils/fleetStorage";
 
 import {
@@ -53,35 +52,6 @@ type StatusFilter =
   | "All status"
   | DroneStatus;
 
-
-function getDroneDisplayCode(
-  drone: FleetDrone,
-) {
-  const prefix =
-    drone.name
-      .match(/[A-Za-z]+/)?.[0]
-      ?.toUpperCase() ??
-    "DR";
-
-  const idMatch =
-    drone.id.match(/(\d+)$/);
-
-  if (!idMatch) {
-    return drone.name;
-  }
-
-  const number = Number(
-    idMatch[1],
-  );
-
-  if (Number.isNaN(number)) {
-    return drone.name;
-  }
-
-  return `${prefix}-${String(
-    number,
-  ).padStart(2, "0")}`;
-}
 
 export function FleetPage() {
   const navigate = useNavigate();
@@ -138,22 +108,11 @@ export function FleetPage() {
 
       return hubDrones.filter(
         (drone) => {
-          const code =
-            getDroneDisplayCode(
-              drone,
-            ).toLowerCase();
-
           const matchesSearch =
             !query ||
-            code.includes(
-              query,
-            ) ||
-            drone.id
-              .toLowerCase()
-              .includes(query) ||
-            drone.model
-              .toLowerCase()
-              .includes(query);
+            drone.id.toLowerCase().includes(query) ||
+            drone.name.toLowerCase().includes(query) ||
+            drone.model.toLowerCase().includes(query);
 
           const matchesStatus =
             statusFilter ===
@@ -213,7 +172,7 @@ export function FleetPage() {
                     .value,
                 )
               }
-              placeholder="Search drone code, ID or model..."
+              placeholder="Search drone ID or model..."
               className="tech-control h-10 w-full pl-9 pr-3 !text-[13px]"
             />
           </div>
@@ -249,7 +208,7 @@ export function FleetPage() {
             <TableHeader>
               <TableRow className="fleet-header-row hover:bg-transparent">
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
-                  Drone
+                  Drone ID
                 </TableHead>
 
                 <TableHead className="h-14 text-center !text-[var(--tech-text-secondary)]">
@@ -275,12 +234,6 @@ export function FleetPage() {
               0 ? (
                 filteredDrones.map(
                   (drone) => {
-                    const code =
-                      getDroneDisplayCode(
-                        drone,
-                      );
-
-
                     return (
                       <TableRow
                         key={
@@ -290,7 +243,7 @@ export function FleetPage() {
                       >
                         <TableCell className="h-[72px] text-center">
                           <strong className="text-[15px] font-semibold text-[var(--tech-text)]">
-                            {code}
+                            {drone.id}
                           </strong>
                         </TableCell>
 

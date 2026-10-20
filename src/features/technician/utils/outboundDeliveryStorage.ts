@@ -109,6 +109,9 @@ export type OutboundDelivery = {
 
   installedBatteryId?: string;
 
+  /** Human-readable assigned battery serial; Operator assigns it before handoff. */
+  assignedBatteryCode?: string;
+
   readyConfirmedAt?: string;
 
 };
@@ -389,9 +392,10 @@ export function applyOperatorMissionAssignment({
 
 }
 
-// Dispatch is intentionally not implemented on the frontend:
-// the published Technician Swagger has no departure/dispatch endpoint.
-// Backend must provide an authoritative transition to IN_PROGRESS.
+// Initial Outbound Dispatch is wired separately through a BE-confirmed
+// endpoint template in api/outboundDispatchApi.ts. Never treat a Relay Hub
+// continuation endpoint as an initial departure without BE confirmation.
+// Backend owns the Flying transition and physical drone/battery hub removal.
 
 // ---------------------------------------------------------------------------
 
@@ -488,6 +492,19 @@ function normalizeOutboundStatus(
     Boolean(receivedAt);
 
   if (isAtHub) {
+    // The Operator may have already selected a battery for this mission.
+    // Only a Backend-confirmed Ready mission may be presented as Ready:
+    // presence of a 100% battery is not permission to depart.
+    const missionState = normalize(
+      pickString(record, ["mission_status", "mission_state", "missionStatus"], ""),
+    );
+    const hasAssignedBattery = Boolean(readableEntity(record, [
+      "battery_id", "installed_battery_id", "battery", "battery_code",
+    ]));
+    if (hasMission && hasDrone && hasAssignedBattery &&
+        ["READY", "READY_TO_DISPATCH", "READY_FOR_DEPARTURE"].includes(missionState)) {
+      return "Ready";
+    }
     return hasMission && hasDrone ? "Mission Assigned" : "At Hub";
   }
 
@@ -598,7 +615,7 @@ function mapApiOutbound(
     "";
 
   const rawBatteryId =
-    readableEntity(value, ["battery_code", "installed_battery", "battery", "battery_id", "installed_battery_id"]) ||
+    readableEntity(value, ["battery_id", "installed_battery_id", "installed_battery", "battery", "battery_code"]) ||
     missionInfo?.batteryId ||
     "";
 
@@ -746,9 +763,9 @@ function mapApiOutbound(
           : "") ||
       undefined,
 
-    installedBatteryId: rawBatteryId
-      ? (/^BAT[-_]/i.test(rawBatteryId) ? rawBatteryId : `Battery #${rawBatteryId}`)
-      : undefined,
+    installedBatteryId: rawBatteryId || undefined,
+
+    assignedBatteryCode: pickString(value, ["battery_code", "battery_serial_number", "battery_serial", "serial_number"], "") || undefined,
 
     readyConfirmedAt:
       pickString(

@@ -1,15 +1,14 @@
 import {
   BatteryFull,
-  ChevronDown,
   Check,
   Eye,
   History,
   PackageCheck,
+  PlaneTakeoff,
   Search,
   X,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/shadcn/ui/button";
 import { Card, CardContent } from "@/components/shadcn/ui/card";
@@ -17,20 +16,16 @@ import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
 import { TECHNICIAN_HUB } from "../utils/fleetStorage";
 import {
-  applyOperatorMissionAssignment,
-  loadOutboundDeliveries,
-  type OperatorAssignmentPayload,
   type OutboundDelivery,
 } from "../utils/outboundDeliveryStorage";
 import {
   useOutboundDeliveriesQuery,
   useOutboundHistoryQuery,
-  usePrepareOutboundBatteryMutation,
   useReceiveOutboundMutation,
+  useOutboundDispatchMutation,
+  useOutboundReadyMutation,
 } from "../hooks/useOutboundQueries";
 import { technicianQueryKeys } from "../hooks/queryKeys";
-import { useBatteriesQuery, useBatteryMutation } from "../hooks/useBatteryQueries";
-import { type HubBattery } from "../utils/batteryStorage";
 
 type Status = OutboundDelivery["status"];
 type ModeFilter = "ALL" | "EXPRESS" | "SCHEDULED";
@@ -132,63 +127,32 @@ function DetailField({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/**
- * Never guess battery/drone fit from numeric suffixes or charge alone.
- * Prefer explicit Backend compatibility; exact model-code/name matching
- * is supported for installations where Backend uses a common model label.
+/** A Scheduled mission is allowed to reach READY through the dedicated API.
+ * Do not mistake mission.status=Scheduled for mission.handling_status=READY.
  */
-function normalizedModel(value?: string): string {
-  return (value ?? "").trim().toLowerCase().replace(/\\s+/g, " ");
+function normalizedState(raw?: string) {
+  return (raw ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
 }
 
-function targetDroneModel(delivery: OutboundDelivery): string {
-  const explicit = delivery.assignedDroneModel?.trim();
-  if (explicit) return explicit;
-
-  // The outbound API may return "DJI FlyCart 15 Heavy - Unit H01-09".
-  // Remove only its unit suffix, never the actual model name.
-  return (delivery.assignedDroneCode ?? "")
-    .replace(/\\s*[-–]\\s*unit\\b.*$/i, "")
-    .trim();
+function isInitialDispatchCandidate(delivery: OutboundDelivery): boolean {
+  if (delivery.prematureMissionAssignment) return false;
+  if (delivery.status !== "Mission Assigned" && delivery.status !== "Ready") return false;
+  const missionState = normalizedState(delivery.missionStatus);
+  if (missionState !== "SCHEDULED" && missionState !== "READY") return false;
+  return Boolean(delivery.backendMissionId && delivery.assignedDroneId && delivery.installedBatteryId);
 }
 
-function isVerifiedForDrone(battery: HubBattery, delivery: OutboundDelivery): boolean {
-  const model = normalizedModel(targetDroneModel(delivery));
-  if (!model) return false;
-
-  const explicit = battery.compatibleDroneModels ?? [];
-  if (explicit.length > 0) {
-    return explicit.some((item) => normalizedModel(item) === model);
-  }
-  // Only if both database fields actually contain the same model label.
-  return Boolean(battery.model) && normalizedModel(battery.model) === model;
+function isBackendReady(delivery: OutboundDelivery): boolean {
+  return normalizedState(delivery.handlingStatus) === "READY";
 }
-
-function isReadyAndFullyCharged(battery: HubBattery): boolean {
-  const unavailable = /^(IN_USE|INSTALLED|ASSIGNED|RESERVED|MAINTENANCE|CHARGING)$/i
-    .test(battery.backendStatus ?? "");
-  return Boolean(battery.backendId) &&
-    battery.status === "Ready" &&
-    battery.chargeReportedByBackend === true &&
-    battery.chargeLevelPct >= 100 &&
-    !battery.droneId &&
-    !unavailable;
-}
-
-type PickerPosition = {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-};
 
 export function OutboundDeliveriesPage() {
   const queryClient = useQueryClient();
   const outboundQuery = useOutboundDeliveriesQuery();
   const historyQuery = useOutboundHistoryQuery();
   const receiveMutation = useReceiveOutboundMutation();
-  const batteriesQuery = useBatteriesQuery();
-  const assignBatteryMutation = useBatteryMutation();
+  const outboundDispatchMutation = useOutboundDispatchMutation();
+  const outboundReadyMutation = useOutboundReadyMutation();
 
   const deliveries: OutboundDelivery[] = outboundQuery.data ?? [];
   const history = historyQuery.data ?? [];
@@ -200,35 +164,19 @@ export function OutboundDeliveriesPage() {
   const [modeFilter, setModeFilter] = useState<ModeFilter>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
+  const [dispatchingMissionId, setDispatchingMissionId] = useState<string | null>(null);
+  const [dispatchConfirmOrderId, setDispatchConfirmOrderId] = useState<string | null>(null);
+  // Keep evidence of a successful READY POST if a following Dispatch fails.
+  // On remount the API GET handling_status=READY also provides this evidence.
+  const [readyConfirmedIds, setReadyConfirmedIds] = useState<string[]>([]);
+  // Prevent double-dispatch after a successful POST while BE data propagates.
+  const [acceptedDispatchIds, setAcceptedDispatchIds] = useState<string[]>([]);
   const [backendReceivedIds, setBackendReceivedIds] = useState<string[]>([]);
-  const [batteryPickerOrderId, setBatteryPickerOrderId] = useState<string | null>(null);
-  const [pickerPosition, setPickerPosition] = useState<PickerPosition | null>(null);
-  // This menu is rendered through createPortal(document.body) so it does not
-  // inherit the Technician layout's scoped CSS custom properties. Copy the
-  // computed palette from the orange trigger before opening the menu.
-  const [pickerTheme, setPickerTheme] = useState<Record<string, string>>({
-    "--tech-surface": "#ffffff",
-    "--tech-text": "#18181b",
-    "--tech-text-secondary": "#3f3f46",
-    "--tech-muted": "#71717a",
-    "--tech-border": "#e4e4e7",
-  });
-  const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
-  // A successful battery-use request is not the same as Ready/dispatch.
-  const [batteryAssignmentAwaitingReadiness, setBatteryAssignmentAwaitingReadiness] =
-    useState<Record<string, string>>({});
-  const pickerButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const pickerPanelRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
-    const onOperatorAssigned = (event: Event) => {
-      const detail = (event as CustomEvent<OperatorAssignmentPayload>).detail;
-      if (!detail) return;
-      applyOperatorMissionAssignment(detail);
-      queryClient.setQueryData(
-        technicianQueryKeys.outbound(),
-        loadOutboundDeliveries(),
-      );
+    // Operator assignment is authoritative only after Backend confirms it.
+    // Refresh Outbound instead of inserting a client-only drone or battery assignment.
+    const onOperatorAssigned = () => {
+      void queryClient.invalidateQueries({ queryKey: technicianQueryKeys.outbound() });
     };
     window.addEventListener("operator-outbound-assigned", onOperatorAssigned);
     return () => window.removeEventListener("operator-outbound-assigned", onOperatorAssigned);
@@ -239,22 +187,6 @@ export function OutboundDeliveriesPage() {
       ? { ...delivery, status: "At Hub" as const }
       : delivery,
   ), [deliveries, backendReceivedIds]);
-
-  useEffect(() => {
-    // Clear local acknowledgement when Backend begins reporting the battery
-    // or transitions the order away from Mission Assigned.
-    setBatteryAssignmentAwaitingReadiness((current) => {
-      const entries = Object.entries(current).filter(([orderId]) =>
-        normalizedDeliveries.some((item) =>
-          item.orderId === orderId &&
-          item.status === "Mission Assigned" &&
-          !item.installedBatteryId,
-        ),
-      );
-      if (entries.length === Object.keys(current).length) return current;
-      return Object.fromEntries(entries);
-    });
-  }, [normalizedDeliveries]);
 
   const filteredDeliveries = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -271,6 +203,7 @@ export function OutboundDeliveriesPage() {
         delivery.deliveryMode,
         delivery.missionCode,
         delivery.missionId,
+        delivery.assignedDroneId,
         delivery.assignedDroneCode,
       ].some((field) => field?.toLowerCase().includes(term));
     }).sort((a, b) => {
@@ -290,71 +223,6 @@ export function OutboundDeliveriesPage() {
   }, [normalizedDeliveries, search, modeFilter, statusFilter]);
 
   const selectedDelivery = normalizedDeliveries.find((item) => item.orderId === detailOrderId);
-  const batteryPickerDelivery = normalizedDeliveries.find(
-    (item) => item.orderId === batteryPickerOrderId,
-  );
-
-  const fullyChargedBatteries = useMemo(
-    () => (batteriesQuery.data ?? []).filter(isReadyAndFullyCharged),
-    [batteriesQuery.data],
-  );
-
-  const compatibleBatteries = useMemo(
-    () => batteryPickerDelivery
-      ? fullyChargedBatteries.filter((battery) =>
-        isVerifiedForDrone(battery, batteryPickerDelivery),
-      )
-      : [],
-    [fullyChargedBatteries, batteryPickerDelivery],
-  );
-
-  const updateBatteryPickerPosition = useCallback((orderId: string) => {
-    const button = pickerButtonRefs.current[orderId];
-    if (!button) return;
-
-    const rect = button.getBoundingClientRect();
-    const width = 300;
-    const maxHeight = 280;
-    const roomBelow = window.innerHeight - rect.bottom - 14;
-    const showAbove = roomBelow < 165 && rect.top > roomBelow;
-
-    const top = showAbove
-      ? Math.max(8, rect.top - maxHeight - 6)
-      : rect.bottom + 6;
-
-    setPickerPosition({
-      top,
-      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
-      width,
-      maxHeight: Math.min(maxHeight, showAbove ? rect.top - 14 : window.innerHeight - rect.bottom - 14),
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!batteryPickerOrderId) return;
-    const reposition = () => updateBatteryPickerPosition(batteryPickerOrderId);
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      const trigger = pickerButtonRefs.current[batteryPickerOrderId];
-      if (pickerPanelRef.current?.contains(target) || trigger?.contains(target)) return;
-      setBatteryPickerOrderId(null);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setBatteryPickerOrderId(null);
-    };
-    reposition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [batteryPickerOrderId, updateBatteryPickerPosition]);
-
   const hubLabel = [deliveries[0]?.hub, history[0]?.hub, TECHNICIAN_HUB]
     .find((item) => item && item !== "—") ?? "the assigned hub";
 
@@ -392,98 +260,44 @@ export function OutboundDeliveriesPage() {
     }
   };
 
-  const openBatteryPicker = (delivery: OutboundDelivery) => {
-    if (
-      delivery.status !== "Mission Assigned" ||
-      !delivery.backendMissionId ||
-      !delivery.assignedDroneCode
-    ) {
-      setActionMessage("The mission and its drone must be assigned before selecting a battery.");
-      return;
-    }
+  const dispatchCandidate = normalizedDeliveries.find(
+    (delivery) => delivery.orderId === dispatchConfirmOrderId,
+  );
 
-    // A portal attached to <body> does not inherit scoped theme variables.
-    // The trigger already inherits them from TechnicianPageShell, so read
-    // their resolved values and apply them to the portal container.
-    const trigger = pickerButtonRefs.current[delivery.orderId];
-    if (trigger) {
-      const computed = window.getComputedStyle(trigger);
-      const isDark = computed.colorScheme === "dark" ||
-        document.documentElement.classList.contains("dark");
-      const fallback = isDark
-        ? {
-            "--tech-surface": "#181a20",
-            "--tech-text": "#f4f4f5",
-            "--tech-text-secondary": "#d4d4d8",
-            "--tech-muted": "#a1a1aa",
-            "--tech-border": "#3f3f46",
-          }
-        : {
-            "--tech-surface": "#ffffff",
-            "--tech-text": "#18181b",
-            "--tech-text-secondary": "#3f3f46",
-            "--tech-muted": "#71717a",
-            "--tech-border": "#e4e4e7",
-          };
+  const handleInitialDispatch = async (delivery: OutboundDelivery) => {
+    const missionId = delivery.backendMissionId;
+    if (!missionId || !isInitialDispatchCandidate(delivery) ||
+        dispatchingMissionId !== null || outboundReadyMutation.isPending ||
+        outboundDispatchMutation.isPending || acceptedDispatchIds.includes(missionId)) return;
 
-      const palette = Object.fromEntries(
-        Object.entries(fallback).map(([name, defaultColor]) => {
-          const inherited = computed.getPropertyValue(name).trim();
-          return [name, inherited && inherited !== "transparent" ? inherited : defaultColor];
-        }),
-      );
-      setPickerTheme(palette);
-    }
-
+    setDispatchingMissionId(missionId);
     setActionMessage("");
-    setBatteryPickerOrderId((current) =>
-      current === delivery.orderId ? null : delivery.orderId,
-    );
-    updateBatteryPickerPosition(delivery.orderId);
-  };
-
-  const handleSelectBattery = async (delivery: OutboundDelivery, battery: HubBattery) => {
-    if (
-      assigningOrderId !== null ||
-      assignBatteryMutation.isPending ||
-      !delivery.backendMissionId ||
-      !isReadyAndFullyCharged(battery) ||
-      !isVerifiedForDrone(battery, delivery)
-    ) {
-      setActionMessage("This battery is not verified as fully charged and compatible with the assigned drone.");
-      return;
-    }
-
-    setActionMessage("");
-    setAssigningOrderId(delivery.orderId);
-    setBatteryPickerOrderId(null);
-
+    setDispatchConfirmOrderId(null);
+    let readyConfirmedThisAttempt = isBackendReady(delivery) || readyConfirmedIds.includes(missionId);
     try {
-      // This API receives the exact selected battery, not an automatically chosen battery.
-      // The no-body /prepare-battery endpoint is NOT called, as it may override
-      // the selected battery. Backend must expose a validated, atomic readiness
-      // transition if the battery-use endpoint alone does not mark order Ready.
-      await assignBatteryMutation.mutateAsync({
-        batteryId: battery.id,
-        missionId: delivery.backendMissionId,
-      });
-      setBatteryAssignmentAwaitingReadiness((current) => ({
-        ...current,
-        [delivery.orderId]: battery.id,
-      }));
-      await outboundQuery.refetch();
-      setActionMessage(
-        `${battery.id} was assigned to mission ${delivery.missionCode ?? delivery.missionId}. ` +
-        "Waiting for Backend to confirm Outbound readiness; no Ready status was generated on Frontend.",
-      );
+      const readyAlreadyConfirmed = readyConfirmedThisAttempt;
+      if (!readyAlreadyConfirmed) {
+        // Only send Dispatch after the READY request actually succeeds.
+        await outboundReadyMutation.mutateAsync(missionId);
+        readyConfirmedThisAttempt = true;
+        setReadyConfirmedIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
+      }
+
+      // BE has confirmed this endpoint supports the initial Origin departure.
+      await outboundDispatchMutation.mutateAsync(missionId);
+      setAcceptedDispatchIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
+      setActionMessage("Dispatch accepted by Backend. Mission is starting; Hub Fleet and Battery Management are refreshing from the server.");
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to start the mission.";
       setActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to assign the selected battery to this mission.",
+        readyConfirmedThisAttempt
+          ? `Dispatch was not completed: ${message}. If READY was accepted, retry will skip the Ready request.`
+          : `Ready/Dispatch failed: ${message}`,
       );
+      // If READY succeeded but Dispatch failed, GET will show READY for retries.
+      void outboundQuery.refetch();
     } finally {
-      setAssigningOrderId(null);
+      setDispatchingMissionId(null);
     }
   };
 
@@ -556,7 +370,7 @@ export function OutboundDeliveriesPage() {
               <Header>Package</Header>
               <Header>Destination Hub</Header>
               <Header>Mission / Drone</Header>
-              <Header>Battery</Header>
+              <Header>Assigned Battery</Header>
               <Header>Status</Header>
               <Header alignRight>Action</Header>
             </div>
@@ -597,10 +411,10 @@ export function OutboundDeliveriesPage() {
                         ? "—"
                         : display(delivery.missionCode ?? delivery.missionId)}
                     </p>
-                    <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneCode ?? ""}>
+                    <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneId ?? ""}>
                       {delivery.prematureMissionAssignment
                         ? "Awaiting package receipt"
-                        : delivery.assignedDroneCode || "Drone not assigned"}
+                        : delivery.assignedDroneId || "Drone not assigned"}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -609,17 +423,13 @@ export function OutboundDeliveriesPage() {
                         <BatteryFull className="shrink-0 text-orange-500" size={14} />
                         <div className="min-w-0">
                           <p className="truncate text-[12px] font-semibold text-orange-500" title={delivery.installedBatteryId}>{delivery.installedBatteryId}</p>
+                          {delivery.assignedBatteryCode && delivery.assignedBatteryCode !== delivery.installedBatteryId && (
+                            <p className="mt-1 truncate text-[10px] text-[var(--tech-muted)]" title={delivery.assignedBatteryCode}>SN: {delivery.assignedBatteryCode}</p>
+                          )}
                           {delivery.batteryChargePct !== undefined && (
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">{delivery.batteryChargePct}%</p>
                           )}
                         </div>
-                      </div>
-                    ) : batteryAssignmentAwaitingReadiness[delivery.orderId] ? (
-                      <div>
-                        <p className="text-[12px] font-semibold text-orange-500">
-                          {batteryAssignmentAwaitingReadiness[delivery.orderId]}
-                        </p>
-                        <p className="text-[10px] text-[var(--tech-muted)]">Awaiting Backend sync</p>
                       </div>
                     ) : (
                       <span className="text-[12px] text-[var(--tech-muted)]">—</span>
@@ -650,33 +460,43 @@ export function OutboundDeliveriesPage() {
                         {delivery.missionId ? "Awaiting drone assignment" : "Awaiting Operator"}
                       </span>
                     )}
-                    {delivery.status === "Mission Assigned" && (
-                      batteryAssignmentAwaitingReadiness[delivery.orderId] ? (
-                        <span
-                          className="max-w-[145px] text-right text-[11px] text-orange-500"
-                          title="Battery-use API succeeded; waiting for Backend to confirm Outbound Ready"
-                        >
-                          Battery assigned · Awaiting Ready
-                        </span>
-                      ) : (
-                        <Button
-                          ref={(element) => { pickerButtonRefs.current[delivery.orderId] = element; }}
-                          type="button"
-                          aria-haspopup="listbox"
-                          aria-expanded={batteryPickerOrderId === delivery.orderId}
-                          disabled={assigningOrderId !== null || assignBatteryMutation.isPending}
-                          onClick={() => openBatteryPicker(delivery)}
-                          className="h-9 rounded-md bg-orange-500 px-2.5 text-[11px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <BatteryFull size={13} /> Prepare battery
-                          <ChevronDown size={13} className="ml-1" />
-                        </Button>
-                      )
-                    )}
-                    {delivery.status === "Ready" && (
-                      <span className="text-right text-[11px] text-[var(--tech-muted)]" title="Dispatch is controlled by Backend / Operator. No Technician dispatch endpoint is exposed.">
-                        Awaiting dispatch
-                      </span>
+                    {(delivery.status === "Mission Assigned" || delivery.status === "Ready") && (
+                      <div className="flex max-w-[168px] flex-col items-end gap-1">
+                        {delivery.backendMissionId && acceptedDispatchIds.includes(delivery.backendMissionId) ? (
+                          <span className="text-right text-[11px] text-orange-500">Dispatch accepted · Syncing</span>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              disabled={!isInitialDispatchCandidate(delivery) ||
+                                outboundReadyMutation.isPending || outboundDispatchMutation.isPending ||
+                                dispatchingMissionId !== null}
+                              title={isInitialDispatchCandidate(delivery)
+                                ? "Confirm the Operator-assigned drone and battery before departure."
+                                : "Mission must be Scheduled/Ready with a valid mission ID, drone ID and battery ID."}
+                              onClick={() => {
+                                if (isInitialDispatchCandidate(delivery)) {
+                                  setActionMessage("");
+                                  setDispatchConfirmOrderId(delivery.orderId);
+                                }
+                              }}
+                              className="h-9 rounded-md bg-orange-500 px-3 text-[11px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <PlaneTakeoff size={13} />
+                              {dispatchingMissionId === delivery.backendMissionId ? "Dispatching..." : "Dispatch"}
+                            </Button>
+                            {!isInitialDispatchCandidate(delivery) && (
+                              <span className="text-right text-[10px] text-[var(--tech-muted)]">
+                                {!delivery.installedBatteryId
+                                  ? "Awaiting Operator battery"
+                                  : !delivery.assignedDroneId || !delivery.backendMissionId
+                                    ? "Verify mission & drone ID"
+                                    : "Mission not eligible for dispatch"}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     )}
                     {delivery.status === "Needs Review" && (
                       <span className="text-right text-[11px] text-[var(--tech-muted)]">Check order status</span>
@@ -706,86 +526,40 @@ export function OutboundDeliveriesPage() {
         </div>
       </Card>
 
-      {batteryPickerOrderId && batteryPickerDelivery && pickerPosition &&
-        createPortal(
-          <div
-            ref={pickerPanelRef}
-            role="listbox"
-            aria-label={`Ready batteries compatible with ${targetDroneModel(batteryPickerDelivery)}`}
-            style={{
-              ...pickerTheme,
-              position: "fixed",
-              top: pickerPosition.top,
-              left: pickerPosition.left,
-              width: pickerPosition.width,
-              maxHeight: Math.max(100, pickerPosition.maxHeight),
-              zIndex: 9999,
-              // An explicit opaque background is important here: without the
-              // inherited Technician variables the old popup was transparent
-              // and the table text showed through the battery choices.
-              backgroundColor: pickerTheme["--tech-surface"] || "#ffffff",
-              color: pickerTheme["--tech-text"] || "#18181b",
-              opacity: 1,
-              isolation: "isolate",
-              boxShadow: "0 14px 40px rgba(0, 0, 0, 0.19)",
-            }}
-            className="overflow-y-auto rounded-lg border border-[var(--tech-border)] p-1.5"
-          >
-            <div className="border-b border-[var(--tech-border)] px-3 py-2">
-              <p className="text-[12px] font-semibold text-[var(--tech-text)]">
-                Ready batteries · 100%
-              </p>
-              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                Compatible with: {targetDroneModel(batteryPickerDelivery) || "Model not provided"}
+      {dispatchCandidate && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !dispatchingMissionId) setDispatchConfirmOrderId(null);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Confirm drone dispatch" className="w-full max-w-[480px] overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+            <div className="border-b border-[var(--tech-border)] px-6 py-5">
+              <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">Confirm dispatch</h2>
+              <p className="mt-2 text-[12px] leading-5 text-[var(--tech-muted)]">
+                Check that you have installed the battery assigned by Operator and finished the pre-flight inspection.
               </p>
             </div>
-
-            {batteriesQuery.isPending ? (
-              <p className="p-3 text-[12px] text-[var(--tech-muted)]">Loading hub batteries...</p>
-            ) : batteriesQuery.isError ? (
-              <p className="p-3 text-[12px] text-red-400">
-                Cannot load batteries. Check the Battery Management API.
-              </p>
-            ) : compatibleBatteries.length ? (
-              compatibleBatteries.map((battery) => (
-                <button
-                  key={battery.backendId ?? battery.id}
-                  type="button"
-                  role="option"
-                  aria-selected={false}
-                  disabled={assignBatteryMutation.isPending}
-                  onClick={() => void handleSelectBattery(batteryPickerDelivery, battery)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left hover:bg-orange-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-semibold text-[var(--tech-text)]">{battery.id}</p>
-                    <p className="mt-0.5 truncate text-[10px] text-[var(--tech-muted)]">
-                      {battery.model || "Compatible model from Backend"}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[12px] font-semibold text-orange-500">{battery.chargeLevelPct}%</p>
-                    <p className="text-[10px] text-[var(--tech-muted)]">Ready</p>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-3">
-                <p className="text-[12px] text-[var(--tech-text-secondary)]">
-                  No verified compatible, fully charged battery at this hub.
-                </p>
-                <p className="mt-1 text-[11px] leading-4 text-[var(--tech-muted)]">
-                  {fullyChargedBatteries.length
-                    ? `${fullyChargedBatteries.length} fully charged battery(s), but no verified model match. Backend must provide compatibility information if battery model names differ from drone model names.`
-                    : "Backend has not returned an available battery with an actual 100% charge reading and a usable battery ID."}
-                </p>
-              </div>
-            )}
-          </div>,
-          document.body,
-        )}
-
-     
+            <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
+              <DetailField label="Mission ID" value={display(dispatchCandidate.backendMissionId)} />
+              <DetailField label="Order" value={display(dispatchCandidate.orderCode ?? dispatchCandidate.orderId)} />
+              <DetailField label="Drone ID" value={display(dispatchCandidate.assignedDroneId)} />
+              <DetailField label="Assigned battery" value={display(dispatchCandidate.installedBatteryId)} />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
+              <Button type="button" disabled={dispatchingMissionId !== null} onClick={() => setDispatchConfirmOrderId(null)} className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">Cancel</Button>
+              <Button
+                type="button"
+                disabled={!isInitialDispatchCandidate(dispatchCandidate) || dispatchingMissionId !== null}
+                onClick={() => void handleInitialDispatch(dispatchCandidate)}
+                className="h-9 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
+              >
+                <PlaneTakeoff size={14} /> Confirm dispatch
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedDelivery && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4" onMouseDown={(event) => {
@@ -843,7 +617,8 @@ export function OutboundDeliveriesPage() {
                   <DetailField label="Mission (Backend)" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
                   <DetailField label="Mission state" value={readableStatus(selectedDelivery.missionStatus)} />
                   <DetailField label="Drone" value={display(selectedDelivery.assignedDroneCode)} />
-                  <DetailField label="Battery" value={selectedDelivery.installedBatteryId ? `${selectedDelivery.installedBatteryId}${selectedDelivery.batteryChargePct !== undefined ? ` · ${selectedDelivery.batteryChargePct}%` : ""}${selectedDelivery.batteryStatus ? ` · ${selectedDelivery.batteryStatus}` : ""}` : "—"} />
+                  <DetailField label="Assigned battery" value={selectedDelivery.installedBatteryId ? `${selectedDelivery.installedBatteryId}${selectedDelivery.batteryChargePct !== undefined ? ` · ${selectedDelivery.batteryChargePct}%` : ""}${selectedDelivery.batteryStatus ? ` · ${selectedDelivery.batteryStatus}` : ""}` : "Not assigned"} />
+                  <DetailField label="Battery serial / code" value={display(selectedDelivery.assignedBatteryCode)} />
                 </div>
               </section>
             </div>

@@ -409,6 +409,24 @@ function mapApiWorkOrderLog(value: unknown): WorkOrderLog | null {
   };
 }
 
+/**
+ * Keep reading checklist text embedded by older FE versions so historical
+ * records continue to display properly. New records use the BE contract:
+ * inspection_items: { item_name: string; is_completed: boolean }[].
+ */
+const INSPECTION_CHECKLIST_HEADING = "\n\n[Completed inspection checklist]\n";
+
+function extractInspectionChecklist(action: string) {
+  const index = action.indexOf(INSPECTION_CHECKLIST_HEADING);
+  if (index < 0) return { action, items: [] as string[] };
+  return {
+    action: action.slice(0, index),
+    items: action.slice(index + INSPECTION_CHECKLIST_HEADING.length)
+      .split("\n").filter((line) => line.startsWith("- "))
+      .map((line) => line.slice(2).trim()),
+  };
+}
+
 function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | null {
   if (!isRecord(value)) return null;
 
@@ -416,16 +434,21 @@ function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | n
   const rawDroneId = pickString(value, ["drone_id", "droneId"]);
   if (!rawWorkOrderId || !rawDroneId) return null;
 
+  const savedAction = pickString(value, ["corrective_action", "action_taken"], "—");
+  const checklistBackup = extractInspectionChecklist(savedAction);
   const inspectionRaw = value.inspection_items;
-  const inspectionItems = Array.isArray(inspectionRaw)
+  const structuredItems = Array.isArray(inspectionRaw)
     ? inspectionRaw.map((item) =>
         typeof item === "string"
           ? item
           : isRecord(item)
-            ? pickString(item, ["label", "name", "item", "description"], JSON.stringify(item))
+            ? pickString(item, ["item_name", "label", "name", "item", "description"], JSON.stringify(item))
             : String(item),
       )
     : [];
+  const inspectionItems = structuredItems.length > 0
+    ? structuredItems
+    : checklistBackup.items;
 
   const resultStatus = pickString(
     value,
@@ -448,7 +471,7 @@ function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | n
     ),
     assignedTo: pickString(value, ["assigned_to", "technician_name"], "Technician"),
     diagnosis: pickString(value, ["diagnosis"], "—"),
-    correctiveAction: pickString(value, ["corrective_action", "action_taken"], "—"),
+    correctiveAction: checklistBackup.action,
     inspectionItems,
     resultingStatus:
       resultStatus.trim().toUpperCase() === "MAINTENANCE"
@@ -490,11 +513,16 @@ export async function createWorkOrderOnServer(payload: {
   batteryId: string;
   issueDescription: string;
 }) {
+  // The Work Order API expects a string battery identifier (e.g. BAT-0003).
+  // Do not convert a BAT code to a numeric suffix: it may not equal the DB ID.
+  const batteryId = payload.batteryId.trim();
+  if (!batteryId) {
+    throw new Error("Please select a valid battery before creating the work order.");
+  }
+
   const result = await createWorkOrderApi({
     drone_id: toBackendNumericId(payload.droneId),
-    // A 422 from live Backend says battery_id must be a string.
-    // Pass the battery identifier verbatim, never use toBackendNumericId here.
-    battery_id: String(payload.batteryId).trim(),
+    battery_id: batteryId,
     issue_description: payload.issueDescription,
   });
 
@@ -527,19 +555,40 @@ export async function createMaintenanceRecordOnServer(payload: {
   diagnosis: string;
   correctiveAction: string;
   resultingDroneStatus: DroneStatus;
-  inspectionItems: unknown[];
+  inspectionItems: string[];
 }) {
+  const numericWorkOrderId = toBackendNumericId(payload.workOrderId);
+
+  // Best-effort protection against duplicate POST after a partial failure.
+  // A server-side unique constraint/idempotency key is still required for
+  // concurrency-safe de-duplication.
+  const existingResponse = await getMaintenanceRecordsApi(payload.droneId);
+  const existing = unwrapList(existingResponse).find((item) => {
+    if (!isRecord(item)) return false;
+    const id = pickString(item, ["work_order_id", "workOrderId"], "");
+    return Boolean(id) && toBackendNumericId(id) === numericWorkOrderId;
+  });
+  if (existing) return existing;
+
   const result = await createMaintenanceRecordApi({
-    work_order_id: toBackendNumericId(payload.workOrderId),
-    drone_id: toBackendNumericId(payload.droneId),
+    work_order_id: numericWorkOrderId,
+    drone_id: String(toBackendNumericId(payload.droneId)),
     title: payload.title,
     diagnosis: payload.diagnosis,
+    // Store the corrective action separately; inspection items are now
+    // structured data rather than appended to this field.
     corrective_action: payload.correctiveAction,
     resulting_drone_status:
       payload.resultingDroneStatus === "Maintenance"
         ? "MAINTENANCE"
         : "AVAILABLE",
-    inspection_items: payload.inspectionItems,
+    // The Complete button is enabled only after every displayed checkbox
+    // has been checked. The incoming string[] therefore consists of completed
+    // checklist names. BE expects each entry to be an object.
+    inspection_items: payload.inspectionItems
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item_name) => ({ item_name, is_completed: true })),
   });
 
   return result;

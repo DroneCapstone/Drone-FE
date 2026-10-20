@@ -938,7 +938,22 @@ function mapApiBattery(value: unknown): HubBattery | null {
     "",
   );
 
-  const statusKey = rawStatus.trim().toUpperCase();
+  const statusKey = rawStatus.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  // BE clears current_hub_id once the installed battery leaves hub with drone.
+  // Only interpret explicit null, not missing fields in older API responses.
+  if ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
+      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null)) {
+    return null;
+  }
+  // Batteries physically carried by a flying drone are NOT hub stock.
+  // The old relay battery must remain visible if BE returns it as stored
+  // (e.g. CHARGING / ACTIVE with current_hub_id and detached drone_id).
+  // Do not hide merely because drone_id is set; it may be installed on a
+  // grounded drone before initial Dispatch or during maintenance testing.
+  if ([
+    "IN_USE", "IN_FLIGHT", "FLYING", "ON_MISSION", "IN_TRANSIT",
+    "DISPATCHED", "AIRBORNE",
+  ].includes(statusKey)) return null;
 
   const chargeLevelPct = Math.max(
     0,
