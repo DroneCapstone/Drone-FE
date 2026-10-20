@@ -101,6 +101,11 @@ export interface MissionLeg {
   fromHubId: string;
   toHubId: string;
   status: MissionLegStatus;
+  /** Actual battery persisted for this flight leg by BE. */
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
 }
 
 export interface Mission {
@@ -212,6 +217,13 @@ export interface PlannedRouteLeg {
   toHubId: string;
   predictedEnergyWh?: number;
   endingSocPct?: number;
+  /** BE-selected battery used to depart this leg's origin hub. */
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
+  batteryCapacityWh?: number;
+  batteryConsumptionPct?: number;
   minimumReservePct?: number;
   feasible?: boolean;
 }
@@ -223,6 +235,12 @@ export interface PlannedRelayBattery {
   requiredBatteryCount?: number;
   availableBatteryCount?: number;
   batteryIds?: string[];
+  /** Authoritative auto-allocation at this Relay Hub from Analyze. */
+  swapBatteryId?: string;
+  selectedBatteryModel?: string;
+  selectedBatteryChargePct?: number;
+  selectedBatteryEnergyWh?: number;
+  selectedBatteryCapacityWh?: number;
   ready?: boolean;
 }
 
@@ -236,6 +254,16 @@ export interface RouteLegSnapshot {
   to_hub_id?: number;
   from_hub_name?: string;
   to_hub_name?: string;
+  /** Preserve BE Analyze battery allocation when handing the snapshot to Create Mission. */
+  battery_id?: string;
+  battery_serial?: string;
+  battery_model?: string;
+  battery_capacity_wh?: number;
+  battery_charge_pct?: number;
+  battery_energy_wh?: number;
+  energy_wh?: number;
+  battery_consumption_pct?: number;
+  remaining_battery_pct?: number;
 }
 
 export interface RouteOption {

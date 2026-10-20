@@ -25,13 +25,13 @@ export function TelemetryPage() {
   return (
     <OperationPageShell active="/operator/operations/telemetry">
       {!missionId ? (
-        <OperatorPanel title="Mission telemetry" eyebrow="BACKEND FLIGHT HISTORY">
+        <OperatorPanel title="Mission telemetry" eyebrow="">
           <div className="operator-empty-state">
             Select an active aircraft from Live Tracking or open this page with a missionId.
           </div>
         </OperatorPanel>
       ) : (
-        <OperatorPanel title={`Mission telemetry · ${missionId}`} eyebrow="BACKEND FLIGHT HISTORY">
+        <OperatorPanel title={`Mission telemetry · ${missionId}`} eyebrow="">
           {telemetryLoading ? (
             <div className="operator-empty-state">Loading telemetry…</div>
           ) : telemetryError ? (

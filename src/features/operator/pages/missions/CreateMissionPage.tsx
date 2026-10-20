@@ -7,7 +7,6 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
-import { getCompatibleBatteriesAtHub } from '../../utils/batteryPlanning';
 import { EnergyPredictionSummary } from '../../components/EnergyPredictionSummary';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
@@ -94,8 +93,6 @@ export function CreateMissionPage() {
   const { data: fleetDrones } = useFleetDronesQuery();
   const {
     data: fleetBatteries,
-    isLoading: batteriesLoading,
-    error: batteriesError,
   } = useFleetBatteriesQuery();
   const {
     data: eligibleBatteries,
@@ -550,16 +547,11 @@ export function CreateMissionPage() {
                 {routeOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
                   const timing = calculateRouteTiming(order, route);
-                  const inventoryState = batteriesError ? 'error' : batteriesLoading || fleetBatteries === undefined ? 'loading' : 'ready';
-                  const requiredModel = selectedDrone.batteryModel?.trim();
+                  // Relay Battery IDs are allocated by BE Analyze, not inferred
+                  // from the separate Fleet inventory query.
                   const relayHubs = getRouteRelayHubIds(route, order.originHubId, order.destinationHubId).map((hubId) => ({
                     hubId,
                     hubName: hubName(hubId),
-                    requiredModel,
-                    inventoryState: inventoryState as 'ready' | 'loading' | 'error',
-                    readyCount: inventoryState === 'ready' && requiredModel
-                      ? getCompatibleBatteriesAtHub(fleetBatteries ?? [], selectedDrone, hubId).length
-                      : null,
                   }));
                   return (
                     <RouteOptionCard
@@ -611,10 +603,29 @@ export function CreateMissionPage() {
                 <div><dt>Origin battery</dt><dd>{selectedBattery?.serialNumber || selectedBatteryId}{selectedBattery?.model ? ` · ${selectedBattery.model}` : ''}</dd></div>
                 <div><dt>Route</dt><dd>{selectedRoute.id} · {selectedRoute.name}</dd></div>
                 <div><dt>Relay Hub</dt><dd>{selectedRelayHubIds.length ? selectedRelayHubIds.map(hubName).join(' → ') : 'Not required'}</dd></div>
-                {selectedRelayHubIds.length > 0 && <div><dt>Relay battery plan</dt><dd>{selectedRelayHubIds.map((hubId) => {
-                  const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
-                  return `${hubName(hubId)}: ${plan?.requiredBatteryCount ?? '—'} batteries`;
-                }).join(' · ')}</dd></div>}
+                {selectedRelayHubIds.length > 0 && (
+                  <div>
+                    <dt>Relay batteries (BE assigned)</dt>
+                    <dd className="mission-relay-battery-review">
+                      {selectedRelayHubIds.map((hubId) => {
+                        const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
+                        const nextLeg = selectedRoute.legDetails?.find((leg) => String(leg.from_hub_id) === hubId);
+                        const batteryId = plan?.swapBatteryId ?? nextLeg?.battery_id;
+                        const model = plan?.selectedBatteryModel ?? nextLeg?.battery_model ?? plan?.batteryModel;
+                        const charge = plan?.selectedBatteryChargePct ?? nextLeg?.battery_charge_pct;
+                        const energy = plan?.selectedBatteryEnergyWh ?? nextLeg?.battery_energy_wh;
+                        return (
+                          <span key={hubId}>
+                            <strong>{hubName(hubId)}</strong>: {batteryId || 'No battery allocated'}
+                            {batteryId && model ? ` · ${model}` : ''}
+                            {batteryId && charge !== undefined ? ` · ${charge}%` : ''}
+                            {batteryId && energy !== undefined ? ` · ${energy.toFixed(1)} Wh` : ''}
+                          </span>
+                        );
+                      })}
+                    </dd>
+                  </div>
+                )}
                 <div><dt>Planned start</dt><dd>{formatMissionTime(selectedTiming.plannedStartAt)}</dd></div><div><dt>Estimated arrival</dt><dd>{formatMissionTime(selectedTiming.estimatedArrivalAt)}</dd></div>
               </dl>
               <div className="mission-review-side">
