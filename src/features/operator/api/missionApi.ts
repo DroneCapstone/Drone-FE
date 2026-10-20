@@ -4,6 +4,7 @@ import { OperatorApiError, operatorApiRequest } from './orderApi';
 export interface MissionHubSummary {
   id: string;
   name: string;
+  code?: string;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -32,6 +33,20 @@ export interface LiveTrackingDrone {
   latitude?: number;
   longitude?: number;
   mapPosition: string;
+  lastUpdated?: string;
+  checkpointsPassed?: number;
+  weather?: {
+    temperature?: number;
+    apparentTemperature?: number;
+    dewPoint?: number;
+    humidity?: number;
+    windSpeed?: number;
+    windGust?: number;
+    windDirection?: number;
+    precipitation?: number;
+    pressure?: number;
+    cloudCover?: number;
+  };
 }
 
 export interface MissionTelemetryPoint {
@@ -332,6 +347,7 @@ function mapHub(raw: unknown): MissionHubSummary {
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
+    code: pickString(record, ['code', 'hub_code', 'hubCode']) || undefined,
     address: pickString(record, ['address', 'location']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
@@ -434,7 +450,7 @@ function mapMission(raw: unknown): Mission {
 function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
-  const health = normalizeHealth(record.health ?? record.status ?? record.alert_level);
+  const health = normalizeHealth(record.health ?? record.health_status ?? record.alert_level);
   const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
   const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
   return {
@@ -457,6 +473,20 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
+    lastUpdated: normalizeIso(pickString(record, ['last_updated', 'lastUpdated'])) ?? undefined,
+    checkpointsPassed: pickOptionalNumber(record, ['checkpoints_passed', 'checkpointsPassed']),
+    weather: {
+      temperature: pickOptionalNumber(record, ['weather_temperature']),
+      apparentTemperature: pickOptionalNumber(record, ['weather_apparent_temp']),
+      dewPoint: pickOptionalNumber(record, ['weather_dew_point']),
+      humidity: pickOptionalNumber(record, ['weather_humidity']),
+      windSpeed: pickOptionalNumber(record, ['weather_wind_speed']),
+      windGust: pickOptionalNumber(record, ['weather_wind_gust']),
+      windDirection: pickOptionalNumber(record, ['weather_wind_direction']),
+      precipitation: pickOptionalNumber(record, ['weather_precipitation']),
+      pressure: pickOptionalNumber(record, ['weather_pressure']),
+      cloudCover: pickOptionalNumber(record, ['weather_cloud_cover']),
+    },
     mapPosition: `pos-${(index % 12) + 1}`,
   };
 }
@@ -794,10 +824,18 @@ export async function collectMissionTelemetryApi(
   );
 }
 
-export async function getMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+export async function getMissionTelemetryApi(
+  missionId: string,
+  pagination?: { limit?: number; offset?: number },
+): Promise<MissionTelemetryPoint[]> {
   if (!missionId.trim()) return [];
+  const query = new URLSearchParams();
+  if (pagination?.limit !== undefined) query.set('limit', String(Math.min(5000, Math.max(1, Math.round(pagination.limit)))));
+  if (pagination?.offset !== undefined) query.set('offset', String(Math.max(0, Math.round(pagination.offset))));
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : '';
   const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry`,
+    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry${suffix}`,
   );
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
