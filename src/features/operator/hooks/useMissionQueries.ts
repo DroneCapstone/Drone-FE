@@ -80,7 +80,7 @@ export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 5_000,
+    refetchInterval: 4_000,
     refetchIntervalInBackground: true,
   });
 }
@@ -107,6 +107,8 @@ export function useMissionHubCheckpointsQuery(missionId: string) {
     queryKey: operatorQueryKeys.missionHubCheckpoints(missionId),
     queryFn: () => getMissionHubCheckpointsApi(missionId),
     enabled: Boolean(missionId.trim()),
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
   });
 }
 

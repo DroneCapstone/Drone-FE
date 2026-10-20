@@ -4,6 +4,8 @@ import { OperatorApiError, operatorApiRequest } from './orderApi';
 export interface MissionHubSummary {
   id: string;
   name: string;
+  code?: string;
+  status?: string;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -32,6 +34,23 @@ export interface LiveTrackingDrone {
   latitude?: number;
   longitude?: number;
   mapPosition: string;
+  /** API's latest telemetry timestamp, not when React most recently polled. */
+  lastUpdated?: string;
+  /** Number of passed hubs confirmed by Backend. */
+  checkpointsPassed?: number;
+  /** Units are retained exactly as returned by Backend. */
+  weather?: {
+    temperature?: number;
+    apparentTemp?: number;
+    dewPoint?: number;
+    humidity?: number;
+    windSpeed?: number;
+    windGust?: number;
+    windDirection?: number;
+    precipitation?: number;
+    pressure?: number;
+    cloudCover?: number;
+  };
 }
 
 export interface MissionTelemetryPoint {
@@ -316,6 +335,8 @@ function mapHub(raw: unknown): MissionHubSummary {
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
+    code: pickString(record, ['code', 'hub_code', 'hubCode']) || undefined,
+    status: pickString(record, ['status']) || undefined,
     address: pickString(record, ['address', 'location']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
@@ -433,6 +454,20 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
     mapPosition: `pos-${(index % 12) + 1}`,
+    lastUpdated: pickString(record, ['last_updated', 'lastUpdated', 'updated_at', 'updatedAt']) || undefined,
+    checkpointsPassed: pickOptionalNumber(record, ['checkpoints_passed', 'checkpointsPassed']),
+    weather: {
+      temperature: pickOptionalNumber(record, ['weather_temperature']),
+      apparentTemp: pickOptionalNumber(record, ['weather_apparent_temp']),
+      dewPoint: pickOptionalNumber(record, ['weather_dew_point']),
+      humidity: pickOptionalNumber(record, ['weather_humidity']),
+      windSpeed: pickOptionalNumber(record, ['weather_wind_speed']),
+      windGust: pickOptionalNumber(record, ['weather_wind_gust']),
+      windDirection: pickOptionalNumber(record, ['weather_wind_direction']),
+      precipitation: pickOptionalNumber(record, ['weather_precipitation']),
+      pressure: pickOptionalNumber(record, ['weather_pressure']),
+      cloudCover: pickOptionalNumber(record, ['weather_cloud_cover']),
+    },
   };
 }
 
@@ -749,10 +784,17 @@ export async function collectMissionTelemetryApi(
   );
 }
 
-export async function getMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+export async function getMissionTelemetryApi(
+  missionId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<MissionTelemetryPoint[]> {
   if (!missionId.trim()) return [];
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) query.set('limit', String(options.limit));
+  if (options.offset !== undefined) query.set('offset', String(options.offset));
+  const suffix = query.toString() ? `?${query.toString()}` : '';
   const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry`,
+    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry${suffix}`,
   );
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
