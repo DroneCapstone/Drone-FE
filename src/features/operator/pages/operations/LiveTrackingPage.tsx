@@ -12,6 +12,7 @@ import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuer
 import { operatorQueryKeys } from '../../query/queryKeys';
 import aeroLinkLiveHtml from './aerolink-live.html?raw';
 import './digital-twin-live.css';
+import { createLiveTrackingDemo, DEMO_HUBS } from './liveTrackingDemo';
 
 import { OperationPageShell } from './OperationPageShell';
 import './operations-enhanced.css';
@@ -19,7 +20,8 @@ import './operations-enhanced.css';
 type LiveBridgeMessage =
   | { type: 'DRONEOPTAI_3D_READY' }
   | { type: 'DRONEOPTAI_3D_SELECT'; missionId: string }
-  | { type: 'DRONEOPTAI_3D_ESCAPE' };
+  | { type: 'DRONEOPTAI_3D_ESCAPE' }
+  | { type: 'DRONEOPTAI_3D_ERROR'; message?: string };
 
 const STALE_THRESHOLD_MS = 10_000;
 const isTelemetryStale = (timestamp?: string) => {
@@ -55,13 +57,21 @@ const healthTone: Record<LiveDroneHealth, 'danger' | 'warning' | 'success'> = {
 
 export function LiveTrackingPage() {
   const navigate = useNavigate();
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoTick, setDemoTick] = useState(0);
+  const demoSnapshot = useMemo(() => createLiveTrackingDemo(demoTick), [demoTick]);
+  useEffect(() => {
+    if (!demoMode) return;
+    const timer = window.setInterval(() => setDemoTick((tick) => tick + 1), 1_000);
+    return () => window.clearInterval(timer);
+  }, [demoMode]);
   const {
     data: liveTrackingData,
     isLoading,
     error,
     dataUpdatedAt: liveTrackingDataUpdatedAt,
   } = useLiveTrackingQuery();
-  const liveDrone = useMemo(() => (liveTrackingData ?? []).map((drone) => {
+  const apiDrones = useMemo(() => (liveTrackingData ?? []).map((drone) => {
     // Backend explicitly declared Critical/Attention takes precedence. A stale
     // telemetry packet is Attention, never an invented flight emergency.
     if (!isTelemetryStale(drone.lastUpdated) || drone.health !== 'Normal') return drone;
@@ -72,13 +82,20 @@ export function LiveTrackingPage() {
       incidentPolicy: 'monitor' as const,
     };
   }), [liveTrackingData, liveTrackingDataUpdatedAt]);
+  const liveDrone = demoMode ? demoSnapshot.drones : apiDrones;
   const hubsQuery = useMissionHubsQuery();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const [frameReady, setFrameReady] = useState(false);
+  const [mapInitError, setMapInitError] = useState('');
+  useEffect(() => {
+    if (frameReady || mapInitError) return;
+    const timer = window.setTimeout(() => setMapInitError('Bản đồ 3D chưa khởi tạo. Kiểm tra Three.js, OrbitControls và WebGL trong Console (F12).'), 9_000);
+    return () => window.clearTimeout(timer);
+  }, [frameReady, mapInitError]);
   const [isMapExpanded, setMapExpanded] = useState(false);
 
-  const missionIds = useMemo(() => Array.from(new Set(liveDrone.map((d) => d.missionId).filter(Boolean))), [liveDrone]);
+  const missionIds = useMemo(() => demoMode ? [] : Array.from(new Set(liveDrone.map((d) => d.missionId).filter(Boolean))), [liveDrone, demoMode]);
   const trailsQuery = useQueries({
     queries: missionIds.map((missionId) => ({
       queryKey: [...operatorQueryKeys.missionTelemetry(missionId), '3d-trail'] as const,
@@ -122,7 +139,7 @@ export function LiveTrackingPage() {
   );
 
   const selectedDrone = liveDrone.find((aircraft) => aircraft.id === selectedDroneId) ?? liveDrone[0];
-  const checkpointQuery = useMissionHubCheckpointsQuery(selectedDrone?.missionId ?? '');
+  const checkpointQuery = useMissionHubCheckpointsQuery(demoMode ? '' : (selectedDrone?.missionId ?? ''));
 
   const sendMapCommand = (type: string, extra: Record<string, unknown> = {}) => {
     if (!frameReady) return;
@@ -133,7 +150,10 @@ export function LiveTrackingPage() {
     const onMessage = (event: MessageEvent<LiveBridgeMessage>) => {
       if (event.source !== frameRef.current?.contentWindow || !event.data) return;
       if (event.data.type === 'DRONEOPTAI_3D_READY') {
+        setMapInitError('');
         setFrameReady(true);
+      } else if (event.data.type === 'DRONEOPTAI_3D_ERROR') {
+        setMapInitError(event.data.message || 'Không thể khởi tạo bản đồ 3D.');
       } else if (event.data.type === 'DRONEOPTAI_3D_SELECT' && typeof event.data.missionId === 'string') {
         const found = liveDrone.find((drone) => drone.missionId === event.data.missionId);
         if (found) {
@@ -160,7 +180,7 @@ export function LiveTrackingPage() {
     });
     frameRef.current?.contentWindow?.postMessage({
       type: 'DRONEOPTAI_3D_SNAPSHOT',
-      hubs: (hubsQuery.data ?? []).map((hub) => ({
+      hubs: (demoMode ? DEMO_HUBS : (hubsQuery.data ?? [])).map((hub) => ({
         id: hub.id, code: hub.code, name: hub.name,
         latitude: hub.latitude, longitude: hub.longitude,
       })),
@@ -173,17 +193,17 @@ export function LiveTrackingPage() {
         lastUpdated: drone.lastUpdated, checkpointsPassed: drone.checkpointsPassed,
         weather: drone.weather,
       })),
-      trails,
-      checkpoints: (checkpointQuery.data ?? []).map((point) => ({
+      trails: demoMode ? demoSnapshot.trails : trails,
+      checkpoints: (demoMode ? demoSnapshot.checkpoints : (checkpointQuery.data ?? [])).map((point) => ({
         hubId: point.hubId, hubName: point.hubName,
         sequence: point.sequence, passedAt: point.reachedAt,
       })),
       selectedMissionId: selectedDrone?.missionId ?? '',
-      error: error instanceof Error ? error.message : hubsQuery.error instanceof Error ? hubsQuery.error.message : '',
+      error: demoMode ? '' : error instanceof Error ? error.message : hubsQuery.error instanceof Error ? hubsQuery.error.message : '',
     }, '*');
     // Capture new telemetry snapshots without rerender feedback loops from useQueries.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameReady, liveTrackingDataUpdatedAt, hubsQuery.data, hubsQuery.error,
+  }, [frameReady, liveTrackingDataUpdatedAt, hubsQuery.data, hubsQuery.error, demoMode, demoSnapshot,
       liveDrone, missionIds, trailUpdateKey, checkpointQuery.data, selectedDrone?.missionId, error]);
 
   // Sidebar selection should focus the corresponding marker without having to
@@ -224,7 +244,7 @@ export function LiveTrackingPage() {
   };
 
   const openIncident = () => {
-    if (!selectedDrone?.alertId) return;
+    if (demoMode || !selectedDrone?.alertId) return;
 
     navigate(
       `/operator/operations/incidents?create=1&alertId=${selectedDrone.alertId}`,
@@ -238,11 +258,20 @@ export function LiveTrackingPage() {
           <OperatorPanel className={`live-map-panel live-ops-map-panel ${isMapExpanded ? 'live-ops-map-expanded' : ''}`}>
             <div className="live-3d-toolbar">
               <div className="live-3d-title">
-                <span className="live-3d-status"><i className="live-3d-dot"/> LIVE 3D</span>
+                <span className="live-3d-status"><i className="live-3d-dot"/> {demoMode ? 'DEMO 3D' : 'LIVE 3D'}</span>
                 <strong>Drone Fleet Map</strong>
-                <small>{liveDrone.length} drone đang bay · cập nhật mỗi 4 giây</small>
+                <small>{demoMode ? `${liveDrone.length} drone thử nghiệm · không dùng dữ liệu Backend` : `${liveDrone.length} drone đang bay · cập nhật mỗi 4 giây`}</small>
               </div>
               <div className="live-3d-tools" aria-label="3D map controls">
+                {import.meta.env.DEV && (
+                  <button
+                    type="button"
+                    className={`live-demo-toggle ${demoMode ? 'is-active' : ''}`}
+                    aria-pressed={demoMode}
+                    title="Bật/tắt dữ liệu thử nghiệm chỉ trên máy local, không gọi lệnh điều khiển drone"
+                    onClick={() => { setDemoMode((value) => !value); setDemoTick(0); setSelectedDroneId(''); }}
+                  >{demoMode ? 'Demo: ON' : 'Try Demo'}</button>
+                )}
                 <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => sendMapCommand('DRONEOPTAI_3D_ZOOM', { direction: 'in' })}><Icon name="plus" size={17}/></button>
                 <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => sendMapCommand('DRONEOPTAI_3D_ZOOM', { direction: 'out' })}><span>−</span></button>
                 <button type="button" title="Fit all hubs and drones" aria-label="Fit all hubs and drones" onClick={() => sendMapCommand('DRONEOPTAI_3D_FIT')}><Icon name="pin" size={17}/></button>
@@ -258,11 +287,12 @@ export function LiveTrackingPage() {
                 title="DroneOptAI AERO-LINK live 3D map"
                 srcDoc={aeroLinkLiveHtml}
                 sandbox="allow-scripts"
-                onLoad={() => setFrameReady(true)}
               />
-              {isLoading && <div className="live-3d-overlay">Đang tải dữ liệu Live Tracking…</div>}
-              {error && <div className="live-3d-api-error" role="alert">Không cập nhật được Live Tracking: {error instanceof Error ? error.message : 'API error'}</div>}
-              {!isLoading && !error && liveDrone.length === 0 && <div className="live-3d-empty">Không có drone đang bay · Chờ Technician Dispatch mission</div>}
+              {!demoMode && isLoading && <div className="live-3d-overlay">Đang tải dữ liệu Live Tracking…</div>}
+              {!demoMode && error && <div className="live-3d-api-error" role="alert">Không cập nhật được Live Tracking: {error instanceof Error ? error.message : 'API error'}</div>}
+              {!demoMode && !isLoading && !error && liveDrone.length === 0 && <div className="live-3d-empty">Không có drone đang bay · Chờ Technician Dispatch mission</div>}
+              {mapInitError && <div className="live-3d-init-error" role="alert">{mapInitError}</div>}
+              {demoMode && <div className="live-3d-demo-banner">DEMO MODE · Dữ liệu minh họa, không phải chuyến bay thực</div>}
               <div className="live-3d-legend">
                 <span><i className="health-dot health-normal"/> Normal</span>
                 <span><i className="health-dot health-attention"/> Attention</span>
@@ -306,7 +336,9 @@ export function LiveTrackingPage() {
               <div className="live-ai-actions">
                 <ActionButton
                   variant="secondary"
-                  onClick={() => navigate(`/operator/operations/telemetry?aircraft=${selectedDrone.id}&missionId=${selectedDrone.missionId}`)}
+                  disabled={demoMode}
+                  title={demoMode ? 'Telemetry thử nghiệm chỉ hiển thị tại Live Tracking' : 'Xem telemetry chuyến bay'}
+                  onClick={() => { if (!demoMode) navigate(`/operator/operations/telemetry?aircraft=${selectedDrone.id}&missionId=${selectedDrone.missionId}`); }}
                 >
                   View telemetry
                 </ActionButton>

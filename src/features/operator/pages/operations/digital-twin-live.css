@@ -35,3 +35,15 @@
   .live-ops-map-expanded {inset:6px!important;}
   .live-3d-legend {gap:7px;font-size:10px;}
 }
+
+/* Development-only demo preview controls; never presented as live operations. */
+.live-3d-tools .live-demo-toggle {width:auto; min-width:74px; padding:0 10px; white-space:nowrap;
+  border-color:#9a3412; background:#fff7ed; color:#c2410c; font-size:11px; font-weight:700;}
+.live-3d-tools .live-demo-toggle.is-active {border-color:#f97316; background:#ffedd5; color:#9a3412;}
+.live-3d-demo-banner {position:absolute;top:12px;left:12px;z-index:5;max-width:calc(100% - 24px);
+  border:1px solid rgba(251,146,60,.65);border-radius:9px;background:rgba(67,20,7,.92);color:#fed7aa;
+  padding:8px 11px;font-size:11px;letter-spacing:.02em;pointer-events:none;}
+.live-3d-init-error {position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;
+  width:min(90%,450px);padding:16px 20px;text-align:center;line-height:1.5;font-size:13px;
+  background:#172334;color:#fee2e2;border:1px solid #f87171;border-radius:12px;pointer-events:none;}
+@media (max-width:700px) {.live-3d-tools .live-demo-toggle {margin-right:auto}}

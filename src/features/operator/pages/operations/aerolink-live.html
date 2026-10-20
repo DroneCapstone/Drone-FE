@@ -558,8 +558,13 @@
     </footer>
 
     <script>
+        // Surface startup failures in the React page instead of leaving an unexplained black map.
+        window.addEventListener('error', (event) => {
+            window.parent.postMessage({type:'DRONEOPTAI_3D_ERROR', message:'Lỗi Three.js/WebGL: ' + String(event.message || 'không rõ lỗi')}, '*');
+        });
         // Maintain the reference UI if a remote Three.js/OrbitControls CDN fails.
         if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+            window.parent.postMessage({type:'DRONEOPTAI_3D_ERROR', message:'Không tải được Three.js hoặc OrbitControls từ CDN. Kiểm tra mạng, CSP hoặc chặn script.'}, '*');
             document.getElementById('live-map-fallback').style.display = 'block';
             document.getElementById('live-status').textContent = 'Không tải được Three.js / OrbitControls — kiểm tra kết nối CDN.';
             document.getElementById('live-status').classList.add('text-rose-300');
@@ -613,6 +618,9 @@
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
+        renderer.domElement.addEventListener('webglcontextlost', () => {
+            window.parent.postMessage({type:'DRONEOPTAI_3D_ERROR', message:'WebGL context bị mất. Kiểm tra tăng tốc đồ họa trong trình duyệt.'}, '*');
+        });
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -916,7 +924,7 @@
 
         // Rebuild static visual flight corridors between hubs
         function refreshStaticCorridors() {
-            if (window.__LIVE_API_MODE) return; // Planned route unavailable until Backend adds legs.
+            if (window.__LIVE_API_MODE || HUBS.length < 2) return; // Live mode has no planned route; protect against empty hubs.
             while (corridorsGroup.children.length > 0) {
                 const c = corridorsGroup.children[0];
                 c.geometry.dispose();
@@ -1408,7 +1416,7 @@
 
         // Project 3D coordinates to 2D Screen HTML overlays
         function update3DWorldLabels() {
-            if (window.__LIVE_API_MODE) return updateLiveLabels();
+            if (window.__LIVE_API_MODE) return renderLiveLabels();
             const halfW = window.innerWidth / 2;
             const halfH = window.innerHeight / 2;
 
