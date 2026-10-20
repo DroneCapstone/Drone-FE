@@ -296,15 +296,19 @@ export function useCreateMaintenanceRecordMutation() {
   return useMutation({
     mutationFn:
       createMaintenanceRecordOnServer,
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
+          queryKey: technicianQueryKeys.workOrders(),
         }),
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.fleet(),
+          queryKey: technicianQueryKeys.fleet(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.maintenanceRecords(variables.droneId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.droneMaintenance(variables.droneId),
         }),
       ]);
     },

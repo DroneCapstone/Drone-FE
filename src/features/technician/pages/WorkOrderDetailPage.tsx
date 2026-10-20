@@ -10,6 +10,7 @@ import {
 import {
   type ReactNode,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -94,6 +95,8 @@ export function WorkOrderDetailPage() {
     !order;
 
   const [apiError, setApiError] = useState("");
+  const [isCompleting, setIsCompleting] = useState(false);
+  const completionLock = useRef(false);
 
   const [
     workOrderStatus,
@@ -239,10 +242,25 @@ export function WorkOrderDetailPage() {
       .length > 0;
 
   const completeWorkOrder = async () => {
-    if (!canComplete) return;
+    if (!canComplete || completionLock.current || workOrderStatus === "Completed") return;
+    completionLock.current = true;
+    setIsCompleting(true);
 
     try {
       setApiError("");
+
+      // Persist the maintenance record BEFORE marking the Work Order Completed.
+      // A failed record creation must not produce a false Completed status.
+      // The utility checks for an existing record before POST to reduce retries.
+      await createMaintenanceRecordMutation.mutateAsync({
+        workOrderId: order.id,
+        droneId: order.droneId,
+        title: order.title,
+        diagnosis: diagnosis.trim(),
+        correctiveAction: correctiveAction.trim(),
+        resultingDroneStatus: droneStatus,
+        inspectionItems: [...checkedItems],
+      });
 
       await updateInspectionMutation.mutateAsync({
         workOrderId: order.id,
@@ -261,23 +279,15 @@ export function WorkOrderDetailPage() {
         },
       });
 
-      await createMaintenanceRecordMutation.mutateAsync({
-        workOrderId: order.id,
-        droneId: order.droneId,
-        title: order.title,
-        diagnosis: diagnosis.trim(),
-        correctiveAction: correctiveAction.trim(),
-        resultingDroneStatus: droneStatus,
-        inspectionItems: [...checkedItems],
-      });
-
+      // Drone fleet state only changes after the record and work order
+      // succeed. If this final request fails, BE must reconcile the already
+      // completed work order; never report an entirely successful operation.
       await updateDroneStatusMutation.mutateAsync({
         droneId: order.droneId,
         status: droneStatus,
       });
 
       const completedAt = formatMaintenanceTime();
-
       addMaintenanceRecord({
         id: `MR-${Date.now()}`,
         workOrderId: order.id,
@@ -296,16 +306,15 @@ export function WorkOrderDetailPage() {
       });
 
       setWorkOrderStatus("Completed");
-      navigate(
-        "/technician/maintenance/work-orders",
-        { replace: true },
-      );
+      navigate("/technician/maintenance/work-orders", { replace: true });
     } catch (error) {
       setApiError(
-        error instanceof Error
-          ? error.message
-          : "Unable to complete work order.",
+        `${error instanceof Error ? error.message : "Unable to complete work order."} ` +
+        "Some earlier API steps may have succeeded. Refresh the Work Order before retrying to avoid duplicate operations.",
       );
+    } finally {
+      completionLock.current = false;
+      setIsCompleting(false);
     }
   };
 
@@ -318,6 +327,7 @@ export function WorkOrderDetailPage() {
           type="button"
           disabled={
             !canComplete ||
+            isCompleting ||
             workOrderStatus ===
               "Completed"
           }
@@ -328,10 +338,11 @@ export function WorkOrderDetailPage() {
         >
           <Check size={14} />
 
-          {workOrderStatus ===
-          "Completed"
+          {workOrderStatus === "Completed"
             ? "Completed"
-            : "Complete work order"}
+            : isCompleting
+              ? "Completing..."
+              : "Complete work order"}
         </Button>
       }
     >

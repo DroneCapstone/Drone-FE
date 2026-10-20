@@ -570,14 +570,14 @@ export const confirmMissionArrivalApi = (
   missionId: string | number,
   inspection: { has_issue: boolean; notes: string } = { has_issue: false, notes: "" },
 ) => technicianApiRequest(
-  `/technician/fleet/${encodeURIComponent(String(missionId))}/confirm-arrival`,
+  `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-arrival`,
   { method: "POST", body: JSON.stringify(inspection) },
 );
 
 /** Relay handling is a DIFFERENT flow from final-destination arrival. */
 export const confirmRelayArrivalApi = (missionId: string | number) =>
   technicianApiRequest(
-    `/technician/fleet/${encodeURIComponent(String(missionId))}/confirm-relay-arrival`,
+    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-relay-arrival`,
     { method: "POST" },
   );
 
@@ -585,13 +585,13 @@ export const swapRelayBatteryApi = (
   missionId: string | number,
   payload: { new_battery_id: number; old_battery_has_issue: boolean; issue_notes: string },
 ) => technicianApiRequest(
-  `/technician/fleet/${encodeURIComponent(String(missionId))}/swap-battery`,
+  `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/swap-battery`,
   { method: "POST", body: JSON.stringify(payload) },
 );
 
 export const dispatchRelayMissionApi = (missionId: string | number) =>
   technicianApiRequest(
-    `/technician/fleet/${encodeURIComponent(String(missionId))}/dispatch`,
+    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/dispatch`,
     { method: "POST" },
   );
 
@@ -682,6 +682,17 @@ export const confirmDeliveryPickupApi = (
 export const getMaintenanceAlertsApi = () =>
   technicianApiRequest("/technician/fleet/maintenance-alerts");
 
+/** History is a separate server-side resource; do not substitute localStorage. */
+export const getMaintenanceAlertsHistoryApi = () =>
+  technicianApiRequest("/technician/fleet/maintenance-alerts/history");
+
+/** Acknowledge only with the alert's real Backend id. */
+export const acknowledgeMaintenanceAlertApi = (alertId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/maintenance-alerts/${encodeURIComponent(String(alertId))}/acknowledge`,
+    { method: "PATCH" },
+  );
+
 export const getMaintenanceAlertApi = (
   alertId: string | number,
 ) =>
@@ -709,7 +720,8 @@ export const getWorkOrdersApi = () =>
 
 export const createWorkOrderApi = (payload: {
   drone_id: number;
-  battery_id: number;
+  // Live API validation expects the original battery identifier as a string.
+  battery_id: string;
   issue_description: string;
 }) =>
   technicianApiRequest("/technician/fleet/work-orders", {
