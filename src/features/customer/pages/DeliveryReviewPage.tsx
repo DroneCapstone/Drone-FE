@@ -32,6 +32,8 @@ import {
 
   customerDeliveryService,
 
+  formatDeliveryMode,
+
   formatDateTime,
 
   formatVnd,
@@ -391,11 +393,7 @@ export function DeliveryReviewPage() {
 
                   value={
 
-                    draft.deliveryMode === "express"
-
-                      ? "Express"
-
-                      : "Scheduled"
+                    formatDeliveryMode(draft.deliveryMode)
 
                   }
 
@@ -481,11 +479,7 @@ export function DeliveryReviewPage() {
 
                 <span className="text-[11px] font-medium text-white/[0.72]">
 
-                  {draft.deliveryMode === "express"
-
-                    ? "Express"
-
-                    : "Scheduled"}
+                  {formatDeliveryMode(draft.deliveryMode)}
 
                 </span>
 

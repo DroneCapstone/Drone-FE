@@ -16,6 +16,7 @@ import {
 
 import {
   customerDeliveryService,
+  formatDeliveryMode,
   formatDateTime,
   formatVnd,
 } from "../services/customerDeliveryService";
@@ -37,24 +38,22 @@ export function DeliveryDetailPage() {
     );
 
   useEffect(() => {
-    if (
-      !deliveryId ||
-      !delivery ||
-      delivery.paymentStatus !== "pending"
-    ) {
-      return;
-    }
+    if (!deliveryId) return;
+    let active = true;
 
-    customerDeliveryService
-      .refreshPaymentStatus(deliveryId)
+    // Refresh the selected order; payment polling only belongs on PaymentPage.
+    void customerDeliveryService
+      .syncOrderFromBackend(deliveryId)
       .then((next) => {
-        if (next) {
-          setDelivery(next);
-        }
+        if (active && next) setDelivery(next);
       })
       .catch(() => {
-        // Keep cached delivery when status endpoint is unavailable.
+        // Offline / API error: keep cached order and its Pay now link.
       });
+
+    return () => {
+      active = false;
+    };
   }, [deliveryId]);
 
   if (!delivery) {
@@ -228,9 +227,7 @@ export function DeliveryDetailPage() {
               <DetailItem
                 label="Delivery mode"
                 value={
-                  delivery.deliveryMode === "express"
-                    ? "Express"
-                    : "Scheduled"
+                  formatDeliveryMode(delivery.deliveryMode)
                 }
               />
             </div>

@@ -239,7 +239,7 @@ export type CustomerEstimateRequest = {
    */
   package_type: string;
 
-  delivery_mode: "EXPRESS" | "SCHEDULED";
+  delivery_mode: "NORMAL" | "EXPRESS" | "SCHEDULED";
 
   /**
    * Retained for Scheduled delivery compatibility.
@@ -289,7 +289,7 @@ export type CustomerCreateOrderRequest = {
   origin_hub_id: string | number;
   destination_hub_id: string | number;
 
-  delivery_mode: "EXPRESS" | "SCHEDULED";
+  delivery_mode: "NORMAL" | "EXPRESS" | "SCHEDULED";
 
   /**
    * Retained for Scheduled delivery compatibility.
@@ -463,6 +463,21 @@ export const customerApi = {
         method: "POST",
         body: JSON.stringify(body),
       },
+    );
+  },
+
+  /**
+   * Fetch Customer orders ONCE per list view, not GET payment status per row.
+   * The response shape may be an array or a paginated wrapper.
+   */
+  getOrders() {
+    return apiRequest<unknown>("/api/v1/customer/orders");
+  },
+
+  /** Refresh just the currently selected order. */
+  getOrder(orderId: string) {
+    return apiRequest<unknown>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}`,
     );
   },
 

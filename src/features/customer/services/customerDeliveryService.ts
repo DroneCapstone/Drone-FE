@@ -4,6 +4,7 @@ import {
 
 import type {
   CustomerDelivery,
+  DeliveryMode,
   DeliveryDraft,
   DeliveryHub,
   DeliveryPreview,
@@ -18,6 +19,41 @@ import {
   type CustomerHubApi,
 } from "./customerApi";
 
+/**
+ * Backend API uses uppercase delivery mode values.
+ * Do not fall back to SCHEDULED for NORMAL orders.
+ */
+function toApiDeliveryMode(
+  mode: DeliveryMode,
+): "NORMAL" | "EXPRESS" | "SCHEDULED" {
+  switch (mode) {
+    case "normal":
+      return "NORMAL";
+    case "express":
+      return "EXPRESS";
+    case "scheduled":
+      return "SCHEDULED";
+    default:
+      throw new Error("Please select a valid delivery mode.");
+  }
+}
+
+/** Shared label used by Create, Review and Order Detail pages. */
+export function formatDeliveryMode(
+  mode: DeliveryMode | "" | null | undefined,
+): string {
+  switch (mode) {
+    case "normal":
+      return "Normal";
+    case "express":
+      return "Express";
+    case "scheduled":
+      return "Scheduled";
+    default:
+      return "—";
+  }
+}
+
 const DELIVERY_KEY =
   "droneoptai.customer.deliveries";
 
@@ -31,15 +67,12 @@ const ESTIMATE_KEY =
   "droneoptai.customer.delivery-estimate";
 
 /* =========================================================
-   LOCAL CACHE
+   LOCAL CACHE + BACKEND REFRESH
 
-   NOTE:
-   Swagger currently has POST /customer/orders but no
-   GET /customer/orders or GET /customer/orders/{id}.
-
-   Therefore Dashboard / My Deliveries / Detail keep a local cache
-   of orders created through the backend. Once BE exposes customer
-   order GET endpoints, replace these reads with server queries.
+   Backend provides GET /customer/orders and GET /customer/orders/{id}.
+   We update the existing local delivery records from those endpoints,
+   without polling payment status for all orders. Local details are
+   preserved until the exact full response schema can be mapped safely.
 ========================================================= */
 
 function readDeliveries(): CustomerDelivery[] {
@@ -122,7 +155,10 @@ function normalizeOrderStatus(
     rawStatus ?? "",
   ).toLowerCase();
 
-  if (normalized.includes("complete")) {
+  if (
+    normalized.includes("complete") ||
+    normalized === "delivered"
+  ) {
     return "completed";
   }
 
@@ -296,6 +332,111 @@ function normalizeEstimate(
   };
 }
 
+/**
+ * Parse the known /customer/orders list wrappers without guessing missing
+ * fields. Never clear the local order cache because of an unknown shape.
+ */
+function parseServerOrders(value: unknown): Record<string, unknown>[] | null {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is Record<string, unknown> =>
+        item !== null && typeof item === "object" && !Array.isArray(item),
+    );
+  }
+
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of ["items", "orders", "results", "data"]) {
+    if (record[key] !== undefined) {
+      const parsed = parseServerOrders(record[key]);
+      if (parsed !== null) return parsed;
+    }
+  }
+  return null;
+}
+
+function parseServerOrder(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.id !== undefined || record.order_id !== undefined) return record;
+  return parseServerOrder(record.data);
+}
+
+function getServerOrderId(order: Record<string, unknown>): string {
+  const value = order.id ?? order.order_id;
+  return typeof value === "string" || typeof value === "number"
+    ? String(value)
+    : "";
+}
+
+/** Never infer payment success from an order's generic status field. */
+function getServerPaymentStatus(
+  order: Record<string, unknown>,
+): CustomerDelivery["paymentStatus"] | null {
+  const payment =
+    order.payment && typeof order.payment === "object" &&
+    !Array.isArray(order.payment)
+      ? (order.payment as Record<string, unknown>)
+      : null;
+  const raw =
+    order.payment_status ?? order.paymentStatus ??
+    payment?.payment_status ?? payment?.status;
+
+  if (typeof raw === "string") {
+    const status = raw.trim().toUpperCase().replace(/[\s-]+/g, "_");
+    if (["PAID", "SUCCESS", "COMPLETED", "SUCCEEDED"].includes(status)) {
+      return "paid";
+    }
+    if (["PENDING", "UNPAID", "NOT_PAID", "WAITING", "PROCESSING"].includes(status)) {
+      return "pending";
+    }
+    if (["FAILED", "CANCELLED", "CANCELED", "EXPIRED", "REJECTED"].includes(status)) {
+      return "failed";
+    }
+    if (status === "REFUNDED") return "refunded";
+    return null;
+  }
+
+  if (order.paid === true || payment?.paid === true) return "paid";
+  if (order.paid === false || payment?.paid === false) return "pending";
+  if (typeof order.paid_at === "string" && order.paid_at.trim()) return "paid";
+  return null;
+}
+
+/** Preserve local fields such as package info/price until BE schema is known. */
+function mergeOrderFromServer(
+  delivery: CustomerDelivery,
+  order: Record<string, unknown>,
+): CustomerDelivery {
+  const paymentStatus = getServerPaymentStatus(order);
+  const backendStatus =
+    typeof order.status === "string" ? order.status : undefined;
+  const normalized = backendStatus?.trim().toLowerCase() ?? "";
+  const isKnownStatus =
+    ["pending", "pending_review", "accepted", "scheduled", "cancelled", "canceled",
+      "rejected", "in_delivery", "in_transit", "delivered", "completed"].includes(normalized);
+  const originPackage = order.originPackage ?? order.origin_package;
+  const originReceived =
+    originPackage && typeof originPackage === "object"
+      ? (originPackage as Record<string, unknown>).received
+      : undefined;
+
+  return {
+    ...delivery,
+    ...(paymentStatus ? { paymentStatus } : {}),
+    ...(isKnownStatus
+      ? { orderStatus: normalizeOrderStatus(backendStatus) }
+      : {}),
+    ...(backendStatus ? { backendStatus } : {}),
+    ...(typeof originReceived === "boolean"
+      ? { packageReceivedAtHub: originReceived }
+      : {}),
+  };
+}
+
+// Reuse an in-flight GET when React StrictMode or two screens request it.
+const ordersSyncInFlight = new Map<string, Promise<void>>();
+
 export const customerDeliveryService = {
   /* =======================================================
      DRAFT
@@ -405,11 +546,7 @@ export const customerDeliveryService = {
           backendPackageType(
             draft,
           ),
-        delivery_mode:
-          draft.deliveryMode ===
-          "express"
-            ? "EXPRESS"
-            : "SCHEDULED",
+        delivery_mode: toApiDeliveryMode(draft.deliveryMode),
         requested_delivery_at:
           draft.deliveryMode ===
             "scheduled" &&
@@ -517,11 +654,7 @@ export const customerDeliveryService = {
         destination_hub_id:
           destinationHub.id,
 
-        delivery_mode:
-          draft.deliveryMode ===
-          "express"
-            ? "EXPRESS"
-            : "SCHEDULED",
+        delivery_mode: toApiDeliveryMode(draft.deliveryMode),
 
         requested_delivery_at:
           draft.deliveryMode ===
@@ -602,6 +735,59 @@ export const customerDeliveryService = {
           delivery.id === id,
       ) ?? null
     );
+  },
+
+  /**
+   * A single GET /customer/orders replaces the old N calls to
+   * /payments/orders/{id}/status. Existing cached orders are reconciled
+   * using explicit fields returned by BE; no cache data is deleted.
+   *
+   * When BE's full order-list schema is available, remote-only orders can
+   * be mapped here as well (instead of fabricating missing order details).
+   */
+  async syncOrdersFromBackend(customerId: string): Promise<void> {
+    const existing = ordersSyncInFlight.get(customerId);
+    if (existing) return existing;
+
+    const request = (async () => {
+      const response = await customerApi.getOrders();
+      const orders = parseServerOrders(response);
+      if (!orders) {
+        throw new Error("Unexpected format from GET /customer/orders");
+      }
+
+      const byId = new Map(
+        orders.map((order) => [getServerOrderId(order), order] as const)
+          .filter(([id]) => Boolean(id)),
+      );
+      const merged = readDeliveries().map((delivery) => {
+        if (delivery.customerId !== customerId) return delivery;
+        const serverOrder = byId.get(delivery.id);
+        return serverOrder ? mergeOrderFromServer(delivery, serverOrder) : delivery;
+      });
+      writeDeliveries(merged);
+    })();
+
+    ordersSyncInFlight.set(customerId, request);
+    try {
+      await request;
+    } finally {
+      if (ordersSyncInFlight.get(customerId) === request) {
+        ordersSyncInFlight.delete(customerId);
+      }
+    }
+  },
+
+  /** A selected detail only fetches its own Order, never all payment statuses. */
+  async syncOrderFromBackend(id: string): Promise<CustomerDelivery | null> {
+    const response = await customerApi.getOrder(id);
+    const order = parseServerOrder(response);
+    if (!order || getServerOrderId(order) !== id) {
+      return this.getById(id);
+    }
+    const cached = this.getById(id);
+    if (!cached) return null;
+    return upsertDelivery(mergeOrderFromServer(cached, order));
   },
 
   /* =======================================================

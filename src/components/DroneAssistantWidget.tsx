@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Mascot } from "page-mascot";
 import droneDirections from "../assets/mascot/delivery-drone-directions.webp";
 import droneReactions from "../assets/mascot/delivery-drone-reactions.webp";
+import chatbotLogo from "../assets/images/home/logo.png";
 import {
   CustomerChatbotApiError,
   getCustomerQuickQuestions,
@@ -727,12 +728,19 @@ export function DroneAssistantWidget() {
                   : "none",
             }}
           >
-            {/* HEADER */}
+              {/* HEADER */}
             <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3.5">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/[0.10] text-orange-400">
-                    <Sparkles size={14} />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                    <img
+                      src={chatbotLogo}
+                      alt="DroneOptAI logo"
+                      width={32}
+                      height={32}
+                      className="h-full w-full object-contain"
+                      draggable={false}
+                    />
                   </div>
                   <p className="truncate text-[14px] font-semibold text-white">
                     DroneOptAI Assistant
