@@ -161,6 +161,11 @@ export function MissionDetailPage() {
                     <span>
                       <small>Leg {index + 1}</small>
                       <strong>{hubName(leg.fromHubId)} → {hubName(leg.toHubId)}</strong>
+                      <small className="mission-leg-battery-info">
+                        {leg.batteryId
+                          ? <>Battery {leg.batteryId}{leg.batteryModel ? ` · ${leg.batteryModel}` : ''}{leg.batteryChargePct !== undefined ? ` · ${leg.batteryChargePct}%` : ''}{leg.batteryEnergyWh !== undefined ? ` · ${leg.batteryEnergyWh.toFixed(1)} Wh` : ''}</>
+                          : 'Battery ID unavailable'}
+                      </small>
                     </span>
                     <StatusBadge tone={leg.status === 'Completed' ? 'success' : leg.status === 'In Progress' ? 'warning' : 'neutral'}>
                       {leg.status}
@@ -206,6 +211,7 @@ export function MissionDetailPage() {
           <OperatorPanel title="Mission details">
             <dl className="key-values">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
+              <div><dt>Origin battery</dt><dd>{mission.legs?.[0]?.batteryId || mission.batteryId || '—'}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Drop-off Point</dt><dd>{originHub?.name || mission.originHubId || '—'}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>

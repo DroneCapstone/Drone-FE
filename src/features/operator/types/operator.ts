@@ -13,7 +13,9 @@ export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
 
 export type MissionType = 'Delivery';
 
-export type DeliveryMode = 'Express' | 'Scheduled';
+export type DeliveryMode = 'Express' | 'Scheduled' | 'Normal';
+
+export type OrderPriorityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type CustomerContactChannel = 'Phone' | 'SMS';
 
@@ -75,6 +77,14 @@ export interface Order {
   planningStateLabel?: string;
   /** Official permission returned by BE. Never infer true from a date. */
   canCreateMission?: boolean;
+  /** BE-calculated Operator coordination priority; these fields may be missing on older responses. */
+  priorityLevel?: OrderPriorityLevel;
+  priorityScore?: number;
+  slackMinutes?: number;
+  coordinationDeadline?: string;
+  customerDeadline?: string;
+  overdueMinutes?: number;
+  isOverdue?: boolean;
   status: OrderStatus;
 
   /** Authoritative package receipt flag from originPackage.received (independent of received_at). */

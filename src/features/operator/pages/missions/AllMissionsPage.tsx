@@ -9,7 +9,7 @@ import { MissionPageShell } from './MissionPageShell';
 
 export function AllMissionsPage() {
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('All statuses');
+  const [status, setStatus] = useState('All mission statuses');
   const [page, setPage] = useState(1);
   const {
     data: missions = [],
@@ -23,7 +23,7 @@ export function AllMissionsPage() {
     const matchesQuery = `${mission.name} ${mission.id} ${mission.orderId} ${mission.drone} ${mission.route}`
       .toLowerCase()
       .includes(query.toLowerCase());
-    return matchesQuery && (status === 'All statuses' || mission.status === status);
+    return matchesQuery && (status === 'All mission statuses' || mission.status === status);
   });
   const totalPages = Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -46,7 +46,7 @@ export function AllMissionsPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={['All statuses', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Failed']}
+            options={['All mission statuses', 'Scheduled', 'In Progress', 'Completed', 'Cancelled', 'Failed']}
             onChange={(value) => { setStatus(value); setPage(1); }}
             ariaLabel="Mission status"
           />

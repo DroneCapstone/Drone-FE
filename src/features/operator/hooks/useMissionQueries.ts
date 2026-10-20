@@ -81,7 +81,7 @@ export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 5_000,
+    refetchInterval: 4_000,
     refetchIntervalInBackground: true,
   });
 }
