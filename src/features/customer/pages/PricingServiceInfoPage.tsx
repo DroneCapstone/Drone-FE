@@ -15,6 +15,7 @@ import {
 
 import { Link } from "react-router-dom";
 
+import activeDeliveryImage from "../../../assets/images/customer/active-delivery.png";
 import expressDeliveryImage from "../../../assets/images/customer/express-delivery.png";
 import scheduledDeliveryImage from "../../../assets/images/customer/scheduled-delivery.png";
 
@@ -138,10 +139,23 @@ export function PricingServiceInfoPage() {
       <section className="mt-8">
         <SectionHeader
           title="Choose your delivery"
-          subtitle="Two simple options depending on how urgent the shipment is."
+          subtitle="Three options to match your urgency and preferred delivery time."
         />
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <CommerceServiceCard
+            image={activeDeliveryImage}
+            icon={<Package size={20} />}
+            title="Normal delivery"
+            subtitle="Standard"
+            description="Standard delivery using available flight capacity, without choosing a fixed departure time."
+            fee="0% surcharge"
+            points={[
+              "Standard scheduling based on available flights",
+              "No delivery-mode surcharge",
+            ]}
+          />
+
           <CommerceServiceCard
             image={scheduledDeliveryImage}
             icon={
@@ -150,7 +164,7 @@ export function PricingServiceInfoPage() {
               />
             }
             title="Scheduled delivery"
-            subtitle="Best value"
+            subtitle="Plan ahead"
             description="Choose a preferred delivery time when your shipment is flexible."
             fee="0% surcharge"
             points={[
@@ -219,6 +233,11 @@ export function PricingServiceInfoPage() {
             />
 
             <SurchargeChip
+              label="Normal"
+              value="0%"
+              muted
+            />
+            <SurchargeChip
               label="Scheduled"
               value="0%"
               muted
@@ -236,7 +255,7 @@ export function PricingServiceInfoPage() {
             </summary>
 
             <div className="mt-3 rounded-xl bg-black/[0.12] px-4 py-3 text-[12px] leading-6 text-white/[0.72]">
-              Core fee = Base fee + Distance fee + Payload fee. Optional surcharges are added when selected.
+              Core fee = Base fee + Distance fee + Payload fee. Normal and Scheduled have no delivery-mode surcharge; Express adds 25% of core fee. Fragile handling and insurance can still add fees when selected. The final quotation is always returned by the backend.
             </div>
           </details>
         </div>

@@ -11,6 +11,7 @@ export type PackageCategory =
   | "other";
 
 export type DeliveryMode =
+  | "normal"
   | "express"
   | "scheduled";
 
