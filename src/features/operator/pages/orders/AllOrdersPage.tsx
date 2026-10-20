@@ -16,10 +16,12 @@ import { OrderPageShell } from './OrderPageShell';
 
 const STATUS_TO_API: Record<
   string,
-  'PENDING' | 'IN_DELIVERY' | 'DELIVERED_TO_HUB' | 'CANCELLED' | undefined
+  'PENDING' | 'AWAITING_DROP_OFF' | 'AT_HUB' | 'IN_DELIVERY' | 'DELIVERED_TO_HUB' | 'CANCELLED' | undefined
 > = {
   'All statuses': undefined,
   Pending: 'PENDING',
+  'Awaiting Drop-off': 'AWAITING_DROP_OFF',
+  'At Hub': 'AT_HUB',
   'In Delivery': 'IN_DELIVERY',
   'Delivered to Hub': 'DELIVERED_TO_HUB',
   Cancelled: 'CANCELLED',
@@ -93,6 +95,8 @@ export function AllOrdersPage() {
             options={[
               'All statuses',
               'Pending',
+              'Awaiting Drop-off',
+              'At Hub',
               'In Delivery',
               'Delivered to Hub',
               'Cancelled',

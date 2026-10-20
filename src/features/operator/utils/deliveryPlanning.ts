@@ -44,40 +44,30 @@ export function getDeliveryMission(orderId: string, missions: Mission[]) {
 export function getPlanningState(
   order: Order,
   missions: Mission[],
-  now = new Date(),
-): PlanningState {
-  // Mission records are stronger evidence that an Order is already planned.
-  // BE's planningState can lag behind the Mission creation response.
-  const orderMissions = getMissionsForOrder(order.id, missions);
-  const activeMission = orderMissions.find(
-    (mission) => mission.status === 'Scheduled' || mission.status === 'In Progress',
-  );
-  if (activeMission) return 'Planned';
-  if (order.replanRequiredAt) return 'Needs Replanning';
-  if (orderMissions.some((mission) => mission.status === 'Completed')) return 'Planned';
-  if (order.planningState) return order.planningState;
-
-
-  const planningAt = new Date(order.planningAt).getTime();
-  return now.getTime() >= planningAt ? 'Ready for Planning' : 'Future';
+): PlanningState | undefined {
+  // Mission evidence can correct stale list data between queries.
+  if (getDeliveryMission(order.id, missions)) return 'Planned';
+  // Otherwise BE's planningState is the source of truth.
+  // Never turn missing/null into Ready for Planning.
+  return order.planningState;
 }
 
-export function getOrderPlanningBadge(order: Order, missions: Mission[], now = new Date()) {
-  if (order.status !== 'Pending') return undefined;
-  return getPlanningState(order, missions, now);
+export function getOrderPlanningBadge(order: Order, missions: Mission[]) {
+  if (order.status === 'Cancelled' || order.status === 'Delivered to Hub') return undefined;
+  return getPlanningState(order, missions);
 }
 
 export function isActionablePlanningState(state: PlanningState | undefined) {
-  return state === 'Ready for Planning';
+  return state === 'Ready for Planning' || state === 'Needs Replanning';
 }
 
-/** Both Express and Scheduled Orders can be assigned only AFTER Technician receipt. */
+/**
+ * BE can_create_mission is authoritative for BOTH Express and Scheduled.
+ * AT_HUB is expected after Technician receives the package; it is not Pending.
+ * Never infer permission from planning_at or receipt timestamp.
+ */
 export function canCreateMissionForOrder(order: Order, missions: Mission[] = []) {
-  return order.status === 'Pending' &&
-    getOrderPlanningBadge(order, missions) === 'Ready for Planning' &&
-    (order.originPackageReceived === true || Boolean(order.originHubReceivedAt)) &&
-    Boolean(order.originHubId && order.destinationHubId) &&
-    !hasDeliveryMission(order.id, missions);
+  return order.canCreateMission === true && !hasDeliveryMission(order.id, missions);
 }
 
 export function getPlanningPriority(state: PlanningState | undefined) {
@@ -87,6 +77,7 @@ export function getPlanningPriority(state: PlanningState | undefined) {
     'Needs Replanning': 1,
     Planned: 2,
     Future: 3,
+    'Waiting for package': 4,
   }[state];
 }
 
@@ -102,7 +93,7 @@ function sortTimestamp(value?: string) {
  * 2. Existing planning-state priority for other Orders.
  * 3. Earlier estimated delivery deadline, then planning time.
  *
- * The page must filter received Orders before sorting and pagination.
+ * All Orders must remain visible; filter only the Ready tab before sorting/pagination.
  */
 export function sortOrdersByPlanningPriority(orders: Order[], missions: Mission[]) {
   return [...orders].sort((a, b) => {
@@ -128,12 +119,16 @@ export function sortOrdersByPlanningPriority(orders: Order[], missions: Mission[
 }
 
 export function formatDeliveryWindow(order: Order) {
-  const start = new Date(order.currentEstimatedWindow.start);
-  const end = new Date(order.currentEstimatedWindow.end);
+  const { start: startRaw, end: endRaw } = order.currentEstimatedWindow;
+  if (!startRaw || !endRaw) return '—';
+  const start = new Date(startRaw);
+  const end = new Date(endRaw);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return '—';
+
   const sameDay = start.toDateString() === new Date().toDateString();
   const day = sameDay
     ? 'Today'
     : start.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  const time = `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}–${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  return `${day} · ${time}`;
+  const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${day} · ${formatTime(start)}–${formatTime(end)}`;
 }
