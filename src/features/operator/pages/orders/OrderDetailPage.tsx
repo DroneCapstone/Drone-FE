@@ -89,9 +89,9 @@ export function OrderDetailPage() {
               </div>
               <div className="mission-hero-actions">
                 {deliveryMission && <ActionButton onClick={() => navigate(`/operator/missions/${deliveryMission.id}`)}>View delivery mission</ActionButton>}
-                {!deliveryMission && order.status === 'Pending' && (
-                  <ActionButton disabled={!actionable} onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>
-                    Create mission
+                {!deliveryMission && actionable && (
+                  <ActionButton onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>
+                    {planning === 'Needs Replanning' ? 'Replan mission' : 'Create mission'}
                   </ActionButton>
                 )}
               </div>
@@ -112,7 +112,7 @@ export function OrderDetailPage() {
               <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div><dt>Estimated delivery</dt><dd>{formatDeliveryWindow(order)}</dd></div>
               <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>
-              <div><dt>Planning state</dt><dd>{planning ?? 'Closed'}</dd></div>
+              <div><dt>Planning state</dt><dd>{planning ?? '—'}</dd></div>
               {order.destinationHubReceivedAt && (
                 <div><dt>Received at Pick-up Point</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
               )}
@@ -126,11 +126,13 @@ export function OrderDetailPage() {
                   <strong>{planning ?? 'No active Mission'}</strong>
                   <small>
                     {planning === 'Ready for Planning'
-                      ? actionable ? 'The package has been received. Operator can create the Mission now.' : 'Awaiting Technician package receipt before Mission creation.'
+                      ? actionable ? 'The package has been received. Operator can create the Mission now.' : 'Mission planning is not available for this Order yet.'
+                      : planning === 'Waiting for package'
+                        ? 'Waiting for the package to be received at the Drop-off Point.'
                       : planning === 'Needs Replanning'
                         ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
                         : planning === 'Future'
-                          ? `The system will surface this Order when planning opens ${formatMissionTime(order.planningAt)}.`
+                          ? 'Mission planning will open when the Order becomes eligible.'
                           : 'No further Operator planning is required.'}
                   </small>
                 </div>
@@ -139,7 +141,7 @@ export function OrderDetailPage() {
                     {planning}
                   </StatusBadge>
                 )}
-                {actionable && <button className="row-action" type="button" onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>Create mission</button>}
+                {actionable && <button className="row-action" type="button" onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>{planning === 'Needs Replanning' ? 'Replan mission' : 'Create mission'}</button>}
               </div>
             ) : (
               <div className="linked-mission-list">

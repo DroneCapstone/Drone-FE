@@ -112,6 +112,7 @@ export interface CreateMissionInput {
   orderId: string;
   droneId: string;
   routeId: string;
+  batteryId: string;
   /** Exact selected Analyze route snapshot accepted by the updated Create Mission schema. */
   routeString: string;
   legDetails: RouteLegSnapshot[];
@@ -123,7 +124,22 @@ export interface CreateMissionInput {
 export interface AnalyzeMissionPlanningInput {
   orderId: string;
   droneId: string;
+  batteryId: string;
 }
+
+/** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
+export interface EligibleMissionBattery {
+  id: string;
+  serialNumber: string;
+  model?: string;
+  capacityWh?: number;
+  chargeLevelPct?: number;
+  availableEnergyWh?: number;
+  hubId?: string;
+  droneId?: string;
+  availableStatus?: string;
+}
+
 
 export interface CreateIncidentInput {
   missionId: string;
@@ -386,7 +402,7 @@ function mapMission(raw: unknown): Mission {
   return {
     id, orderId, type: 'Delivery',
     name: pickString(record, ['name', 'mission_name', 'missionName'], `Delivery ${orderId || id}`),
-    droneId, drone: droneName,
+    droneId, batteryId: pickString(record, ['battery_id', 'batteryId', 'assignedBatteryId']) || undefined, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
     destinationHubId: pickString(record, ['destination_hub_id', 'destinationHubId']),
     relayHubIds, legs, routeId, route: routeName,
@@ -819,19 +835,56 @@ export async function updateIncidentStatusApi(
   return mapIncident(payload);
 }
 
+/** GET /operator/missions/eligible-batteries — actual compatibility check belongs to BE. */
+export async function getEligibleMissionBatteriesApi(
+  droneId: string,
+  orderId: string,
+): Promise<EligibleMissionBattery[]> {
+  if (!droneId.trim() || !orderId.trim()) return [];
+  const query = new URLSearchParams({ drone_id: droneId.trim(), order_id: orderId.trim() });
+  const response = await operatorApiRequest<unknown>(
+    `/operator/missions/eligible-batteries?${query.toString()}`,
+  );
+  const payload = parseJsonString(response);
+  const records = Array.isArray(payload) ? payload :
+    isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
+  if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
+       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+         'items' in payload || 'data' in payload || 'results' in payload))) {
+    throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
+  }
+  return records.map((entry) => {
+    const record = asRecord(entry);
+    const nested = isRecord(record.battery) ? record.battery : record;
+    const id = pickString(nested, ['id', 'battery_id', 'batteryId']);
+    if (!id || record.eligible === false || record.compatible === false) return null;
+    return {
+      id,
+      serialNumber: pickString(nested, ['serial_number', 'serialNumber', 'battery_serial', 'batterySerial'], id),
+      model: pickString(nested, ['battery_model', 'batteryModel', 'model']) || undefined,
+      capacityWh: pickOptionalNumber(nested, ['capacity_wh', 'capacityWh']),
+      chargeLevelPct: pickOptionalNumber(nested, ['charge_level_pct', 'chargeLevelPct', 'battery_charge_pct', 'batteryChargePct']),
+      availableEnergyWh: pickOptionalNumber(nested, ['available_energy_wh', 'availableEnergyWh', 'battery_energy_wh', 'batteryEnergyWh']),
+      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
+      droneId: pickString(nested, ['drone_id', 'droneId']) || undefined,
+      availableStatus: pickString(nested, ['available_status', 'availableStatus']) || undefined,
+    } as EligibleMissionBattery;
+  }).filter((item): item is EligibleMissionBattery => item !== null);
+}
+
 export async function analyzeMissionPlanningApi(
   input: AnalyzeMissionPlanningInput,
 ): Promise<MissionPlanningAnalysis> {
-  const numericDroneId = Number(input.droneId);
-  if (!Number.isInteger(numericDroneId)) {
-    throw new OperatorApiError('Drone ID must be a number.', 400);
+  if (!input.droneId.trim() || !input.batteryId.trim()) {
+    throw new OperatorApiError('Select a drone and its origin battery before analysis.', 400);
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/mission-planning/analyze', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
-      droneId: numericDroneId,
+      droneId: input.droneId,
+      batteryId: input.batteryId,
     }),
   });
   const root = unwrapObject(payload);
@@ -862,16 +915,16 @@ export async function analyzeMissionPlanningApi(
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
-  const numericDroneId = Number(input.droneId);
-  if (!Number.isInteger(numericDroneId)) {
-    throw new OperatorApiError('Drone ID must be a number.', 400);
+  if (!input.droneId.trim() || !input.batteryId.trim()) {
+    throw new OperatorApiError('Select a drone and a battery before assigning a Mission.', 400);
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
-      droneId: numericDroneId,
+      droneId: input.droneId,
+      batteryId: input.batteryId,
       routeId: input.routeId,
       route_string: input.routeString,
       legs_detail: input.legDetails.map((leg) => ({

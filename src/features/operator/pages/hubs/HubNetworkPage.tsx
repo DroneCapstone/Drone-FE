@@ -64,11 +64,11 @@ export function HubNetworkPage() {
           <div className="operator-empty-state">No hubs were returned by the Backend.</div>
         ) : (
           <>
-            {batteriesError || fleetError ? (
+            {/* {batteriesError || fleetError ? (
               <p className="hub-resource-notice" role="status">
                 Some inventory data could not be loaded. Hub and available resource information remain visible.
               </p>
-            ) : null}
+            ) : null} */}
             <div className="hub-grid hub-network-grid">
               {paginatedHubs.map((hub) => (
                 <HubCard

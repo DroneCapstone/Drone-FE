@@ -160,3 +160,94 @@
   .mission-builder .mission-route-head { flex-wrap: wrap; }
   .mission-builder .mission-route-key-metrics { grid-template-columns: 1fr; }
 }
+
+/* Operator Create Mission / Step 3: selected origin battery */
+.page-content .mission-builder .mission-origin-battery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.page-content .mission-builder .mission-origin-battery-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.page-content .mission-builder .mission-origin-battery-card:hover,
+.page-content .mission-builder .mission-origin-battery-card:focus-visible,
+.page-content .mission-builder .mission-origin-battery-card.is-selected {
+  border-color: #fb741b;
+}
+.page-content .mission-builder .mission-origin-battery-card:focus-visible {
+  outline: 2px solid #fb741b;
+  outline-offset: 2px;
+}
+.page-content .mission-builder .mission-origin-battery-head,
+.page-content .mission-builder .mission-origin-battery-id {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.page-content .mission-builder .mission-origin-battery-id {
+  justify-content: flex-start;
+  min-width: 0;
+}
+.page-content .mission-builder .mission-origin-battery-id > strong {
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-origin-battery-id > svg { color: #fb741b; flex: none; }
+.page-content .mission-builder .mission-origin-battery-state,
+.page-content .mission-builder .mission-origin-battery-card > small {
+  color: var(--muted, #8893a7);
+  font-size: 12px;
+}
+.page-content .mission-builder .mission-origin-battery-model { font-size: 13px; font-weight: 600; }
+.page-content .mission-builder .mission-origin-battery-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-origin-battery-metrics > span { display: flex; flex-direction: column; gap: 5px; }
+.page-content .mission-builder .mission-origin-battery-metrics small { color: var(--muted, #8893a7); font-size: 11px; }
+.page-content .mission-builder .mission-origin-battery-metrics strong { font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .page-content .mission-builder .mission-origin-battery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 670px) {
+  .page-content .mission-builder .mission-origin-battery-grid { grid-template-columns: 1fr; }
+}
+
+/* Step 3 battery context — compact single line, consistent with Select Drone. */
+.page-content .mission-builder .mission-origin-battery-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: var(--muted, #8893a7);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-content .mission-builder .mission-origin-battery-context > svg {
+  color: #fb741b;
+  flex: none;
+}
+.page-content .mission-builder .mission-origin-battery-context strong {
+  color: var(--text, #1f2937);
+  font-weight: 650;
+}

@@ -57,8 +57,11 @@ export const operatorQueryKeys = {
   incidentDetail: (incidentId: string) =>
     [...operatorQueryKeys.incidents(), 'detail', incidentId] as const,
 
-  missionPlanning: (orderId: string, droneId: string) =>
-    [...operatorQueryKeys.missions(), 'planning', orderId, droneId] as const,
+  eligibleMissionBatteries: (orderId: string, droneId: string) =>
+    [...operatorQueryKeys.missions(), 'eligible-batteries', orderId, droneId] as const,
+
+  missionPlanning: (orderId: string, droneId: string, batteryId: string) =>
+    [...operatorQueryKeys.missions(), 'planning', orderId, droneId, batteryId] as const,
 
   fleet: () => [...operatorQueryKeys.all, 'fleet'] as const,
 
