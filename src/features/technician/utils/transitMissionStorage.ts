@@ -38,6 +38,9 @@ export type TransitMission = {
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
   missionState?: string;
+  originHubId?: number;
+  destinationHubId?: number;
+  droneCurrentHubId?: number;
   /** Exact Backend handling enum, not the mission flight status. */
   handlingStatus?: string;
 
@@ -201,29 +204,72 @@ export function isActiveTechnicianTransitMission(mission: TransitMission): boole
 
   const handling = normalizedKey(mission.handlingStatus ?? "");
   if (RELAY_HANDLING_STATES.includes(handling)) {
-    // Incident landings remain visible for inspection; no battery swap action.
     return isContinuationMission(mission) || mission.purpose === "INCIDENT_RETURN";
   }
 
-  if (handling === "ARRIVED_AT_HUB") {
-    return !mission.arrivalConfirmed && (
-      isCompletedMissionState(mission.missionState) ||
+  // The BE also returns human-readable values (Incoming, Cannot continue,
+  // At hub), not just the enum names documented for the Relay flow.
+  // An en-route mission is visible for monitoring, but NEVER confirmable yet.
+  if (handling === "INCOMING") {
+    return ["FLYING", "IN_PROGRESS", "IN_FLIGHT", "ACTIVE"].includes(
+      normalizedKey(mission.missionState ?? ""),
+    );
+  }
+  if (handling === "CANNOT_CONTINUE") {
+    return isIncidentMissionState(mission.missionState) ||
+      mission.purpose === "INCIDENT_RETURN";
+  }
+
+  // A confirmed arrival may still need inspection. Only Backend's explicit
+  // intake_completed flag/time moves it out of the active list.
+  if (["AT_HUB", "ARRIVED_AT_HUB"].includes(handling)) {
+    return isCompletedMissionState(mission.missionState) ||
       isIncidentMissionState(mission.missionState) ||
       mission.purpose === "INCIDENT_RETURN" ||
-      mission.purpose === "RETURN_TO_HUB"
-    );
+      mission.purpose === "RETURN_TO_HUB";
   }
 
-  // Compatibility for legacy data. "At Hub" was used ambiguously; show a
-  // final landing only if it is NOT already marked received by Backend.
-  if (handling === "AT_HUB") {
-    return !mission.arrivalConfirmed && (
-      isCompletedMissionState(mission.missionState) ||
-      mission.purpose === "INCIDENT_RETURN"
+  return false;
+}
+
+/** A final flight cannot be accepted at the destination if the drone is still
+ * assigned to a different hub. Show the mission, but require BE correction. */
+export function hasFinalHubMismatch(mission: TransitMission): boolean {
+  return mission.purpose === "RETURN_TO_HUB" &&
+    isCompletedMissionState(mission.missionState) &&
+    mission.droneCurrentHubId !== undefined &&
+    mission.destinationHubId !== undefined &&
+    mission.droneCurrentHubId !== mission.destinationHubId;
+}
+
+/** Whether Technician may OPEN the Confirm Arrival action.
+ * A row from /incoming is not proof the drone has landed: Technician must
+ * verify physical receipt in the dialog and Backend authorizes the POST.
+ * A hub mismatch is a warning, never a silent disappearance of Confirm.
+ */
+export function canConfirmTransitArrival(mission: TransitMission): boolean {
+  if (!isActiveTechnicianTransitMission(mission) ||
+      mission.arrivalConfirmed || mission.intakeCompleted) return false;
+  const handling = normalizedKey(mission.handlingStatus ?? "");
+  if (handling === "INCOMING") {
+    // The incoming list may contain approaching drones. The user must verify
+    // actual landing before sending the confirmation request.
+    return ["FLYING", "IN_PROGRESS", "IN_FLIGHT", "ACTIVE"].includes(
+      normalizedKey(mission.missionState ?? ""),
     );
   }
-
-  // null/Ready is not evidence of a drone arriving at this hub.
+  if (handling === "CANNOT_CONTINUE" || handling === "AT_RELAY_HUB") {
+    // Incident arrivals also need an acknowledgement/inspection, not only an
+    // inert Review Incident label. BE remains authoritative about eligibility.
+    return mission.purpose === "INCIDENT_RETURN" ||
+      isContinuationMission(mission);
+  }
+  if (["AT_HUB", "ARRIVED_AT_HUB"].includes(handling)) {
+    return isCompletedMissionState(mission.missionState) ||
+      isIncidentMissionState(mission.missionState) ||
+      mission.purpose === "RETURN_TO_HUB" ||
+      mission.purpose === "INCIDENT_RETURN";
+  }
   return false;
 }
 
@@ -374,6 +420,12 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       `LEG-${missionRaw}`,
     ),
     missionState: missionState || undefined,
+    originHubId: pickNumber(value, ["origin_hub_id"], -1) >= 0
+      ? pickNumber(value, ["origin_hub_id"], -1) : undefined,
+    destinationHubId: pickNumber(value, ["destination_hub_id"], -1) >= 0
+      ? pickNumber(value, ["destination_hub_id"], -1) : undefined,
+    droneCurrentHubId: pickNumber(value, ["drone_current_hub_id"], -1) >= 0
+      ? pickNumber(value, ["drone_current_hub_id"], -1) : undefined,
     handlingStatus: rawHandlingStatus || undefined,
     droneCode: rawDroneCode || undefined,
     purpose,
@@ -408,15 +460,12 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     status,
     arrivalConfirmedAt:
       pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "") || undefined,
-    // In the currently deployed Incoming API `handling_status: At Hub` is
-    // returned for a mission that POST confirm-arrival says is already
-    // confirmed (400). Treat it as an ARRIVAL acknowledgment only; do not
-    // infer that inspection, battery removal or availability is completed.
+    // Do not infer confirmation from the ambiguous "At hub" label.
+    // A timestamp or explicit boolean from BE is the only reliable signal.
     arrivalConfirmed: (
       pickBoolean(value, ["arrival_confirmed", "is_arrival_confirmed"], false) ||
       Boolean(pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "")) ||
-      handlingKey === "WAITING_BATTERY_SWAP" ||
-      (handlingKey === "AT_HUB" && purpose !== "BATTERY_STOP")
+      handlingKey === "WAITING_BATTERY_SWAP"
     ),
     intakeCompleted: (
       pickBoolean(value, ["intake_completed", "inspection_completed", "hub_intake_completed"], false) ||

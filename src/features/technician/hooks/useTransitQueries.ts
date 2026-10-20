@@ -10,6 +10,7 @@ import {
   refreshTransitMissionsFromApi,
 } from "../utils/transitMissionStorage";
 import { dispatchRelayMissionApi, swapRelayBatteryApi } from "../api/transitApi";
+import { invalidateAfterTechnicianDispatch } from "./invalidateAfterDispatch";
 
 import {
   technicianQueryKeys,
@@ -98,11 +99,10 @@ export function useTransitDispatchMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: dispatchRelayMissionApi,
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.transit() }),
-      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.missions() }),
-      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.confirmations() }),
-      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.notifications() }),
-    ]),
+    onSuccess: () => {
+      // The new battery follows the drone; the removed battery stays at relay.
+      // BE owns state transition and hub assignment. FE only refreshes.
+      invalidateAfterTechnicianDispatch(queryClient);
+    },
   });
 }

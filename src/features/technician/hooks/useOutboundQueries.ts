@@ -14,6 +14,8 @@ import {
 import {
   technicianQueryKeys,
 } from "./queryKeys";
+import { dispatchInitialOutboundMissionApi } from "../api/outboundDispatchApi";
+import { invalidateAfterTechnicianDispatch } from "./invalidateAfterDispatch";
 
 export function useOutboundDeliveriesQuery() {
   return useQuery({
@@ -90,5 +92,14 @@ export function usePrepareOutboundBatteryMutation() {
       prepareOutboundBatteryOnServer(orderId),
     onSuccess: () =>
       invalidateOutboundRelated(queryClient),
+  });
+}
+
+/** Initial departure from origin, never relay dispatch unless explicitly configured by BE. */
+export function useOutboundDispatchMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (missionId: string) => dispatchInitialOutboundMissionApi(missionId),
+    onSuccess: () => invalidateAfterTechnicianDispatch(queryClient),
   });
 }

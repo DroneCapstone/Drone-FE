@@ -188,9 +188,29 @@ function mapApiDrone(value: unknown): FleetDrone | null {
 
   const name = pickString(value, ["name", "drone_name", "code"], id);
   const model = pickString(value, ["model", "drone_model"], "—");
-  const status = normalizeDroneStatus(
-    pickString(value, ["status", "technical_status", "operational_status"], "Available"),
-  );
+  // Hub Fleet is *physical hub inventory*. Never display a flying drone as
+  // Available. BE should also clear its hub assignment on successful Dispatch.
+  const rawStatus = pickString(
+    value, ["status", "operational_status", "flight_status", "technical_status"], "",
+  ).trim().toUpperCase().replace(/[\s-]+/g, "_");
+  // Explicit null hub means BE has unassigned this drone from physical hub stock.
+  // Do not do this check for older responses which omit current_hub_id.
+  if ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
+      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null)) {
+    return null;
+  }
+  const flightStatuses = [
+    "FLYING", "IN_FLIGHT", "IN_MISSION", "ON_MISSION", "IN_TRANSIT",
+    "DEPARTED", "DISPATCHED", "AIRBORNE",
+  ];
+  const hasFlyingStatus = ["status", "operational_status", "flight_status", "technical_status"]
+    .some((key) => {
+      const valueAtKey = value[key];
+      return typeof valueAtKey === "string" &&
+        flightStatuses.includes(valueAtKey.trim().toUpperCase().replace(/[\s-]+/g, "_"));
+    });
+  if (hasFlyingStatus) return null;
+  const status = normalizeDroneStatus(rawStatus || "Available");
   const hub = pickString(value, ["hub_name", "hub", "location"], TECHNICIAN_HUB);
   const battery = pickNumber(value, ["battery_level_pct", "battery_pct", "battery", "charge_level_pct"], 0);
 
