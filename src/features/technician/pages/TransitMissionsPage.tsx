@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
 
 import {
@@ -42,7 +43,6 @@ import { useNavigate } from "react-router-dom";
 import {
   isContinuationMission,
   isActiveTechnicianTransitMission,
-  canConfirmTransitArrival,
   hasFinalHubMismatch,
   type TransitMission,
   type TransitMissionHistory,
@@ -81,41 +81,12 @@ function compatibleBatteryForTransit(battery: HubBattery, mission: TransitMissio
   return norm(batteryModel) === droneModel;
 }
 
-function getIdNumber(
-  droneId: string,
-) {
-  const match =
-    droneId.match(/(\d+)$/);
-
-  if (!match) {
-    return droneId;
-  }
-
-  return String(
-    Number(match[1]),
-  ).padStart(2, "0");
-}
-
-function getDroneCode(
-  type: string,
-  droneId: string,
-) {
-  return `${type}-${getIdNumber(
-    droneId,
-  )}`;
-}
-
-function getMissionDroneCode(
-  mission: TransitMission,
-) {
-  if (mission.droneCode) {
-    return mission.droneCode;
-  }
-
-  return getDroneCode(
-    mission.droneType,
-    mission.currentDroneId,
-  );
+/** Preserve the real drone_id from GET /technician/fleet/incoming.
+ * drone_code is the drone's name, NOT its identifier. */
+function getMissionDroneId(mission: TransitMission): string {
+  return mission.currentDroneId && mission.currentDroneId !== "0"
+    ? mission.currentDroneId
+    : "—";
 }
 
 function getMissionDisplayId(
@@ -192,12 +163,12 @@ function getPurposeDescription(purpose: TransitMissionPurpose) {
     return "Relay Hub flow: Confirm Relay Arrival → Swap Battery → Dispatch. The Backend changes mission to Flying and notifies Operator.";
   }
   if (purpose === "RETURN_TO_HUB") {
-    return "At destination Hub: inspect the drone, then confirm arrival once with the inspection result. Backend handles Hub Fleet and battery detachment.";
+    return "At destination Hub: click Confirm once after the drone has physically landed. Inspection and hub inventory follow Backend workflow.";
   }
   if (purpose === "INCIDENT_RETURN") {
-    return "For an incident at destination Hub, report has_issue and notes in Confirm Arrival, then track maintenance in Hub Fleet.";
+    return "For a landed incident: click Confirm once. Backend receives the incident flag; inspection and maintenance are handled separately.";
   }
-  return "Backend has not identified this arrival as a transit battery stop, completed return or incident return. Only confirm physical arrival; battery replacement and dispatch are blocked until the mission is classified.";
+  return "Backend did not provide an arrival reason. When the drone current hub matches the destination hub, Technician can confirm physical receipt using the final-destination API. Otherwise, Backend must classify the stop first.";
 }
 
 function getHistoryResultLabel(
@@ -205,6 +176,54 @@ function getHistoryResultLabel(
     TransitMissionHistory["outcome"],
 ) {
   return outcome;
+}
+
+/**
+ * Choose the confirm API using BE data, never by parsing drone names.
+ * A match of the current hub and destination hub can identify the FINAL
+ * destination for an unclassified Incoming record. The Technician's single
+ * Confirm click attests physical receipt; BE must still validate eligibility.
+ * Without such evidence, do NOT guess relay/final or fake a confirmation.
+ */
+function getArrivalConfirmRoute(mission: TransitMission): "RELAY" | "FINAL" | null {
+  if (!isActiveTechnicianTransitMission(mission) ||
+      mission.arrivalConfirmed || mission.intakeCompleted ||
+      hasFinalHubMismatch(mission)) return null;
+
+  const handling = (mission.handlingStatus ?? "")
+    .trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+  if (isContinuationMission(mission) && handling === "AT_RELAY_HUB") {
+    return "RELAY";
+  }
+
+  if (mission.purpose === "INCIDENT_RETURN" &&
+      ["CANNOT_CONTINUE", "AT_HUB", "ARRIVED_AT_HUB"].includes(handling) &&
+      mission.droneCurrentHubId !== undefined) {
+    return "FINAL";
+  }
+
+  if (mission.purpose === "RETURN_TO_HUB" &&
+      ["AT_HUB", "ARRIVED_AT_HUB"].includes(handling)) {
+    return "FINAL";
+  }
+
+  // BE has not sent purpose, but current hub matches the destination hub.
+  // This picks the final-destination API, not a relay continuation API.
+  // 'Incoming/Flying' by itself is NOT proof of landing; the user click
+  // confirms physical receipt, and the backend is authoritative on success.
+  if (mission.purpose === "UNKNOWN" && handling === "INCOMING" &&
+      mission.droneCurrentHubId !== undefined &&
+      mission.destinationHubId !== undefined &&
+      mission.droneCurrentHubId === mission.destinationHubId) {
+    return "FINAL";
+  }
+
+  return null;
+}
+
+function canConfirmLandedMission(mission: TransitMission): boolean {
+  return getArrivalConfirmRoute(mission) !== null;
 }
 
 export function TransitMissionsPage() {
@@ -233,13 +252,6 @@ export function TransitMissionsPage() {
   const [confirmedArrivalIds, setConfirmedArrivalIds] = useState<string[]>([]);
 
   const missionHistory = historyQuery.data ?? [];
-  const [inspectionMission, setInspectionMission] = useState<TransitMission | null>(null);
-  // Incoming can be an approaching relay OR destination arrival: do not guess
-  // which Backend API to call when the response omits its purpose.
-  const [arrivalMode, setArrivalMode] = useState<"RELAY" | "FINAL" | "">("");
-  const [physicalArrivalVerified, setPhysicalArrivalVerified] = useState(false);
-  const [hasIssue, setHasIssue] = useState(false);
-  const [inspectionNotes, setInspectionNotes] = useState("");
   const [oldBatteryHasIssue, setOldBatteryHasIssue] = useState(false);
   const [oldBatteryIssueNotes, setOldBatteryIssueNotes] = useState("");
 
@@ -344,7 +356,7 @@ export function TransitMissionsPage() {
           // Active Transit is ONLY Relay Stop, Incident, or completed arrival.
           if (!isActiveTechnicianTransitMission(mission)) return false;
           const code =
-            getMissionDroneCode(
+            getMissionDroneId(
               mission,
             ).toLowerCase();
 
@@ -386,80 +398,63 @@ export function TransitMissionsPage() {
 
 
 
-  const requestConfirm = (mission: TransitMission) => {
-    if (!isActiveTechnicianTransitMission(mission)) {
-      pushActionMessage("Scheduled/Ready missions belong to Outbound, not Transit Missions.");
+  // One click = one confirmation API request. No Arrival type dropdown,
+  // second confirmation button, or synthetic success in the frontend.
+  const confirmingArrivalIds = useRef<Set<string>>(new Set());
+
+  const requestConfirm = async (mission: TransitMission) => {
+    const missionKey = mission.backendMissionId;
+    if (!missionKey) {
+      pushActionMessage("Backend mission ID is missing; cannot confirm arrival.");
       return;
     }
     if (mission.arrivalConfirmed || confirmedArrivalIds.includes(mission.id)) {
       pushActionMessage("Arrival was already confirmed by Backend; it cannot be confirmed twice.");
       return;
     }
-    if (!canConfirmTransitArrival(mission)) {
-      pushActionMessage("This mission is not awaiting an arrival confirmation.");
+    const confirmRoute = getArrivalConfirmRoute(mission);
+    if (!confirmRoute) {
+      pushActionMessage(hasFinalHubMismatch(mission)
+        ? "Drone's current hub differs from destination hub. Ask Backend to correct the hub assignment before confirming arrival."
+        : "This incoming record does not identify a safe destination/relay arrival yet. Check the drone's actual hub and Backend handling status.");
       return;
     }
-    if (!mission.backendMissionId) {
-      pushActionMessage("Backend mission ID is missing; cannot confirm arrival.");
-      return;
-    }
-    // For a verified relay stop, the orange Confirm button calls the real
-    // relay endpoint as before; all other arrivals open a receipt/inspection
-    // dialog. The user never gets a fake success status.
-    if (isContinuationMission(mission)) {
-      void confirmArrival(mission, false, "", true);
-      return;
-    }
-    const classified = mission.purpose === "BATTERY_STOP"
-      ? "RELAY"
-      : mission.purpose === "UNKNOWN"
-        ? ""
-        : "FINAL";
-    setArrivalMode(classified);
-    setPhysicalArrivalVerified(false);
-    setInspectionMission(mission);
-    setHasIssue(mission.purpose === "INCIDENT_RETURN");
-    setInspectionNotes("");
-  };
+    if (confirmingArrivalIds.current.has(missionKey) || confirmArrivalMutation.isPending) return;
 
-  const confirmArrival = async (
-    mission: TransitMission,
-    issue: boolean,
-    notes: string,
-    relayOverride?: boolean,
-  ) => {
-    if (!mission.backendMissionId) return;
-    const relay = relayOverride ?? (arrivalMode === "RELAY");
-    // Unclassified Incoming cannot be assigned an endpoint arbitrarily.
-    if (relayOverride === undefined && !arrivalMode) {
-      pushActionMessage("Select relay stop or destination arrival before confirming.");
-      return;
-    }
+    const relay = confirmRoute === "RELAY";
+    confirmingArrivalIds.current.add(missionKey);
     try {
       await confirmArrivalMutation.mutateAsync({
-        missionId: mission.backendMissionId,
+        missionId: missionKey,
         relay,
-        hasIssue: issue,
-        notes,
+        // The mission already identifies an incident. Do not invent an
+        // inspection result or fault description if Backend has none.
+        hasIssue: mission.purpose === "INCIDENT_RETURN",
+        notes: mission.purpose === "INCIDENT_RETURN"
+          ? (mission.cannotContinueReason ?? "")
+          : "",
       });
-      setInspectionMission(null);
       setSelectedMissionId(null);
       setConfirmedArrivalIds((ids) => ids.includes(mission.id) ? ids : [...ids, mission.id]);
       pushActionMessage(relay
-        ? "Relay arrival confirmed. Awaiting Backend's battery-swap status."
-        : "Arrival and preliminary inspection confirmed. Hub Fleet and battery inventory will refresh from Backend.");
+        ? "Drone arrival confirmed by Backend. Continue with battery replacement when available."
+        : "Arrival confirmation accepted by Backend. Transit, Hub Fleet and related information are refreshing.");
       void transitQuery.refetch();
       void historyQuery.refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not confirm arrival.";
-      if (error instanceof TechnicianApiError && error.status === 400 && /arrival\s+already\s+confirmed/i.test(message)) {
-        setInspectionMission(null);
+      if (error instanceof TechnicianApiError && error.status === 400 &&
+          /arrival\s+already\s+confirmed/i.test(message)) {
+        // Backend, not the frontend, explicitly says it was already accepted.
+        setConfirmedArrivalIds((ids) => ids.includes(mission.id) ? ids : [...ids, mission.id]);
         pushActionMessage("Backend reports that arrival was already confirmed. Refreshing missions and history.");
         void transitQuery.refetch();
         void historyQuery.refetch();
       } else {
         pushActionMessage(message);
       }
+    } finally {
+      confirmingArrivalIds.current.delete(missionKey);
     }
   };
 
@@ -656,7 +651,7 @@ export function TransitMissionsPage() {
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
-            Drone
+            Drone ID
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
@@ -680,7 +675,7 @@ export function TransitMissionsPage() {
           {visibleMissions.map(
             (mission) => {
               const code =
-                getMissionDroneCode(
+                getMissionDroneId(
                   mission,
                 );
 
@@ -693,8 +688,8 @@ export function TransitMissionsPage() {
                 mission.batteryServiceRequired;
               const arrivalConfirmed = mission.arrivalConfirmed ||
                 confirmedArrivalIds.includes(mission.id);
-              // Incident handling remains visible; Backend validates the
-              // selected arrival endpoint when Technician confirms receipt.
+              // Incident handling stays visible; confirmation uses its
+              // Backend-classified purpose without any extra selection.
               const incidentAtRelay = mission.purpose === "INCIDENT_RETURN" &&
                 ["AT_RELAY_HUB", "WAITING_BATTERY_SWAP", "READY_FOR_RELAUNCH"].includes(
                   (mission.handlingStatus ?? "").toUpperCase(),
@@ -794,18 +789,18 @@ export function TransitMissionsPage() {
                       {arrivalConfirmed && !mission.intakeCompleted &&
                         !isContinuationMission(mission) && (
                           <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                            Arrival confirmed · inspection pending
+                            Arrival confirmed · follow-up pending
                           </p>
                         )}
                     </div>
 
                     {/* ACTIONS */}
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-                      {canConfirmTransitArrival(mission) && !arrivalConfirmed && (
+                      {canConfirmLandedMission(mission) && !arrivalConfirmed && (
                         <Button
                           type="button"
                           onClick={() =>
-                            requestConfirm(mission)
+                            void requestConfirm(mission)
                           }
                           disabled={
                             mission.backendMissionId ===
@@ -823,7 +818,7 @@ export function TransitMissionsPage() {
                           <Check
                             size={14}
                           />
-                          Confirm
+                          {confirmArrivalMutation.isPending ? "Confirming..." : "Confirm"}
                         </Button>
                       )}
 
@@ -840,7 +835,7 @@ export function TransitMissionsPage() {
                         </span>
                       )}
 
-                      {incidentAtRelay && !canConfirmTransitArrival(mission) && (
+                      {incidentAtRelay && !canConfirmLandedMission(mission) && (
                         <Button
                           type="button"
                           onClick={() => navigate("/technician/maintenance/alerts")}
@@ -974,7 +969,7 @@ export function TransitMissionsPage() {
                           </span>
                         )}
 
-                      {mission.status === "Cannot Continue" && !canConfirmTransitArrival(mission) && (
+                      {mission.status === "Cannot Continue" && !canConfirmLandedMission(mission) && (
                         <Button type="button" variant="outline"
                           onClick={() => navigate("/technician/maintenance/alerts")}
                           className="h-9 shrink-0 text-[12px] text-orange-500"
@@ -1091,7 +1086,7 @@ export function TransitMissionsPage() {
                   </HistoryHeader>
 
                   <HistoryHeader>
-                    Drone
+                    Drone ID
                   </HistoryHeader>
 
                   <HistoryHeader>
@@ -1135,7 +1130,7 @@ export function TransitMissionsPage() {
 
                           <div>
                             <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                              {item.droneCode || getDroneCode(item.droneType, item.droneId)}
+                              {item.droneId || "—"}
                             </p>
 
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
@@ -1194,83 +1189,6 @@ export function TransitMissionsPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation keeps the original orange Action button on all arrivals.
-          No mission/drone status is changed locally until BE accepts the POST. */}
-      {inspectionMission && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Confirm drone arrival">
-          <div className="w-full max-w-lg rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-[var(--tech-text)]">Confirm drone received at hub</h3>
-            <p className="mt-2 text-sm text-[var(--tech-muted)]">
-              {inspectionMission.missionId}. Only confirm after the Technician has physically received the drone.
-            </p>
-            {hasFinalHubMismatch(inspectionMission) && (
-              <p className="mt-3 rounded border border-orange-500/40 p-3 text-[12px] text-orange-500">
-                Backend hub mismatch: drone_current_hub_id ({inspectionMission.droneCurrentHubId}) differs from destination_hub_id ({inspectionMission.destinationHubId}). Verify physical arrival and the assigned hub; Backend may reject the confirmation.
-              </p>
-            )}
-            {inspectionMission.purpose === "INCIDENT_RETURN" && (
-              <p className="mt-3 rounded border border-orange-500/40 p-3 text-[12px] text-orange-500">
-                Incident: record the fault. This action does not authorize another flight; maintenance must be completed first.
-              </p>
-            )}
-            <label className="mt-4 block text-sm font-semibold text-[var(--tech-text)]" htmlFor="technician-arrival-mode">
-              Arrival type
-            </label>
-            <select
-              id="technician-arrival-mode"
-              value={arrivalMode}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (next === "FINAL" || next === "RELAY" || next === "") setArrivalMode(next);
-              }}
-              disabled={inspectionMission.purpose !== "UNKNOWN"}
-              className="mt-2 w-full rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 py-2 text-sm text-[var(--tech-text)] disabled:opacity-80"
-            >
-              <option value="">Select the actual arrival type</option>
-              <option value="RELAY">Relay stop — replace battery, continue flight</option>
-              <option value="FINAL">Destination / Incident — inspect and finish intake</option>
-            </select>
-            {inspectionMission.purpose === "UNKNOWN" && (
-              <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-                Backend did not identify the reason for this Incoming mission; choose the actual arrival type so FE can call the correct existing endpoint.
-              </p>
-            )}
-            {arrivalMode === "FINAL" && (
-              <>
-                <label className="mt-4 flex items-center gap-2 text-sm text-[var(--tech-text)]">
-                  <input
-                    type="checkbox"
-                    checked={hasIssue}
-                    onChange={(event) => setHasIssue(event.target.checked)}
-                    disabled={inspectionMission.purpose === "INCIDENT_RETURN"}
-                  />
-                  Issue found during initial inspection
-                </label>
-                <textarea className="mt-3 w-full rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface)] p-3 text-sm text-[var(--tech-text)]"
-                  rows={3} value={inspectionNotes} onChange={event => setInspectionNotes(event.target.value)}
-                  placeholder={hasIssue ? "Describe the detected issue (required)" : "Inspection notes (optional)"}/>
-              </>
-            )}
-            <label className="mt-4 flex items-start gap-2 text-sm text-[var(--tech-text)]">
-              <input type="checkbox" checked={physicalArrivalVerified}
-                onChange={(event) => setPhysicalArrivalVerified(event.target.checked)}
-                className="mt-1" />
-              I have physically received this drone at the hub
-            </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setInspectionMission(null)}>Cancel</Button>
-              <Button
-                className="bg-orange-500 text-black hover:bg-orange-600"
-                disabled={confirmArrivalMutation.isPending || !physicalArrivalVerified ||
-                  !arrivalMode || (arrivalMode === "FINAL" && hasIssue && !inspectionNotes.trim())}
-                onClick={() => void confirmArrival(inspectionMission, hasIssue, inspectionNotes)}>
-                {confirmArrivalMutation.isPending ? "Confirming..." : "Confirm arrival"}
-              </Button>
             </div>
           </div>
         </div>
@@ -1415,9 +1333,9 @@ export function TransitMissionsPage() {
                 <div className="mt-4 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <DetailField
-                      label="Drone"
+                      label="Drone ID"
                       value={
-                        getMissionDroneCode(
+                        getMissionDroneId(
                           selectedMission,
                         )
                       }
@@ -1614,7 +1532,7 @@ export function TransitMissionsPage() {
                   </h3>
 
                   <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
-                    At destination Hub, make a preliminary inspection and confirm arrival once. Send has_issue and notes so Backend updates drone fleet and battery inventory and moves the mission to History.
+                    When the drone has physically landed, click Confirm once to record its arrival. Inspection and hub inventory are handled in the subsequent Backend workflow.
                   </p>
                 </section>
               )}

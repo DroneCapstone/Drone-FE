@@ -9,6 +9,7 @@ import {
   pickNumber,
   pickString,
   unwrapList,
+  unwrapObject,
 } from "../api/httpClient";
 
 import {
@@ -32,6 +33,16 @@ export type FleetDrone = {
   installedBatteryPct?: number;
   lastMaintenanceAt?: string;
   nextMaintenanceAt?: string;
+  // Fields returned by GET /technician/fleet/drones/{drone_id}.
+  // Optional: a missing value must never be displayed as a made-up zero.
+  operationalStatus?: string;
+  payloadKg?: number;
+  maxSpeed?: number;
+  currentHubId?: string | number | null;
+  batteryLevelPct?: number;
+  utilizationPct?: number;
+  batteryCode?: string;
+  lastFlightAt?: string;
 };
 
 export const TECHNICIAN_HUB =
@@ -176,15 +187,25 @@ export function resetDemoFleet() {
 }
 
 
-function mapApiDrone(value: unknown): FleetDrone | null {
+function readOptionalNumber(record: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const raw = record[key];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const value = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+function mapApiDrone(value: unknown, forDetail = false): FleetDrone | null {
   if (!isRecord(value)) return null;
 
   const rawId = pickString(value, ["drone_id", "id", "droneId"]);
   if (!rawId) return null;
 
-  const id = /^DR-/i.test(rawId)
-    ? rawId.toUpperCase()
-    : `DR-${String(Number(rawId) || rawId).padStart(3, "0")}`;
+  // Preserve the Backend drone ID exactly (e.g. DRN-0005).
+  // Do not generate an extra DR- prefix: DR-DRN-0005 is not a real ID.
+  const id = rawId.trim();
 
   const name = pickString(value, ["name", "drone_name", "code"], id);
   const model = pickString(value, ["model", "drone_model"], "—");
@@ -195,8 +216,9 @@ function mapApiDrone(value: unknown): FleetDrone | null {
   ).trim().toUpperCase().replace(/[\s-]+/g, "_");
   // Explicit null hub means BE has unassigned this drone from physical hub stock.
   // Do not do this check for older responses which omit current_hub_id.
-  if ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
-      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null)) {
+  const currentHub = value.current_hub_id ?? value.currentHubId;
+  if (!forDetail && ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
+      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null))) {
     return null;
   }
   const flightStatuses = [
@@ -209,17 +231,18 @@ function mapApiDrone(value: unknown): FleetDrone | null {
       return typeof valueAtKey === "string" &&
         flightStatuses.includes(valueAtKey.trim().toUpperCase().replace(/[\s-]+/g, "_"));
     });
-  if (hasFlyingStatus) return null;
+  if (!forDetail && hasFlyingStatus) return null;
   const status = normalizeDroneStatus(rawStatus || "Available");
-  const hub = pickString(value, ["hub_name", "hub", "location"], TECHNICIAN_HUB);
-  const battery = pickNumber(value, ["battery_level_pct", "battery_pct", "battery", "charge_level_pct"], 0);
+  const hub = pickString(value, ["hub_name", "hub", "location"], "") || "—";
+  const batteryPct = readOptionalNumber(value, ["battery_level_pct", "battery_pct", "charge_level_pct"]);
+  const battery = batteryPct ?? pickNumber(value, ["battery"], 0);
+  const utilizationPct = readOptionalNumber(value, ["utilization_pct", "utilization_percent", "utilization"]);
 
   const installedBatteryId = (() => {
     const raw = pickString(value, ["installed_battery_id", "battery_id"], "");
     if (!raw) return undefined;
-    if (/^BAT-/i.test(raw)) return raw.toUpperCase();
-    const match = raw.match(/(\d+)$/);
-    return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${raw}`;
+    // Never fabricate a battery identifier; API ids and serials may differ.
+    return raw.trim();
   })();
 
   return {
@@ -228,20 +251,29 @@ function mapApiDrone(value: unknown): FleetDrone | null {
     model,
     status,
     battery,
-    utilization: 0,
-    lastFlight: pickString(value, ["last_flight", "last_mission_id"], "Not flown"),
+    utilization: utilizationPct ?? 0,
+    lastFlight: pickString(value, ["last_flight", "last_mission_id", "last_flight_id"], "") || "—",
     location: hub,
     installedBatteryId,
-    installedBatteryPct: installedBatteryId ? battery : undefined,
-    lastMaintenanceAt: pickString(value, ["last_maintenance", "last_maintenance_at"], "") || undefined,
-    nextMaintenanceAt: pickString(value, ["next_maintenance", "next_maintenance_at"], "") || undefined,
+    installedBatteryPct: installedBatteryId ? batteryPct : undefined,
+    batteryCode: pickString(value, ["battery_code", "installed_battery_code", "battery_serial_number"], "") || undefined,
+    batteryLevelPct: batteryPct,
+    utilizationPct,
+    payloadKg: readOptionalNumber(value, ["payload_kg", "max_payload_kg", "max_payload"]),
+    maxSpeed: readOptionalNumber(value, ["max_speed", "max_speed_m_s", "max_speed_mps"]),
+    currentHubId: currentHub === null ? null :
+      typeof currentHub === "string" || typeof currentHub === "number" ? currentHub : undefined,
+    operationalStatus: pickString(value, ["status", "operational_status", "flight_status"], "") || undefined,
+    lastFlightAt: pickString(value, ["last_flight_at", "last_flight_time"], "") || undefined,
+    lastMaintenanceAt: pickString(value, ["last_maintenance_at", "last_maintenance"], "") || undefined,
+    nextMaintenanceAt: pickString(value, ["next_maintenance_at", "next_maintenance"], "") || undefined,
   };
 }
 
 export async function refreshFleetFromApi() {
   const payload = await getFleetDronesApi();
   const next = unwrapList(payload)
-    .map(mapApiDrone)
+    .map((value) => mapApiDrone(value, false))
     .filter((item): item is FleetDrone => Boolean(item));
 
   demoFleet = next;
@@ -265,16 +297,13 @@ export async function updateDroneStatusOnServer(
 
 export async function fetchDroneDetailFromApi(droneId: string) {
   const payload = await getDroneDetailApi(droneId);
-  const record = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
-  const mapped = mapApiDrone(record);
+  const record = unwrapObject(payload);
+  // The detail endpoint may legitimately return an in-flight drone or a
+  // null current_hub_id. Do not apply the physical Hub Fleet inventory filter.
+  const mapped = mapApiDrone(record, true);
   if (!mapped) {
     throw new Error("Backend returned an invalid drone detail response.");
   }
-
-  demoFleet = [
-    mapped,
-    ...demoFleet.filter((drone) => drone.id !== mapped.id),
-  ];
-  window.dispatchEvent(new Event("technician-fleet-updated"));
+  // Do NOT insert a drone that is flying into Hub Fleet's local inventory.
   return { ...mapped };
 }

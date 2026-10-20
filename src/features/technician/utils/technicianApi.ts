@@ -508,12 +508,13 @@ export const getTechnicianUsersApi = () =>
 export const getFleetDronesApi = () =>
   technicianApiRequest("/technician/fleet/drones");
 
+// Drone detail expects its exact API identifier (for example DRN-0001).
+// Do not guess a numeric suffix: /drones/1 is not the same resource.
 export const getDroneDetailApi = (
   droneId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/drones/${id}`,
-    droneId,
+  technicianApiRequest(
+    `/technician/fleet/drones/${encodeURIComponent(String(droneId).trim())}`,
   );
 
 export const updateDroneStatusApi = (

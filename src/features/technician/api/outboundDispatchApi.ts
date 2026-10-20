@@ -1,34 +1,26 @@
 import { technicianApiRequest } from "../utils/technicianApi";
 
 /**
- * Backend has published ONLY /technician/fleet/missions/{mission_id}/dispatch
- * for the Relay Hub continuation flow. Do not presume it supports an
- * INITIAL departure from Origin. Enable when BE confirms the initial dispatch
- * contract by setting VITE_TECHNICIAN_INITIAL_DISPATCH_PATH to e.g.
- *   /technician/fleet/missions/{mission_id}/dispatch
- * ONLY if BE explicitly confirms that endpoint accepts an initial departure.
- * If BE exposes a different endpoint, configure its exact path template.
- * Must include {mission_id}; no guessed URL or fake status update.
+ * BE-confirmed Origin Hub flow:
+ *   Scheduled + AT_HUB --POST ready--> Scheduled + READY
+ *   Scheduled + READY  --POST dispatch--> Flying
+ *
+ * These calls use the real mission ID (MSN-...), never a numeric suffix.
+ * BE is authoritative for drone/battery checks, scheduled departure time,
+ * mission transition and physical inventory changes.
  */
-const pathTemplate = String(
-  import.meta.env.VITE_TECHNICIAN_INITIAL_DISPATCH_PATH ?? "",
-).trim();
+function missionEndpoint(missionId: string, operation: "ready" | "dispatch"): string {
+  const id = missionId.trim();
+  if (!id) {
+    throw new Error("Backend mission ID is missing.");
+  }
+  return `/technician/fleet/missions/${encodeURIComponent(id)}/${operation}`;
+}
 
-export const initialDispatchEnabled =
-  pathTemplate.startsWith("/") &&
-  !pathTemplate.startsWith("//") &&
-  pathTemplate.includes("{mission_id}") &&
-  !/[?#]/.test(pathTemplate);
+export function markOutboundMissionReadyApi(missionId: string) {
+  return technicianApiRequest(missionEndpoint(missionId, "ready"), { method: "POST" });
+}
 
 export function dispatchInitialOutboundMissionApi(missionId: string) {
-  if (!initialDispatchEnabled) {
-    return Promise.reject(new Error(
-      "Backend has not confirmed an initial Outbound Dispatch API. " +
-      "Ask BE to confirm the route and configure VITE_TECHNICIAN_INITIAL_DISPATCH_PATH.",
-    ));
-  }
-  const path = pathTemplate.replaceAll(
-    "{mission_id}", encodeURIComponent(missionId),
-  );
-  return technicianApiRequest(path, { method: "POST" });
+  return technicianApiRequest(missionEndpoint(missionId, "dispatch"), { method: "POST" });
 }

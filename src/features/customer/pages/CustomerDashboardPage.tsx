@@ -175,7 +175,7 @@ export function CustomerDashboardPage() {
           icon={<Package size={21} />}
           title="Normal delivery"
           description="Standard service, using available flight slots."
-          badge="0% mode surcharge"
+          badge="0% service surcharge"
         />
 
         <DeliveryOptionCard

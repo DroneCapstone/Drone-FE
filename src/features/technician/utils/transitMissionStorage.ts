@@ -341,10 +341,8 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     "",
   );
 
-  const derivedDroneId =
-    droneRaw ||
-    rawDroneCode.match(/(\d+)$/)?.[1] ||
-    "0";
+  // Prefer the canonical BE drone_id. Do not derive an ID from drone name.
+  const droneId = droneRaw.trim();
 
   // Some versions of GET /technician/fleet/incoming return the mission
   // identifier under `id` / `mission_code`, without a `mission_id` field.
@@ -360,7 +358,6 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
   const missionId = missionCodeRaw
     ? missionCodeRaw
     : displayId("MSN", missionRaw);
-  const droneId = displayId("DR", derivedDroneId, 3);
   const droneType = (
     rawDroneCode.match(/[A-Za-z]+/)?.[0] ??
     pickString(value, ["drone_type"], "DR")
@@ -534,7 +531,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const purpose = normalizeTransitPurpose(
     pickString(value, ["purpose", "mission_purpose", "arrival_reason"], ""), state,
   );
-  const droneId = pickString(value, ["drone_id", "drone_code", "drone"], "");
+  const droneId = pickString(value, ["drone_id", "current_drone_id", "droneId"], "");
   const batteryId = pickString(value, ["battery_code", "battery_id", "battery"], "");
   const outcome = isIncidentMissionState(state) ? "Sent to maintenance" :
     isCompletedMissionState(state) ? "Returned to hub" : "Continued";
