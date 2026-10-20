@@ -8,6 +8,7 @@ import type {
   Order,
   OrderStatus,
   PlanningState,
+  OrderPriorityLevel,
   OperatorDrone,
 } from '../types/operator';
 
@@ -31,7 +32,7 @@ type BackendOrderStatus =
   | 'DELIVERED_TO_HUB'
   | 'CANCELLED';
 
-type BackendDeliveryMode = 'EXPRESS' | 'SCHEDULED';
+type BackendDeliveryMode = 'EXPRESS' | 'SCHEDULED' | 'NORMAL';
 
 type BackendPlanningState =
   | 'WAITING_PACKAGE'
@@ -67,6 +68,13 @@ export interface BackendOperatorOrder {
   estimated_window_start?: string | null;
   estimated_window_end?: string | null;
   planning_at?: string | null;
+  slack_minutes?: number | null;
+  priority_score?: number | null;
+  priority_level?: string | null;
+  coordination_deadline?: string | null;
+  customer_deadline?: string | null;
+  overdue_minutes?: number | null;
+  is_overdue?: boolean | null;
 
   // The current Swagger List Orders schema does not show these fields yet,
   // but the Operator table needs them to render Origin → Destination.
@@ -229,7 +237,23 @@ function mapStatus(status: BackendOrderStatus): OrderStatus {
 }
 
 function mapDeliveryMode(mode: BackendDeliveryMode): DeliveryMode {
-  return mode === 'EXPRESS' ? 'Express' : 'Scheduled';
+  switch (mode) {
+    case 'EXPRESS': return 'Express';
+    case 'NORMAL': return 'Normal';
+    case 'SCHEDULED': default: return 'Scheduled';
+  }
+}
+
+function mapPriorityLevel(value?: string | null): OrderPriorityLevel | undefined {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === 'CRITICAL' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW') {
+    return normalized;
+  }
+  return undefined;
+}
+
+function finiteNumber(value?: number | null): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function mapPlanningState(value?: BackendPlanningState | null): PlanningState | undefined {
@@ -295,6 +319,13 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     planningState: mapPlanningState(raw.planningState),
     planningStateLabel: raw.planning_state_label?.trim() || undefined,
     canCreateMission: raw.can_create_mission === true,
+    priorityLevel: mapPriorityLevel(raw.priority_level),
+    priorityScore: finiteNumber(raw.priority_score),
+    slackMinutes: finiteNumber(raw.slack_minutes),
+    coordinationDeadline: validIso(raw.coordination_deadline),
+    customerDeadline: validIso(raw.customer_deadline),
+    overdueMinutes: finiteNumber(raw.overdue_minutes),
+    isOverdue: raw.is_overdue ?? undefined,
     status: mapStatus(raw.status),
     originPackageReceived: raw.originPackage?.received === true,
     originHubReceivedAt:

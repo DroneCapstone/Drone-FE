@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import './order-priority.css';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Mission, Order, PlanningState, Tone } from '../types/operator';
 import {
@@ -25,6 +26,24 @@ function receivedTime(value: string) {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatUrgency(order: Order): string | undefined {
+  if (!order.priorityLevel) return undefined;
+  const label = order.priorityLevel.charAt(0) + order.priorityLevel.slice(1).toLowerCase();
+  const slack = order.slackMinutes;
+  if (order.isOverdue === true || (slack !== undefined && slack <= 0)) {
+    const overdue = order.overdueMinutes && order.overdueMinutes > 0
+      ? order.overdueMinutes
+      : slack !== undefined ? Math.max(0, -slack) : undefined;
+    return overdue !== undefined && overdue > 0
+      ? `${label} · Assign overdue by ${Math.ceil(overdue)} min`
+      : `${label} · Coordination deadline reached`;
+  }
+  if (slack === undefined) return `${label} priority`;
+  const minutes = Math.ceil(slack);
+  if (minutes >= 120) return `${label} · ${Math.floor(minutes / 60)}h ${minutes % 60}m left to assign`;
+  return `${label} · ${minutes} min left to assign`;
+}
+
 export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mission[] }) {
   const navigate = useNavigate();
 
@@ -45,6 +64,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
             const planning = getOrderPlanningBadge(order, missions);
             const deliveryMission = getDeliveryMission(order.id, missions);
             const canCreate = canCreateMissionForOrder(order, missions);
+            const urgency = canCreate ? formatUrgency(order) : undefined;
 
             let action = 'Open';
             let target = `/operator/orders/${order.id}`;
@@ -85,6 +105,11 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                     {planning && <StatusBadge tone={planningTone(planning)}>{planning}</StatusBadge>}
                     {!planning && order.status !== 'Pending' && <small>{order.status}</small>}
                   </div>
+                  {urgency && (
+                    <small className={`operator-order-priority operator-order-priority--${order.priorityLevel?.toLowerCase()}`}>
+                      {urgency}
+                    </small>
+                  )}
                 </td>
                 <td>
                   <button

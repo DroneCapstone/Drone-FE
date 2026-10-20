@@ -13,7 +13,9 @@ export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
 
 export type MissionType = 'Delivery';
 
-export type DeliveryMode = 'Express' | 'Scheduled';
+export type DeliveryMode = 'Express' | 'Scheduled' | 'Normal';
+
+export type OrderPriorityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type CustomerContactChannel = 'Phone' | 'SMS';
 
@@ -75,6 +77,14 @@ export interface Order {
   planningStateLabel?: string;
   /** Official permission returned by BE. Never infer true from a date. */
   canCreateMission?: boolean;
+  /** BE-calculated Operator coordination priority; these fields may be missing on older responses. */
+  priorityLevel?: OrderPriorityLevel;
+  priorityScore?: number;
+  slackMinutes?: number;
+  coordinationDeadline?: string;
+  customerDeadline?: string;
+  overdueMinutes?: number;
+  isOverdue?: boolean;
   status: OrderStatus;
 
   /** Authoritative package receipt flag from originPackage.received (independent of received_at). */
@@ -101,11 +111,6 @@ export interface MissionLeg {
   fromHubId: string;
   toHubId: string;
   status: MissionLegStatus;
-  /** Actual battery persisted for this flight leg by BE. */
-  batteryId?: string;
-  batteryModel?: string;
-  batteryChargePct?: number;
-  batteryEnergyWh?: number;
 }
 
 export interface Mission {
@@ -217,13 +222,6 @@ export interface PlannedRouteLeg {
   toHubId: string;
   predictedEnergyWh?: number;
   endingSocPct?: number;
-  /** BE-selected battery used to depart this leg's origin hub. */
-  batteryId?: string;
-  batteryModel?: string;
-  batteryChargePct?: number;
-  batteryEnergyWh?: number;
-  batteryCapacityWh?: number;
-  batteryConsumptionPct?: number;
   minimumReservePct?: number;
   feasible?: boolean;
 }
@@ -235,12 +233,6 @@ export interface PlannedRelayBattery {
   requiredBatteryCount?: number;
   availableBatteryCount?: number;
   batteryIds?: string[];
-  /** Authoritative auto-allocation at this Relay Hub from Analyze. */
-  swapBatteryId?: string;
-  selectedBatteryModel?: string;
-  selectedBatteryChargePct?: number;
-  selectedBatteryEnergyWh?: number;
-  selectedBatteryCapacityWh?: number;
   ready?: boolean;
 }
 
@@ -254,16 +246,6 @@ export interface RouteLegSnapshot {
   to_hub_id?: number;
   from_hub_name?: string;
   to_hub_name?: string;
-  /** Preserve BE Analyze battery allocation when handing the snapshot to Create Mission. */
-  battery_id?: string;
-  battery_serial?: string;
-  battery_model?: string;
-  battery_capacity_wh?: number;
-  battery_charge_pct?: number;
-  battery_energy_wh?: number;
-  energy_wh?: number;
-  battery_consumption_pct?: number;
-  remaining_battery_pct?: number;
 }
 
 export interface RouteOption {
