@@ -102,6 +102,7 @@ export interface Mission {
   type: MissionType;
   name: string;
   droneId: string;
+  batteryId?: string;
   drone: string;
   originHubId: string;
   destinationHubId: string;

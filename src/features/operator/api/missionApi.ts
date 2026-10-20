@@ -4,8 +4,6 @@ import { OperatorApiError, operatorApiRequest } from './orderApi';
 export interface MissionHubSummary {
   id: string;
   name: string;
-  code?: string;
-  status?: string;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -34,23 +32,6 @@ export interface LiveTrackingDrone {
   latitude?: number;
   longitude?: number;
   mapPosition: string;
-  /** API's latest telemetry timestamp, not when React most recently polled. */
-  lastUpdated?: string;
-  /** Number of passed hubs confirmed by Backend. */
-  checkpointsPassed?: number;
-  /** Units are retained exactly as returned by Backend. */
-  weather?: {
-    temperature?: number;
-    apparentTemp?: number;
-    dewPoint?: number;
-    humidity?: number;
-    windSpeed?: number;
-    windGust?: number;
-    windDirection?: number;
-    precipitation?: number;
-    pressure?: number;
-    cloudCover?: number;
-  };
 }
 
 export interface MissionTelemetryPoint {
@@ -131,6 +112,7 @@ export interface CreateMissionInput {
   orderId: string;
   droneId: string;
   routeId: string;
+  batteryId: string;
   /** Exact selected Analyze route snapshot accepted by the updated Create Mission schema. */
   routeString: string;
   legDetails: RouteLegSnapshot[];
@@ -142,7 +124,22 @@ export interface CreateMissionInput {
 export interface AnalyzeMissionPlanningInput {
   orderId: string;
   droneId: string;
+  batteryId: string;
 }
+
+/** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
+export interface EligibleMissionBattery {
+  id: string;
+  serialNumber: string;
+  model?: string;
+  capacityWh?: number;
+  chargeLevelPct?: number;
+  availableEnergyWh?: number;
+  hubId?: string;
+  droneId?: string;
+  availableStatus?: string;
+}
+
 
 export interface CreateIncidentInput {
   missionId: string;
@@ -335,8 +332,6 @@ function mapHub(raw: unknown): MissionHubSummary {
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
-    code: pickString(record, ['code', 'hub_code', 'hubCode']) || undefined,
-    status: pickString(record, ['status']) || undefined,
     address: pickString(record, ['address', 'location']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
@@ -407,7 +402,7 @@ function mapMission(raw: unknown): Mission {
   return {
     id, orderId, type: 'Delivery',
     name: pickString(record, ['name', 'mission_name', 'missionName'], `Delivery ${orderId || id}`),
-    droneId, drone: droneName,
+    droneId, batteryId: pickString(record, ['battery_id', 'batteryId', 'assignedBatteryId']) || undefined, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
     destinationHubId: pickString(record, ['destination_hub_id', 'destinationHubId']),
     relayHubIds, legs, routeId, route: routeName,
@@ -430,7 +425,7 @@ function mapMission(raw: unknown): Mission {
 function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
-  const health = normalizeHealth(record.health ?? record.alert_level ?? record.status);
+  const health = normalizeHealth(record.health ?? record.status ?? record.alert_level);
   const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
   const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
   return {
@@ -448,26 +443,12 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
     speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
-    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Backend chưa cung cấp AI assessment cho chuyến bay này.'),
+    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
     mapPosition: `pos-${(index % 12) + 1}`,
-    lastUpdated: pickString(record, ['last_updated', 'lastUpdated', 'updated_at', 'updatedAt']) || undefined,
-    checkpointsPassed: pickOptionalNumber(record, ['checkpoints_passed', 'checkpointsPassed']),
-    weather: {
-      temperature: pickOptionalNumber(record, ['weather_temperature']),
-      apparentTemp: pickOptionalNumber(record, ['weather_apparent_temp']),
-      dewPoint: pickOptionalNumber(record, ['weather_dew_point']),
-      humidity: pickOptionalNumber(record, ['weather_humidity']),
-      windSpeed: pickOptionalNumber(record, ['weather_wind_speed']),
-      windGust: pickOptionalNumber(record, ['weather_wind_gust']),
-      windDirection: pickOptionalNumber(record, ['weather_wind_direction']),
-      precipitation: pickOptionalNumber(record, ['weather_precipitation']),
-      pressure: pickOptionalNumber(record, ['weather_pressure']),
-      cloudCover: pickOptionalNumber(record, ['weather_cloud_cover']),
-    },
   };
 }
 
@@ -784,17 +765,10 @@ export async function collectMissionTelemetryApi(
   );
 }
 
-export async function getMissionTelemetryApi(
-  missionId: string,
-  options: { limit?: number; offset?: number } = {},
-): Promise<MissionTelemetryPoint[]> {
+export async function getMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
   if (!missionId.trim()) return [];
-  const query = new URLSearchParams();
-  if (options.limit !== undefined) query.set('limit', String(options.limit));
-  if (options.offset !== undefined) query.set('offset', String(options.offset));
-  const suffix = query.toString() ? `?${query.toString()}` : '';
   const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry${suffix}`,
+    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry`,
   );
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
@@ -861,19 +835,56 @@ export async function updateIncidentStatusApi(
   return mapIncident(payload);
 }
 
+/** GET /operator/missions/eligible-batteries — actual compatibility check belongs to BE. */
+export async function getEligibleMissionBatteriesApi(
+  droneId: string,
+  orderId: string,
+): Promise<EligibleMissionBattery[]> {
+  if (!droneId.trim() || !orderId.trim()) return [];
+  const query = new URLSearchParams({ drone_id: droneId.trim(), order_id: orderId.trim() });
+  const response = await operatorApiRequest<unknown>(
+    `/operator/missions/eligible-batteries?${query.toString()}`,
+  );
+  const payload = parseJsonString(response);
+  const records = Array.isArray(payload) ? payload :
+    isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
+  if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
+       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+         'items' in payload || 'data' in payload || 'results' in payload))) {
+    throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
+  }
+  return records.map((entry) => {
+    const record = asRecord(entry);
+    const nested = isRecord(record.battery) ? record.battery : record;
+    const id = pickString(nested, ['id', 'battery_id', 'batteryId']);
+    if (!id || record.eligible === false || record.compatible === false) return null;
+    return {
+      id,
+      serialNumber: pickString(nested, ['serial_number', 'serialNumber', 'battery_serial', 'batterySerial'], id),
+      model: pickString(nested, ['battery_model', 'batteryModel', 'model']) || undefined,
+      capacityWh: pickOptionalNumber(nested, ['capacity_wh', 'capacityWh']),
+      chargeLevelPct: pickOptionalNumber(nested, ['charge_level_pct', 'chargeLevelPct', 'battery_charge_pct', 'batteryChargePct']),
+      availableEnergyWh: pickOptionalNumber(nested, ['available_energy_wh', 'availableEnergyWh', 'battery_energy_wh', 'batteryEnergyWh']),
+      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
+      droneId: pickString(nested, ['drone_id', 'droneId']) || undefined,
+      availableStatus: pickString(nested, ['available_status', 'availableStatus']) || undefined,
+    } as EligibleMissionBattery;
+  }).filter((item): item is EligibleMissionBattery => item !== null);
+}
+
 export async function analyzeMissionPlanningApi(
   input: AnalyzeMissionPlanningInput,
 ): Promise<MissionPlanningAnalysis> {
-  const numericDroneId = Number(input.droneId);
-  if (!Number.isInteger(numericDroneId)) {
-    throw new OperatorApiError('Drone ID must be a number.', 400);
+  if (!input.droneId.trim() || !input.batteryId.trim()) {
+    throw new OperatorApiError('Select a drone and its origin battery before analysis.', 400);
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/mission-planning/analyze', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
-      droneId: numericDroneId,
+      droneId: input.droneId,
+      batteryId: input.batteryId,
     }),
   });
   const root = unwrapObject(payload);
@@ -904,16 +915,16 @@ export async function analyzeMissionPlanningApi(
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
-  const numericDroneId = Number(input.droneId);
-  if (!Number.isInteger(numericDroneId)) {
-    throw new OperatorApiError('Drone ID must be a number.', 400);
+  if (!input.droneId.trim() || !input.batteryId.trim()) {
+    throw new OperatorApiError('Select a drone and a battery before assigning a Mission.', 400);
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
-      droneId: numericDroneId,
+      droneId: input.droneId,
+      batteryId: input.batteryId,
       routeId: input.routeId,
       route_string: input.routeString,
       legs_detail: input.legDetails.map((leg) => ({
