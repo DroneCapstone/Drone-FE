@@ -23,8 +23,8 @@ import {
   useOutboundHistoryQuery,
   useReceiveOutboundMutation,
   useOutboundDispatchMutation,
+  useOutboundReadyMutation,
 } from "../hooks/useOutboundQueries";
-import { initialDispatchEnabled } from "../api/outboundDispatchApi";
 import { technicianQueryKeys } from "../hooks/queryKeys";
 
 type Status = OutboundDelivery["status"];
@@ -127,12 +127,32 @@ function DetailField({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+/** A Scheduled mission is allowed to reach READY through the dedicated API.
+ * Do not mistake mission.status=Scheduled for mission.handling_status=READY.
+ */
+function normalizedState(raw?: string) {
+  return (raw ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+}
+
+function isInitialDispatchCandidate(delivery: OutboundDelivery): boolean {
+  if (delivery.prematureMissionAssignment) return false;
+  if (delivery.status !== "Mission Assigned" && delivery.status !== "Ready") return false;
+  const missionState = normalizedState(delivery.missionStatus);
+  if (missionState !== "SCHEDULED" && missionState !== "READY") return false;
+  return Boolean(delivery.backendMissionId && delivery.assignedDroneId && delivery.installedBatteryId);
+}
+
+function isBackendReady(delivery: OutboundDelivery): boolean {
+  return normalizedState(delivery.handlingStatus) === "READY";
+}
+
 export function OutboundDeliveriesPage() {
   const queryClient = useQueryClient();
   const outboundQuery = useOutboundDeliveriesQuery();
   const historyQuery = useOutboundHistoryQuery();
   const receiveMutation = useReceiveOutboundMutation();
   const outboundDispatchMutation = useOutboundDispatchMutation();
+  const outboundReadyMutation = useOutboundReadyMutation();
 
   const deliveries: OutboundDelivery[] = outboundQuery.data ?? [];
   const history = historyQuery.data ?? [];
@@ -145,6 +165,10 @@ export function OutboundDeliveriesPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
   const [dispatchingMissionId, setDispatchingMissionId] = useState<string | null>(null);
+  const [dispatchConfirmOrderId, setDispatchConfirmOrderId] = useState<string | null>(null);
+  // Keep evidence of a successful READY POST if a following Dispatch fails.
+  // On remount the API GET handling_status=READY also provides this evidence.
+  const [readyConfirmedIds, setReadyConfirmedIds] = useState<string[]>([]);
   // Prevent double-dispatch after a successful POST while BE data propagates.
   const [acceptedDispatchIds, setAcceptedDispatchIds] = useState<string[]>([]);
   const [backendReceivedIds, setBackendReceivedIds] = useState<string[]>([]);
@@ -179,6 +203,7 @@ export function OutboundDeliveriesPage() {
         delivery.deliveryMode,
         delivery.missionCode,
         delivery.missionId,
+        delivery.assignedDroneId,
         delivery.assignedDroneCode,
       ].some((field) => field?.toLowerCase().includes(term));
     }).sort((a, b) => {
@@ -235,23 +260,42 @@ export function OutboundDeliveriesPage() {
     }
   };
 
+  const dispatchCandidate = normalizedDeliveries.find(
+    (delivery) => delivery.orderId === dispatchConfirmOrderId,
+  );
+
   const handleInitialDispatch = async (delivery: OutboundDelivery) => {
     const missionId = delivery.backendMissionId;
-    if (!initialDispatchEnabled || !missionId || delivery.status !== "Ready" ||
-        !delivery.assignedDroneId || !delivery.installedBatteryId ||
-        dispatchingMissionId || outboundDispatchMutation.isPending ||
-        acceptedDispatchIds.includes(missionId)) return;
+    if (!missionId || !isInitialDispatchCandidate(delivery) ||
+        dispatchingMissionId !== null || outboundReadyMutation.isPending ||
+        outboundDispatchMutation.isPending || acceptedDispatchIds.includes(missionId)) return;
 
     setDispatchingMissionId(missionId);
     setActionMessage("");
+    setDispatchConfirmOrderId(null);
+    let readyConfirmedThisAttempt = isBackendReady(delivery) || readyConfirmedIds.includes(missionId);
     try {
-      // The endpoint must be configured from an explicit BE confirmation.
-      // Never synthesize Flying or remove fleet/battery rows client-side.
+      const readyAlreadyConfirmed = readyConfirmedThisAttempt;
+      if (!readyAlreadyConfirmed) {
+        // Only send Dispatch after the READY request actually succeeds.
+        await outboundReadyMutation.mutateAsync(missionId);
+        readyConfirmedThisAttempt = true;
+        setReadyConfirmedIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
+      }
+
+      // BE has confirmed this endpoint supports the initial Origin departure.
       await outboundDispatchMutation.mutateAsync(missionId);
       setAcceptedDispatchIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
-      setActionMessage("Origin Dispatch accepted by Backend. Refreshing Outbound, Hub Fleet and Battery Management. Drone and installed battery leave hub inventory only when Backend records their departure.");
+      setActionMessage("Dispatch accepted by Backend. Mission is starting; Hub Fleet and Battery Management are refreshing from the server.");
     } catch (error) {
-      setActionMessage(error instanceof Error ? error.message : "Initial dispatch failed.");
+      const message = error instanceof Error ? error.message : "Unable to start the mission.";
+      setActionMessage(
+        readyConfirmedThisAttempt
+          ? `Dispatch was not completed: ${message}. If READY was accepted, retry will skip the Ready request.`
+          : `Ready/Dispatch failed: ${message}`,
+      );
+      // If READY succeeded but Dispatch failed, GET will show READY for retries.
+      void outboundQuery.refetch();
     } finally {
       setDispatchingMissionId(null);
     }
@@ -367,10 +411,10 @@ export function OutboundDeliveriesPage() {
                         ? "—"
                         : display(delivery.missionCode ?? delivery.missionId)}
                     </p>
-                    <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneCode ?? ""}>
+                    <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneId ?? ""}>
                       {delivery.prematureMissionAssignment
                         ? "Awaiting package receipt"
-                        : delivery.assignedDroneCode || "Drone not assigned"}
+                        : delivery.assignedDroneId || "Drone not assigned"}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -416,26 +460,7 @@ export function OutboundDeliveriesPage() {
                         {delivery.missionId ? "Awaiting drone assignment" : "Awaiting Operator"}
                       </span>
                     )}
-                    {delivery.status === "Mission Assigned" && (
-                      delivery.installedBatteryId && delivery.backendMissionId && delivery.assignedDroneCode ? (
-                        <div className="flex max-w-[160px] flex-col items-end gap-1">
-                          <Button
-                            type="button"
-                            disabled
-                            title="Waiting for Backend Ready status and a verified initial outbound Dispatch endpoint."
-                            className="h-9 rounded-md bg-orange-500 px-3 text-[11px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <PlaneTakeoff size={13} /> Dispatch
-                          </Button>
-                          <span className="text-right text-[10px] text-[var(--tech-muted)]">Check assignment · Awaiting Ready/API</span>
-                        </div>
-                      ) : (
-                        <span className="max-w-[150px] text-right text-[11px] text-[var(--tech-muted)]">
-                          {delivery.installedBatteryId ? "Verify mission & drone" : "Awaiting Operator battery"}
-                        </span>
-                      )
-                    )}
-                    {delivery.status === "Ready" && (
+                    {(delivery.status === "Mission Assigned" || delivery.status === "Ready") && (
                       <div className="flex max-w-[168px] flex-col items-end gap-1">
                         {delivery.backendMissionId && acceptedDispatchIds.includes(delivery.backendMissionId) ? (
                           <span className="text-right text-[11px] text-orange-500">Dispatch accepted · Syncing</span>
@@ -443,20 +468,31 @@ export function OutboundDeliveriesPage() {
                           <>
                             <Button
                               type="button"
-                              disabled={!initialDispatchEnabled || !delivery.backendMissionId ||
-                                !delivery.assignedDroneId || !delivery.installedBatteryId ||
-                                outboundDispatchMutation.isPending || Boolean(dispatchingMissionId)}
-                              title={initialDispatchEnabled
-                                ? "Dispatch the Operator-assigned drone and installed battery."
-                                : "BE must confirm the initial departure endpoint before enabling Dispatch."}
-                              onClick={() => void handleInitialDispatch(delivery)}
+                              disabled={!isInitialDispatchCandidate(delivery) ||
+                                outboundReadyMutation.isPending || outboundDispatchMutation.isPending ||
+                                dispatchingMissionId !== null}
+                              title={isInitialDispatchCandidate(delivery)
+                                ? "Confirm the Operator-assigned drone and battery before departure."
+                                : "Mission must be Scheduled/Ready with a valid mission ID, drone ID and battery ID."}
+                              onClick={() => {
+                                if (isInitialDispatchCandidate(delivery)) {
+                                  setActionMessage("");
+                                  setDispatchConfirmOrderId(delivery.orderId);
+                                }
+                              }}
                               className="h-9 rounded-md bg-orange-500 px-3 text-[11px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <PlaneTakeoff size={13} />
                               {dispatchingMissionId === delivery.backendMissionId ? "Dispatching..." : "Dispatch"}
                             </Button>
-                            {!initialDispatchEnabled && (
-                              <span className="text-right text-[10px] text-[var(--tech-muted)]">Awaiting BE initial Dispatch API</span>
+                            {!isInitialDispatchCandidate(delivery) && (
+                              <span className="text-right text-[10px] text-[var(--tech-muted)]">
+                                {!delivery.installedBatteryId
+                                  ? "Awaiting Operator battery"
+                                  : !delivery.assignedDroneId || !delivery.backendMissionId
+                                    ? "Verify mission & drone ID"
+                                    : "Mission not eligible for dispatch"}
+                              </span>
                             )}
                           </>
                         )}
@@ -489,6 +525,41 @@ export function OutboundDeliveriesPage() {
           </div>
         </div>
       </Card>
+
+      {dispatchCandidate && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !dispatchingMissionId) setDispatchConfirmOrderId(null);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Confirm drone dispatch" className="w-full max-w-[480px] overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+            <div className="border-b border-[var(--tech-border)] px-6 py-5">
+              <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">Confirm dispatch</h2>
+              <p className="mt-2 text-[12px] leading-5 text-[var(--tech-muted)]">
+                Check that you have installed the battery assigned by Operator and finished the pre-flight inspection.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
+              <DetailField label="Mission ID" value={display(dispatchCandidate.backendMissionId)} />
+              <DetailField label="Order" value={display(dispatchCandidate.orderCode ?? dispatchCandidate.orderId)} />
+              <DetailField label="Drone ID" value={display(dispatchCandidate.assignedDroneId)} />
+              <DetailField label="Assigned battery" value={display(dispatchCandidate.installedBatteryId)} />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
+              <Button type="button" disabled={dispatchingMissionId !== null} onClick={() => setDispatchConfirmOrderId(null)} className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">Cancel</Button>
+              <Button
+                type="button"
+                disabled={!isInitialDispatchCandidate(dispatchCandidate) || dispatchingMissionId !== null}
+                onClick={() => void handleInitialDispatch(dispatchCandidate)}
+                className="h-9 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
+              >
+                <PlaneTakeoff size={14} /> Confirm dispatch
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedDelivery && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4" onMouseDown={(event) => {

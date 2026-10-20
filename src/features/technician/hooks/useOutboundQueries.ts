@@ -14,7 +14,7 @@ import {
 import {
   technicianQueryKeys,
 } from "./queryKeys";
-import { dispatchInitialOutboundMissionApi } from "../api/outboundDispatchApi";
+import { dispatchInitialOutboundMissionApi, markOutboundMissionReadyApi } from "../api/outboundDispatchApi";
 import { invalidateAfterTechnicianDispatch } from "./invalidateAfterDispatch";
 
 export function useOutboundDeliveriesQuery() {
@@ -95,7 +95,23 @@ export function usePrepareOutboundBatteryMutation() {
   });
 }
 
-/** Initial departure from origin, never relay dispatch unless explicitly configured by BE. */
+/**
+ * Confirms the Technician physically installed/checked the Operator-assigned
+ * battery before the first departure. A successful response means READY was
+ * persisted by BE; Scheduled mission status may remain unchanged.
+ */
+export function useOutboundReadyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (missionId: string) => markOutboundMissionReadyApi(missionId),
+    onSuccess: () => {
+      // A successful READY response is authoritative; do not wait for slow GET.
+      void queryClient.invalidateQueries({ queryKey: technicianQueryKeys.outbound() });
+    },
+  });
+}
+
+/** First departure at Origin Hub. BE has confirmed this route supports it. */
 export function useOutboundDispatchMutation() {
   const queryClient = useQueryClient();
   return useMutation({
