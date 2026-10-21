@@ -251,3 +251,9 @@
   color: var(--text, #1f2937);
   font-weight: 650;
 }
+
+/* BE-assigned battery information, without changing route-card layout. */
+.mission-builder .mission-route-leg-places .mission-route-leg-battery { color: #48566a; line-height: 1.4; }
+.mission-builder .mission-route-leg-battery strong { display: inline; color: #273447; font-size: inherit; }
+.mission-builder .mission-relay-battery-review { display: flex; flex-direction: column; gap: 5px; }
+.mission-builder .mission-relay-battery-review > span { display: block; line-height: 1.45; overflow-wrap: anywhere; }

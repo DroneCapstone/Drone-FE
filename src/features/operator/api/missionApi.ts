@@ -4,6 +4,7 @@ import { OperatorApiError, operatorApiRequest } from './orderApi';
 export interface MissionHubSummary {
   id: string;
   name: string;
+  code?: string;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -32,6 +33,20 @@ export interface LiveTrackingDrone {
   latitude?: number;
   longitude?: number;
   mapPosition: string;
+  lastUpdated?: string;
+  checkpointsPassed?: number;
+  weather?: {
+    temperature?: number;
+    apparentTemperature?: number;
+    dewPoint?: number;
+    humidity?: number;
+    windSpeed?: number;
+    windGust?: number;
+    windDirection?: number;
+    precipitation?: number;
+    pressure?: number;
+    cloudCover?: number;
+  };
 }
 
 export interface MissionTelemetryPoint {
@@ -332,6 +347,7 @@ function mapHub(raw: unknown): MissionHubSummary {
   return {
     id: pickString(record, ['id', 'hub_id', 'hubId']),
     name: pickString(record, ['name', 'hub_name', 'hubName'], 'Unnamed Hub'),
+    code: pickString(record, ['code', 'hub_code', 'hubCode']) || undefined,
     address: pickString(record, ['address', 'location']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
@@ -340,14 +356,20 @@ function mapHub(raw: unknown): MissionHubSummary {
   };
 }
 
-function mapMissionLeg(raw: unknown, index: number): MissionLeg {
+function mapMissionLeg(raw: unknown, index: number, routeLeg?: unknown): MissionLeg {
   const record = asRecord(raw);
+  const snapshot = asRecord(routeLeg);
   const rawStatus = pickString(record, ['status'], 'PENDING').toUpperCase();
+  const batteryId = pickString(record, ['battery_id', 'batteryId']) || pickString(snapshot, ['battery_id', 'batteryId']);
   return {
     id: pickString(record, ['id', 'leg_id', 'legId'], `LEG-${index + 1}`),
-    fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']),
-    toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']),
+    fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']) || pickString(snapshot, ['from_hub_id', 'fromHubId']),
+    toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']) || pickString(snapshot, ['to_hub_id', 'toHubId']),
     status: rawStatus === 'COMPLETED' ? 'Completed' : rawStatus === 'IN_PROGRESS' ? 'In Progress' : 'Pending',
+    batteryId: batteryId || undefined,
+    batteryModel: pickString(record, ['battery_model', 'batteryModel']) || pickString(snapshot, ['battery_model', 'batteryModel']) || undefined,
+    batteryChargePct: pickOptionalNumber(record, ['battery_charge_pct', 'batteryChargePct']) ?? pickOptionalNumber(snapshot, ['battery_charge_pct', 'batteryChargePct']),
+    batteryEnergyWh: pickOptionalNumber(record, ['battery_energy_wh', 'batteryEnergyWh']) ?? pickOptionalNumber(snapshot, ['battery_energy_wh', 'batteryEnergyWh']),
   };
 }
 
@@ -379,8 +401,11 @@ function mapMission(raw: unknown): Mission {
   const createdAt = normalizeIso(pickString(record, ['created_at', 'createdAt'])) ?? plannedStartAt;
 
   const rawLegs = pickArray(record, ['legs_detail', 'legs', 'mission_legs']);
-  const legsRecords = rawLegs.length > 0 ? rawLegs : pickArray(routeRecord, ['legs_detail', 'legs']);
-  const legs = legsRecords.map(mapMissionLeg);
+  const plannedLegs = pickArray(routeRecord, ['legs_detail', 'legs']);
+  const legsRecords = rawLegs.length > 0 ? rawLegs : plannedLegs;
+  // MissionLeg can hold the operational status while scheduled_route holds the
+  // exact assigned battery snapshot. Merge by sequence, never fabricate an ID.
+  const legs = legsRecords.map((leg, index) => mapMissionLeg(leg, index, plannedLegs[index]));
   const relayHubIds = legs.length > 1
     ? legs.slice(0, -1).map((leg) => leg.toHubId).filter(Boolean)
     : pickArray(record, ['relay_hub_ids', 'relayHubIds']).map(String);
@@ -425,7 +450,7 @@ function mapMission(raw: unknown): Mission {
 function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
-  const health = normalizeHealth(record.health ?? record.status ?? record.alert_level);
+  const health = normalizeHealth(record.health ?? record.health_status ?? record.alert_level);
   const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
   const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
   return {
@@ -448,6 +473,20 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
+    lastUpdated: normalizeIso(pickString(record, ['last_updated', 'lastUpdated'])) ?? undefined,
+    checkpointsPassed: pickOptionalNumber(record, ['checkpoints_passed', 'checkpointsPassed']),
+    weather: {
+      temperature: pickOptionalNumber(record, ['weather_temperature']),
+      apparentTemperature: pickOptionalNumber(record, ['weather_apparent_temp']),
+      dewPoint: pickOptionalNumber(record, ['weather_dew_point']),
+      humidity: pickOptionalNumber(record, ['weather_humidity']),
+      windSpeed: pickOptionalNumber(record, ['weather_wind_speed']),
+      windGust: pickOptionalNumber(record, ['weather_wind_gust']),
+      windDirection: pickOptionalNumber(record, ['weather_wind_direction']),
+      precipitation: pickOptionalNumber(record, ['weather_precipitation']),
+      pressure: pickOptionalNumber(record, ['weather_pressure']),
+      cloudCover: pickOptionalNumber(record, ['weather_cloud_cover']),
+    },
     mapPosition: `pos-${(index % 12) + 1}`,
   };
 }
@@ -532,8 +571,14 @@ function mapRouteLeg(raw: unknown): PlannedRouteLeg {
   return {
     fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']),
     toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']),
-    predictedEnergyWh: pickOptionalNumber(record, ['predicted_energy_wh', 'predictedEnergyWh']),
-    endingSocPct: pickOptionalNumber(record, ['ending_soc_pct', 'endingSocPct', 'battery_after_pct', 'batteryAfterPct']),
+    predictedEnergyWh: pickOptionalNumber(record, ['energy_wh', 'predicted_energy_wh', 'predictedEnergyWh']),
+    endingSocPct: pickOptionalNumber(record, ['remaining_battery_pct', 'remainingBatteryPct', 'ending_soc_pct', 'endingSocPct', 'battery_after_pct', 'batteryAfterPct']),
+    batteryId: pickString(record, ['battery_id', 'batteryId']) || undefined,
+    batteryModel: pickString(record, ['battery_model', 'batteryModel']) || undefined,
+    batteryChargePct: pickOptionalNumber(record, ['battery_charge_pct', 'batteryChargePct']),
+    batteryEnergyWh: pickOptionalNumber(record, ['battery_energy_wh', 'batteryEnergyWh']),
+    batteryCapacityWh: pickOptionalNumber(record, ['battery_capacity_wh', 'batteryCapacityWh']),
+    batteryConsumptionPct: pickOptionalNumber(record, ['battery_consumption_pct', 'batteryConsumptionPct']),
     minimumReservePct: pickOptionalNumber(record, ['minimum_reserve_pct', 'minimumReservePct']),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
   };
@@ -543,11 +588,16 @@ function mapRelayBattery(raw: unknown): PlannedRelayBattery {
   const record = asRecord(raw);
   return {
     hubId: pickString(record, ['hub_id', 'hubId', 'relay_hub_id', 'relayHubId']),
-    batteryModel: pickString(record, ['battery_model', 'batteryModel']) || undefined,
+    batteryModel: pickString(record, ['selected_battery_model', 'selectedBatteryModel', 'battery_model', 'batteryModel']) || undefined,
     requiredBatteryCount: pickOptionalNumber(record, ['required_battery_count', 'requiredBatteryCount']),
-    availableBatteryCount: pickOptionalNumber(record, ['available_battery_count', 'availableBatteryCount']),
+    availableBatteryCount: pickOptionalNumber(record, ['ready_count', 'readyCount', 'available_battery_count', 'availableBatteryCount']),
     batteryIds: pickArray(record, ['battery_ids', 'batteryIds']).map(String),
-    ready: pickOptionalBoolean(record, ['ready', 'verified', 'is_ready', 'isReady']),
+    swapBatteryId: pickString(record, ['swap_battery_id', 'swapBatteryId', 'selected_battery_id', 'selectedBatteryId']) || undefined,
+    selectedBatteryModel: pickString(record, ['selected_battery_model', 'selectedBatteryModel']) || undefined,
+    selectedBatteryChargePct: pickOptionalNumber(record, ['selected_battery_charge_pct', 'selectedBatteryChargePct']),
+    selectedBatteryEnergyWh: pickOptionalNumber(record, ['selected_battery_energy_wh', 'selectedBatteryEnergyWh']),
+    selectedBatteryCapacityWh: pickOptionalNumber(record, ['selected_battery_capacity_wh', 'selectedBatteryCapacityWh']),
+    ready: pickOptionalBoolean(record, ['feasible', 'ready', 'verified', 'is_ready', 'isReady']),
   };
 }
 
@@ -566,6 +616,15 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
     to_hub_id: pickOptionalNumber(item, ['to_hub_id', 'toHubId']),
     from_hub_name: pickString(item, ['from_hub_name', 'fromHubName']) || undefined,
     to_hub_name: pickString(item, ['to_hub_name', 'toHubName']) || undefined,
+    battery_id: pickString(item, ['battery_id', 'batteryId']) || undefined,
+    battery_serial: pickString(item, ['battery_serial', 'batterySerial']) || undefined,
+    battery_model: pickString(item, ['battery_model', 'batteryModel']) || undefined,
+    battery_capacity_wh: pickOptionalNumber(item, ['battery_capacity_wh', 'batteryCapacityWh']),
+    battery_charge_pct: pickOptionalNumber(item, ['battery_charge_pct', 'batteryChargePct']),
+    battery_energy_wh: pickOptionalNumber(item, ['battery_energy_wh', 'batteryEnergyWh']),
+    energy_wh: pickOptionalNumber(item, ['energy_wh', 'energyWh']),
+    battery_consumption_pct: pickOptionalNumber(item, ['battery_consumption_pct', 'batteryConsumptionPct']),
+    remaining_battery_pct: pickOptionalNumber(item, ['remaining_battery_pct', 'remainingBatteryPct']),
   };
 }
 
@@ -765,10 +824,18 @@ export async function collectMissionTelemetryApi(
   );
 }
 
-export async function getMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+export async function getMissionTelemetryApi(
+  missionId: string,
+  pagination?: { limit?: number; offset?: number },
+): Promise<MissionTelemetryPoint[]> {
   if (!missionId.trim()) return [];
+  const query = new URLSearchParams();
+  if (pagination?.limit !== undefined) query.set('limit', String(Math.min(5000, Math.max(1, Math.round(pagination.limit)))));
+  if (pagination?.offset !== undefined) query.set('offset', String(Math.max(0, Math.round(pagination.offset))));
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : '';
   const payload = await operatorApiRequest<unknown>(
-    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry`,
+    `/operator/missions/${encodeURIComponent(missionId.trim())}/telemetry${suffix}`,
   );
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
@@ -927,10 +994,26 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
       batteryId: input.batteryId,
       routeId: input.routeId,
       route_string: input.routeString,
+      // Send the exact per-leg battery snapshot selected by BE Analyze.
+      // BE remains authoritative and validates/re-reserves relay batteries on Assign.
       legs_detail: input.legDetails.map((leg) => ({
         from_hub_code: leg.from_hub_code,
         to_hub_code: leg.to_hub_code,
         distance_km: leg.distance_km,
+        sequence_no: leg.sequence_no,
+        from_hub_id: leg.from_hub_id,
+        to_hub_id: leg.to_hub_id,
+        from_hub_name: leg.from_hub_name,
+        to_hub_name: leg.to_hub_name,
+        battery_id: leg.battery_id,
+        battery_serial: leg.battery_serial,
+        battery_model: leg.battery_model,
+        battery_capacity_wh: leg.battery_capacity_wh,
+        battery_charge_pct: leg.battery_charge_pct,
+        battery_energy_wh: leg.battery_energy_wh,
+        energy_wh: leg.energy_wh,
+        battery_consumption_pct: leg.battery_consumption_pct,
+        remaining_battery_pct: leg.remaining_battery_pct,
       })),
       distance_km: input.distanceKm,
       predicted_energy_wh: input.predictedEnergyWh,

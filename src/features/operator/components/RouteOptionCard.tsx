@@ -4,13 +4,10 @@ import type { RouteOption } from '../types/operator';
 import { DEFAULT_BATTERY_RESERVE_PCT } from '../utils/droneEligibility';
 import { formatMissionTime } from '../utils/missionTiming';
 
-/** This is presentation data from Operator Battery Inventory, not an allocation. */
+/** Relay Hub labels only; allocation & availability come from BE Analyze. */
 export interface RelayHubInventoryView {
   hubId: string;
   hubName: string;
-  requiredModel?: string;
-  readyCount: number | null;
-  inventoryState: 'loading' | 'error' | 'ready';
 }
 
 interface RouteOptionCardProps {
@@ -56,6 +53,10 @@ export function RouteOptionCard({
     distanceKm: leg.distance_km,
     energyWh: route.legs?.[index]?.predictedEnergyWh,
     batteryAfter: route.legs?.[index]?.endingSocPct,
+    batteryId: leg.battery_id ?? route.legs?.[index]?.batteryId,
+    batteryModel: leg.battery_model ?? route.legs?.[index]?.batteryModel,
+    batteryChargePct: leg.battery_charge_pct ?? route.legs?.[index]?.batteryChargePct,
+    batteryEnergyWh: leg.battery_energy_wh ?? route.legs?.[index]?.batteryEnergyWh,
   }));
   // Older API responses only provide leg IDs. Do not invent leg distances or energy.
   if (!legs.length && route.legs?.length) {
@@ -65,6 +66,10 @@ export function RouteOptionCard({
       distanceKm: Number.NaN,
       energyWh: leg.predictedEnergyWh,
       batteryAfter: leg.endingSocPct,
+      batteryId: leg.batteryId,
+      batteryModel: leg.batteryModel,
+      batteryChargePct: leg.batteryChargePct,
+      batteryEnergyWh: leg.batteryEnergyWh,
     }));
   }
 
@@ -120,6 +125,11 @@ export function RouteOptionCard({
                   {(leg.energyWh !== undefined || leg.batteryAfter !== undefined) && (
                     <small>{leg.energyWh !== undefined ? displayEnergy(leg.energyWh) : ''}{leg.energyWh !== undefined && leg.batteryAfter !== undefined ? ' · ' : ''}{leg.batteryAfter !== undefined ? `Battery after ${displayPct(leg.batteryAfter)}` : ''}</small>
                   )}
+                  <small className="mission-route-leg-battery">
+                    {leg.batteryId
+                      ? <>Battery <strong>{leg.batteryId}</strong>{leg.batteryModel ? ` · ${leg.batteryModel}` : ''}{leg.batteryChargePct !== undefined ? ` · ${displayPct(leg.batteryChargePct)}` : ''}{leg.batteryEnergyWh !== undefined ? ` · ${displayEnergy(leg.batteryEnergyWh)}` : ''}</>
+                      : index > 0 ? 'Relay battery not assigned' : 'Origin battery not provided'}
+                  </small>
                 </div>
                 {Number.isFinite(leg.distanceKm) && <span className="mission-route-leg-distance">{leg.distanceKm.toFixed(2)} km</span>}
               </div>
@@ -131,39 +141,37 @@ export function RouteOptionCard({
           {hasRelay && (
             <section className="mission-route-battery-section">
               <div className="mission-route-section-head">
-                <strong>Matching batteries</strong>
+                <strong>Assigned relay batteries</strong>
               </div>
-              {relayHubs.map((hub) => (
-                <div className="mission-route-battery-hub" key={hub.hubId}>
-                  <div className="mission-route-battery-hub-head">
-                    <strong>{hub.hubName}</strong>
-                    <a
-                      href={`/operator/fleet-hubs/batteries?hub=${encodeURIComponent(hub.hubId)}`}
-                      className="text-button"
-                      onClick={(event) => event.stopPropagation()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      View Battery
-                    </a>
-                  </div>
-                  <div className="mission-route-battery-metrics">
-                    <div>
-                      <small>Match Found</small>
-                      <strong>{hub.inventoryState !== 'ready' || !hub.requiredModel ? '—' : (hub.readyCount ?? 0) > 0 ? hub.requiredModel : 'No match'}</strong>
-                      {hub.requiredModel && (hub.readyCount === 0 || hub.inventoryState !== 'ready') && <span className="mission-route-muted">{hub.requiredModel}</span>}
+              {relayHubs.map((hub) => {
+                const allocation = route.relayBatteryPlan?.find((item) => item.hubId === hub.hubId);
+                const nextLegBattery = route.legs?.find((leg) => leg.fromHubId === hub.hubId);
+                const batteryId = allocation?.swapBatteryId ?? nextLegBattery?.batteryId;
+                const model = allocation?.selectedBatteryModel ?? nextLegBattery?.batteryModel ?? allocation?.batteryModel;
+                const charge = allocation?.selectedBatteryChargePct ?? nextLegBattery?.batteryChargePct;
+                const energy = allocation?.selectedBatteryEnergyWh ?? nextLegBattery?.batteryEnergyWh;
+                return (
+                  <div className="mission-route-battery-hub" key={hub.hubId}>
+                    <div className="mission-route-battery-hub-head">
+                      <strong>{hub.hubName}</strong>
+                      <a
+                        href={`/operator/fleet-hubs/batteries?hub=${encodeURIComponent(hub.hubId)}`}
+                        className="text-button"
+                        onClick={(event) => event.stopPropagation()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >View Battery</a>
                     </div>
-                    <div>
-                      <small>Batteries Available</small>
-                      <strong>{hub.inventoryState === 'ready' && hub.requiredModel ? hub.readyCount ?? 0 : '—'}</strong>
+                    <div className="mission-route-battery-metrics">
+                      <div><small>BE-assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
+                      <div><small>Battery model</small><strong>{model || '—'}</strong></div>
+                      <div><small>Charge</small><strong>{displayPct(charge)}</strong></div>
+                      <div><small>Available energy</small><strong>{displayEnergy(energy)}</strong></div>
                     </div>
+                    {!batteryId && <p className="mission-route-muted">No eligible relay battery was allocated by BE for this route.</p>}
                   </div>
-                  {hub.inventoryState === 'error' && <p className="mission-route-muted">Could not load battery availability.</p>}
-                  {hub.inventoryState === 'loading' && <p className="mission-route-muted">Loading batteries…</p>}
-                  {hub.inventoryState === 'ready' && !hub.requiredModel && <p className="mission-route-muted">Battery model unavailable.</p>}
-                  {hub.inventoryState === 'ready' && hub.requiredModel && hub.readyCount === 0 && <p className="mission-route-muted"></p>}
-                </div>
-              ))}
+                );
+              })}
             </section>
           )}
 

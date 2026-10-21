@@ -62,7 +62,7 @@ export function isActionablePlanningState(state: PlanningState | undefined) {
 }
 
 /**
- * BE can_create_mission is authoritative for BOTH Express and Scheduled.
+ * BE can_create_mission is authoritative for Express, Scheduled, and Normal.
  * AT_HUB is expected after Technician receives the package; it is not Pending.
  * Never infer permission from planning_at or receipt timestamp.
  */
@@ -88,18 +88,31 @@ function sortTimestamp(value?: string) {
 }
 
 /**
- * Operator priority:
- * 1. Orders eligible for Create Mission (Technician already received package).
- * 2. Existing planning-state priority for other Orders.
- * 3. Earlier estimated delivery deadline, then planning time.
- *
- * All Orders must remain visible; filter only the Ready tab before sorting/pagination.
+ * Default Priority-first queue, without a user-facing Sort control.
+ * Eligible Orders come first. Inside that queue use BE's priority level and
+ * score, then slack and timestamps as stable ties. Do not recompute BE scoring.
+ * All Orders remain visible; non-actionable Orders follow the planning states.
  */
 export function sortOrdersByPlanningPriority(orders: Order[], missions: Mission[]) {
   return [...orders].sort((a, b) => {
     const aCanCreate = canCreateMissionForOrder(a, missions);
     const bCanCreate = canCreateMissionForOrder(b, missions);
     if (aCanCreate !== bCanCreate) return aCanCreate ? -1 : 1;
+
+    if (aCanCreate && bCanCreate) {
+      const levelRank: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+      const aRank = a.priorityLevel ? levelRank[a.priorityLevel] : 4;
+      const bRank = b.priorityLevel ? levelRank[b.priorityLevel] : 4;
+      if (aRank !== bRank) return aRank - bRank;
+
+      // BE score is the official priority within each level. Slack resolves ties.
+      const aScore = a.priorityScore ?? Number.NEGATIVE_INFINITY;
+      const bScore = b.priorityScore ?? Number.NEGATIVE_INFINITY;
+      if (aScore !== bScore) return aScore > bScore ? -1 : 1;
+      const aSlack = a.slackMinutes ?? Number.POSITIVE_INFINITY;
+      const bSlack = b.slackMinutes ?? Number.POSITIVE_INFINITY;
+      if (aSlack !== bSlack) return aSlack < bSlack ? -1 : 1;
+    }
 
     const aState = getOrderPlanningBadge(a, missions);
     const bState = getOrderPlanningBadge(b, missions);
