@@ -916,8 +916,8 @@ export async function getEligibleMissionBatteriesApi(
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
   if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
-       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
-         'items' in payload || 'data' in payload || 'results' in payload))) {
+    !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+      'items' in payload || 'data' in payload || 'results' in payload))) {
     throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
   }
   return records.map((entry) => {

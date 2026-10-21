@@ -53,7 +53,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
         <thead>
           <tr>
             <th>Order</th>
-            <th className="order-route-heading">Drop-off Point → Pick-up Point</th>
+            <th className="order-route-heading">Hub Point</th>
             <th>Package</th>
             <th>Estimated delivery</th>
             <th />
