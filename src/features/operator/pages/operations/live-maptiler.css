@@ -1,0 +1,25 @@
+.live-geo-shell{position:relative;height:100%;min-height:0;overflow:hidden;font-family:inherit}
+.live-geo-map{position:absolute;inset:0}
+.live-geo-shell .maplibregl-map{font-family:inherit}
+.live-geo-hub{display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:pointer}
+.live-geo-hub-badge{display:grid;place-items:center;width:29px;height:29px;border-radius:999px;color:white;background:#0891b2;border:3px solid white;box-shadow:0 2px 8px rgba(8,37,61,.35);font-size:13px;font-weight:900}
+.live-geo-hub-label{padding:4px 7px;border-radius:5px;background:rgba(13,33,53,.92);color:white;font-size:10px;font-weight:750;box-shadow:0 2px 9px rgba(0,0,0,.16)}
+.live-geo-drone{position:relative;display:flex;align-items:center;gap:4px;cursor:pointer;background:transparent;border:none;padding:0;color:#10b981;white-space:nowrap;outline-offset:4px}
+.live-geo-drone-symbol{width:35px;height:35px;display:grid;place-items:center;border:2px solid currentColor;border-radius:50%;background:#0b2538;box-shadow:0 0 0 5px color-mix(in srgb,currentColor 19%, transparent),0 2px 11px rgba(0,0,0,.28);animation:live-geo-pulse 2s infinite}
+.live-geo-drone-label{border:1px solid currentColor;padding:4px 7px;border-radius:5px;color:white;background:rgba(9,25,42,.94);font-size:10px;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+.live-geo-drone.health-attention{color:#f59e0b}.live-geo-drone.health-critical{color:#ef4444}.live-geo-drone.selected .live-geo-drone-symbol{box-shadow:0 0 0 6px color-mix(in srgb,currentColor 35%,transparent),0 0 0 10px rgba(255,255,255,.35)}
+@keyframes live-geo-pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.live-geo-shell .maplibregl-popup-content{border-radius:9px;background:var(--surface,#fff);color:var(--text,#18263a);padding:10px 12px;border:1px solid var(--border,#ddd);box-shadow:0 8px 35px rgba(0,0,0,.2)}
+.live-geo-popup-content{min-width:165px;font-size:11px}.live-geo-popup-content>strong{display:block;margin-bottom:7px}.live-geo-popup-content>div{display:flex;gap:14px;justify-content:space-between;margin:4px 0}.live-geo-popup-content span{color:var(--muted,#64748b)}
+.live-geo-shell .maplibregl-popup-tip{border-top-color:var(--surface,#fff)}
+.live-geo-badge,.live-geo-controls,.live-geo-weather,.live-geo-layers,.live-geo-hint{position:absolute;z-index:3}
+.live-geo-badge{top:12px;right:12px;font-size:10px;font-weight:750;color:var(--text);background:var(--surface);padding:7px 9px;border:1px solid var(--border);border-radius:7px;max-width:220px}
+.live-geo-controls{top:44px;right:12px;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:270px}
+.live-geo-controls button,.live-geo-layers button{font-size:10px;font-weight:700;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 9px;cursor:pointer;background:var(--surface);box-shadow:0 2px 7px rgba(0,0,0,.11)}
+.live-geo-controls button:hover,.live-geo-layers button:hover,.live-geo-layers button.active{border-color:#0891b2;color:#0891b2}
+.live-geo-weather{left:13px;top:13px;width:202px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:11px 12px;font-size:11px}
+.live-geo-weather strong{display:block;color:var(--muted);font-size:9px;letter-spacing:.04em;text-transform:uppercase;line-height:1.6}.live-geo-weather>span{display:block;font-weight:800;padding:5px 0 7px}.live-geo-weather>div{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding:5px 0;gap:9px}.live-geo-weather>div span{color:var(--muted)}.live-geo-weather small{font-size:9px;color:var(--muted);line-height:1.5;display:block;margin-top:7px}
+.live-geo-layers{bottom:13px;left:13px;display:flex;gap:6px}
+.live-geo-hint{bottom:13px;right:13px;background:var(--surface);color:var(--muted);font-size:9px;border:1px solid var(--border);border-radius:6px;padding:7px 9px;pointer-events:none}
+.live-geo-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;max-width:85%;width:390px;background:var(--surface);color:var(--red,#ef4444);border:1px solid var(--red,#ef4444);border-radius:9px;padding:14px;font-size:12px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.2)}
+@media(max-width:720px){.live-geo-weather{width:175px}.live-geo-badge{max-width:125px}.live-geo-hint{display:none}.live-geo-layers{flex-wrap:wrap}}
