@@ -81,7 +81,7 @@ export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 4_000,
+    refetchInterval: 3_000, // BE GPS cadence: one new fix approximately every 3 s.
     refetchIntervalInBackground: true,
   });
 }
