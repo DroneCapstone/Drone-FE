@@ -111,6 +111,10 @@ export interface MissionLeg {
   fromHubId: string;
   toHubId: string;
   status: MissionLegStatus;
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
 }
 
 export interface Mission {
@@ -224,6 +228,12 @@ export interface PlannedRouteLeg {
   endingSocPct?: number;
   minimumReservePct?: number;
   feasible?: boolean;
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
+  batteryCapacityWh?: number;
+  batteryConsumptionPct?: number;
 }
 
 /** Technician will swap a compatible spare battery set at this relay hub. */
@@ -234,6 +244,11 @@ export interface PlannedRelayBattery {
   availableBatteryCount?: number;
   batteryIds?: string[];
   ready?: boolean;
+  swapBatteryId?: string;
+  selectedBatteryModel?: string;
+  selectedBatteryChargePct?: number;
+  selectedBatteryEnergyWh?: number;
+  selectedBatteryCapacityWh?: number;
 }
 
 /** Snapshot of the exact BE leg geometry used for Create Mission and Mission Detail. */
@@ -246,6 +261,15 @@ export interface RouteLegSnapshot {
   to_hub_id?: number;
   from_hub_name?: string;
   to_hub_name?: string;
+  battery_id?: string;
+  battery_serial?: string;
+  battery_model?: string;
+  battery_capacity_wh?: number;
+  battery_charge_pct?: number;
+  battery_energy_wh?: number;
+  energy_wh?: number;
+  battery_consumption_pct?: number;
+  remaining_battery_pct?: number;
 }
 
 export interface RouteOption {
