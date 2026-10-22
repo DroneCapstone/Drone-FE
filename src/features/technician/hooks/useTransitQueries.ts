@@ -17,7 +17,7 @@ import {
 } from "./queryKeys";
 
 
-const TRANSIT_POLL_INTERVAL_MS = 30_000;
+const TRANSIT_POLL_INTERVAL_MS = 7_000;
 
 export function useTransitMissionsQuery() {
   return useQuery({
@@ -27,7 +27,7 @@ export function useTransitMissionsQuery() {
       refreshTransitMissionsFromApi,
     // Poll /technician/fleet/incoming once every 30s while the page is active.
     // A successful arrival confirmation invalidates the related caches.
-    staleTime: 30_000,
+    staleTime: 5_000,
     gcTime: 10 * 60_000,
     refetchInterval:
       TRANSIT_POLL_INTERVAL_MS,
@@ -82,12 +82,10 @@ export function useConfirmTransitArrivalMutation() {
 export function useTransitBatterySwapMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (args: { missionId: string; newBatteryId: number; oldBatteryHasIssue: boolean; issueNotes: string }) =>
-      swapRelayBatteryApi(args.missionId, {
-        new_battery_id: args.newBatteryId,
-        old_battery_has_issue: args.oldBatteryHasIssue,
-        issue_notes: args.issueNotes,
-      }),
+    mutationFn: (args: { missionId: string; newBatteryId?: string }) =>
+      swapRelayBatteryApi(args.missionId, args.newBatteryId
+        ? { new_battery_id: args.newBatteryId }
+        : {}),
     onSuccess: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: technicianQueryKeys.transit() }),
       queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),

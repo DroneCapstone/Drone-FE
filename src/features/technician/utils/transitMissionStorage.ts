@@ -65,6 +65,9 @@ export type TransitMission = {
    */
   batteryId?: string;
 
+  /** New battery assigned by Operator for this relay, NOT the installed battery_id. */
+  assignedReplacementBatteryId?: string;
+
   batteryLevelPct: number;
 
   requiredDepartureBatteryPct:
@@ -202,7 +205,8 @@ export function isActiveTechnicianTransitMission(mission: TransitMission): boole
 
   const handling = normalizedKey(mission.handlingStatus ?? "");
   if (isCompletedMissionState(mission.missionState)) {
-    return handling === "AT_HUB";
+    // BE documents both Incoming and At hub before final receipt.
+    return ["INCOMING", "AT_HUB"].includes(handling);
   }
   if (isIncidentMissionState(mission.missionState)) {
     return ["INCOMING", "CANNOT_CONTINUE", "AT_HUB"].includes(handling);
@@ -214,28 +218,36 @@ export function isActiveTechnicianTransitMission(mission: TransitMission): boole
   return false;
 }
 
-/** Informative only: BE may only assign the destination hub AFTER confirm-arrival.
- * Do not disable the real Confirm button on a stale current_hub_id. */
+/** Current hub is the planned stop at which this Technician receives the drone.
+ * A different final destination means this hub is a relay, not an error. */
 export function hasFinalHubMismatch(mission: TransitMission): boolean {
-  return mission.purpose === "RETURN_TO_HUB" &&
-    isCompletedMissionState(mission.missionState) &&
-    mission.droneCurrentHubId !== undefined &&
-    mission.destinationHubId !== undefined &&
-    mission.droneCurrentHubId !== mission.destinationHubId;
+  // There is no mismatch under the BE contract: current != destination denotes relay.
+  // Preserve the exported utility for existing imports.
+  void mission;
+  return false;
 }
 
-/** Exactly one existing BE endpoint, chosen by mission / current-leg facts. */
+/** One click confirms PHYSICAL receipt. "Incoming" alone is not landing proof.
+ * Routing is determined by BE destination_hub_id vs drone_current_hub_id. */
 export function getTransitConfirmKind(mission: TransitMission): "RELAY" | "FINAL" | null {
   if (!isActiveTechnicianTransitMission(mission) ||
       mission.arrivalConfirmed || mission.intakeCompleted) return null;
   const handling = normalizedKey(mission.handlingStatus ?? "");
-  if (isIncidentMissionState(mission.missionState) && handling === "CANNOT_CONTINUE") return "FINAL";
-  if (isCompletedMissionState(mission.missionState) && handling === "AT_HUB") return "FINAL";
-  // BE leaves a relay drone in Incoming until the Technician physically
-  // receives it and calls confirm-relay-arrival. Do not guess for an
-  // unclassified flight to the final hub.
-  if (isContinuationMission(mission) && handling === "INCOMING") return "RELAY";
-  return null;
+  if (!["INCOMING", "CANNOT_CONTINUE", "AT_HUB"].includes(handling)) return null;
+
+  // Safety first: an incident never authorizes a relay launch.
+  if (mission.purpose === "INCIDENT_RETURN" || isIncidentMissionState(mission.missionState)) {
+    return "FINAL";
+  }
+  // The hub IDs represent the planned stop and ultimate destination.
+  if (mission.droneCurrentHubId !== undefined && mission.destinationHubId !== undefined) {
+    if (mission.droneCurrentHubId === mission.destinationHubId) return "FINAL";
+    return handling === "INCOMING" ? "RELAY" : null;
+  }
+  // Older responses may still explicitly identify a relay or final stop.
+  if (handling === "INCOMING" && mission.purpose === "BATTERY_STOP") return "RELAY";
+  if (mission.purpose === "RETURN_TO_HUB" || isCompletedMissionState(mission.missionState)) return "FINAL";
+  return null; // Missing routing information: show Confirm but explain the missing IDs.
 }
 
 export function canConfirmTransitArrival(mission: TransitMission): boolean {
@@ -360,6 +372,12 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
   const handlingKey = normalizedKey(rawHandlingStatus);
   const rawPurpose = pickString(value, ["purpose", "mission_purpose", "arrival_reason"], "");
   const destinationHubId = pickNumber(value, ["destination_hub_id"], -1);
+  const stopHubId = pickNumber(value, ["drone_current_hub_id"], -1);
+  // Contract confirmed by BE/user: this is the HUB THE DRONE WILL STOP AT,
+  // not necessarily a historical physical location.
+  const stopIsRelay = stopHubId >= 0 && destinationHubId >= 0 && stopHubId !== destinationHubId;
+  const stopIsFinal = stopHubId >= 0 && destinationHubId >= 0 && stopHubId === destinationHubId;
+  // Fall back to active-leg details only if the hub IDs are absent.
   const distinctRelayTarget = currentLegToHubId !== undefined && destinationHubId >= 0 &&
     currentLegToHubId !== destinationHubId;
   const finalLegTarget = currentLegToHubId !== undefined && destinationHubId >= 0 &&
@@ -370,13 +388,17 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     Boolean(pickString(value, ["incident_id", "incident_alert_id", "maintenance_alert_id"], ""));
   const purpose: TransitMissionPurpose = incidentReported
     ? "INCIDENT_RETURN"
-    : isCompletedMissionState(missionState)
-      ? "RETURN_TO_HUB"
-      : isFlyingMissionState(missionState) && distinctRelayTarget
-        ? "BATTERY_STOP"
-        : isFlyingMissionState(missionState) && finalLegTarget
-          ? "UNKNOWN" // still Incoming until Completed/At hub
-          : normalizeTransitPurpose(rawPurpose, missionState);
+    : stopIsRelay
+      ? "BATTERY_STOP"
+      : stopIsFinal
+        ? "RETURN_TO_HUB"
+        : isCompletedMissionState(missionState)
+          ? "RETURN_TO_HUB"
+          : isFlyingMissionState(missionState) && (["AT_HUB", "READY"].includes(handlingKey) || distinctRelayTarget)
+            ? "BATTERY_STOP"
+            : isFlyingMissionState(missionState) && finalLegTarget
+              ? "RETURN_TO_HUB"
+              : normalizeTransitPurpose(rawPurpose, missionState);
 
   const batteryCode = pickString(
     value,
@@ -405,9 +427,12 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     currentDroneId: droneId,
     droneType,
     droneModel: pickString(value, ["drone_model", "model"], rawDroneCode || "—"),
-    batteryId: batteryCode
-      ? displayId("BAT", batteryCode, 3)
-      : undefined,
+    batteryId: batteryCode || undefined,
+    // Never reuse battery_id here: it is the OLD installed battery.
+    assignedReplacementBatteryId: pickString(value, [
+      "assigned_replacement_battery_id", "replacement_battery_id",
+      "operator_assigned_battery_id", "next_battery_id",
+    ], "") || undefined,
     batteryLevelPct: pickNumber(
       value,
       ["battery_percent", "battery_level_pct", "battery_pct", "charge_level_pct"],
@@ -431,8 +456,9 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     status,
     arrivalConfirmedAt:
       pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "") || undefined,
-    // At hub / Ready on a classified relay means confirm-relay-arrival ran;
-    // Incoming on a new leg is a new landing event, not the prior confirmation.
+    // BE says relay confirmation writes At hub, but the Incoming table also
+    // documents At hub as a possible pre-confirmation state. Only a BE flag,
+    // timestamp or a subsequent Ready (successful battery swap) proves receipt.
     arrivalConfirmed: purpose === "BATTERY_STOP" && ["AT_HUB", "READY"].includes(handlingKey)
       ? true
       : handlingKey === "INCOMING" ? false
@@ -483,9 +509,12 @@ export async function confirmTransitArrivalOnServer(input: {
 }) {
   if (!input.missionId.trim()) throw new Error("Backend mission ID is missing.");
   if (input.relay) return confirmRelayArrivalApi(input.missionId);
+  // New BE contract accepts has_issue / has_incident / battery_faulty.
+  // Do not submit old `notes` field or an invented inspection outcome.
   return confirmMissionArrivalApi(input.missionId, {
     has_issue: input.hasIssue === true,
-    notes: input.notes?.trim() ?? "",
+    has_incident: input.hasIssue === true,
+    battery_faulty: false,
   });
 }
 

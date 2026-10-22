@@ -455,9 +455,8 @@ function normalizeOutboundStatus(
     return "Needs Review";
   }
 
-  if (statuses.includes("READY") || statuses.includes("READY_TO_DISPATCH")) {
-    return "Ready";
-  }
+  // Only Mission.handling_status grants readiness; order.status alone does not.
+  if (handling === "READY") return "Ready";
 
   if (statuses.includes("MISSION_ASSIGNED")) {
     return "Mission Assigned";
@@ -493,18 +492,8 @@ function normalizeOutboundStatus(
 
   if (isAtHub) {
     // The Operator may have already selected a battery for this mission.
-    // Only a Backend-confirmed Ready mission may be presented as Ready:
-    // presence of a 100% battery is not permission to depart.
-    const missionState = normalize(
-      pickString(record, ["mission_status", "mission_state", "missionStatus"], ""),
-    );
-    const hasAssignedBattery = Boolean(readableEntity(record, [
-      "battery_id", "installed_battery_id", "battery", "battery_code",
-    ]));
-    if (hasMission && hasDrone && hasAssignedBattery &&
-        ["READY", "READY_TO_DISPATCH", "READY_FOR_DEPARTURE"].includes(missionState)) {
-      return "Ready";
-    }
+    // Scheduled describes flight lifecycle. "Ready" describes hub handling.
+    // Do not mistake a fully charged battery or Scheduled status for readiness.
     return hasMission && hasDrone ? "Mission Assigned" : "At Hub";
   }
 
@@ -804,13 +793,13 @@ export async function receiveOutboundOrderOnServer(orderId: string) {
   );
 }
 
-export async function prepareOutboundBatteryOnServer(orderId: string) {
+export async function prepareOutboundBatteryOnServer(orderId: string, batteryId?: string) {
   if (!orderId.trim()) throw new Error("Backend order ID is missing.");
 
   // This is the authoritative Backend operation. Do not reserve a battery
   // locally or retry using an inferred numeric suffix.
   return technicianApiRequest(
     `/technician/deliveries/outbound/${encodeURIComponent(orderId)}/prepare-battery`,
-    { method: "POST" },
+    { method: "POST", ...(batteryId ? { body: JSON.stringify({ battery_id: batteryId }) } : {}) },
   );
 }

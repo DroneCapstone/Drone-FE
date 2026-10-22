@@ -8,8 +8,6 @@ import {
 
 import {
   ArrowRight,
-  BatteryCharging,
-  ChevronDown,
   Check,
   CircleAlert,
   Clock3,
@@ -59,28 +57,11 @@ import {
   useTransitDispatchMutation,
 } from "../hooks/useTransitQueries";
 
-import {
-  useBatteriesQuery,
-} from "../hooks/useBatteryQueries";
-import type { HubBattery } from "../utils/batteryStorage";
 import { TechnicianApiError } from "../api/httpClient";
 
 type TransitFilter =
   | "All transit"
   | TransitMissionStatus;
-
-/** Only Backend-verified drone ↔ battery compatibility may enable assignment. */
-function compatibleBatteryForTransit(battery: HubBattery, mission: TransitMission) {
-  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, " ");
-  const droneModel = norm(mission.droneModel);
-  if (!droneModel || droneModel === "—") return false;
-  const compatibility = battery.compatibleDroneModels ?? [];
-  if (compatibility.length) return compatibility.some((m) => norm(m) === droneModel);
-  // Only exact names qualify when a separate compatibility map is absent.
-  const batteryModel = battery.model;
-  if (!batteryModel) return false;
-  return norm(batteryModel) === droneModel;
-}
 
 /** Preserve the real drone_id from GET /technician/fleet/incoming.
  * drone_code is the drone's name, NOT its identifier. */
@@ -153,23 +134,23 @@ function getMissionStateLabel(
 }
 
 function getMissionStateHint(purpose: TransitMissionPurpose) {
-  if (purpose === "BATTERY_STOP") return "Relay hub · battery stop";
+  if (purpose === "BATTERY_STOP") return "Relay hub · Operator-assigned battery";
   if (purpose === "INCIDENT_RETURN") return "Incident · technical inspection";
-  if (purpose === "RETURN_TO_HUB") return "Destination hub · completed flight";
-  return "En route · awaiting confirmed arrival";
+  if (purpose === "RETURN_TO_HUB") return "Destination hub · confirm physical arrival";
+  return "Incoming · check hub routing";
 }
 
 function getPurposeDescription(purpose: TransitMissionPurpose) {
   if (purpose === "BATTERY_STOP") {
-    return "Relay: confirm the drone has physically landed → Replace battery (At hub) → Dispatch (Ready). Mission remains Flying until it reaches the destination.";
+    return "Relay: click Confirm after physical landing. Install the battery assigned by Operator, then click Dispatch. FE records swap-battery with that assigned ID before dispatch; no battery selection dropdown.";
   }
   if (purpose === "RETURN_TO_HUB") {
-    return "Destination: mission Completed + handling At hub. Confirm arrival once after physically receiving the drone; Backend finalizes the mission and updates Hub Fleet.";
+    return "Destination: click Confirm once after physically receiving the drone, including when Backend still reports Flying / Incoming. BE validates the request and finalizes the mission.";
   }
   if (purpose === "INCIDENT_RETURN") {
     return "Incident return + Cannot continue: confirm arrival once, then create/review the maintenance work order. Do not dispatch an unsafe drone.";
   }
-  return "Incoming is an en-route state, not an arrival confirmation. Backend must provide purpose or the active MissionLeg.to_hub_id to establish a relay; final confirmation requires mission Completed / At hub.";
+  return "Incoming: Confirm appears for every arriving drone. FE selects relay or final API using drone_current_hub_id and destination_hub_id; click only after the drone actually lands.";
 }
 
 function getHistoryResultLabel(
@@ -192,9 +173,6 @@ export function TransitMissionsPage() {
   const confirmArrivalMutation =
     useConfirmTransitArrivalMutation();
 
-  const batteriesQuery =
-    useBatteriesQuery();
-
   const batterySwapMutation = useTransitBatterySwapMutation();
   const dispatchMutation = useTransitDispatchMutation();
   const [dispatchedRelayMissionIds, setDispatchedRelayMissionIds] = useState<string[]>([]);
@@ -210,8 +188,6 @@ export function TransitMissionsPage() {
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
   const missionHistory = historyQuery.data ?? [];
-  const [oldBatteryHasIssue, setOldBatteryHasIssue] = useState(false);
-  const [oldBatteryIssueNotes, setOldBatteryIssueNotes] = useState("");
 
   const [
     searchQuery,
@@ -263,10 +239,10 @@ export function TransitMissionsPage() {
     setHistoryOpen,
   ] = useState(false);
 
-  const [
-    openBatteryDropdownMissionId,
-    setOpenBatteryDropdownMissionId,
-  ] = useState<string | null>(null);
+  // A swap may succeed while Dispatch fails. On retry, do not perform the
+  // swap a second time, even if /incoming has not caught up yet.
+  const [swappedMissionKeys, setSwappedMissionKeys] = useState<string[]>([]);
+  const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
 
   const selectedMission =
     selectedMissionId
@@ -276,17 +252,6 @@ export function TransitMissionsPage() {
             selectedMissionId,
         ) ?? null
       : null;
-
-  const readyBatteries =
-    (batteriesQuery.data ?? []).filter(
-      (battery) =>
-        Boolean(battery.backendId) &&
-        battery.status === "Ready" &&
-        battery.chargeReportedByBackend === true &&
-        battery.chargeLevelPct >= 100 &&
-        !battery.droneId &&
-        !/^(IN_USE|INSTALLED|ASSIGNED|RESERVED|MAINTENANCE|CHARGING)$/i.test(battery.backendStatus ?? ""),
-    );
 
   useEffect(() => {
     if (transitQuery.data) {
@@ -373,7 +338,7 @@ export function TransitMissionsPage() {
     }
     const confirmRoute = getTransitConfirmKind(mission);
     if (!confirmRoute) {
-      pushActionMessage("Confirmation is not available in this mission/handling state. Relay needs a known transit leg; destination requires Completed / At hub; incident requires Incident return / Cannot continue.");
+      pushActionMessage("Cannot select arrival API: Backend must provide drone_current_hub_id and destination_hub_id (or an explicit arrival purpose). Do not confirm until the drone has physically landed.");
       return;
     }
     if (confirmingArrivalIds.current.has(missionKey) || confirmArrivalMutation.isPending) return;
@@ -394,7 +359,7 @@ export function TransitMissionsPage() {
       setSelectedMissionId(null);
       setConfirmedArrivalIds((ids) => ids.includes(confirmationKey) ? ids : [...ids, confirmationKey]);
       pushActionMessage(relay
-        ? "Drone arrival confirmed by Backend. Continue with battery replacement when available."
+        ? "Relay arrival confirmed. Install the battery specified by Operator, then press Dispatch."
         : "Arrival confirmation accepted by Backend. Transit, Hub Fleet and related information are refreshing.");
       void transitQuery.refetch();
       void historyQuery.refetch();
@@ -415,81 +380,55 @@ export function TransitMissionsPage() {
     }
   };
 
-  const replaceBattery = async (
-    mission: TransitMission,
-    batteryId: string,
-  ) => {
-    if (!isContinuationMission(mission) || mission.status !== "At Hub" ||
-        !mission.arrivalConfirmed) {
-      pushActionMessage("Confirm relay arrival first. The Backend must return At hub before replacing the battery.");
-      return;
-    }
-    if (!batteryId) return;
-    if (!mission.backendMissionId) {
-      pushActionMessage("Backend mission_id is missing; cannot safely assign a battery to this mission.");
-      return;
-    }
-
-    const selectedBattery = readyBatteries.find(
-      (battery) => battery.id === batteryId,
-    );
-
-    if (!selectedBattery || !compatibleBatteryForTransit(selectedBattery, mission)) {
-      pushActionMessage(
-        "Battery is not verified as Ready, fully charged and compatible with this drone. Check Backend battery model/compatibility data.",
-      );
-      return;
-    }
-
-    try {
-      // New API expects a REAL internal numeric battery ID, not BAT- display code.
-      const backendId = selectedBattery.backendId;
-      if (!backendId || !/^\d+$/.test(backendId)) {
-        throw new Error("Backend must provide a numeric battery ID for swap-battery.");
-      }
-      await batterySwapMutation.mutateAsync({
-        missionId: mission.backendMissionId,
-        newBatteryId: Number(backendId),
-        oldBatteryHasIssue,
-        issueNotes: oldBatteryHasIssue ? oldBatteryIssueNotes.trim() : "",
-      });
-      setOldBatteryHasIssue(false);
-      setOldBatteryIssueNotes("");
-      setOpenBatteryDropdownMissionId(null);
-      const refreshed = await transitQuery.refetch();
-      pushActionMessage(
-        refreshed.isError
-          ? "Battery swap accepted. Refresh Transit Missions to check handling status Ready."
-          : "Battery swap accepted. Technician may Dispatch when Backend returns handling status Ready.",
-      );
-    } catch (error) {
-      pushActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to replace the mission battery.",
-      );
-    }
-  };
-
+  /** Technician physically installs the specific battery assigned by Operator.
+   * One Dispatch click records that swap (if needed), then starts the next leg.
+   * The currently installed battery_id is NOT a replacement assignment.
+   */
   const dispatchMission = async (mission: TransitMission) => {
-    const dispatchKey = arrivalKey(mission);
+    const key = arrivalKey(mission);
     if (!mission.backendMissionId || !isContinuationMission(mission) ||
-        dispatchedRelayMissionIds.includes(dispatchKey) ||
-        mission.status !== "Ready") {
-      pushActionMessage("The relay mission must have handling status Ready after swapping the battery before Dispatch.");
+        dispatchedRelayMissionIds.includes(key) || dispatchingKey !== null ||
+        (mission.status !== "At Hub" && mission.status !== "Ready")) {
       return;
     }
+    if (mission.status === "At Hub" &&
+        !(mission.arrivalConfirmed || confirmedArrivalIds.includes(key))) {
+      pushActionMessage("Confirm arrival at this relay hub before Dispatch.");
+      return;
+    }
+    // The backend may already have recorded the swap (handling Ready).
+    // Otherwise the replacement battery must come explicitly from Operator.
+    const needSwap = mission.status === "At Hub" && !swappedMissionKeys.includes(key);
+    if (needSwap && !mission.assignedReplacementBatteryId) {
+      pushActionMessage("Backend has not supplied the Operator-assigned replacement_battery_id. The installed battery_id is the old battery and cannot be used for swap. Ask BE to expose the assigned replacement battery before Dispatch.");
+      return;
+    }
+    setDispatchingKey(key);
     try {
+      if (needSwap) {
+        const newBatteryId = mission.assignedReplacementBatteryId!;
+        if (!/^BAT[-_]/i.test(newBatteryId)) {
+          throw new Error("Operator-assigned replacement battery must have a BAT-... ID.");
+        }
+        await batterySwapMutation.mutateAsync({
+          missionId: mission.backendMissionId,
+          newBatteryId,
+        });
+        setSwappedMissionKeys((keys) => keys.includes(key) ? keys : [...keys, key]);
+      }
       await dispatchMutation.mutateAsync(mission.backendMissionId);
-      setDispatchedRelayMissionIds((ids) => ids.includes(dispatchKey)
-        ? ids : [...ids, dispatchKey]);
-      setOpenBatteryDropdownMissionId(null);
-      pushActionMessage("Relay Dispatch accepted. Mission stays Flying; handling returns to Incoming. Drone and installed battery depart this hub; inventories refresh from Backend.");
+      setDispatchedRelayMissionIds((keys) => keys.includes(key) ? keys : [...keys, key]);
+      pushActionMessage("Relay Dispatch was accepted by Backend. Mission continues to the next hub; fleet and battery data are refreshing.");
+      void transitQuery.refetch();
+      void historyQuery.refetch();
     } catch (error) {
-      pushActionMessage(error instanceof Error ? error.message : "Dispatch failed.");
+      const detail = error instanceof Error ? error.message : "Dispatch failed.";
+      pushActionMessage(`Dispatch not completed: ${detail}. If battery swap was accepted, retry will not swap a second time.`);
+      void transitQuery.refetch();
+    } finally {
+      setDispatchingKey(null);
     }
   };
-
 
   return (
     <TechnicianPageShell
@@ -638,9 +577,6 @@ export function TransitMissionsPage() {
                   mission,
                 );
 
-              const compatibleReadyBatteries = readyBatteries.filter(
-                (battery) => compatibleBatteryForTransit(battery, mission),
-              );
               const batteryNeedsService =
                 isContinuationMission(mission) &&
                 mission.status === "At Hub" &&
@@ -749,7 +685,7 @@ export function TransitMissionsPage() {
 
                     {/* ACTIONS */}
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-                      {canConfirmLandedMission(mission) && !arrivalConfirmed && (
+                      {(canConfirmLandedMission(mission) || mission.status === "Incoming") && !arrivalConfirmed && (
                         <Button
                           type="button"
                           onClick={() =>
@@ -777,10 +713,8 @@ export function TransitMissionsPage() {
 
                       {mission.status === "Incoming" && !arrivalConfirmed && (
                         <span className="text-[11px] text-[var(--tech-muted)]"
-                          title={canConfirmLandedMission(mission)
-                            ? "Only confirm after physically receiving the drone at the relay hub"
-                            : "Drone is en route; final arrival is confirmed after Backend returns Completed / At hub"}>
-                          {canConfirmLandedMission(mission) ? "Confirm after landing" : "Awaiting arrival"}
+                          title="Click Confirm only after the Technician physically receives the drone. Backend still validates the operation.">
+                          Confirm after landing
                         </span>
                       )}
 
@@ -791,127 +725,39 @@ export function TransitMissionsPage() {
                       )}
 
                       {isContinuationMission(mission) &&
-                        mission.status ===
-                          "At Hub" &&
-                        mission.arrivalConfirmed &&
-                        mission.batteryServiceRequired && (
-                          <div className="relative inline-flex shrink-0 flex-col gap-1">
-                            <Button
-                              type="button"
-                              onClick={() =>
-                                setOpenBatteryDropdownMissionId(
-                                  (current) =>
-                                    current === mission.id
-                                      ? null
-                                      : mission.id,
-                                )
-                              }
-                              disabled={
-                                batteriesQuery.isPending ||
-                                batterySwapMutation.isPending ||
-                                compatibleReadyBatteries.length === 0 ||
-                                !mission.backendMissionId
-                              }
-                              aria-expanded={
-                                openBatteryDropdownMissionId ===
-                                mission.id
-                              }
-                              aria-haspopup="listbox"
-                              aria-label={`Replace battery for ${getMissionDisplayId(
-                                mission.missionId,
-                              )}`}
-                              title={
-                                !mission.backendMissionId
-                                  ? "Backend mission_id is missing"
-                                  : compatibleReadyBatteries.length === 0
-                                    ? "No Ready battery available"
-                                    : "Choose a Ready battery"
-                              }
-                              className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <BatteryCharging size={14} />
-                              {batterySwapMutation.isPending
-                                ? "Replacing..."
-                                : "Replace battery"}
-                              <ChevronDown
-                                size={13}
-                                className={`transition-transform ${
-                                  openBatteryDropdownMissionId ===
-                                  mission.id
-                                    ? "rotate-180"
-                                    : ""
-                                }`}
-                              />
-                            </Button>
-
-                            {openBatteryDropdownMissionId ===
-                              mission.id && (
-                              <div
-                                role="listbox"
-                                aria-label={`Ready batteries for ${getMissionDisplayId(
-                                  mission.missionId,
-                                )}`}
-                                className="absolute right-0 top-[calc(100%+6px)] z-50 max-h-64 min-w-[230px] overflow-y-auto rounded-md border border-zinc-700 bg-[#121419] p-1.5 shadow-xl"
-                              >
-                                <label className="flex items-center gap-2 px-2 py-2 text-[11px] text-zinc-100">
-                                  <input type="checkbox" checked={oldBatteryHasIssue}
-                                    onChange={(event) => setOldBatteryHasIssue(event.target.checked)} />
-                                  Old battery has an issue
-                                </label>
-                                {oldBatteryHasIssue && (
-                                  <textarea value={oldBatteryIssueNotes}
-                                    onChange={(event) => setOldBatteryIssueNotes(event.target.value)}
-                                    placeholder="Issue notes" rows={2}
-                                    className="mb-2 w-full rounded border border-zinc-600 bg-zinc-900 p-2 text-[12px] text-white" />
-                                )}
-                                {compatibleReadyBatteries.map((battery) => (
-                                  <button
-                                    key={battery.id}
-                                    type="button"
-                                    role="option"
-                                    onClick={() =>
-                                      void replaceBattery(
-                                        mission,
-                                        battery.id,
-                                      )
-                                    }
-                                    disabled={
-                                      batterySwapMutation.isPending
-                                    }
-                                    className="flex w-full items-center justify-between gap-4 rounded px-3 py-2 text-left hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    <span className="min-w-0">
-                                      <span className="block truncate text-[12px] font-semibold text-zinc-100">
-                                        {battery.id}
-                                      </span>
-                                      <span className="block truncate text-[10px] text-zinc-500">
-                                        {battery.model ||
-                                          "Model not provided"}
-                                      </span>
-                                    </span>
-
-                                    <span className="shrink-0 text-right">
-                                      <span className="block text-[11px] font-semibold text-orange-500">
-                                        {battery.chargeLevelPct}%
-                                      </span>
-                                      <span className="block text-[9px] text-zinc-500">
-                                        Ready
-                                      </span>
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                      {isContinuationMission(mission) &&
-                        mission.status === "At Hub" &&
-                        !mission.batteryServiceRequired && (
-                          <span className="text-[12px] text-[var(--tech-muted)]">
-                            Waiting for Backend readiness
-                          </span>
-                        )}
+                        (mission.status === "At Hub" || mission.status === "Ready") && (
+                        <div className="flex max-w-[178px] flex-col items-end gap-1">
+                          <Button
+                            type="button"
+                            onClick={() => void dispatchMission(mission)}
+                            disabled={!mission.backendMissionId ||
+                              dispatchingKey !== null || batterySwapMutation.isPending || dispatchMutation.isPending ||
+                              dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
+                              (mission.status === "At Hub" && !arrivalConfirmed) ||
+                              (mission.status === "At Hub" && !mission.assignedReplacementBatteryId && !swappedMissionKeys.includes(arrivalKey(mission)))}
+                            title={mission.status === "At Hub" && !mission.assignedReplacementBatteryId
+                              ? "Waiting for Operator-assigned replacement battery ID from Backend"
+                              : "After physically installing the assigned battery, Dispatch records the swap if necessary and launches the next leg"}
+                            className="h-9 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <ArrowRight size={14} />
+                            {dispatchedRelayMissionIds.includes(arrivalKey(mission))
+                              ? "Dispatched · syncing"
+                              : dispatchingKey === arrivalKey(mission)
+                                ? "Dispatching..."
+                                : "Dispatch"}
+                          </Button>
+                          {mission.status === "At Hub" && (
+                            <span className="text-right text-[11px] text-[var(--tech-muted)]">
+                              {mission.assignedReplacementBatteryId
+                                ? `Install ${mission.assignedReplacementBatteryId} (Operator assigned)`
+                                : swappedMissionKeys.includes(arrivalKey(mission))
+                                  ? "Battery swap recorded · retry Dispatch"
+                                  : "Awaiting Operator replacement battery ID"}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {mission.status === "Cannot Continue" && !canConfirmLandedMission(mission) && (
                         <Button type="button" variant="outline"
@@ -919,18 +765,6 @@ export function TransitMissionsPage() {
                           className="h-9 shrink-0 text-[12px] text-orange-500"
                           title="Review incident and maintenance alerts; do not dispatch an unsafe drone">
                           <CircleAlert size={14} /> Review incident
-                        </Button>
-                      )}
-
-                      {isContinuationMission(mission) &&
-                        mission.status === "Ready" && (
-                        <Button type="button" onClick={() => void dispatchMission(mission)}
-                          disabled={dispatchMutation.isPending || !mission.backendMissionId ||
-                            dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
-                            mission.status !== "Ready"}
-                          className="h-9 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:opacity-50">
-                          <ArrowRight size={14}/>{dispatchedRelayMissionIds.includes(arrivalKey(mission))
-                            ? "Dispatched · syncing" : dispatchMutation.isPending ? "Dispatching..." : "Dispatch"}
                         </Button>
                       )}
 
@@ -1382,8 +1216,8 @@ export function TransitMissionsPage() {
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailField
-                      label="Battery swap policy"
-                      value="Transit stops only"
+                      label="Replacement battery (Operator)"
+                      value={selectedMission.assignedReplacementBatteryId ?? "Not provided by Backend"}
                     />
 
                     <DetailField
@@ -1594,7 +1428,7 @@ export function TransitMissionsPage() {
                     </h3>
                     <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
                       {isContinuationMission(selectedMission)
-                        ? "After swapping a compatible battery, Technician can dispatch the next leg. Backend notifies Operator."
+                        ? "Install the replacement battery chosen by Operator and click Dispatch. FE records the swap and continues the mission only after Backend accepts it."
                         : "Inspect the arrived drone in Hub Fleet and verify the removed battery in Battery Management. Arrival confirmation alone does not certify inspection or charging."}
                     </p>
                   </div>
