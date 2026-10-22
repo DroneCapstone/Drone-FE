@@ -190,7 +190,7 @@ export function CreateMissionPage() {
       // Never infer compatibility with other battery models from drone_id.
       batteryModel: drone.batteryModel || fleetDrone?.batteryModel || installedModel,
     };
-  });
+  }).sort((a, b) => a.maxPayloadKg - b.maxPayloadKg);
   const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
   const availableOriginBatteries = (eligibleBatteries ?? []).filter((battery) =>
     isAvailableOriginBattery(battery, order.originHubId),

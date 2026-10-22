@@ -144,7 +144,10 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     followRef.current = missionId;
     setIsFollowing(true);
     setViewLabel(`Following ${drone.id}`);
-    map.easeTo({center:displayed ?? point,zoom:Math.max(map.getZoom(),13.5),pitch:45,duration:900});
+    // Follow needs a readable zoom immediately: continuous map.jumpTo() calls
+    // from the GPS animation would otherwise cancel an in-progress easeTo zoom.
+    // Zoom 16 makes the 15-25 m GPS steps clearly visible (~7-11 px in HCMC).
+    map.jumpTo({center:displayed ?? point,zoom:Math.max(map.getZoom(),16),pitch:45});
   }
   useImperativeHandle(ref,()=>({
     zoomIn:()=>mapRef.current?.zoomIn({duration:350}),
@@ -317,6 +320,20 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       const parsedFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
       const fixAt = Number.isFinite(parsedFixAt) ? parsedFixAt : undefined;
       const outOfOrder = fixAt !== undefined && moving.lastFixAt !== undefined && fixAt < moving.lastFixAt;
+      // Diagnostic: this proves which GPS actually reaches the map component.
+      // Keep this DEV-only; do not log bearer tokens or the complete response.
+      if (import.meta.env.DEV && selectedMissionId === id) {
+        console.info('[DroneOptAI MAP GPS]', {
+          missionId: id,
+          latestLat: pt[1], latestLng: pt[0],
+          markerLat: moving.marker.getLngLat().lat,
+          markerLng: moving.marker.getLngLat().lng,
+          changed: moving.position[0] !== pt[0] || moving.position[1] !== pt[1],
+          outOfOrder,
+          lastUpdated: drone.lastUpdated,
+          zoom: Number(map.getZoom().toFixed(1)),
+        });
+      }
       if (outOfOrder) continue;
       if (moving.position[0] !== pt[0] || moving.position[1] !== pt[1]) {
         if (moving.frame !== undefined) cancelAnimationFrame(moving.frame);

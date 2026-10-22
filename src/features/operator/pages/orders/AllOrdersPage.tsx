@@ -16,13 +16,13 @@ import { OrderPageShell } from './OrderPageShell';
 const ALL_PLANNING_STATES = 'All planning states';
 const ALL_DELIVERY_MODES = 'All delivery modes';
 
-// Filter exclusively by the five planning states defined by BE.
+// Show only the four requested planning states in the filter.
+// FUTURE may still exist in API data, but is not a selectable filter option.
 // Do not mix Order status (PENDING/AT_HUB/...) into this dropdown.
 const PLANNING_STATES = [
   'Waiting for package',     // WAITING_PACKAGE
   'Ready for Planning',      // READY_FOR_PLANNING
   'Planned',                 // PLANNED
-  'Future',                  // FUTURE
   'Needs Replanning',        // NEEDS_REPLANNING
 ] as const;
 
