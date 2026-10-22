@@ -37,7 +37,7 @@ import './create-mission-compact.css';
 // const [isAssigning, setIsAssigning] = useState(false);
 // const [needsMissionCheck, setNeedsMissionCheck] = useState(false);
 
-const STEPS = ['Order info', 'Select drone', 'Select battery', 'Route, relay battery & energy', 'Review & assign'] as const;
+const STEPS = ['Order info', 'Select drone & battery', 'Route, relay battery & energy', 'Review & assign'] as const;
 
 // Battery eligibility is calculated by BE. "Ready" already means fully charged.
 // This step only lists spare Ready batteries at the Order's Drop-off Point.
@@ -81,7 +81,14 @@ export function CreateMissionPage() {
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
 
   // Do not restore directly into Review: availability and planning may have changed.
-  const [step, setStep] = useState(Math.min(4, Math.max(1, restoredDraft?.step ?? 1)));
+  // Existing drafts used a 5-step flow: Step 3 was Select battery, Step 4 was Route.
+  // Never restore into Review directly; both flows return to Route for validation.
+  const [step, setStep] = useState(() => {
+    const savedStep = restoredDraft?.step ?? 1;
+    if (savedStep >= 4) return 3;
+    if (savedStep === 3) return restoredDraft?.selectedBatteryId ? 3 : 2;
+    return Math.min(2, Math.max(1, savedStep));
+  });
   const [toast, setToast] = useState('');
   const [selectedDroneId, setSelectedDroneId] = useState(restoredDraft?.selectedDroneId || '');
   const [selectedBatteryId, setSelectedBatteryId] = useState(restoredDraft?.selectedBatteryId || '');
@@ -214,13 +221,16 @@ export function CreateMissionPage() {
     canCreateMissionForOrder(order) &&
     hasOrderHubs
   );
-  // Backend guarantees that an eligible/available drone is equipped with its full battery set.
-  const canContinueStep2 = Boolean(hasOrderHubs && selectedDrone);
-  const canContinueStep3 = Boolean(selectedDrone && selectedBattery && !eligibleBatteriesFetching);
+  // The combined selection is complete only when both a drone and its origin battery
+  // have been explicitly chosen; a previously selected battery may be invalidated by BE.
+  const canContinueStep2 = Boolean(
+    canContinueStep1 && selectedDrone && selectedBattery &&
+    !eligibleBatteriesLoading && !eligibleBatteriesFetching && !eligibleBatteriesError
+  );
   // Step 3 -> Step 4 is a review/navigation action, not a flight safety approval.
   // Reviewing is allowed for any chosen route, including one with warnings.
   const canReviewMission = Boolean(
-    canContinueStep1 && canContinueStep3 && selectedRoute && selectedDrone && selectedTiming &&
+    canContinueStep1 && canContinueStep2 && selectedRoute && selectedDrone && selectedTiming &&
     !isPlanningAnalysisFetching && !planningAnalysisError
   );
   // Only final Assign is guarded by the authoritative Analyze feasibility result.
@@ -232,6 +242,22 @@ export function CreateMissionPage() {
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
+  };
+
+  const handleChangeDrone = () => {
+    setSelectedDroneId('');
+    setSelectedBatteryId('');
+    setSelectedRouteId('');
+    setExpandedRouteId(null);
+    // Discard old selection so it cannot return on refresh.
+    saveMissionDraft({
+      orderId: order.id,
+      step: 2,
+      selectedDroneId: '',
+      selectedBatteryId: '',
+      selectedRouteId: '',
+      relayBatterySelections: [],
+    });
   };
 
   const handleBatterySelect = (batteryId: string) => {
@@ -258,7 +284,7 @@ export function CreateMissionPage() {
   };
 
   const handleViewAiDetails = (routeId: string) => {
-    persistDraft(4, selectedRouteId);
+    persistDraft(3, selectedRouteId);
     navigate(`/operator/ai/mission-analysis?${new URLSearchParams({ orderId: order.id, droneId: selectedDroneId, batteryId: selectedBatteryId, routeId, returnTo: 'mission-create' }).toString()}`);
   };
 
@@ -293,7 +319,7 @@ export function CreateMissionPage() {
       if (batteriesNow.error || !batteriesNow.data?.some((item) =>
         item.id === selectedBatteryId && isAvailableOriginBattery(item, order.originHubId)
       )) {
-        setStep(3);
+        setStep(2);
         setSelectedBatteryId('');
         setSelectedRouteId('');
         showToast('Selected battery is no longer eligible. Choose another battery.');
@@ -307,17 +333,17 @@ export function CreateMissionPage() {
       }
       const currentRoute = current.data.routes.find((route) => route.id === selectedRoute.id);
       if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible) {
-        setStep(4);
+        setStep(3);
         setSelectedRouteId('');
         showToast('Route or relay battery availability changed. Please select a route again.');
         return;
       }
 
       if (!currentRoute.routeString || !currentRoute.legDetails?.length ||
-          !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
-          !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
-          !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
-        setStep(4);
+        !Number.isFinite(currentRoute.distanceKm) || currentRoute.distanceKm <= 0 ||
+        !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
+        !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
+        setStep(3);
         showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
         return;
       }
@@ -415,19 +441,21 @@ export function CreateMissionPage() {
                 <div className="delivery-network-node">
                   <small>Drop-off Point</small>
                   <strong>{originHubLabel}</strong>
-                  {/* <span>Customer selected</span> */}
                 </div>
                 <div className="delivery-network-arrow">→</div>
                 <div className="delivery-network-node">
                   <small>Pick-up Point</small>
                   <strong>{destinationHubLabel}</strong>
-                  {/* <span>Customer selected</span> */}
                 </div>
               </div>
-              {/* <p className="section-note">Origin and Pick-up Points are fixed by the customer. Route planning may add an intermediate Relay Hub when a long-distance flight requires a technical stop.</p> */}
             </OperatorPanel>
 
-            <OperatorPanel title="Available drones">
+            <OperatorPanel
+              title="Available drones"
+              action={selectedDrone ? (
+                <ActionButton variant="secondary" onClick={handleChangeDrone}>Change drone</ActionButton>
+              ) : undefined}
+            >
               {isEligibleDronesLoading ? (
                 <div className="operator-empty-state">Loading available drones…</div>
               ) : eligibleDronesError ? (
@@ -438,28 +466,8 @@ export function CreateMissionPage() {
                 </div>
               ) : eligibleDronesData ? (
                 <>
-                  {/* Drop-off Point summary and API explanation hidden by design.
-                      Keep the JSX below commented so it can be restored if needed.
-                  <div className="hub-grid hub-grid-select">
-                    <div className="hub-card">
-                      <div className="hub-card-head">
-                        <div>
-                          <span className="eyebrow">Drop-off Point</span>
-                          <h3>{eligibleDronesData.hub.name}</h3>
-                        </div>
-                        <StatusBadge tone="success">Active</StatusBadge>
-                      </div>
-                      <div className="hub-card-stats">
-                        <span><small>Total drones</small><strong>{eligibleDronesData.hub.totalDrones}</strong></span>
-                        <span><small>Available now</small><strong>{eligibleDronesData.hub.availableDrones}</strong></span>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="section-note">Only drones returned by the Backend eligibility check are shown. The API already filters by Drop-off Point, availability, assignment conflict, and payload capacity.</p>
-                  */}
-
-                  <div className="eligible-drone-grid">
-                    {eligibleDronesAtOrigin.map((drone) => (
+                  <div className="eligible-drone-grid" role="group" aria-label="Available drones">
+                    {(selectedDrone ? [selectedDrone] : eligibleDronesAtOrigin).map((drone) => (
                       <EligibleDroneCard
                         key={drone.id}
                         drone={drone}
@@ -469,67 +477,63 @@ export function CreateMissionPage() {
                       />
                     ))}
                   </div>
-
                   {eligibleDronesAtOrigin.length === 0 && (
                     <div className="operator-empty-state">No eligible drones are currently available at the Drop-off Point.</div>
+                  )}
+
+                  {selectedDrone && (
+                    <div className="mission-combined-battery-section">
+                      <div className="mission-combined-battery-heading">
+                        <h3>Available batteries</h3>
+                        {/* <StatusBadge tone="info">{originHubLabel}</StatusBadge> */}
+                      </div>
+                      {eligibleBatteriesLoading || eligibleBatteriesFetching ? (
+                        <div className="operator-empty-state">Loading available batteries…</div>
+                      ) : eligibleBatteriesError ? (
+                        <div className="operator-empty-state mission-create-gate">
+                          <strong>Unable to load available batteries</strong>
+                          <span>{eligibleBatteriesError instanceof Error ? eligibleBatteriesError.message : 'Battery list unavailable.'}</span>
+                          <ActionButton onClick={() => void refetchEligibleBatteries()}>Retry</ActionButton>
+                        </div>
+                      ) : availableOriginBatteries.length > 0 ? (
+                        <div className="mission-origin-battery-grid" role="radiogroup" aria-label="Select available battery">
+                          {availableOriginBatteries.map((battery) => (
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={selectedBatteryId === battery.id}
+                              aria-label={`${battery.id} · ${battery.model || 'Battery'} · Available`}
+                              key={battery.id}
+                              className={`mission-origin-battery-card${selectedBatteryId === battery.id ? ' is-selected' : ''}`}
+                              onClick={() => handleBatterySelect(battery.id)}
+                            >
+                              <span className="mission-origin-battery-head">
+                                <span className="mission-origin-battery-id"><Icon name="battery" size={18} /><strong>{battery.id}</strong></span>
+                                <StatusBadge tone={selectedBatteryId === battery.id ? 'warning' : 'success'}>{selectedBatteryId === battery.id ? 'Selected' : 'Available'}</StatusBadge>
+                              </span>
+                              <span className="mission-origin-battery-model">{battery.model || selectedDrone.batteryModel || 'Battery model not provided'}</span>
+                              <span className="mission-origin-battery-metrics">
+                                <span><small>Capacity</small><strong>{battery.capacityWh === undefined ? '—' : `${battery.capacityWh} Wh`}</strong></span>
+                                <span><small>Charge</small><strong>{battery.chargeLevelPct === undefined ? '—' : `${battery.chargeLevelPct}%`}</strong></span>
+                                <span><small>Energy</small><strong>{battery.availableEnergyWh === undefined ? '—' : `${battery.availableEnergyWh.toFixed(1)} Wh`}</strong></span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="operator-empty-state">No available batteries at this Hub for the selected drone.</div>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (
                 <div className="operator-empty-state">No eligible drone data is available.</div>
               )}
             </OperatorPanel>
-
           </div>
         )}
 
         {step === 3 && selectedDrone && (
-          <div className="mission-step-stack">
-            <OperatorPanel title="Select battery" action={<StatusBadge tone="info">{originHubLabel}</StatusBadge>}>
-              <div className="mission-origin-battery-context">
-                <Icon name="drone" size={16} />
-                <span>For drone <strong>{selectedDrone.id}</strong> · {selectedDrone.model}</span>
-              </div>
-              {eligibleBatteriesLoading || eligibleBatteriesFetching ? (
-                <div className="operator-empty-state">Loading available batteries…</div>
-              ) : eligibleBatteriesError ? (
-                <div className="operator-empty-state mission-create-gate">
-                  <strong>Unable to load available batteries</strong>
-                  <span>{eligibleBatteriesError instanceof Error ? eligibleBatteriesError.message : 'Battery list unavailable.'}</span>
-                  <ActionButton onClick={() => void refetchEligibleBatteries()}>Retry</ActionButton>
-                </div>
-              ) : availableOriginBatteries.length ? (
-                <div className="mission-origin-battery-grid" role="radiogroup" aria-label="Select available battery">
-                  {availableOriginBatteries.map((battery) => (
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={selectedBatteryId === battery.id}
-                      aria-label={`${battery.id} · ${battery.model || 'Battery'} · Available`}
-                      key={battery.id}
-                      className={`mission-origin-battery-card${selectedBatteryId === battery.id ? ' is-selected' : ''}`}
-                      onClick={() => handleBatterySelect(battery.id)}
-                    >
-                      <span className="mission-origin-battery-head">
-                        <span className="mission-origin-battery-id"><Icon name="battery" size={18} /><strong>{battery.id}</strong></span>
-                        <StatusBadge tone="success">{selectedBatteryId === battery.id ? 'Selected' : 'Available'}</StatusBadge>
-                      </span>
-                      <span className="mission-origin-battery-model">{battery.model || selectedDrone.batteryModel || 'Battery model not provided'}</span>
-                      <span className="mission-origin-battery-metrics">
-                        <span><small>Capacity</small><strong>{battery.capacityWh === undefined ? '—' : `${battery.capacityWh} Wh`}</strong></span>
-                        <span><small>Charge</small><strong>{battery.chargeLevelPct === undefined ? '—' : `${battery.chargeLevelPct}%`}</strong></span>
-                        <span><small>Energy</small><strong>{battery.availableEnergyWh === undefined ? '—' : `${battery.availableEnergyWh.toFixed(1)} Wh`}</strong></span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="operator-empty-state">No available batteries at this Hub for the selected drone.</div>
-              )}
-            </OperatorPanel>
-          </div>
-        )}
-
-        {step === 4 && selectedDrone && (
           <div className="mission-step-stack">
             <OperatorPanel title="Choose flight route">
               {isPlanningAnalysisFetching && (
@@ -583,13 +587,13 @@ export function CreateMissionPage() {
           </div>
         )}
 
-        {step === 4 && !selectedDrone && (
+        {step === 3 && !selectedDrone && (
           <OperatorPanel title="Route, energy & timing">
             <div className="operator-empty-state">Choose an eligible drone in Step 2 before AI compares route, relay battery, energy, and timing.</div>
           </OperatorPanel>
         )}
 
-        {step === 5 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canReviewMission && (
+        {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canReviewMission && (
           <OperatorPanel title="Review & assign">
             <div className="mission-review-grid">
               <dl className="review-values">
@@ -649,9 +653,8 @@ export function CreateMissionPage() {
           {step > 1 && <ActionButton variant="secondary" onClick={() => { const next = Math.max(1, step - 1); setStep(next); persistDraft(next); }}>Back</ActionButton>}
           {step === 1 && <ActionButton disabled={!canContinueStep1} onClick={() => { setStep(2); persistDraft(2); }}>Continue</ActionButton>}
           {step === 2 && <ActionButton disabled={!canContinueStep2} onClick={() => { setStep(3); persistDraft(3); }}>Continue</ActionButton>}
-          {step === 3 && <ActionButton disabled={!canContinueStep3} onClick={() => { setStep(4); persistDraft(4); }}>Continue</ActionButton>}
-          {step === 4 && <ActionButton disabled={!canReviewMission} onClick={() => { setStep(5); persistDraft(5); }}>Review mission</ActionButton>}
-          {step === 5 && <ActionButton icon="check" disabled={createMissionMutation.isPending || isPlanningAnalysisFetching || !canAssignMission} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
+          {step === 3 && <ActionButton disabled={!canReviewMission} onClick={() => { setStep(4); persistDraft(4); }}>Review mission</ActionButton>}
+          {step === 4 && <ActionButton icon="check" disabled={createMissionMutation.isPending || isPlanningAnalysisFetching || !canAssignMission} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
         </div>
       </div>
       {toast && <div className="operator-toast">{toast}</div>}

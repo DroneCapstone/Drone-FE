@@ -252,8 +252,22 @@
   font-weight: 650;
 }
 
-/* BE-assigned battery information, without changing route-card layout. */
-.mission-builder .mission-route-leg-places .mission-route-leg-battery { color: #48566a; line-height: 1.4; }
-.mission-builder .mission-route-leg-battery strong { display: inline; color: #273447; font-size: inherit; }
-.mission-builder .mission-relay-battery-review { display: flex; flex-direction: column; gap: 5px; }
-.mission-builder .mission-relay-battery-review > span { display: block; line-height: 1.45; overflow-wrap: anywhere; }
+/* Combined Drone + Battery step: keep both existing card designs. */
+.page-content .mission-builder .mission-combined-battery-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-combined-battery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page-content .mission-builder .mission-combined-battery-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text, #202a38);
+}
