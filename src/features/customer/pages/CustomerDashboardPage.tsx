@@ -36,9 +36,7 @@ import {
   formatDateTime,
 } from "../services/customerDeliveryService";
 
-import type {
-  CustomerDelivery,
-} from "../types/customer";
+import type { CustomerOrderSummary } from "../services/customerDeliveryService";
 
 export function CustomerDashboardPage() {
   const { user } = useAuth();
@@ -46,7 +44,7 @@ export function CustomerDashboardPage() {
     useState(0);
 
   const deliveries = user
-    ? customerDeliveryService.getByCustomer(
+    ? customerDeliveryService.getOrderSummariesByCustomer(
         user.id,
       )
     : [];
@@ -72,17 +70,11 @@ export function CustomerDashboardPage() {
     };
   }, [user?.id]);
 
-  const activeDeliveries =
-    deliveries.filter(
-      (delivery) =>
-        ![
-          "completed",
-          "cancelled",
-          "rejected",
-        ].includes(
-          delivery.orderStatus,
-        ),
-    );
+  const activeDeliveries = deliveries.filter((delivery) =>
+    !["completed", "picked_up", "collected", "package_collected", "cancelled", "canceled", "rejected"].includes(
+      delivery.orderStatus.trim().toLowerCase(),
+    ),
+  );
 
   const active =
     activeDeliveries[0];
@@ -90,8 +82,7 @@ export function CustomerDashboardPage() {
   const completedCount =
     deliveries.filter(
       (delivery) =>
-        delivery.orderStatus ===
-        "completed",
+        ["completed", "picked_up", "collected", "package_collected"].includes(delivery.orderStatus.trim().toLowerCase()),
     ).length;
 
   const awaitingPaymentCount =
@@ -175,7 +166,7 @@ export function CustomerDashboardPage() {
           icon={<Package size={21} />}
           title="Normal delivery"
           description="Standard service, using available flight slots."
-          badge="0% service surcharge"
+          badge="0% mode surcharge"
         />
 
         <DeliveryOptionCard
@@ -452,12 +443,9 @@ function MetricCard({
 function ActiveDelivery({
   delivery,
 }: {
-  delivery: CustomerDelivery;
+  delivery: CustomerOrderSummary;
 }) {
-  const status =
-    customerDeliveryService.getCustomerStatus(
-      delivery,
-    );
+  const status = delivery.statusLabel;
 
   return (
     <Link
@@ -514,7 +502,7 @@ function ActiveDelivery({
             icon={
               <Package size={15} />
             }
-            value={`${delivery.weightKg} kg · Size ${delivery.packageSize}`}
+            value={`${delivery.weightKg === null ? "—" : `${delivery.weightKg} kg`}${delivery.packageSize ? ` · Size ${delivery.packageSize}` : ""}`}
           />
 
           <DeliveryMeta
@@ -524,9 +512,7 @@ function ActiveDelivery({
                 size={15}
               />
             }
-            value={formatDateTime(
-              delivery.estimatedArrivalAt,
-            )}
+            value="—"
           />
 
           <DeliveryMeta

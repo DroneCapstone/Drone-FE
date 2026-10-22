@@ -155,6 +155,14 @@ function normalizeOrderStatus(
     rawStatus ?? "",
   ).toLowerCase();
 
+  // Collection by recipient is distinct from arrival at destination hub.
+  if (["picked_up", "collected", "package_collected", "package_picked_up", "received_by_recipient", "handed_over_to_recipient"].includes(normalized)) {
+    return "collected";
+  }
+  if (["delivered_to_hub", "at_destination_hub", "ready_for_pickup"].includes(normalized)) {
+    return "arrived_at_destination";
+  }
+
   if (
     normalized.includes("complete") ||
     normalized === "delivered"
@@ -172,7 +180,8 @@ function normalizeOrderStatus(
 
   if (
     normalized.includes("accept") ||
-    normalized.includes("schedule")
+    normalized.includes("schedule") ||
+    normalized === "at_hub"
   ) {
     return "accepted";
   }
@@ -359,7 +368,11 @@ function parseServerOrder(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   if (record.id !== undefined || record.order_id !== undefined) return record;
-  return parseServerOrder(record.data);
+  for (const key of ["data", "order", "result"]) {
+    const found = parseServerOrder(record[key]);
+    if (found) return found;
+  }
+  return null;
 }
 
 function getServerOrderId(order: Record<string, unknown>): string {
@@ -410,11 +423,13 @@ function mergeOrderFromServer(
 ): CustomerDelivery {
   const paymentStatus = getServerPaymentStatus(order);
   const backendStatus =
-    typeof order.status === "string" ? order.status : undefined;
+    readText(order.order_status) ?? readText(order.status) ?? undefined;
   const normalized = backendStatus?.trim().toLowerCase() ?? "";
   const isKnownStatus =
     ["pending", "pending_review", "accepted", "scheduled", "cancelled", "canceled",
-      "rejected", "in_delivery", "in_transit", "delivered", "completed"].includes(normalized);
+      "rejected", "in_delivery", "in_transit", "delivered", "completed", "delivered_to_hub", "at_hub",
+      "at_destination_hub", "ready_for_pickup", "picked_up", "collected", "package_collected", "package_picked_up", "received_by_recipient",
+      "handed_over_to_recipient"].includes(normalized);
   const originPackage = order.originPackage ?? order.origin_package;
   const originReceived =
     originPackage && typeof originPackage === "object"
@@ -430,7 +445,184 @@ function mergeOrderFromServer(
     ...(backendStatus ? { backendStatus } : {}),
     ...(typeof originReceived === "boolean"
       ? { packageReceivedAtHub: originReceived }
-      : {}),
+      : ["at_hub", "in_delivery", "delivered_to_hub"].includes(normalized)
+        ? { packageReceivedAtHub: true }
+        : {}),
+  };
+}
+
+/**
+ * A list row needs fewer fields than a full CustomerDelivery.
+ * GET /customer/orders does not return package_size, handover times or
+ * the fee breakdown. Keep missing fields as null instead of fabricating them.
+ */
+/**
+ * Server-provided historical quotation components. All figures are optional:
+ * GET /customer/orders/{id} may omit them for older orders. Never recreate
+ * historical financial values from today's pricing rules.
+ */
+export type CustomerOrderFeeBreakdown = {
+  baseFee: number | null;
+  distanceFee: number | null;
+  payloadFee: number | null;
+  insuranceFee: number | null;
+  expressSurcharge: number | null;
+  fragileSurcharge: number | null;
+  coreFee: number | null;
+  deliverySubtotal: number | null;
+  serviceFee: number | null;
+};
+
+function readFeeNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value.trim())) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+  return null;
+}
+
+function feeObject(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readServerFeeBreakdown(
+  order: Record<string, unknown>,
+): CustomerOrderFeeBreakdown | null {
+  const pricing = feeObject(order.pricing) ?? feeObject(order.quotation);
+  const fees = feeObject(order.fee_details) ??
+    feeObject(order.price_breakdown) ??
+    feeObject(order.pricing_details) ??
+    feeObject(pricing?.fee_details) ??
+    feeObject(pricing?.price_breakdown);
+  if (!fees) return null;
+
+  // Only use explicitly provided components. A bare delivery_fee from the
+  // list endpoint is the amount charged, NOT necessarily the subtotal.
+  const baseFee = readFeeNumber(fees.base_fee);
+  const distanceFee = readFeeNumber(fees.distance_fee);
+  const payloadFee = readFeeNumber(fees.payload_fee);
+  const coreFee = readFeeNumber(fees.core_fee) ??
+    (baseFee !== null && distanceFee !== null && payloadFee !== null
+      ? baseFee + distanceFee + payloadFee : null);
+  const result: CustomerOrderFeeBreakdown = {
+    baseFee,
+    distanceFee,
+    payloadFee,
+    insuranceFee: readFeeNumber(fees.insurance_fee),
+    expressSurcharge: readFeeNumber(fees.express_surcharge),
+    fragileSurcharge: readFeeNumber(fees.fragile_surcharge),
+    coreFee,
+    deliverySubtotal: readFeeNumber(fees.delivery_subtotal) ??
+      readFeeNumber(order.delivery_subtotal),
+    serviceFee: readFeeNumber(fees.service_fee) ??
+      readFeeNumber(order.service_fee),
+  };
+  if (Object.values(result).every((value) => value === null)) return null;
+  return result;
+}
+
+export type CustomerOrderSummary = {
+  id: string;
+  customerId: string;
+  createdAt: string;
+  originHub: DeliveryHub;
+  destinationHub: DeliveryHub;
+  weightKg: number | null;
+  packageSize: string | null;
+  deliveryMode: DeliveryMode | null;
+  paymentStatus: CustomerDelivery["paymentStatus"] | null;
+  orderStatus: string;
+  statusLabel: string;
+  customerStatus?: string;
+  totalFee: number | null;
+  feeBreakdown?: CustomerOrderFeeBreakdown | null;
+  source: "backend" | "local";
+};
+
+const backendOrdersByCustomer = new Map<string, Map<string, Record<string, unknown>>>();
+
+function readText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readNumeric(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readServerHub(value: unknown, fallback?: DeliveryHub): DeliveryHub {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback ?? { id: "", name: "—", address: "" };
+  }
+  const raw = value as Record<string, unknown>;
+  return {
+    id: typeof raw.id === "string" || typeof raw.id === "number"
+      ? raw.id : fallback?.id ?? "",
+    name: readText(raw.name) ?? fallback?.name ?? "—",
+    address: readText(raw.address) ?? fallback?.address ?? "",
+  };
+}
+
+function summarizeLocal(delivery: CustomerDelivery): CustomerOrderSummary {
+  return {
+    id: delivery.id,
+    customerId: delivery.customerId,
+    createdAt: delivery.createdAt,
+    originHub: delivery.originHub,
+    destinationHub: delivery.destinationHub,
+    weightKg: delivery.weightKg,
+    packageSize: delivery.packageSize,
+    deliveryMode: delivery.deliveryMode,
+    paymentStatus: delivery.paymentStatus,
+    orderStatus: delivery.backendStatus ?? delivery.orderStatus,
+    statusLabel: customerDeliveryService.getCustomerStatus(delivery),
+    customerStatus: undefined,
+    totalFee: delivery.price.total,
+    source: "local",
+  };
+}
+
+function summarizeServer(
+  order: Record<string, unknown>,
+  customerId: string,
+  local?: CustomerDelivery,
+): CustomerOrderSummary {
+  const mode = readText(order.delivery_mode)?.toUpperCase();
+  const deliveryMode = mode === "NORMAL" ? "normal" as const
+    : mode === "EXPRESS" ? "express" as const
+    : mode === "SCHEDULED" ? "scheduled" as const
+    : local?.deliveryMode ?? null;
+  const backendStatus = readText(order.order_status) ?? readText(order.status)
+    ?? local?.backendStatus ?? "";
+  const customerStatus = readText(order.customer_status);
+  // BE currently labels DELIVERED_TO_HUB as "Completed"; that is hub arrival,
+  // not proof of collection by the recipient.
+  const statusLabel = backendStatus.trim().toUpperCase() === "DELIVERED_TO_HUB"
+    ? "Arrived at destination hub / Ready for pickup"
+    : readText(order.status_label)
+    ?? (customerStatus === "awaiting_payment" ? "Awaiting payment" : null)
+    ?? (local ? customerDeliveryService.getCustomerStatus(local) : null)
+    ?? (backendStatus ? backendStatus.replace(/_/g, " ") : "—");
+
+  return {
+    id: getServerOrderId(order),
+    customerId,
+    createdAt: readText(order.created_at) ?? local?.createdAt ?? "",
+    originHub: readServerHub(order.origin_hub, local?.originHub),
+    destinationHub: readServerHub(order.destination_hub, local?.destinationHub),
+    weightKg: readNumeric(order.payload_kg) ?? local?.weightKg ?? null,
+    // This field is NOT present in current GET /customer/orders response.
+    packageSize: readText(order.package_size) ?? local?.packageSize ?? null,
+    deliveryMode,
+    paymentStatus: getServerPaymentStatus(order) ?? local?.paymentStatus ?? null,
+    orderStatus: backendStatus,
+    statusLabel,
+    customerStatus: customerStatus ?? undefined,
+    totalFee: readNumeric(order.total_fee) ?? readNumeric(order.delivery_fee)
+      ?? local?.price.total ?? null,
+    feeBreakdown: readServerFeeBreakdown(order),
+    source: "backend",
   };
 }
 
@@ -760,6 +952,11 @@ export const customerDeliveryService = {
         orders.map((order) => [getServerOrderId(order), order] as const)
           .filter(([id]) => Boolean(id)),
       );
+      // The remote list is authoritative for the list UI, including records
+      // created on another device or missing from localStorage.
+      backendOrdersByCustomer.set(customerId, byId);
+      // Reconcile existing full cached records without inventing fields that
+      // the list endpoint does not provide (size, price breakdown, ETA, etc).
       const merged = readDeliveries().map((delivery) => {
         if (delivery.customerId !== customerId) return delivery;
         const serverOrder = byId.get(delivery.id);
@@ -776,6 +973,55 @@ export const customerDeliveryService = {
         ordersSyncInFlight.delete(customerId);
       }
     }
+  },
+
+  /** Display all BE orders, then any legacy cached-only orders as fallback. */
+  getOrderSummariesByCustomer(customerId: string): CustomerOrderSummary[] {
+    const locals = readDeliveries().filter((d) => d.customerId === customerId);
+    const localById = new Map(locals.map((d) => [d.id, d] as const));
+    const backend = backendOrdersByCustomer.get(customerId);
+    // After a successful GET, the server list is authoritative. If GET has
+    // not succeeded yet, keep showing the local cache as an offline fallback.
+    const result: CustomerOrderSummary[] = backend
+      ? Array.from(backend.values())
+          .filter((order) => Boolean(getServerOrderId(order)))
+          .map((order) => summarizeServer(order, customerId, localById.get(getServerOrderId(order))))
+      : locals.map(summarizeLocal);
+    return result.sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+    );
+  },
+
+  /** Timeline fallback for a legacy local order, even if BE list lacks it. */
+  getLocalOrderSummary(customerId: string, id: string): CustomerOrderSummary | null {
+    const delivery = readDeliveries().find(
+      (item) => item.id === id && item.customerId === customerId,
+    );
+    return delivery ? summarizeLocal(delivery) : null;
+  },
+
+  getServerOrderSummary(customerId: string, id: string): CustomerOrderSummary | null {
+    const order = backendOrdersByCustomer.get(customerId)?.get(id);
+    if (!order) return null;
+    const local = readDeliveries().find((d) => d.id === id && d.customerId === customerId);
+    return summarizeServer(order, customerId, local);
+  },
+
+  /** Supports direct navigation/reload for orders absent from localStorage. */
+  async loadOrderSummaryFromBackend(customerId: string, id: string): Promise<CustomerOrderSummary> {
+    const response = await customerApi.getOrder(id);
+    const order = parseServerOrder(response);
+    if (!order || getServerOrderId(order) !== id) {
+      throw new Error("Order details are unavailable.");
+    }
+    const byId = backendOrdersByCustomer.get(customerId) ?? new Map();
+    // Detail may return a different subset of fields from the list endpoint.
+    const combined = { ...(byId.get(id) ?? {}), ...order };
+    byId.set(id, combined);
+    backendOrdersByCustomer.set(customerId, byId);
+    const local = readDeliveries().find((d) => d.id === id && d.customerId === customerId);
+    if (local) upsertDelivery(mergeOrderFromServer(local, combined));
+    return summarizeServer(combined, customerId, local);
   },
 
   /** A selected detail only fetches its own Order, never all payment statuses. */
@@ -914,7 +1160,9 @@ export const customerDeliveryService = {
       delivery.orderStatus ===
       "accepted"
     ) {
-      return "Scheduled";
+      return delivery.backendStatus?.toUpperCase() === "AT_HUB"
+        ? "Package received at origin hub / Preparing delivery"
+        : "Scheduled";
     }
 
     if (
@@ -922,6 +1170,13 @@ export const customerDeliveryService = {
       "in_delivery"
     ) {
       return "In delivery";
+    }
+
+    if (delivery.orderStatus === "arrived_at_destination") {
+      return "Arrived at destination hub / Ready for pickup";
+    }
+    if (delivery.orderStatus === "collected") {
+      return "Package collected by recipient";
     }
 
     if (

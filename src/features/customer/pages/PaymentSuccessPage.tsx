@@ -5,7 +5,6 @@ import {
 
 import {
   Link,
-  Navigate,
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -19,19 +18,25 @@ import {
   customerDeliveryService,
   formatDateTime,
 } from "../services/customerDeliveryService";
+import type { CustomerOrderSummary } from "../services/customerDeliveryService";
+import { customerApi, normalizePaymentStatus } from "../services/customerApi";
+import { useAuth } from "../../auth/hooks/useAuth";
 
 export function PaymentSuccessPage() {
   const { deliveryId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [remote, setRemote] = useState<CustomerOrderSummary | null>(() =>
+    user?.id && deliveryId
+      ? customerDeliveryService.getServerOrderSummary(user.id, deliveryId)
+      : null,
+  );
+  const [verifiedPaid, setVerifiedPaid] = useState(false);
 
-  const [delivery, setDelivery] =
-    useState(() =>
-      deliveryId
-        ? customerDeliveryService.getById(
-          deliveryId,
-        )
-        : null,
-    );
+  const [delivery, setDelivery] = useState(() => {
+    const candidate = deliveryId ? customerDeliveryService.getById(deliveryId) : null;
+    return candidate?.customerId === user?.id ? candidate : null;
+  });
 
   const [checking, setChecking] =
     useState(true);
@@ -49,60 +54,52 @@ export function PaymentSuccessPage() {
     let active = true;
 
     setChecking(true);
+    setVerifiedPaid(false);
     setVerificationError("");
-    setDelivery(customerDeliveryService.getById(orderId));
+    const candidate = customerDeliveryService.getById(orderId);
+    setDelivery(candidate?.customerId === user?.id ? candidate : null);
 
-    // This URL is for verified payments only. If the backend says
-    // PENDING, go back to the QR automatically, without making the
-    // customer press "Return to payment".
-    void customerDeliveryService
-      .refreshPaymentStatus(orderId)
-      .then((next) => {
+    // Server status is authoritative. Do not rely on the presence of a
+    // localStorage order: older orders may exist only in the backend.
+    void customerApi.getPaymentStatus(orderId)
+      .then(async (response) => {
         if (!active) return;
-
-        setDelivery(next);
-
-        if (next?.paymentStatus === "paid") {
-          customerDeliveryService.clearDraft();
-          window.sessionStorage.removeItem(
-            "droneoptai.customer.pending-checkout-order",
-          );
+        const status = normalizePaymentStatus(response);
+        if (status !== "paid") {
+          navigate(`/customer/payment/${encodeURIComponent(orderId)}`, { replace: true });
           return;
         }
-
-        navigate(
-          `/customer/payment/${encodeURIComponent(orderId)}`,
-          { replace: true },
-        );
+        setVerifiedPaid(true);
+        const candidate = customerDeliveryService.getById(orderId);
+        const current = candidate?.customerId === user?.id ? candidate : null;
+        if (current) {
+          setDelivery(customerDeliveryService.markPaid(orderId));
+        } else if (user?.id) {
+          const known = customerDeliveryService.getServerOrderSummary(user.id, orderId);
+          if (known) setRemote(known);
+          else {
+            try {
+              const summary = await customerDeliveryService.loadOrderSummaryFromBackend(user.id, orderId);
+              if (active) setRemote(summary);
+            } catch { /* Payment is verified; summary may remain unavailable. */ }
+          }
+        }
+        customerDeliveryService.clearDraft();
+        window.sessionStorage.removeItem("droneoptai.customer.pending-checkout-order");
       })
       .catch(() => {
-        // Never claim that the payment succeeded when verification
-        // cannot reach the backend. Allow retry or return to QR.
-        if (active) {
-          setVerificationError(
-            "Payment verification is temporarily unavailable. Please try again.",
-          );
-        }
+        if (active) setVerificationError(
+          "Payment verification is temporarily unavailable. Please try again.",
+        );
       })
-      .finally(() => {
-        if (active) setChecking(false);
-      });
+      .finally(() => { if (active) setChecking(false); });
 
     return () => {
       active = false;
     };
-  }, [deliveryId, navigate, verificationAttempt]);
+  }, [deliveryId, navigate, verificationAttempt, user?.id]);
 
-  if (!delivery) {
-    return (
-      <Navigate
-        to="/customer/deliveries"
-        replace
-      />
-    );
-  }
-
-  if (checking || delivery.paymentStatus !== "paid") {
+  if (checking || !verifiedPaid) {
     return (
       <div className="mx-auto max-w-[760px] px-6 py-20 text-center">
         <Loader2
@@ -133,7 +130,7 @@ export function PaymentSuccessPage() {
               Try again
             </button>
             <Link
-              to={`/customer/payment/${encodeURIComponent(delivery.id)}`}
+              to={`/customer/payment/${encodeURIComponent(deliveryId ?? "")}`}
               replace
               className="inline-flex rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black"
             >
@@ -162,23 +159,21 @@ export function PaymentSuccessPage() {
       <div className="mx-auto mt-10 max-w-[520px] border-y border-white/10 py-7 text-left">
         <SuccessRow
           label="Order"
-          value={delivery.id}
+          value={deliveryId ?? "—"}
         />
         <SuccessRow
           label="Drop-off Point"
-          value={delivery.originHub.name}
+          value={delivery?.originHub.name ?? remote?.originHub.name ?? "—"}
         />
         <SuccessRow
           label="Handover deadline"
-          value={formatDateTime(
-            delivery.handoverDeadlineAt,
-          )}
+          value={delivery ? formatDateTime(delivery.handoverDeadlineAt) : "Not available"}
         />
       </div>
 
       <div className="mt-10 flex flex-wrap justify-center gap-4">
         <Link
-          to={`/customer/deliveries/${delivery.id}`}
+          to={`/customer/deliveries/${encodeURIComponent(deliveryId ?? "")}`}
           className="rounded-xl bg-orange-500 px-7 py-3 text-sm font-semibold text-black hover:bg-orange-400"
         >
           View delivery

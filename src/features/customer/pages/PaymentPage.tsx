@@ -57,6 +57,8 @@ import type {
   DeliveryPrice,
 
 } from "../types/customer";
+import type { CustomerOrderSummary, CustomerOrderFeeBreakdown } from "../services/customerDeliveryService";
+import { useAuth } from "../../auth/hooks/useAuth";
 
 import { QRCodeSVG } from "qrcode.react";
 
@@ -326,34 +328,87 @@ async function copyText(value: string) {
    ========================================================= */
 
 export function PaymentPage() {
+  const { deliveryId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const { deliveryId } =
+  // A paid/unpaid order may exist on BE but not in this browser's localStorage.
+  // Never redirect such orders to My Deliveries before requesting their detail.
+  const [delivery, setDelivery] = useState(() => {
+    const cached = deliveryId ? customerDeliveryService.getById(deliveryId) : null;
+    return cached?.customerId === user?.id ? cached : null;
+  });
+  const [serverOrder, setServerOrder] = useState<CustomerOrderSummary | null>(() =>
+    deliveryId && user?.id
+      ? customerDeliveryService.getServerOrderSummary(user.id, deliveryId)
+      : null,
+  );
+  const [orderLoading, setOrderLoading] = useState(true);
+  const [orderError, setOrderError] = useState("");
 
-    useParams();
+  useEffect(() => {
+    if (!deliveryId || !user?.id) {
+      setOrderLoading(false);
+      setOrderError("Order information is unavailable.");
+      return;
+    }
 
-  const navigate =
+    let active = true;
+    const orderId = deliveryId;
+    const customerId = user.id;
+    const cached = customerDeliveryService.getById(orderId);
+    setDelivery(cached?.customerId === customerId ? cached : null);
+    setServerOrder(customerDeliveryService.getServerOrderSummary(customerId, orderId));
+    setOrderLoading(true);
+    setOrderError("");
 
-    useNavigate();
+    void customerDeliveryService.loadOrderSummaryFromBackend(customerId, orderId)
+      .then((summary) => {
+        if (!active) return;
+        setServerOrder(summary);
+        const refreshed = customerDeliveryService.getById(orderId);
+        setDelivery(refreshed?.customerId === customerId ? refreshed : null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        // Preserve a previously known local/BE order during a temporary outage.
+        // Checkout still requires the backend to authorize the selected order.
+        setOrderError(error instanceof Error ? error.message : "Unable to load order details.");
+      })
+      .finally(() => {
+        if (active) {
+          setOrderLoading(false);
+        }
+      });
 
-  const delivery =
+    return () => { active = false; };
+  }, [deliveryId, user?.id]);
 
-    deliveryId
+  // Route changes must never briefly show/checkout a previous order.
+  const currentDelivery = delivery?.id === deliveryId ? delivery : null;
+  const currentServerOrder = serverOrder?.id === deliveryId ? serverOrder : null;
+  const knownOrder = Boolean(
+    (currentDelivery && currentDelivery.customerId === user?.id) ||
+    (currentServerOrder && currentServerOrder.customerId === user?.id),
+  );
+  const latestPaymentStatus = currentServerOrder?.paymentStatus ?? currentDelivery?.paymentStatus;
+  const orderStatus = (currentServerOrder?.orderStatus ?? currentDelivery?.backendStatus ?? "").trim().toUpperCase();
+  const cannotPay = latestPaymentStatus === "paid" ||
+    latestPaymentStatus === "refunded" ||
+    latestPaymentStatus === "failed" ||
+    ["CANCELLED", "REJECTED", "COMPLETED", "DELIVERED_TO_HUB", "PICKED_UP"].includes(orderStatus);
 
-      ? customerDeliveryService.getById(
-
-          deliveryId,
-
-        )
-
-      : null;
-
-  const paymentOrderId =
-
-    delivery?.id ?? null;
+  // A known order from My Deliveries is sufficient to start checkout.
+  // Refreshing its detail happens in PARALLEL, never as a full-page gate.
+  // When the user deep-links to an uncached order, checkout starts after the
+  // GET confirms that it belongs to the signed-in customer.
+  const paymentOrderId = Boolean(user?.id) && knownOrder && !cannotPay
+    ? deliveryId ?? null
+    : null;
 
   const [
 
-    checkout,
+    storedCheckout,
 
     setCheckout,
 
@@ -362,6 +417,11 @@ export function PaymentPage() {
     PaymentCheckoutDetails | null
 
   >(null);
+
+  // Do not accidentally render a QR/amount from the previous order when
+  // React Router reuses PaymentPage across two different order IDs.
+  const [checkoutOwnerId, setCheckoutOwnerId] = useState<string | null>(null);
+  const checkout = checkoutOwnerId === deliveryId ? storedCheckout : null;
 
   const [
 
@@ -445,6 +505,7 @@ export function PaymentPage() {
     let active = true;
 
     setCheckout(null);
+    setCheckoutOwnerId(orderId);
     setFailedImageSrc(null);
     setLoading(true);
     setError("");
@@ -471,20 +532,36 @@ export function PaymentPage() {
     };
   }, [paymentOrderId]);
 
-  if (!delivery) {
-
+  // Payment shell is rendered immediately. Only the QR region waits while
+  // the selected backend order is resolved; no blank intermediate page.
+  if (!knownOrder && !orderLoading) {
     return (
-
-      <Navigate
-
-        to="/customer/deliveries"
-
-        replace
-
-      />
-
+      <div className="mx-auto max-w-[760px] px-6 py-20 text-center text-white">
+        <h1 className="text-2xl font-semibold">Unable to open payment</h1>
+        <p role="alert" className="mt-3 text-sm text-white/65">
+          {orderError || "The selected order could not be found."}
+        </p>
+        <Link to="/customer/deliveries" className="mt-6 inline-block rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black">
+          Back to My deliveries
+        </Link>
+      </div>
     );
+  }
 
+  if (knownOrder && latestPaymentStatus === "paid") {
+    return <Navigate to={`/customer/payment/${encodeURIComponent(deliveryId ?? "")}/success`} replace />;
+  }
+
+  if (knownOrder && cannotPay) {
+    return (
+      <div className="mx-auto max-w-[760px] px-6 py-20 text-center text-white">
+        <h1 className="text-2xl font-semibold">Payment unavailable</h1>
+        <p className="mt-3 text-sm text-white/65">This order is not eligible for payment in its current status.</p>
+        <Link to={`/customer/deliveries/${encodeURIComponent(deliveryId ?? "")}`} className="mt-6 inline-block rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black">
+          View order details
+        </Link>
+      </div>
+    );
   }
 
   const reloadPayment = async () => {
@@ -556,11 +633,9 @@ export function PaymentPage() {
   const qrImage = checkout ? resolveQrImage(checkout) : null;
   const canShowQrImage = Boolean(qrImage && qrImage !== failedImageSrc);
 
-  const displayAmount =
-
-    checkout?.amount ??
-
-    delivery.price.total;
+  // The list/detail API supplies a total even for orders without a local
+  // quotation. Use the checkout amount first; never manufacture a fee breakdown.
+  const displayAmount = checkout?.amount ?? currentDelivery?.price.total ?? currentServerOrder?.totalFee ?? null;
 
   const hasBankDetails =
 
@@ -580,7 +655,7 @@ export function PaymentPage() {
 
       <Link
 
-        to="/customer/deliveries/review"
+        to={`/customer/deliveries/${encodeURIComponent(deliveryId ?? "")}`}
 
         className="inline-flex items-center gap-2 text-[12px] text-white/[0.50] transition hover:text-white"
 
@@ -592,7 +667,7 @@ export function PaymentPage() {
 
         />
 
-        Back to review
+        Back to order details
 
       </Link>
 
@@ -636,11 +711,7 @@ export function PaymentPage() {
 
               <p className="mt-1 text-[25px] font-semibold tracking-[-0.035em] text-white">
 
-                {formatVnd(
-
-                  displayAmount,
-
-                )}
+                {displayAmount === null ? "—" : formatVnd(displayAmount)}
 
               </p>
 
@@ -666,7 +737,7 @@ export function PaymentPage() {
 
           <div className="p-5 sm:p-6">
 
-            {loading ? (
+            {loading || (orderLoading && !knownOrder) ? (
 
               <div className="flex min-h-[390px] flex-col items-center justify-center rounded-2xl bg-white px-6 text-center">
 
@@ -819,21 +890,9 @@ export function PaymentPage() {
 
                     label="Amount"
 
-                    value={formatVnd(
+                    value={displayAmount === null ? "—" : formatVnd(displayAmount)}
 
-                      displayAmount,
-
-                    )}
-
-                    copyValue={String(
-
-                      Math.round(
-
-                        displayAmount,
-
-                      ),
-
-                    )}
+                    copyValue={displayAmount === null ? undefined : String(Math.round(displayAmount))}
 
                     copyKey="amount"
 
@@ -953,7 +1012,7 @@ export function PaymentPage() {
 
             <p className="mt-1 break-all text-[13px] font-semibold text-white/[0.92]">
 
-              {delivery.id}
+              {deliveryId}
 
             </p>
 
@@ -961,15 +1020,15 @@ export function PaymentPage() {
 
           <div className="mt-5">
 
-            <PaymentPriceBreakdown
-
-              price={
-
-                delivery.price
-
-              }
-
-            />
+            {currentDelivery?.price.feeDetails ? (
+              <PaymentPriceBreakdown price={currentDelivery.price} />
+            ) : (
+              <BackendPaymentPriceBreakdown
+                details={currentServerOrder?.feeBreakdown ?? null}
+                isExpress={currentServerOrder?.deliveryMode === "express"}
+                isRefreshing={orderLoading}
+              />
+            )}
 
           </div>
 
@@ -983,13 +1042,7 @@ export function PaymentPage() {
 
             <strong className="text-[22px] tracking-[-0.03em] text-white">
 
-              {formatVnd(
-
-                delivery.price
-
-                  .total,
-
-              )}
+              {displayAmount === null ? "—" : formatVnd(displayAmount)}
 
             </strong>
 
@@ -1138,6 +1191,61 @@ function BankRow({
    PRICE BREAKDOWN
 
 ========================================================= */
+
+function BackendPaymentPriceBreakdown({
+  details,
+  isExpress,
+  isRefreshing,
+}: {
+  details: CustomerOrderFeeBreakdown | null;
+  isExpress: boolean;
+  isRefreshing: boolean;
+}) {
+  const money = (value: number | null | undefined) =>
+    value === null || value === undefined ? "—" : formatVnd(value);
+
+  // A historical order is NOT repriced using the current estimate API.
+  // Values appear only when the backend returns the original fee breakdown.
+  return (
+    <div className="space-y-3">
+      <PaymentPriceRow label="Base fee" value={money(details?.baseFee)} />
+      <PaymentPriceRow label="Distance fee" value={money(details?.distanceFee)} />
+      <PaymentPriceRow label="Payload fee" value={money(details?.payloadFee)} />
+      <div className="border-t border-white/[0.07] pt-3">
+        <PaymentPriceRow label="Core fee" value={money(details?.coreFee)} strong />
+      </div>
+      {(details?.fragileSurcharge ?? 0) > 0 && (
+        <PaymentPriceRow label="Fragile surcharge"
+          value={details?.fragileSurcharge === null || details?.fragileSurcharge === undefined
+            ? "—" : `+${formatVnd(details.fragileSurcharge)}`} />
+      )}
+      {(details?.insuranceFee === undefined ||
+        details?.insuranceFee === null || details.insuranceFee > 0) && (
+        <PaymentPriceRow label="Package insurance"
+          value={details?.insuranceFee === null || details?.insuranceFee === undefined
+            ? "—" : `+${formatVnd(details.insuranceFee)}`} />
+      )}
+      <div className="border-t border-white/[0.07] pt-3">
+        <PaymentPriceRow label="Delivery subtotal" value={money(details?.deliverySubtotal)} strong />
+      </div>
+      {(isExpress && details?.expressSurcharge === undefined ||
+        isExpress && details?.expressSurcharge === null ||
+        (details?.expressSurcharge ?? 0) > 0) && (
+        <PaymentPriceRow label="Express surcharge"
+          value={details?.expressSurcharge === null || details?.expressSurcharge === undefined
+            ? "—" : `+${formatVnd(details.expressSurcharge)}`} />
+      )}
+      <PaymentPriceRow label="Service fee" value={money(details?.serviceFee)} />
+      {!details && (
+        <p className="pt-2 text-[10px] leading-5 text-white/[0.46]">
+          {isRefreshing
+            ? "Loading fee details from your order…"
+            : "A detailed fee breakdown was not provided for this order by the backend. The total above is the amount on record."}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PaymentPriceBreakdown({
 
