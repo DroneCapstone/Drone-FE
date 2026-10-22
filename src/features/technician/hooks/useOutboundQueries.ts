@@ -27,7 +27,7 @@ export function useOutboundDeliveriesQuery() {
     // required for the list; unrelated auth/mission requests no longer block it.
     staleTime: 60_000,
     gcTime: 10 * 60_000,
-    refetchInterval: 90_000,
+    refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
