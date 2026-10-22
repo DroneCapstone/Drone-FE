@@ -80,6 +80,17 @@ export function LiveTrackingPage() {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionIds, trailsKey]);
+  // The live-tracking response may already include a more recent BE GPS trail.
+  // Preserve telemetry API for detailed logs; use inline trail only for the map.
+  const mapHistories = useMemo(() => {
+    const result: Record<string, MissionTelemetryPoint[]> = { ...histories };
+    for (const drone of liveDrone) {
+      if (drone.missionId && (drone.trail?.length ?? 0) >= 2) {
+        result[drone.missionId] = drone.trail!;
+      }
+    }
+    return result;
+  }, [histories, liveDrone]);
   const logEvents = useMemo(() => {
     const events: LogEvent[] = [];
     liveDrone.forEach(drone => {
@@ -96,7 +107,7 @@ export function LiveTrackingPage() {
     return events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 70);
   }, [liveDrone, histories, checkpointQuery.data, selectedDrone]);
   const visibleLogs = logFilter === 'selected' && selectedDrone ? logEvents.filter(e => e.missionId === selectedDrone.missionId) : logEvents;
-  const selectedHistory = selectedDrone ? histories[selectedDrone.missionId] ?? [] : [];
+  const selectedHistory = selectedDrone ? mapHistories[selectedDrone.missionId] ?? [] : [];
   const heading = selectedHistory.length > 1 ? bearing(selectedHistory[selectedHistory.length - 2], selectedHistory[selectedHistory.length - 1]) : undefined;
   // The first aircraft is highlighted on load, not auto-followed; the user chooses when to follow.
   function followFromAircraftList(aircraft: LiveTrackingDrone) {
@@ -112,8 +123,7 @@ export function LiveTrackingPage() {
       <div className="live-ops-main">
         <OperatorPanel className={`live-map-panel live-ops-map-panel ${isMapExpanded ? 'live-ops-map-expanded' : ''}`}>
           <div className="live-3d-toolbar">
-            {/* <div className="live-3d-title"><span className="live-3d-status"><i className="live-3d-dot"/> LIVE MAP</span><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft flying · updates every 4s</small></div> */}
-            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft flying · updates every 4s</small></div>
+            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft flying · updates every 3s</small></div>
             <div className="live-3d-tools" aria-label="Map controls">
               <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Icon name="plus" size={17} /></button>
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
@@ -127,7 +137,7 @@ export function LiveTrackingPage() {
               ref={mapRef}
               hubs={hubsQuery.data ?? []}
               drones={liveDrone}
-              histories={histories}
+              histories={mapHistories}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
                 const matching = liveDrone.find(drone => drone.missionId === missionId);

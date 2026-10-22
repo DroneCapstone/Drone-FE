@@ -24,8 +24,8 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
           <strong>{drone.name}</strong>
           <small>ID {drone.displayId} · {drone.model}</small>
         </div>
-        <StatusBadge tone={eligibility.eligible ? 'success' : 'neutral'}>
-          {eligibility.eligible ? 'Available' : 'Unavailable'}
+        <StatusBadge tone={!eligibility.eligible ? 'neutral' : selected ? 'warning' : 'success'}>
+          {!eligibility.eligible ? 'Unavailable' : selected ? 'Selected' : 'Available'}
         </StatusBadge>
       </div>
 

@@ -35,6 +35,8 @@ export interface LiveTrackingDrone {
   mapPosition: string;
   lastUpdated?: string;
   checkpointsPassed?: number;
+  /** GPS history supplied by GET /operator/missions/live-tracking. */
+  trail?: MissionTelemetryPoint[];
   weather?: {
     temperature?: number;
     apparentTemperature?: number;
@@ -451,11 +453,21 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
   const record = asRecord(raw);
   const telemetry = isRecord(record.telemetry) ? record.telemetry : record;
   const health = normalizeHealth(record.health ?? record.health_status ?? record.alert_level);
-  const latitude = pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
-  const longitude = pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
+  // New Live Tracking schema has top-level latest_lat/latest_lng, which must
+  // override any older nested telemetry. Never derive marker GPS from the route.
+  const liveLat = pickNumber(record, ['latest_lat', 'latestLat'], Number.NaN);
+  const liveLng = pickNumber(record, ['latest_lng', 'latestLng'], Number.NaN);
+  const latitude = Number.isFinite(liveLat)
+    ? liveLat : pickNumber(telemetry, ['latitude', 'lat', 'latest_lat', 'latestLat'], Number.NaN);
+  const longitude = Number.isFinite(liveLng)
+    ? liveLng : pickNumber(telemetry, ['longitude', 'lng', 'lon', 'latest_lng', 'latestLng'], Number.NaN);
+  const missionId = pickString(record, ['mission_id', 'missionId']);
+  const trail = pickArray(record, ['trail'])
+    .map((point, pointIndex) => mapTelemetryPoint(point, pointIndex, missionId))
+    .filter(point => point.latitude !== undefined && point.longitude !== undefined);
   return {
     id: pickString(record, ['drone_id', 'droneId', 'id', 'drone'], `DR-${index + 1}`),
-    missionId: pickString(record, ['mission_id', 'missionId']),
+    missionId,
     orderId: pickString(record, ['order_id', 'orderId']),
     route: pickString(record, ['route', 'route_name', 'routeName', 'route_id', 'routeId'], 'Active route'),
     health,
@@ -475,6 +487,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     longitude: Number.isFinite(longitude) ? longitude : undefined,
     lastUpdated: normalizeIso(pickString(record, ['last_updated', 'lastUpdated'])) ?? undefined,
     checkpointsPassed: pickOptionalNumber(record, ['checkpoints_passed', 'checkpointsPassed']),
+    trail,
     weather: {
       temperature: pickOptionalNumber(record, ['weather_temperature']),
       apparentTemperature: pickOptionalNumber(record, ['weather_apparent_temp']),
@@ -916,8 +929,8 @@ export async function getEligibleMissionBatteriesApi(
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
   if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
-    !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
-      'items' in payload || 'data' in payload || 'results' in payload))) {
+       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+         'items' in payload || 'data' in payload || 'results' in payload))) {
     throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
   }
   return records.map((entry) => {
