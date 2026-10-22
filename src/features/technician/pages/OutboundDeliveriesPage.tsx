@@ -616,7 +616,7 @@ export function OutboundDeliveriesPage() {
                   )}
                   <DetailField label="Mission (Backend)" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
                   <DetailField label="Mission state" value={readableStatus(selectedDelivery.missionStatus)} />
-                  <DetailField label="Drone" value={display(selectedDelivery.assignedDroneCode)} />
+                  <DetailField label="Drone ID" value={display(selectedDelivery.assignedDroneId)} />
                   <DetailField label="Assigned battery" value={selectedDelivery.installedBatteryId ? `${selectedDelivery.installedBatteryId}${selectedDelivery.batteryChargePct !== undefined ? ` · ${selectedDelivery.batteryChargePct}%` : ""}${selectedDelivery.batteryStatus ? ` · ${selectedDelivery.batteryStatus}` : ""}` : "Not assigned"} />
                   <DetailField label="Battery serial / code" value={display(selectedDelivery.assignedBatteryCode)} />
                 </div>
@@ -650,7 +650,7 @@ export function OutboundDeliveriesPage() {
                   <div key={item.id} className="grid grid-cols-[140px_140px_145px_135px_1fr_160px_100px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
                     <span className="break-all font-semibold">{item.orderId}</span>
                     <span className="break-all">{display(item.missionId)}</span>
-                    <span className="truncate" title={item.droneCode}>{display(item.droneCode)}</span>
+                    <span className="truncate" title={item.droneId}>{display(item.droneId)}</span>
                     <span className="text-orange-500">{display(item.batteryId)}</span>
                     <span className="truncate" title={item.destination}>{display(item.destination)}</span>
                     <span>{display(item.departedAt)}</span>
