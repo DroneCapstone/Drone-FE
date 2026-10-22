@@ -82,9 +82,11 @@ export function CustomerNotificationsPage() {
   const [error, setError] =
     useState("");
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
+  const load = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const response =
@@ -102,18 +104,33 @@ export function CustomerNotificationsPage() {
 
       setNotifications(items);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load notifications.",
-      );
+      if (!silent) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load notifications.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    // Read actual BE notifications. Refresh while the page is visible;
+    // status transitions / recipient email notifications must be produced by BE.
+    void load();
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load(true);
+    }, 45000);
+    const onFocus = () => {
+      if (!document.hidden) void load(true);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   const unreadCount =
@@ -169,7 +186,7 @@ export function CustomerNotificationsPage() {
         id,
       );
     } catch {
-      load();
+      void load();
     }
   };
 
@@ -241,7 +258,7 @@ export function CustomerNotificationsPage() {
             </p>
             <button
               type="button"
-              onClick={load}
+              onClick={() => { void load(); }}
               className="mt-4 text-[13px] font-medium text-orange-400"
             >
               Try again

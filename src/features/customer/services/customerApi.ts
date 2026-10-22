@@ -481,6 +481,13 @@ export const customerApi = {
     );
   },
 
+  /** Track only the selected order. Actual event timestamps depend on BE. */
+  getOrderTracking(orderId: string) {
+    return apiRequest<unknown>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}/tracking`,
+    );
+  },
+
   createCheckout(orderId: string) {
     return apiRequest<PaymentCheckoutResponse>(
       `/api/v1/payments/orders/${encodeURIComponent(orderId)}/checkout`,
