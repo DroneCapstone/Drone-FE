@@ -24,7 +24,7 @@ export function MyDeliveriesPage() {
   const [, setRevision] = useState(0);
 
   const deliveries = user
-    ? customerDeliveryService.getByCustomer(
+    ? customerDeliveryService.getOrderSummariesByCustomer(
       user.id,
     )
     : [];
@@ -34,23 +34,36 @@ export function MyDeliveriesPage() {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
+    let busy = false;
 
-    // One order-list request, NO payment-status request per pending order.
-    void customerDeliveryService
-      .syncOrdersFromBackend(user.id)
-      .then(() => {
-        if (!active) return;
-        setSyncError(false);
-        setRevision((value) => value + 1);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        console.warn("[MyDeliveries] Unable to refresh orders", error);
-        setSyncError(true); // Show cached orders, never discard them.
-      });
+    const refresh = async () => {
+      if (!active || busy || document.hidden) return;
+      busy = true;
+      try {
+        // One list request, never an individual Payment Status request per order.
+        await customerDeliveryService.syncOrdersFromBackend(user.id);
+        if (active) {
+          setSyncError(false);
+          setRevision((value) => value + 1);
+        }
+      } catch (error) {
+        if (active) {
+          console.warn("[MyDeliveries] Unable to refresh orders", error);
+          setSyncError(true);
+        }
+      } finally {
+        busy = false;
+      }
+    };
 
+    void refresh();
+    const interval = window.setInterval(() => { void refresh(); }, 60000);
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
     return () => {
       active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
     };
   }, [user?.id]);
 
@@ -143,10 +156,7 @@ export function MyDeliveriesPage() {
 
                 {deliveries.map(
                   (delivery) => {
-                    const status =
-                      customerDeliveryService.getCustomerStatus(
-                        delivery,
-                      );
+                    const status = delivery.statusLabel;
 
                     return (
                       <Link
@@ -198,17 +208,11 @@ export function MyDeliveriesPage() {
 
                         <div className="min-w-0">
                           <p className="text-[14px] font-semibold leading-5 text-white/[0.92]">
-                            {
-                              delivery.weightKg
-                            }{" "}
-                            kg
+                            {delivery.weightKg === null ? "—" : `${delivery.weightKg} kg`}
                           </p>
 
                           <p className="mt-1 text-[11px] leading-4 text-white/[0.44]">
-                            Size{" "}
-                            {
-                              delivery.packageSize
-                            }
+                            {delivery.packageSize ? `Size ${delivery.packageSize}` : "Size —"}
                           </p>
                         </div>
 
@@ -243,10 +247,7 @@ export function MyDeliveriesPage() {
               <div className="grid gap-4 lg:hidden">
                 {deliveries.map(
                   (delivery) => {
-                    const status =
-                      customerDeliveryService.getCustomerStatus(
-                        delivery,
-                      );
+                    const status = delivery.statusLabel;
 
                     return (
                       <Link
@@ -307,13 +308,8 @@ export function MyDeliveriesPage() {
                             </p>
 
                             <p className="mt-1.5 text-[13px] font-semibold text-white/[0.82]">
-                              {
-                                delivery.weightKg
-                              }{" "}
-                              kg · Size{" "}
-                              {
-                                delivery.packageSize
-                              }
+                              {delivery.weightKg === null ? "—" : `${delivery.weightKg} kg`}
+                              {delivery.packageSize ? ` · Size ${delivery.packageSize}` : ""}
                             </p>
                           </div>
 

@@ -1,11 +1,9 @@
 import {
   ArrowLeft,
-  Check,
 } from "lucide-react";
 
 import {
   Link,
-  Navigate,
   useParams,
 } from "react-router-dom";
 
@@ -24,98 +22,145 @@ import {
 import type {
   DeliveryPrice,
 } from "../types/customer";
+import type { CustomerOrderSummary } from "../services/customerDeliveryService";
+import { customerApi, ApiError } from "../services/customerApi";
+import {
+  DeliveryProgressTimeline,
+  parseTrackingEvents,
+  type TrackingEvent,
+} from "../components/DeliveryProgressTimeline";
+import { useAuth } from "../../auth/hooks/useAuth";
 
 export function DeliveryDetailPage() {
   const { deliveryId } = useParams();
+  const { user } = useAuth();
 
-  const [delivery, setDelivery] =
-    useState(() =>
-      deliveryId
-        ? customerDeliveryService.getById(
-          deliveryId,
-        )
-        : null,
-    );
+  const [delivery, setDelivery] = useState(() => {
+    const candidate = deliveryId ? customerDeliveryService.getById(deliveryId) : null;
+    return candidate?.customerId === user?.id ? candidate : null;
+  });
+
+  const [serverOrder, setServerOrder] = useState<CustomerOrderSummary | null>(() =>
+    user?.id && deliveryId
+      ? customerDeliveryService.getServerOrderSummary(user.id, deliveryId)
+      : null,
+  );
+  const [trackingEvents, setTrackingEvents] = useState<TrackingEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(!delivery && !serverOrder);
+  const [loadError, setLoadError] = useState("");
+  const [changeNotice, setChangeNotice] = useState("");
 
   useEffect(() => {
-    if (!deliveryId) return;
+    if (!deliveryId || !user?.id) return;
     let active = true;
+    let busy = false;
+    let trackingNotAvailable = false;
+    let trackingFailures = 0;
+    let lastStatus: string | null = null;
+    const currentId = deliveryId;
+    const customerId = user.id;
 
-    // Refresh the selected order; payment polling only belongs on PaymentPage.
-    void customerDeliveryService
-      .syncOrderFromBackend(deliveryId)
-      .then((next) => {
-        if (active && next) setDelivery(next);
-      })
-      .catch(() => {
-        // Offline / API error: keep cached order and its Pay now link.
-      });
+    const cached = customerDeliveryService.getById(currentId);
+    setDelivery(cached?.customerId === customerId ? cached : null);
+    const currentSummary = customerDeliveryService.getServerOrderSummary(customerId, currentId);
+    setServerOrder(currentSummary);
+    setIsLoading(!cached && !currentSummary);
+    setLoadError("");
+    setTrackingEvents([]);
+    setChangeNotice("");
 
+    async function refreshSelectedOrder() {
+      if (busy || document.hidden) return;
+      busy = true;
+      try {
+        // Fetch only the selected order, never poll payment status for the order list.
+        const latest = await customerDeliveryService.loadOrderSummaryFromBackend(customerId, currentId);
+        if (!active) return;
+        setServerOrder(latest);
+        setDelivery(() => {
+          const next = customerDeliveryService.getById(currentId);
+          return next?.customerId === customerId ? next : null;
+        });
+        setLoadError("");
+        const key = [latest.orderStatus, latest.customerStatus, latest.paymentStatus].join("|");
+        if (lastStatus !== null && key !== lastStatus) {
+          setChangeNotice(`Order updated: ${latest.statusLabel}`);
+        }
+        lastStatus = key;
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : "Unable to refresh order.");
+      } finally {
+        if (active) setIsLoading(false);
+        busy = false;
+      }
+      if (trackingNotAvailable || !active) return;
+      try {
+        const result = await customerApi.getOrderTracking(currentId);
+        trackingFailures = 0;
+        if (active) setTrackingEvents(parseTrackingEvents(result));
+      } catch (error) {
+        // Prevent repeated failing requests when BE tracking is unavailable.
+        trackingFailures += 1;
+        if (error instanceof ApiError && [401, 403, 404, 405, 501].includes(error.status)) {
+          trackingNotAvailable = true;
+        } else if (trackingFailures >= 2) {
+          trackingNotAvailable = true;
+        }
+      }
+    }
+
+    void refreshSelectedOrder();
+    const timer = window.setInterval(() => { void refreshSelectedOrder(); }, 30000);
+    const onFocus = () => { void refreshSelectedOrder(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
-  }, [deliveryId]);
+  }, [deliveryId, user?.id]);
+
+  const progressOrder = serverOrder ?? (
+    user?.id && deliveryId
+      ? customerDeliveryService.getLocalOrderSummary(user.id, deliveryId)
+      : null
+  );
 
   if (!delivery) {
-    return (
-      <Navigate
-        to="/customer/deliveries"
-        replace
+    if (serverOrder) return (
+      <BackendOrderDetails
+        order={serverOrder}
+        events={trackingEvents}
+        changeNotice={changeNotice}
+        onDismiss={() => setChangeNotice("")}
+        refreshError={loadError}
       />
+    );
+    return (
+      <div className="mx-auto max-w-[960px] px-4 py-16 text-white">
+        <p className="text-lg font-semibold">{isLoading ? "Loading order details…" : "Order details unavailable"}</p>
+        {loadError && <p className="mt-3 text-sm text-orange-300">{loadError}</p>}
+        <Link to="/customer/deliveries" className="mt-6 inline-block text-orange-400">Back to My deliveries</Link>
+      </div>
     );
   }
 
-  const status =
-    customerDeliveryService.getCustomerStatus(
-      delivery,
-    );
+  const status = serverOrder?.statusLabel ??
+    customerDeliveryService.getCustomerStatus(delivery);
 
-  const paid =
-    delivery.paymentStatus === "paid";
-
-  const steps = [
-    {
-      label: "Order created",
-      complete: true,
-    },
-    {
-      label: "Payment confirmed",
-      complete: paid,
-    },
-    {
-      label: "Package at Drop-off Point",
-      complete:
-        delivery.packageReceivedAtHub,
-    },
-    {
-      label: "Scheduled",
-      complete:
-        delivery.orderStatus === "accepted" ||
-        delivery.orderStatus === "in_delivery" ||
-        delivery.orderStatus === "completed",
-    },
-    {
-      label: "In delivery",
-      complete:
-        delivery.orderStatus === "in_delivery" ||
-        delivery.orderStatus === "completed",
-    },
-    {
-      label: "Arrived at Pick-up Point",
-      complete:
-        delivery.orderStatus === "completed",
-    },
-  ];
+  const paid = (serverOrder?.paymentStatus ?? delivery.paymentStatus) === "paid";
 
   return (
     <div className="mx-auto w-full max-w-[1180px] px-4 pb-20 pt-8 sm:px-6 sm:pt-10 lg:px-10 lg:pb-16 lg:pt-12">
       <header>
         <Link
-          to="/customer/dashboard"
+          to="/customer/deliveries"
           className="mb-5 inline-flex items-center gap-2 text-[12px] font-medium text-white/[0.48] transition hover:text-white sm:mb-6 sm:text-[13px]"
         >
           <ArrowLeft size={15} />
-          Back to dashboard
+          Back to My deliveries
         </Link>
 
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">
@@ -143,26 +188,9 @@ export function DeliveryDetailPage() {
 
       <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
         <main className="min-w-0 space-y-5">
-          <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 shadow-[0_12px_32px_rgba(0,0,0,0.22)] sm:p-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
-              Delivery progress
-            </p>
-
-            <h2 className="mt-2 text-[18px] font-semibold text-white">
-              Order status
-            </h2>
-
-            <div className="mt-6">
-              {steps.map((step, index) => (
-                <TimelineStep
-                  key={step.label}
-                  label={step.label}
-                  complete={step.complete}
-                  last={index === steps.length - 1}
-                />
-              ))}
-            </div>
-          </section>
+          {changeNotice && <StatusChangeNotice text={changeNotice} onClose={() => setChangeNotice("")} />}
+          {loadError && <p className="text-xs text-amber-200" role="status">Unable to refresh right now. Showing the last saved information.</p>}
+          {progressOrder && <DeliveryProgressTimeline order={progressOrder} events={trackingEvents} />}
 
           <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 sm:p-6">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
@@ -270,45 +298,77 @@ export function DeliveryDetailPage() {
   );
 }
 
-function TimelineStep({
-  label,
-  complete,
-  last,
+/** Same progress timeline for orders that exist only on the backend. */
+function BackendOrderDetails({
+  order,
+  events,
+  changeNotice,
+  refreshError,
+  onDismiss,
 }: {
-  label: string;
-  complete: boolean;
-  last: boolean;
+  order: CustomerOrderSummary;
+  events: TrackingEvent[];
+  changeNotice: string;
+  onDismiss: () => void;
+  refreshError: string;
 }) {
+  const canPay = order.paymentStatus === "pending" &&
+    ["pending", "awaiting_payment"].includes(order.orderStatus.trim().toLowerCase());
   return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <div
-          className={`flex h-6 w-6 items-center justify-center rounded-full border ${complete
-            ? "border-orange-500 bg-orange-500 text-black"
-            : "border-white/[0.14] bg-[#161217]"
-            }`}
-        >
-          {complete && <Check size={13} />}
-        </div>
+    <div className="mx-auto w-full max-w-[1180px] px-4 pb-20 pt-8 text-white sm:px-6 sm:pt-10 lg:px-10 lg:pb-16 lg:pt-12">
+      <Link to="/customer/deliveries" className="mb-6 inline-flex items-center gap-2 text-[12px] font-medium text-white/60 hover:text-orange-400">
+        <ArrowLeft size={15} /> Back to My deliveries
+      </Link>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">{order.id}</p>
+      <h1 className="mt-3 text-[28px] font-semibold leading-tight text-white sm:text-[42px]">{order.statusLabel}</h1>
+      <p className="mt-3 text-[13px] text-white/55">{order.originHub.name} → {order.destinationHub.name}</p>
+      <p className="mt-2 text-[11px] text-white/35">Created {formatDateTime(order.createdAt)}</p>
 
-        {!last && (
-          <div
-            className={`h-12 w-px ${complete
-              ? "bg-orange-500/40"
-              : "bg-white/[0.09]"
-              }`}
-          />
-        )}
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]">
+        <main className="min-w-0 space-y-5">
+          {changeNotice && <StatusChangeNotice text={changeNotice} onClose={onDismiss} />}
+          {refreshError && <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">Unable to refresh now. Showing the last known backend status.</p>}
+          <DeliveryProgressTimeline order={order} events={events} />
+          <section className="rounded-2xl border border-white/10 bg-[#161217]/95 p-5 sm:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">Delivery route</p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <RouteCard label="Drop-off Point" name={order.originHub.name} address={order.originHub.address} />
+              <RouteCard label="Pick-up Point" name={order.destinationHub.name} address={order.destinationHub.address} />
+            </div>
+          </section>
+          <section className="rounded-2xl border border-white/10 bg-[#161217]/95 p-5 sm:p-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">Delivery information</p>
+            <div className="mt-5 grid grid-cols-2 gap-5">
+              <DetailItem label="Created" value={formatDateTime(order.createdAt)} />
+              <DetailItem label="Delivery mode" value={order.deliveryMode ? formatDeliveryMode(order.deliveryMode) : "—"} />
+              <DetailItem label="Weight" value={order.weightKg === null ? "—" : `${order.weightKg} kg`} />
+              <DetailItem label="Package size" value={order.packageSize ?? "Not provided by API"} />
+              <DetailItem label="Payment" value={order.paymentStatus === "paid" ? "Paid" : order.paymentStatus === "pending" ? "Pending" : "—"} />
+            </div>
+          </section>
+        </main>
+        <aside className="h-fit lg:sticky lg:top-[96px]">
+          <div className="rounded-2xl border border-white/10 bg-[#161217]/95 p-5 sm:p-6">
+            <p className="text-xs uppercase tracking-wide text-white/50">Order total</p>
+            <strong className="mt-3 block text-2xl text-white">{order.totalFee === null ? "—" : formatVnd(order.totalFee)}</strong>
+            {canPay && (
+              <Link to={`/customer/payment/${encodeURIComponent(order.id)}`}
+                className="mt-6 flex h-11 items-center justify-center rounded-xl bg-orange-500 text-sm font-semibold text-black">
+                Continue to payment
+              </Link>
+            )}
+          </div>
+        </aside>
       </div>
+    </div>
+  );
+}
 
-      <p
-        className={`pt-1 text-[13px] ${complete
-          ? "font-medium text-white/[0.88]"
-          : "text-white/[0.34]"
-          }`}
-      >
-        {label}
-      </p>
+function StatusChangeNotice({ text, onClose }: { text: string; onClose: () => void }) {
+  return (
+    <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-3 text-xs text-orange-200">
+      <span>{text}</span>
+      <button type="button" onClick={onClose} className="shrink-0 text-orange-300 hover:text-white" aria-label="Dismiss update">×</button>
     </div>
   );
 }

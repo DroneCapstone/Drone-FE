@@ -25,6 +25,8 @@ export type OrderStatus =
   | "pending_review"
   | "accepted"
   | "in_delivery"
+  | "arrived_at_destination"
+  | "collected"
   | "completed"
   | "rejected"
   | "cancelled";
