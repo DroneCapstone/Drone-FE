@@ -95,6 +95,7 @@ type DeliveryDraftWithPricing = Omit<
 const steps = ["Details", "Package", "Route", "Delivery mode"];
 
 const PENDING_CHECKOUT_KEY =
+
   "droneoptai.customer.pending-checkout-order";
 
 function getDefaultDraft(
@@ -167,7 +168,7 @@ function getMinimumScheduleValue() {
 
    CREATE DELIVERY PAGE
 
-========================================================= */
+\========================================================= */
 
 export function CreateDeliveryPage() {
 
@@ -299,16 +300,24 @@ export function CreateDeliveryPage() {
 
     customerDeliveryService.clearDraft();
 
-    
     /*
+
      * A brand-new delivery must never inherit the order/payment id
+
      * from a previous unpaid checkout.
+
      *
+
      * Keep delivery history in localStorage; only clear this transient
+
      * checkout pointer.
+
      */
+
     window.sessionStorage.removeItem(
+
       PENDING_CHECKOUT_KEY,
+
     );
 
     setForm(
@@ -704,13 +713,19 @@ export function CreateDeliveryPage() {
       }
 
       if (form.senderPhone.trim().length < 9) {
+
         setError("Please enter a valid sender phone number.");
+
         return false;
+
       }
 
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.recipientEmail.trim())) {
+
         setError("Please enter a valid recipient email address.");
+
         return false;
+
       }
 
     }
@@ -938,12 +953,19 @@ export function CreateDeliveryPage() {
       }
 
       /*
+
        * Clear any legacy checkout pointer again before entering Review.
+
        * Review must create a new backend order and navigate only with
+
        * the id returned by the latest POST /customer/orders.
+
        */
+
       window.sessionStorage.removeItem(
+
         PENDING_CHECKOUT_KEY,
+
       );
 
       customerDeliveryService.saveDraft(
@@ -982,7 +1004,7 @@ export function CreateDeliveryPage() {
 
     <div className="min-h-[calc(100vh-72px)] bg-transparent font-sans">
 
-      <div className="mx-auto max-w-[1500px] px-4 pb-10 pt-6 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+      <div className="mx-auto max-w-[1500px] px-4 pb-32 pt-6 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
 
         {/* =================================================
 
@@ -1314,62 +1336,6 @@ export function CreateDeliveryPage() {
 
             )}
 
-            {/* MOBILE NAVIGATION */}
-
-            <div className="mt-7 grid grid-cols-[auto_1fr] gap-3 border-t border-white/[0.08] pt-5 sm:hidden">
-
-              {step > 0 ? (
-
-                <button
-
-                  type="button"
-
-                  onClick={back}
-
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.10] px-4 text-[13px] font-medium text-white/[0.78] transition active:bg-white/[0.04]"
-
-                >
-
-                  <ArrowLeft size={16} />
-
-                  Back
-
-                </button>
-
-              ) : (
-
-                <div />
-
-              )}
-
-              <button
-
-                type="button"
-
-                onClick={next}
-
-                className="group inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
-
-              >
-
-                {step === steps.length - 1
-
-                  ? "Review delivery"
-
-                  : "Continue"}
-
-                <ArrowRight
-
-                  size={16}
-
-                  className="transition-transform group-hover:translate-x-0.5"
-
-                />
-
-              </button>
-
-            </div>
-
             {/* DESKTOP NAVIGATION */}
 
             <div className="mt-10 hidden items-center justify-between border-t border-white/[0.08] pt-6 sm:flex">
@@ -1654,6 +1620,36 @@ export function CreateDeliveryPage() {
 
       </div>
 
+
+      {/* Mobile-only fixed navigation: always accessible while scrolling. */}
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.12] bg-[#161217]/95 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md sm:hidden">
+        <div className="mx-auto grid w-full max-w-[600px] grid-cols-[auto_minmax(0,1fr)] gap-3">
+          {step > 0 ? (
+            <button
+              type="button"
+              onClick={back}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.12] px-4 text-[13px] font-medium text-white/[0.78] transition active:bg-white/[0.04]"
+            >
+              <ArrowLeft size={16} />
+              Back
+            </button>
+          ) : (
+            <div aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            onClick={next}
+            className="group inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
+          >
+            {step === steps.length - 1 ? "Review delivery" : "Continue"}
+            <ArrowRight
+              size={16}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </button>
+        </div>
+      </div>
+
     </div>
 
   );
@@ -1664,7 +1660,7 @@ export function CreateDeliveryPage() {
 
    STEP PROPS
 
-========================================================= */
+\========================================================= */
 
 interface StepProps {
 
@@ -1688,7 +1684,7 @@ interface StepProps {
 
    CONTACT STEP
 
-========================================================= */
+\========================================================= */
 
 function ContactStep({
 
@@ -1808,7 +1804,7 @@ function ContactStep({
 
    PACKAGE STEP
 
-========================================================= */
+\========================================================= */
 
 function PackageStep({
 
@@ -2324,7 +2320,7 @@ function PackageStep({
 
    ROUTE STEP
 
-========================================================= */
+\========================================================= */
 
 function RouteStep({
 
@@ -2578,7 +2574,7 @@ function HubSelect({
 
    SCHEDULE STEP
 
-========================================================= */
+\========================================================= */
 
 function ScheduleStep({
 
@@ -2607,10 +2603,15 @@ function ScheduleStep({
       <div className="mt-5 grid gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
 
         <ModeButton
+
           active={form.deliveryMode === "normal"}
+
           title="Normal"
+
           description="Standard delivery in available slots. No service surcharge."
+
           onClick={() => update("deliveryMode", "normal")}
+
         />
 
         <ModeButton
@@ -2777,7 +2778,7 @@ function ScheduleStep({
 
    SECTION TITLE
 
-========================================================= */
+\========================================================= */
 
 function SectionTitle({
 
@@ -2819,7 +2820,7 @@ function SectionTitle({
 
    CONTACT GROUP
 
-========================================================= */
+\========================================================= */
 
 function ContactGroup({
 
@@ -2875,7 +2876,7 @@ function ContactGroup({
 
    FIELD LABEL
 
-========================================================= */
+\========================================================= */
 
 function FieldLabel({
 
@@ -2921,7 +2922,7 @@ type FieldInputMode =
 
    FIELD
 
-========================================================= */
+\========================================================= */
 
 function Field({
 
@@ -3003,13 +3004,13 @@ function Field({
 
    LOCATION FIELD
 
-========================================================= */
+\========================================================= */
 
 /* =========================================================
 
    HUB BLOCK
 
-========================================================= */
+\========================================================= */
 
 function HubBlock({
 
@@ -3061,7 +3062,7 @@ function HubBlock({
 
    MODE BUTTON
 
-========================================================= */
+\========================================================= */
 
 function ModeButton({
 
@@ -3145,7 +3146,7 @@ function ModeButton({
 
    SUMMARY ITEM
 
-========================================================= */
+\========================================================= */
 
 function SummaryItem({
 
@@ -3187,7 +3188,7 @@ function SummaryItem({
 
    PRICE LINE
 
-========================================================= */
+\========================================================= */
 
 function CreatePriceBreakdown({
 
@@ -3481,7 +3482,7 @@ function PriceLine({
 
    STEP CAPTION
 
-========================================================= */
+\========================================================= */
 
 function getStepCaption(index: number) {
 
