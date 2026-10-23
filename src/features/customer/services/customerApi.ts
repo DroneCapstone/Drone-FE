@@ -1,16 +1,16 @@
 /* =========================================================
    CUSTOMER API CLIENT
 
-   Uses VITE_API_BASE_URL when provided.
-   Example:
-   VITE_API_BASE_URL=https://your-backend.example.com
+   Uses VITE_API_BASE_URL when provided. The URL may include /api/v1.
 
-   Auth:
-   - Sends credentials: "include" for cookie-based auth.
-   - Also tries common localStorage token keys and sends
-     Authorization: Bearer <token> when one is found.
-========================================================= */
-
+   Authentication:
+   - Sends credentials: "include" for cookie-based sessions.
+   - Chooses a usable bearer token from known legacy auth stores.
+   - Ignores *verifiably expired* JWTs; prefers the most recently issued
+     remaining JWT if multiple copies are stored.
+   - Does not refresh, clear, or replace login sessions; those operations
+     belong to the shared Auth module, not this API client.
+   ========================================================= */
 /*
  * VITE_API_BASE_URL in the current project already ends with /api/v1.
  * The endpoint definitions below also use /api/v1/..., so without
@@ -49,59 +49,140 @@ export class ApiError extends Error {
   }
 }
 
-function getAccessToken() {
-  if (typeof window === "undefined") {
+/**
+ * This client cannot know the canonical token key without the shared Auth
+ * module. Support current/legacy stores without blindly selecting the first
+ * potentially expired token. The JWT payload is used ONLY for local expiry/
+ * recency hints: backend validation is authoritative.
+ */
+type TokenCandidate = {
+  token: string;
+  priority: number;
+  issuedAt: number | null;
+};
+
+function safeStorage(kind: "localStorage" | "sessionStorage"): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window[kind];
+  } catch {
     return null;
   }
+}
 
+function normalizeStoredToken(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const token = value.trim().replace(/^Bearer\s+/i, "").trim();
+  return token || null;
+}
+
+function readJwtTimes(token: string): {
+  expiresAt: number | null;
+  issuedAt: number | null;
+} {
+  const parts = token.split(".");
+  if (parts.length !== 3 || typeof atob !== "function") {
+    return { expiresAt: null, issuedAt: null };
+  }
+
+  try {
+    const payload = parts[1]
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+    const padded = payload.padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    const claims: unknown = JSON.parse(atob(padded));
+    if (!claims || typeof claims !== "object" || Array.isArray(claims)) {
+      return { expiresAt: null, issuedAt: null };
+    }
+    const record = claims as Record<string, unknown>;
+    return {
+      expiresAt: typeof record.exp === "number" && Number.isFinite(record.exp)
+        ? record.exp : null,
+      issuedAt: typeof record.iat === "number" && Number.isFinite(record.iat)
+        ? record.iat : null,
+    };
+  } catch {
+    // Opaque, malformed or unsupported tokens cannot be dated locally.
+    return { expiresAt: null, issuedAt: null };
+  }
+}
+
+function getAccessToken(): string | null {
+  // More specific stores are considered before generic legacy keys when
+  // their JWT issue times are unavailable or identical.
   const directKeys = [
     "access_token",
     "accessToken",
-    "token",
-    "auth_token",
     "droneoptai.access_token",
+    "auth_token",
+    "token",
   ];
-
-  for (const key of directKeys) {
-    const value = window.localStorage.getItem(key);
-
-    if (value) {
-      return value.replace(/^Bearer\s+/i, "").trim();
-    }
-  }
-
   const objectKeys = [
-    "auth",
-    "session",
     "droneoptai.auth",
     "droneoptai.session",
+    "auth",
+    "session",
   ];
 
-  for (const key of objectKeys) {
-    const raw = window.localStorage.getItem(key);
+  const candidates: TokenCandidate[] = [];
+  const now = Math.floor(Date.now() / 1000);
+  let priority = 0;
 
-    if (!raw) {
-      continue;
+  // Prefer sessionStorage when the source and JWT issue time are otherwise
+  // indistinguishable. Both stores are tried because Auth implementation
+  // may differ between deployed versions.
+  for (const kind of ["sessionStorage", "localStorage"] as const) {
+    const storage = safeStorage(kind);
+    if (!storage) continue;
+
+    function addToken(raw: unknown) {
+      const token = normalizeStoredToken(raw);
+      const sourcePriority = priority++;
+      if (!token) return;
+      const { expiresAt, issuedAt } = readJwtTimes(token);
+      // Small skew prevents sending a token that expires during the request.
+      if (expiresAt !== null && expiresAt <= now + 10) return;
+      candidates.push({ token, priority: sourcePriority, issuedAt });
     }
 
-    try {
-      const parsed = JSON.parse(raw);
-      const token =
-        parsed?.access_token ??
-        parsed?.accessToken ??
-        parsed?.token ??
-        parsed?.session?.access_token ??
-        parsed?.session?.accessToken;
-
-      if (typeof token === "string" && token.trim()) {
-        return token.replace(/^Bearer\s+/i, "").trim();
+    for (const key of directKeys) {
+      try {
+        addToken(storage.getItem(key));
+      } catch {
+        priority++;
       }
-    } catch {
-      // Ignore non-JSON localStorage entries.
+    }
+
+    for (const key of objectKeys) {
+      try {
+        const raw = storage.getItem(key);
+        if (!raw) { priority++; continue; }
+        const parsed: unknown = JSON.parse(raw);
+        const record = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown> : null;
+        const nested = record?.session && typeof record.session === "object"
+          ? record.session as Record<string, unknown> : null;
+        addToken(
+          record?.access_token ?? record?.accessToken ?? record?.token ??
+          nested?.access_token ?? nested?.accessToken ?? nested?.token,
+        );
+      } catch {
+        priority++;
+      }
     }
   }
 
-  return null;
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (a.issuedAt !== null && b.issuedAt !== null && a.issuedAt !== b.issuedAt) {
+      return b.issuedAt - a.issuedAt;
+    }
+    if (a.issuedAt !== null && b.issuedAt === null) return -1;
+    if (a.issuedAt === null && b.issuedAt !== null) return 1;
+    return a.priority - b.priority;
+  });
+  return candidates[0].token;
 }
 
 function buildUrl(path: string) {

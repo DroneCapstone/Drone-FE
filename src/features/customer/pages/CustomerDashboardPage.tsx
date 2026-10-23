@@ -31,10 +31,7 @@ import notificationsImage from "../../../assets/images/customer/notifications.pn
 import pricingServicesImage from "../../../assets/images/customer/pricing-services.png";
 import scheduledDeliveryImage from "../../../assets/images/customer/scheduled-delivery.png";
 
-import {
-  customerDeliveryService,
-  formatDateTime,
-} from "../services/customerDeliveryService";
+import { customerDeliveryService } from "../services/customerDeliveryService";
 
 import type { CustomerOrderSummary } from "../services/customerDeliveryService";
 
@@ -52,18 +49,43 @@ export function CustomerDashboardPage() {
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
+    const customerId = user.id;
 
-    // Sync via the order-list endpoint instead of N payment-status requests.
-    void customerDeliveryService
-      .syncOrdersFromBackend(user.id)
-      .then(() => {
-        if (active) setRevision((value) => value + 1);
-      })
-      .catch((error: unknown) => {
+    // Load the list ONCE. The list response can omit estimated_arrival.
+    // Then fetch details for the ONE active delivery shown on this card.
+    // Never fetch payment status for every order.
+    void (async () => {
+      try {
+        await customerDeliveryService.syncOrdersFromBackend(customerId);
+        if (!active) return;
+        setRevision((value) => value + 1);
+      } catch (error) {
         if (active) {
           console.warn("[CustomerDashboard] Could not refresh orders", error);
         }
-      });
+        return;
+      }
+
+      const currentActive = customerDeliveryService
+        .getOrderSummariesByCustomer(customerId)
+        .find((order) => ![
+          "completed", "picked_up", "collected", "package_collected",
+          "cancelled", "canceled", "rejected",
+        ].includes(order.orderStatus.trim().toLowerCase()));
+
+      if (!currentActive || !active) return;
+
+      try {
+        await customerDeliveryService.loadOrderSummaryFromBackend(
+          customerId,
+          currentActive.id,
+        );
+        if (active) setRevision((value) => value + 1);
+      } catch (error) {
+        // The card remains visible even when detail/ETA is temporarily unavailable.
+        if (active) console.warn("[CustomerDashboard] ETA unavailable", error);
+      }
+    })();
 
     return () => {
       active = false;
@@ -166,7 +188,7 @@ export function CustomerDashboardPage() {
           icon={<Package size={21} />}
           title="Normal delivery"
           description="Standard service, using available flight slots."
-          badge="0% mode surcharge"
+          badge="0% service surcharge"
         />
 
         <DeliveryOptionCard
@@ -512,7 +534,7 @@ function ActiveDelivery({
                 size={15}
               />
             }
-            value="—"
+            value={formatActiveDeliveryEta(delivery.estimatedArrivalAt)}
           />
 
           <DeliveryMeta
@@ -538,6 +560,25 @@ function ActiveDelivery({
       />
     </Link>
   );
+}
+
+/** Compact, explicitly estimated arrival time for the dashboard card. */
+function formatActiveDeliveryEta(value?: string | null): string {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Ho_Chi_Minh",
+  }).format(date);
+
+  return `Est. ${formatted.replace(", ", " · ")}`;
 }
 
 function DeliveryMeta({
