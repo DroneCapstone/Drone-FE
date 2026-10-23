@@ -111,6 +111,9 @@ export interface MissionLeg {
   fromHubId: string;
   toHubId: string;
   status: MissionLegStatus;
+  legType?: string;
+  isDispatch?: boolean;
+  payloadKg?: number;
   batteryId?: string;
   batteryModel?: string;
   batteryChargePct?: number;
@@ -178,6 +181,11 @@ export interface OperatorDrone {
   hubName?: string;
   /** Optional compatibility key when Backend exposes it. */
   batteryModel?: string;
+  /** BE v2: drone is currently stationed at a different Hub than the Order origin. */
+  isCrossHub?: boolean;
+  /** BE v2: authoritative eligibility for the specific Order. */
+  isSelectable?: boolean;
+  unavailableReason?: string;
 }
 
 export interface OperatorBattery {
@@ -257,6 +265,14 @@ export interface RouteLegSnapshot {
   to_hub_code: string;
   distance_km: number;
   sequence_no?: number;
+  /** BE v2: ferry flight without a parcel, versus a delivery leg. */
+  leg_type?: 'DISPATCH' | 'DELIVERY' | string;
+  is_dispatch?: boolean;
+  payload_kg?: number;
+  from_latitude?: number;
+  from_longitude?: number;
+  to_latitude?: number;
+  to_longitude?: number;
   from_hub_id?: number;
   to_hub_id?: number;
   from_hub_name?: string;

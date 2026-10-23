@@ -7,9 +7,9 @@ import type { Mission } from '../../types/operator';
 import { RouteTabs } from '../../../../components/ui/RouteTabs';
 import { operationTabs } from '../../constants/operatorRoutes';
 import './flight-history.css';
-import './flight-history-compact.css';
-import './flight-history-readable.css';
-import './flight-history-one-date.css';
+import './flight-history-overrides.css';
+
+
 
 function validDate(value?: string) {
   if (!value) return null;

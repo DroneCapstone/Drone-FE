@@ -105,19 +105,31 @@ interface BackendEligibleDronesHub {
 }
 
 interface BackendEligibleDrone {
-  id: string | number;
-  model: string;
-  maxPayloadKg: number;
-  /** Optional when provided by the eligibility endpoint. */
+  id?: string | number;
+  drone_id?: string | number;
+  name?: string | null;
+  model?: string | null;
+  maxPayloadKg?: number;
+  payload_capacity_kg?: number;
+  current_hub_id?: string | number | null;
+  current_hub_name?: string | null;
+  hub_id?: string | number | null;
+  is_cross_hub?: boolean | null;
+  isCrossHub?: boolean | null;
+  is_selectable?: boolean | null;
+  isSelectable?: boolean | null;
+  unavailable_reason?: string | null;
   battery_model?: string | null;
   batteryModel?: string | null;
   required_battery_model?: string | null;
   requiredBatteryModel?: string | null;
+  compatible_battery_models?: string[];
 }
 
 interface BackendEligibleDronesResponse {
-  hub: BackendEligibleDronesHub;
-  drones: BackendEligibleDrone[];
+  hub?: Partial<BackendEligibleDronesHub>;
+  drones?: BackendEligibleDrone[];
+  data?: BackendEligibleDrone[] | { drones?: BackendEligibleDrone[]; hub?: Partial<BackendEligibleDronesHub> };
 }
 
 export interface EligibleDronesResult {
@@ -368,42 +380,74 @@ export async function listOperatorOrdersApi(
 }
 
 
+/** Supports the deployed Operator endpoint and the BE-v2 documented endpoint.
+ * Do not switch to a different endpoint on validation/authorization/network failures. */
 export async function getEligibleDronesApi(
   orderId: string,
 ): Promise<EligibleDronesResult> {
   const normalizedOrderId = orderId.trim();
+  if (!normalizedOrderId) throw new OperatorApiError('Order ID is required.', 400);
 
-  if (!normalizedOrderId) {
-    throw new OperatorApiError('Order ID is required.', 400);
+  const encoded = encodeURIComponent(normalizedOrderId);
+  let payload: unknown;
+  try {
+    payload = await operatorApiRequest<unknown>(`/operator/orders/${encoded}/eligible-drones`);
+  } catch (error) {
+    if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status)) throw error;
+    payload = await operatorApiRequest<unknown>(`/orders/${encoded}/eligible-drones`);
   }
 
-  const payload = await operatorApiRequest<BackendEligibleDronesResponse>(
-    `/operator/orders/${encodeURIComponent(normalizedOrderId)}/eligible-drones`,
-  );
+  const envelope = isRecord(payload) ? payload : {};
+  const nested = isRecord(envelope.data) ? envelope.data : {};
+  const rawHub: Record<string, unknown> = isRecord(envelope.hub) ? envelope.hub : isRecord(nested.hub) ? nested.hub : {};
+  const rawDrones = Array.isArray(payload) ? payload
+    : Array.isArray(envelope.drones) ? envelope.drones
+    : Array.isArray(envelope.data) ? envelope.data
+    : Array.isArray(nested.drones) ? nested.drones : null;
+  if (rawDrones === null) {
+    throw new OperatorApiError('Eligible-drones API returned an unsupported response.', 502, payload);
+  }
 
-  const hubId = String(payload.hub.id);
-
+  const hubId = rawHub.id != null ? String(rawHub.id) : '';
+  const hubName = typeof rawHub.name === 'string' ? rawHub.name : '';
+  const drones = rawDrones.map((entry): OperatorDrone | null => {
+    if (!isRecord(entry)) return null;
+    const raw = entry as BackendEligibleDrone;
+    const rawId = raw.drone_id ?? raw.id;
+    if (rawId === null || rawId === undefined || String(rawId).trim() === '') return null;
+    const id = String(rawId);
+    const locatedAt = raw.current_hub_id ?? raw.hub_id;
+    const droneHubId = locatedAt != null ? String(locatedAt) : hubId;
+    const crossHub = raw.is_cross_hub === true || raw.isCrossHub === true ||
+      Boolean(hubId && droneHubId && droneHubId !== hubId);
+    const capacity = Number(raw.payload_capacity_kg ?? raw.maxPayloadKg ?? 0);
+    const compatibleModels = Array.isArray(raw.compatible_battery_models) ? raw.compatible_battery_models : [];
+    const selectability = raw.is_selectable ?? raw.isSelectable;
+    return {
+      id,
+      // Preserve the existing card title; BE `name` does not alter current UI.
+      name: `DR-${id}`,
+      displayId: id,
+      model: raw.model?.trim() || '—',
+      hubId: droneHubId,
+      hubName: raw.current_hub_name?.trim() || (droneHubId === hubId ? hubName : undefined),
+      isCrossHub: crossHub,
+      isSelectable: selectability !== false,
+      unavailableReason: raw.unavailable_reason?.trim() || undefined,
+      technicalStatus: 'Available',
+      maxPayloadKg: Number.isFinite(capacity) ? capacity : 0,
+      batteryModel: raw.requiredBatteryModel?.trim() || raw.required_battery_model?.trim() ||
+        raw.batteryModel?.trim() || raw.battery_model?.trim() ||
+        (compatibleModels.length === 1 ? compatibleModels[0] : undefined),
+    };
+  }).filter((drone): drone is OperatorDrone => drone !== null);
   return {
     hub: {
       id: hubId,
-      name: payload.hub.name,
-      totalDrones: Number(payload.hub.totalDrones ?? 0),
-      availableDrones: Number(payload.hub.availableDrones ?? 0),
+      name: hubName,
+      totalDrones: Number(rawHub.totalDrones ?? rawHub.total_drones ?? drones.length),
+      availableDrones: Number(rawHub.availableDrones ?? rawHub.available_drones ?? drones.filter(d => d.isSelectable !== false).length),
     },
-    drones: (payload.drones ?? []).map((drone) => ({
-      id: String(drone.id),
-      name: `DR-${String(drone.id)}`,
-      displayId: String(drone.id),
-      model: drone.model || '—',
-      hubId,
-      technicalStatus: 'Available',
-      maxPayloadKg: Number(drone.maxPayloadKg ?? 0),
-      batteryModel:
-        drone.requiredBatteryModel?.trim() ||
-        drone.required_battery_model?.trim() ||
-        drone.batteryModel?.trim() ||
-        drone.battery_model?.trim() ||
-        undefined,
-    })),
+    drones,
   };
 }

@@ -34,6 +34,9 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
         <span><small>Required battery</small><strong>{drone.batteryModel || '—'}</strong></span>
       </div>
 
+      {drone.isCrossHub && (
+        <p className="eligible-drone-reason">Cross-hub dispatch · {drone.hubName || `Hub ${drone.hubId}`}</p>
+      )}
       {!eligibility.eligible && eligibility.reasons.length > 0 && (
         <p className="eligible-drone-reason">{eligibility.reasons[0]}</p>
       )}

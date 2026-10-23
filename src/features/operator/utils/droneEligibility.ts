@@ -31,7 +31,8 @@ export function getRemainingBattery(
   route: RouteOption,
   startingBatteryPct = AVAILABLE_DRONE_START_BATTERY_PCT,
 ) {
-  if (route.relayHubIds?.length) {
+  if (route.relayHubIds?.length || route.legDetails?.some((leg) =>
+    leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH')) {
     const finalLeg = route.legs?.[route.legs.length - 1];
     return finalLeg?.endingSocPct ?? Number.NaN;
   }
@@ -45,7 +46,11 @@ export function getEnergyFeasibility(
 ) {
   const remainingBattery = getRemainingBattery(route, startingBatteryPct);
 
-  if (!route.relayHubIds?.length) {
+  // Cross-hub flights have distinct DISPATCH (0kg) and DELIVERY legs.
+  // BE validates each leg; do not subtract aggregate consumption from one battery.
+  const hasMultipleBatteryLegs = route.relayHubIds?.length || route.legDetails?.some((leg) =>
+    leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH');
+  if (!hasMultipleBatteryLegs) {
     const metricsValid = Number.isFinite(route.predictedEnergyWh) && route.predictedEnergyWh > 0 &&
       Number.isFinite(route.batteryConsumptionPct) && route.batteryConsumptionPct >= 0 &&
       route.batteryConsumptionPct <= 100;

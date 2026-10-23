@@ -39,15 +39,20 @@ import './create-mission-compact.css';
 
 const STEPS = ['Order info', 'Select drone & battery', 'Route, relay battery & energy', 'Review & assign'] as const;
 
-// Battery eligibility is calculated by BE. "Ready" already means fully charged.
-// This step only lists spare Ready batteries at the Order's Drop-off Point.
-function isAvailableOriginBattery(
-  battery: { availableStatus?: string; droneId?: string; hubId?: string },
+// Keep current local-drone spare battery selection unchanged.
+// A cross-hub drone instead takes a BE-eligible battery from its current Hub,
+// including a battery installed on that SAME drone. Never take another drone's battery.
+function isSelectableMissionBattery(
+  battery: { availableStatus?: string; isSelectable?: boolean; droneId?: string; hubId?: string; isInstalledOnDrone?: boolean },
+  drone: OperatorDrone,
   originHubId: string,
 ) {
-  return battery.availableStatus?.trim().toLowerCase() === 'ready' &&
-    !battery.droneId &&
-    (!battery.hubId || battery.hubId === originHubId);
+  if (battery.isSelectable === false || battery.availableStatus?.trim().toLowerCase() !== 'ready') return false;
+  if (!drone.isCrossHub) {
+    return !battery.droneId && (!battery.hubId || battery.hubId === originHubId);
+  }
+  if (!drone.hubId || !battery.hubId || battery.hubId !== drone.hubId) return false;
+  return !battery.droneId || battery.droneId === drone.id;
 }
 
 function getRouteRelayHubIds(
@@ -101,13 +106,17 @@ export function CreateMissionPage() {
   const {
     data: fleetBatteries,
   } = useFleetBatteriesQuery();
+  const crossHubDroneForQuery = eligibleDronesData?.drones.find((drone) => drone.id === selectedDroneId);
   const {
     data: eligibleBatteries,
     isLoading: eligibleBatteriesLoading,
     isFetching: eligibleBatteriesFetching,
     error: eligibleBatteriesError,
     refetch: refetchEligibleBatteries,
-  } = useEligibleMissionBatteriesQuery(orderId, selectedDroneId);
+  } = useEligibleMissionBatteriesQuery(
+    orderId, selectedDroneId,
+    crossHubDroneForQuery?.isCrossHub ? crossHubDroneForQuery.hubId : undefined,
+  );
   const {
     data: planningAnalysis,
     error: planningAnalysisError,
@@ -135,13 +144,14 @@ export function CreateMissionPage() {
 
   useEffect(() => {
     if (!selectedBatteryId || !eligibleBatteries || !order) return;
-    if (eligibleBatteries.some((battery) =>
-      battery.id === selectedBatteryId && isAvailableOriginBattery(battery, order.originHubId)
+    const drone = eligibleDronesData?.drones.find((item) => item.id === selectedDroneId);
+    if (drone?.isSelectable !== false && drone && eligibleBatteries.some((battery) =>
+      battery.id === selectedBatteryId && isSelectableMissionBattery(battery, drone, order.originHubId)
     )) return;
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
-  }, [selectedBatteryId, eligibleBatteries, order]);
+  }, [selectedBatteryId, selectedDroneId, eligibleBatteries, eligibleDronesData, order]);
 
   if (isOrderLoading) {
     return (
@@ -200,7 +210,7 @@ export function CreateMissionPage() {
   }).sort((a, b) => a.maxPayloadKg - b.maxPayloadKg);
   const selectedDrone = eligibleDronesAtOrigin.find((drone) => drone.id === selectedDroneId);
   const availableOriginBatteries = (eligibleBatteries ?? []).filter((battery) =>
-    isAvailableOriginBattery(battery, order.originHubId),
+    selectedDrone && isSelectableMissionBattery(battery, selectedDrone, order.originHubId),
   );
   const selectedBattery = availableOriginBatteries.find((battery) => battery.id === selectedBatteryId);
   const routeOptions = planningAnalysis?.routes ?? [];
@@ -224,7 +234,7 @@ export function CreateMissionPage() {
   // The combined selection is complete only when both a drone and its origin battery
   // have been explicitly chosen; a previously selected battery may be invalidated by BE.
   const canContinueStep2 = Boolean(
-    canContinueStep1 && selectedDrone && selectedBattery &&
+    canContinueStep1 && selectedDrone && selectedDrone.isSelectable !== false && selectedBattery &&
     !eligibleBatteriesLoading && !eligibleBatteriesFetching && !eligibleBatteriesError
   );
   // Step 3 -> Step 4 is a review/navigation action, not a flight safety approval.
@@ -234,10 +244,14 @@ export function CreateMissionPage() {
     !isPlanningAnalysisFetching && !planningAnalysisError
   );
   // Only final Assign is guarded by the authoritative Analyze feasibility result.
-  const canAssignMission = canReviewMission && selectedRouteEnergy?.feasible === true;
+  const hasDispatchLeg = selectedRoute?.legDetails?.some((leg) =>
+    leg.is_dispatch === true || leg.leg_type?.toUpperCase() === 'DISPATCH',
+  ) === true;
+  const canAssignMission = canReviewMission && selectedRouteEnergy?.feasible === true &&
+    (!selectedDrone?.isCrossHub || hasDispatchLeg);
 
   const handleDroneSelect = (drone: OperatorDrone) => {
-    if (drone.id === selectedDroneId) return;
+    if (drone.isSelectable === false || drone.id === selectedDroneId) return;
     setSelectedDroneId(drone.id);
     setSelectedBatteryId('');
     setSelectedRouteId('');
@@ -306,7 +320,7 @@ export function CreateMissionPage() {
         return;
       }
       const eligibleNow = await refetchEligibleDrones();
-      if (eligibleNow.error || !eligibleNow.data?.drones.some((drone) => drone.id === selectedDrone.id)) {
+      if (eligibleNow.error || !eligibleNow.data?.drones.some((drone) => drone.id === selectedDrone.id && drone.isSelectable !== false)) {
         setStep(2);
         setSelectedDroneId('');
         setSelectedBatteryId('');
@@ -317,7 +331,7 @@ export function CreateMissionPage() {
 
       const batteriesNow = await refetchEligibleBatteries();
       if (batteriesNow.error || !batteriesNow.data?.some((item) =>
-        item.id === selectedBatteryId && isAvailableOriginBattery(item, order.originHubId)
+        item.id === selectedBatteryId && isSelectableMissionBattery(item, selectedDrone, order.originHubId)
       )) {
         setStep(2);
         setSelectedBatteryId('');
@@ -332,10 +346,12 @@ export function CreateMissionPage() {
         return;
       }
       const currentRoute = current.data.routes.find((route) => route.id === selectedRoute.id);
-      if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible) {
+      if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible ||
+          (selectedDrone.isCrossHub && !currentRoute.legDetails?.some((leg) =>
+            leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH'))) {
         setStep(3);
         setSelectedRouteId('');
-        showToast('Route or relay battery availability changed. Please select a route again.');
+        showToast('Route, dispatch leg, or relay battery availability changed. Please select a route again.');
         return;
       }
 
@@ -471,14 +487,17 @@ export function CreateMissionPage() {
                       <EligibleDroneCard
                         key={drone.id}
                         drone={drone}
-                        eligibility={{ eligible: true, reasons: [] }}
+                        eligibility={{
+                          eligible: drone.isSelectable !== false,
+                          reasons: drone.unavailableReason ? [drone.unavailableReason] : [],
+                        }}
                         selected={drone.id === selectedDroneId}
                         onSelect={() => handleDroneSelect(drone)}
                       />
                     ))}
                   </div>
                   {eligibleDronesAtOrigin.length === 0 && (
-                    <div className="operator-empty-state">No eligible drones are currently available at the Drop-off Point.</div>
+                    <div className="operator-empty-state">No eligible drones are currently available for this Order.</div>
                   )}
 
                   {selectedDrone && (
@@ -604,8 +623,21 @@ export function CreateMissionPage() {
                   <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
                 </div>
                 <div><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></div>
-                <div><dt>Origin battery</dt><dd>{selectedBattery?.serialNumber || selectedBatteryId}{selectedBattery?.model ? ` · ${selectedBattery.model}` : ''}</dd></div>
+                {selectedDrone.isCrossHub && (
+                  <div><dt>Dispatch flight</dt><dd>{selectedDrone.hubName || `Hub ${selectedDrone.hubId}`} → {originHubLabel} · 0 kg (no package)</dd></div>
+                )}
+                <div><dt>{selectedDrone.isCrossHub ? 'Dispatch battery' : 'Origin battery'}</dt><dd>{selectedBattery?.serialNumber || selectedBatteryId}{selectedBattery?.model ? ` · ${selectedBattery.model}` : ''}</dd></div>
                 <div><dt>Route</dt><dd>{selectedRoute.id} · {selectedRoute.name}</dd></div>
+                {selectedRoute.legDetails?.some((leg) => leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH') && (
+                  <div><dt>Flight legs</dt><dd>
+                    {selectedRoute.legDetails.map((leg, index) => (
+                      <span key={`${leg.sequence_no ?? index}-${leg.from_hub_code}`}>
+                        {leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH' ? 'DISPATCH · 0 kg' : `DELIVERY${leg.payload_kg !== undefined ? ` · ${leg.payload_kg} kg` : ''}`} · {leg.from_hub_name || leg.from_hub_code} → {leg.to_hub_name || leg.to_hub_code}
+                        {index < (selectedRoute.legDetails?.length ?? 0) - 1 ? '; ' : ''}
+                      </span>
+                    ))}
+                  </dd></div>
+                )}
                 <div><dt>Relay Hub</dt><dd>{selectedRelayHubIds.length ? selectedRelayHubIds.map(hubName).join(' → ') : 'Not required'}</dd></div>
                 {selectedRelayHubIds.length > 0 && (
                   <div>
