@@ -18,6 +18,8 @@ import {
 
   BatteryFull,
 
+  ChevronLeft,
+
   ChevronRight,
 
   History,
@@ -108,6 +110,34 @@ function formatCountdown(battery: HubBattery, now: number): string {
 
 
 
+// Client-side pagination. The backend already returns batteries for the managed hub.
+const BATTERIES_PER_PAGE = 9;
+
+type PageItem = number | "left-ellipsis" | "right-ellipsis";
+
+function getPageItems(currentPage: number, totalPages: number): PageItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const keep = new Set<number>([
+    1, 2, totalPages - 1, totalPages,
+    currentPage - 1, currentPage, currentPage + 1,
+  ]);
+  const pages = Array.from(keep)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const items: PageItem[] = [];
+  pages.forEach((page, index) => {
+    if (index > 0 && page - pages[index - 1] > 1) {
+      items.push(page < currentPage ? "left-ellipsis" : "right-ellipsis");
+    }
+    items.push(page);
+  });
+  return items;
+}
+
 export function BatteryManagementPage() {
 
   const navigate =
@@ -161,6 +191,8 @@ export function BatteryManagementPage() {
 
     useState(false);
 
+  const [page, setPage] = useState(1);
+
 
 
   /*
@@ -210,6 +242,15 @@ export function BatteryManagementPage() {
   );
 
 
+
+  // Filter first, paginate second. Keep the page in range after API changes.
+  const totalPages = Math.max(1, Math.ceil(visibleBatteries.length / BATTERIES_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const firstIndex = (currentPage - 1) * BATTERIES_PER_PAGE;
+  const pagedBatteries = visibleBatteries.slice(firstIndex, firstIndex + BATTERIES_PER_PAGE);
+  const pageItems = getPageItems(currentPage, totalPages);
+  const rangeStart = visibleBatteries.length === 0 ? 0 : firstIndex + 1;
+  const rangeEnd = Math.min(firstIndex + BATTERIES_PER_PAGE, visibleBatteries.length);
 
   const readyCount =
 
@@ -305,15 +346,10 @@ export function BatteryManagementPage() {
 
             value={statusFilter}
 
-            onChange={(value) =>
-
-              setStatusFilter(
-
-                value as BatteryFilter,
-
-              )
-
-            }
+            onChange={(value) => {
+              setStatusFilter(value as BatteryFilter);
+              setPage(1);
+            }}
 
             options={[
 
@@ -359,9 +395,11 @@ export function BatteryManagementPage() {
 
         <div className="overflow-x-auto">
 
-          <div className="min-w-[1100px]">
+          <div className="min-w-[1180px]">
 
-            <div className="grid grid-cols-[145px_170px_130px_120px_110px_175px_1fr] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
+            <div className="grid grid-cols-[52px_145px_170px_130px_120px_110px_175px_minmax(110px,1fr)] gap-4 border-b border-[var(--tech-border)] px-5 py-3">
+
+              <Header>STT</Header>
 
               <Header>Battery ID</Header>
 
@@ -395,9 +433,9 @@ export function BatteryManagementPage() {
 
           ) : (
 
-            visibleBatteries.map(
+            pagedBatteries.map(
 
-              (battery) => {
+              (battery, index) => {
 
                 return (
 
@@ -405,9 +443,13 @@ export function BatteryManagementPage() {
 
                     key={battery.id}
 
-                    className="grid grid-cols-[145px_170px_130px_120px_110px_175px_1fr] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
+                    className="grid grid-cols-[52px_145px_170px_130px_120px_110px_175px_minmax(110px,1fr)] items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
 
                   >
+
+                    <span className="text-[13px] tabular-nums text-[var(--tech-muted)]">
+                      {firstIndex + index + 1}
+                    </span>
 
                     <span className="text-[14px] font-semibold text-[var(--tech-text)]">
 
@@ -603,6 +645,57 @@ export function BatteryManagementPage() {
           </div>
 
         </div>
+
+        {/* Same 9-row pagination behavior as Hub Fleet. */}
+        {!batteriesQuery.isPending && !batteriesQuery.isError && visibleBatteries.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tech-border)] px-4 py-3 sm:px-5">
+            <p className="text-[12px] tabular-nums text-[var(--tech-muted)]">
+              Showing {rangeStart}–{rangeEnd} of {visibleBatteries.length} batteries
+            </p>
+            {totalPages > 1 && (
+              <nav className="flex flex-wrap items-center gap-1.5" aria-label="Battery management pagination">
+                <button
+                  type="button"
+                  aria-label="Previous page"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--tech-border)] text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                {pageItems.map((item) =>
+                  typeof item === "number" ? (
+                    <button
+                      key={item}
+                      type="button"
+                      aria-label={`Page ${item}`}
+                      aria-current={currentPage === item ? "page" : undefined}
+                      onClick={() => setPage(item)}
+                      className={`h-8 min-w-8 rounded-md border px-2 text-[12px] font-semibold tabular-nums transition-colors ${
+                        currentPage === item
+                          ? "border-orange-500 bg-orange-500 text-black"
+                          : "border-[var(--tech-border)] text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ) : (
+                    <span key={item} className="px-1 text-[12px] text-[var(--tech-muted)]" aria-hidden="true">…</span>
+                  ),
+                )}
+                <button
+                  type="button"
+                  aria-label="Next page"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--tech-border)] text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </nav>
+            )}
+          </div>
+        )}
 
       </Card>
 
