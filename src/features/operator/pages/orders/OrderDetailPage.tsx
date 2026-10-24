@@ -98,7 +98,7 @@ export function OrderDetailPage() {
             </div>
           </OperatorPanel>
 
-          <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER">
+          <OperatorPanel title="Delivery request" eyebrow="">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
               <div><dt>Drop-off Point</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
@@ -119,7 +119,7 @@ export function OrderDetailPage() {
             </dl>
           </OperatorPanel>
 
-          <OperatorPanel title="Flight Mission" eyebrow="ORDER → DELIVERY MISSION">
+          <OperatorPanel title="Flight Mission" eyebrow="">
             {!deliveryMission ? (
               <div className="linked-record">
                 <div>
@@ -129,11 +129,11 @@ export function OrderDetailPage() {
                       ? actionable ? 'The package has been received. Operator can create the Mission now.' : 'Mission planning is not available for this Order yet.'
                       : planning === 'Waiting for package'
                         ? 'Waiting for the package to be received at the Drop-off Point.'
-                      : planning === 'Needs Replanning'
-                        ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
-                        : planning === 'Future'
-                          ? 'Mission planning will open when the Order becomes eligible.'
-                          : 'No further Operator planning is required.'}
+                        : planning === 'Needs Replanning'
+                          ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
+                          : planning === 'Future'
+                            ? 'Mission planning will open when the Order becomes eligible.'
+                            : 'No further Operator planning is required.'}
                   </small>
                 </div>
                 {planning && (
