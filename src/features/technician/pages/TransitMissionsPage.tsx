@@ -174,14 +174,13 @@ function getPurposeDescription(purpose: TransitMissionPurpose) {
   return "Incoming: Confirm appears for every arriving drone. FE selects relay or final API using drone_current_hub_id and destination_hub_id; click only after the drone actually lands.";
 }
 
-/** An entry in GET /history is not proof that the Technician confirmed it. */
+/** History reflects the mission lifecycle, independently of confirmation time. */
 function getHistoryResultLabel(item: TransitMissionHistory): string {
   const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (state === "COMPLETED") return "Completed";
+  if (state === "MISSION_COMPLETED") return "Mission completed";
   if (["CANCELLED", "CANCELED"].includes(state)) return "Cancelled";
   if (state === "FAILED") return "Failed";
-  if (item.arrivalConfirmedAt) return "Arrival confirmed";
-  if (state === "COMPLETED") return "Awaiting confirmation";
-  if (state === "MISSION_COMPLETED") return "Mission completed";
   return item.outcome;
 }
 
@@ -243,12 +242,12 @@ export function TransitMissionsPage() {
   const [confirmedArrivalIds, setConfirmedArrivalIds] = useState<string[]>([]);
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
-  // Transit History is the Technician receipt log, not every flight that
-  // has reached Completed. Backend /history may still return arrivals with
-  // arrival_confirmed_at = null; they must not look already handled.
-  const missionHistory = (historyQuery.data ?? []).filter(
-    (item) => Boolean(item.arrivalConfirmedAt?.trim()),
-  );
+  // Show every completed mission returned by Backend /history.
+  // arrival_confirmed_at is informational and must NEVER hide a completed mission.
+  const missionHistory = (historyQuery.data ?? []).filter((item) => {
+    const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    return state === "COMPLETED" || state === "MISSION_COMPLETED";
+  });
 
   const [
     searchQuery,
@@ -886,7 +885,7 @@ export function TransitMissionsPage() {
                 
                 {!historyQuery.isPending && !historyQuery.isError && (
                   <p className="mt-2 text-[12px] text-[var(--tech-text-secondary)]">
-                    {missionHistory.length} confirmed arrival{missionHistory.length === 1 ? "" : "s"}
+                    {missionHistory.length} completed mission{missionHistory.length === 1 ? "" : "s"}
                   </p>
                 )}
               </div>
@@ -902,14 +901,14 @@ export function TransitMissionsPage() {
 
             <div className="min-h-0 flex-1 overflow-auto">
               <div className="min-w-[1520px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[190px_165px_190px_115px_180px_180px_180px_170px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
+                <div className="sticky top-0 z-10 grid grid-cols-[190px_165px_190px_115px_180px_180px_190px_170px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
                   <HistoryHeader>Mission / Order</HistoryHeader>
                   <HistoryHeader>Drone / Model</HistoryHeader>
                   <HistoryHeader>Route / Arrival type</HistoryHeader>
                   <HistoryHeader>Battery</HistoryHeader>
                   <HistoryHeader>Arrived at hub</HistoryHeader>
                   <HistoryHeader>Flight ended at</HistoryHeader>
-                  <HistoryHeader>Tech confirmed at</HistoryHeader>
+                  <HistoryHeader>Confirmation recorded at</HistoryHeader>
                   <HistoryHeader>Mission / Result</HistoryHeader>
                 </div>
 
@@ -924,7 +923,6 @@ export function TransitMissionsPage() {
                   <div className="divide-y divide-[var(--tech-border)]">
                     {missionHistory.map((item) => {
                       const resultLabel = getHistoryResultLabel(item);
-                      const waiting = resultLabel === "Awaiting confirmation";
                       return (
                         <div
                           key={item.id}
@@ -980,11 +978,11 @@ export function TransitMissionsPage() {
                               {formatHistoryTimestamp(item.arrivalConfirmedAt)}
                             </p>
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {item.arrivalConfirmedAt ? "Technician confirmed" : "Awaiting confirmation"}
+                              {item.arrivalConfirmedAt ? "Confirmation recorded" : "Not recorded"}
                             </p>
                           </div>
                           <div>
-                            <p className={`text-[12px] font-semibold ${waiting ? "text-orange-500" : "text-[var(--tech-text-secondary)]"}`}>
+                            <p className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">
                               {resultLabel}
                             </p>
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
@@ -997,8 +995,8 @@ export function TransitMissionsPage() {
                   </div>
                 ) : (
                   <div className="px-6 py-14 text-center">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No confirmed arrivals yet</p>
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Arrivals appear here after Technician confirmation is saved by Backend.</p>
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No completed missions yet</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Completed missions appear here when returned by Backend, even if confirmation time is missing.</p>
                   </div>
                 )}
               </div>
