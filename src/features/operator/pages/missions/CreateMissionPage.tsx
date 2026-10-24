@@ -38,7 +38,7 @@ import './create-mission-compact.css';
 // const [isAssigning, setIsAssigning] = useState(false);
 // const [needsMissionCheck, setNeedsMissionCheck] = useState(false);
 
-const STEPS = ['Order info', 'Select drone & battery', 'Route, relay battery & energy', 'Review & assign'] as const;
+const STEPS = ['Order info', 'Select drone & battery', 'Route & energy', 'Review & assign'] as const;
 
 // Keep current local-drone spare battery selection unchanged.
 // A cross-hub drone instead takes a BE-eligible battery from its current Hub,
@@ -614,7 +614,7 @@ export function CreateMissionPage() {
         )}
 
         {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canReviewMission && (
-          <OperatorPanel title="Review & assign">
+          <OperatorPanel title="Review & Assign">
             {/* One unified review card. Display-only change: mission submission logic is unchanged. */}
             <div className="mission-review-unified">
               <div className="mission-review-info">
