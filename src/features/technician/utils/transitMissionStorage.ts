@@ -105,6 +105,12 @@ export type TransitMissionHistory = {
 
   missionId: string;
   legId: string;
+  /** Only show when returned in GET /fleet/history. */
+  orderId?: string;
+  arrivedAt?: string;
+  flightEndedAt?: string;
+  arrivalConfirmedAt?: string;
+  batteryLevelReported?: boolean;
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
   missionState?: string;
@@ -212,8 +218,25 @@ export function isActiveTechnicianTransitMission(mission: TransitMission): boole
     return ["INCOMING", "CANNOT_CONTINUE", "AT_HUB"].includes(handling);
   }
   if (isFlyingMissionState(mission.missionState)) {
-    return handling === "INCOMING" ||
-      (isContinuationMission(mission) && ["AT_HUB", "READY"].includes(handling));
+    // Incoming is visible for both relay and final destinations. Technician
+    // confirms the physical landing; it is not auto-confirmed by the frontend.
+    if (handling === "INCOMING") return true;
+
+    // BE may keep mission_state=Flying when the drone reaches its final hub
+    // while changing handling_status to "At hub". The older relay-only rule
+    // incorrectly hid these records, even though arrival_confirmed_at is null.
+    if (handling === "AT_HUB") {
+      const atFinalHub =
+        (mission.droneCurrentHubId !== undefined &&
+          mission.destinationHubId !== undefined &&
+          mission.droneCurrentHubId === mission.destinationHubId) ||
+        mission.purpose === "RETURN_TO_HUB";
+      return atFinalHub || isContinuationMission(mission);
+    }
+
+    // Only a relay may be Ready for the next leg. Preflight Ready missions
+    // are already excluded above and must remain on Outbound, not Transit.
+    return handling === "READY" && isContinuationMission(mission);
   }
   return false;
 }
@@ -386,6 +409,10 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
     ["INCIDENT", "INCIDENT_RETURN"].includes(normalizedKey(rawPurpose)) ||
     pickBoolean(value, ["is_incident", "has_incident", "has_issue"], false) ||
     Boolean(pickString(value, ["incident_id", "incident_alert_id", "maintenance_alert_id"], ""));
+  // Hub routing wins when BE provides both hub IDs. When they are absent,
+  // honor an explicitly classified purpose before using handling as fallback.
+  // "Flying / At hub" alone does not prove that this is a relay stop.
+  const declaredPurpose = normalizeTransitPurpose(rawPurpose, missionState);
   const purpose: TransitMissionPurpose = incidentReported
     ? "INCIDENT_RETURN"
     : stopIsRelay
@@ -394,11 +421,15 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
         ? "RETURN_TO_HUB"
         : isCompletedMissionState(missionState)
           ? "RETURN_TO_HUB"
-          : isFlyingMissionState(missionState) && (["AT_HUB", "READY"].includes(handlingKey) || distinctRelayTarget)
-            ? "BATTERY_STOP"
-            : isFlyingMissionState(missionState) && finalLegTarget
-              ? "RETURN_TO_HUB"
-              : normalizeTransitPurpose(rawPurpose, missionState);
+          : declaredPurpose !== "UNKNOWN"
+            ? declaredPurpose
+            : isFlyingMissionState(missionState) && distinctRelayTarget
+              ? "BATTERY_STOP"
+              : isFlyingMissionState(missionState) && finalLegTarget
+                ? "RETURN_TO_HUB"
+                : isFlyingMissionState(missionState) && ["AT_HUB", "READY"].includes(handlingKey)
+                  ? "BATTERY_STOP"
+                  : "UNKNOWN";
 
   const batteryCode = pickString(
     value,
@@ -518,7 +549,9 @@ export async function confirmTransitArrivalOnServer(input: {
   });
 }
 
-/** GET /fleet/history is the single source of truth, including after reload. */
+/** GET /fleet/history is the single source of truth, including after reload.
+ * Keep the raw list mapping here; the Technician History UI displays only
+ * arrivals with arrival_confirmed_at returned by Backend. */
 export async function refreshTransitMissionHistoryFromApi(): Promise<TransitMissionHistory[]> {
   const result = await getTransitHistoryApi();
   return unwrapList(result).map(mapApiTransitHistory).filter(
@@ -538,26 +571,54 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     );
   const droneId = pickString(value, ["drone_id", "current_drone_id", "droneId"], "");
   const batteryId = pickString(value, ["battery_code", "battery_id", "battery"], "");
+  // These are different events: arriving/flight ending is NOT technician receipt.
+  const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
+  const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
+  // Do not use end_time as the Technician confirmation: that would falsely mark unconfirmed arrivals as handled.
+  const confirmedAt = pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at", "handled_at"], "");
+  const originHubId = pickNumber(value, ["origin_hub_id"], -1);
+  const destinationHubId = pickNumber(value, ["destination_hub_id"], -1);
+  const currentHubId = pickNumber(value, ["drone_current_hub_id", "current_hub_id", "hub_id"], -1);
+  const getHubName = (fields: string[], fallbackId: number) => {
+    const name = pickString(value, fields, "");
+    return name || (fallbackId >= 0 ? `Hub #${fallbackId}` : "—");
+  };
+  // Never fabricate a charge percentage if Backend omits it.
+  const batteryPctKeys = ["battery_level_pct", "battery_percent", "battery_pct"];
+  const batteryLevelReported = batteryPctKeys.some((key) => {
+    const reading = value[key];
+    return (typeof reading === "number" && Number.isFinite(reading)) ||
+      (typeof reading === "string" && reading.trim() !== "" && Number.isFinite(Number(reading)));
+  });
   const outcome = ["CANCELLED", "CANCELED"].includes(normalizedKey(state)) ? "Cancelled" :
     normalizedKey(state) === "FAILED" ? "Failed" :
     isIncidentMissionState(state) ? "Sent to maintenance" :
+    confirmedAt ? "Arrival confirmed" :
     (isCompletedMissionState(state) || normalizedKey(state) === "MISSION_COMPLETED")
       ? "Returned to hub" : "Continued";
   return {
-    id: `BE-${id}-${pickString(value, ["arrival_confirmed_at", "handled_at", "id"], "")}`,
+    id: `BE-${id}-${pickString(value, ["leg_id", "mission_leg_id"], "") || id}`,
     missionId: id,
     legId: pickString(value, ["leg_id", "mission_leg_id"], ""),
+    orderId: pickString(value, ["order_id", "order_code"], "") || undefined,
+    arrivedAt: arrivedAt || undefined,
+    flightEndedAt: flightEndedAt || undefined,
+    arrivalConfirmedAt: confirmedAt || undefined,
+    batteryLevelReported,
     missionState: state || undefined,
+    handlingStatus: pickString(value, ["handling_status", "handlingStatus"], "") || undefined,
     droneCode: pickString(value, ["drone_code", "drone"], "") || undefined,
     purpose,
     droneId, droneType: pickString(value, ["drone_type"], "DR"),
-    droneModel: pickString(value, ["drone_model"], "—"),
+    droneModel: pickString(value, ["drone_model", "model"], "—"),
     batteryId: batteryId || undefined,
-    batteryLevelPct: pickNumber(value, ["battery_level_pct", "battery_percent", "battery_pct"], 0),
-    origin: pickString(value, ["origin_hub", "origin", "origin_hub_name"], "—"),
-    hub: pickString(value, ["hub", "hub_name"], "—"),
-    destination: pickString(value, ["destination_hub", "destination", "destination_hub_name"], "—"),
-    handledAt: pickString(value, ["arrival_confirmed_at", "handled_at", "completed_at", "updated_at"], "—"),
+    batteryLevelPct: pickNumber(value, batteryPctKeys, 0),
+    origin: getHubName(["origin_hub_name", "origin_hub", "origin"], originHubId),
+    hub: getHubName(["hub_name", "hub", "target_hub_name"], currentHubId),
+    destination: getHubName(["destination_hub_name", "destination_hub", "destination"], destinationHubId),
+    // Kept for backwards compatibility. Do NOT substitute mission completed_at
+    // or updated_at here; those are not Technician receipt timestamps.
+    handledAt: confirmedAt || "—",
     outcome,
   };
 }
