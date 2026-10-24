@@ -1,0 +1,100 @@
+/*
+ * DroneOptAI Flight History — readable, compact, neutral controls.
+ * Place after flight-history.css AND flight-history-compact.css (if present).
+ * Scoped: only FlightHistoryPage (does not affect FlightReplayPage).
+ */
+.flight-history-screen .fh-filter-panel {
+  grid-template-columns: minmax(200px, 1.8fr) minmax(116px, 1fr) minmax(116px, 1fr)
+                         minmax(118px, .9fr) minmax(144px, 1.15fr) auto;
+  gap: 9px;
+  padding: 14px;
+}
+.flight-history-screen .fh-filter { font-size: 12px; gap: 6px; }
+.flight-history-screen .fh-filter input,
+.flight-history-screen .fh-filter select {
+  font-size: 12px;
+  min-height: 36px;
+  height: 36px;
+  padding-inline: 10px;
+  border-radius: var(--radius-control, 6px);
+}
+.flight-history-screen .fh-filter input::placeholder { font-size: 12px; }
+.flight-history-screen .fh-reset { min-height: 36px; height: 36px; }
+.flight-history-screen .fh-button { font-size: 11.5px; font-weight: 600; }
+.flight-history-screen .fh-card h2 { font-size: 14px; }
+.flight-history-screen .fh-card-head > span { font-size: 11px; }
+.flight-history-screen .fh-table { table-layout: fixed; font-size: 12px; line-height: 1.4; }
+.flight-history-screen .fh-table th {
+  font-size: 10.5px;
+  padding: 11px 7px;
+}
+.flight-history-screen .fh-table td {
+  font-size: 12px;
+  height: 66px;
+  padding: 11px 7px;
+  line-height: 1.4;
+}
+.flight-history-screen .fh-table td small { font-size: 10.5px; }
+.flight-history-screen .fh-table .fh-link {
+  font-size: 12px;
+  font-weight: 680;
+  text-decoration: none;
+  cursor: inherit;
+}
+.flight-history-screen .fh-route { font-size: 11.5px; }
+.flight-history-screen .fh-status { font-size: 10px; padding: 3px 6px; }
+/* More balanced widths with a single Replay action. Sum = 100%. */
+.flight-history-screen .fh-table th:nth-child(1) { width: 10%; }
+.flight-history-screen .fh-table th:nth-child(2) { width: 18%; }
+.flight-history-screen .fh-table th:nth-child(3) { width: 10%; }
+.flight-history-screen .fh-table th:nth-child(4) { width: 18%; }
+.flight-history-screen .fh-table th:nth-child(5) { width: 8%; }
+.flight-history-screen .fh-table th:nth-child(6) { width: 8%; }
+.flight-history-screen .fh-table th:nth-child(7) { width: 9%; }
+.flight-history-screen .fh-table th:nth-child(8) { width: 10%; }
+.flight-history-screen .fh-table th:nth-child(9) { width: 9%; }
+.flight-history-screen .fh-row-actions .fh-button {
+  height: 29px;
+  min-height: 29px;
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface);
+}
+.flight-history-screen .fh-row-actions .fh-button:hover { background: var(--surface-2); }
+/* Entire row is the Mission Details link (mouse + keyboard). */
+.flight-history-screen .fh-clickable-row { cursor: pointer; }
+.flight-history-screen .fh-clickable-row:hover td { background: var(--surface-2); }
+.flight-history-screen .fh-clickable-row:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+.flight-history-screen .fh-clickable-row .fh-row-actions a { cursor: pointer; }
+.flight-history-screen .fh-summary-metrics small { font-size: 11px; }
+.flight-history-screen .fh-summary-metrics strong { font-size: 17px; }
+.flight-history-screen .fh-summary-note,
+.flight-history-screen .fh-stat-list dt,
+.flight-history-screen .fh-stat-list dd { font-size: 11px; }
+.flight-history-screen .fh-overview h2 { font-size: 14px; }
+.flight-history-screen .fh-overview-links .fh-button { font-size: 11.5px; }
+.flight-history-screen .fh-navigation-note { font-size: 11px; }
+/* Match card rounding from the existing Operator design tokens. */
+.flight-history-screen .fh-filter-panel,
+.flight-history-screen .fh-card { border-radius: 10px; }
+@media (max-width: 1450px) {
+  .flight-history-screen .fh-filter-panel {
+    grid-template-columns: minmax(160px, 1.7fr) repeat(2, minmax(106px, 1fr))
+                           minmax(98px, .9fr) minmax(120px, 1fr) auto;
+  }
+}
+@media (max-width: 1320px) {
+  .flight-history-screen .fh-filter-panel { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flight-history-screen .fh-search { grid-column: span 2; }
+}
+@media (max-width: 1050px) {
+  .flight-history-screen .fh-table { min-width: 900px; }
+}
+@media (max-width: 660px) {
+  .flight-history-screen .fh-filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flight-history-screen .fh-search { grid-column: 1 / -1; }
+}

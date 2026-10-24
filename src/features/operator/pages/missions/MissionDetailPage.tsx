@@ -159,7 +159,7 @@ export function MissionDetailPage() {
                 {mission.legs.map((leg, index) => (
                   <div key={leg.id}>
                     <span>
-                      <small>Leg {index + 1}</small>
+                      <small>Leg {index + 1}{leg.isDispatch ? ' · Dispatch · 0 kg' : ''}</small>
                       <strong>{hubName(leg.fromHubId)} → {hubName(leg.toHubId)}</strong>
                       <small className="mission-leg-battery-info">
                         {leg.batteryId
@@ -211,7 +211,7 @@ export function MissionDetailPage() {
           <OperatorPanel title="Mission details">
             <dl className="key-values">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
-              <div><dt>Origin battery</dt><dd>{mission.legs?.[0]?.batteryId || mission.batteryId || '—'}</dd></div>
+              <div><dt>{mission.legs?.[0]?.isDispatch ? 'Dispatch battery' : 'Origin battery'}</dt><dd>{mission.legs?.[0]?.batteryId || mission.batteryId || '—'}</dd></div>
               <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Drop-off Point</dt><dd>{originHub?.name || mission.originHubId || '—'}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>

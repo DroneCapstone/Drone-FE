@@ -155,6 +155,11 @@ export interface EligibleMissionBattery {
   hubId?: string;
   droneId?: string;
   availableStatus?: string;
+  /** BE v2 battery flag. Missing for legacy APIs: eligibility is inferred from READY. */
+  isSelectable?: boolean;
+  unavailableReason?: string;
+  assignedMissionId?: string;
+  isInstalledOnDrone?: boolean;
 }
 
 
@@ -368,6 +373,11 @@ function mapMissionLeg(raw: unknown, index: number, routeLeg?: unknown): Mission
     fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']) || pickString(snapshot, ['from_hub_id', 'fromHubId']),
     toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']) || pickString(snapshot, ['to_hub_id', 'toHubId']),
     status: rawStatus === 'COMPLETED' ? 'Completed' : rawStatus === 'IN_PROGRESS' ? 'In Progress' : 'Pending',
+    legType: pickString(record, ['leg_type', 'legType']) || pickString(snapshot, ['leg_type', 'legType']) || undefined,
+    isDispatch: pickOptionalBoolean(record, ['is_dispatch', 'isDispatch']) ??
+      pickOptionalBoolean(snapshot, ['is_dispatch', 'isDispatch']) ??
+      ((pickString(record, ['leg_type', 'legType']) || pickString(snapshot, ['leg_type', 'legType'])).toUpperCase() === 'DISPATCH'),
+    payloadKg: pickOptionalNumber(record, ['payload_kg', 'payloadKg']) ?? pickOptionalNumber(snapshot, ['payload_kg', 'payloadKg']),
     batteryId: batteryId || undefined,
     batteryModel: pickString(record, ['battery_model', 'batteryModel']) || pickString(snapshot, ['battery_model', 'batteryModel']) || undefined,
     batteryChargePct: pickOptionalNumber(record, ['battery_charge_pct', 'batteryChargePct']) ?? pickOptionalNumber(snapshot, ['battery_charge_pct', 'batteryChargePct']),
@@ -408,8 +418,10 @@ function mapMission(raw: unknown): Mission {
   // MissionLeg can hold the operational status while scheduled_route holds the
   // exact assigned battery snapshot. Merge by sequence, never fabricate an ID.
   const legs = legsRecords.map((leg, index) => mapMissionLeg(leg, index, plannedLegs[index]));
-  const relayHubIds = legs.length > 1
-    ? legs.slice(0, -1).map((leg) => leg.toHubId).filter(Boolean)
+  // A DISPATCH leg ends at the order origin, NOT a relay battery-swap Hub.
+  const deliveryLegs = legs.filter((leg) => !leg.isDispatch);
+  const relayHubIds = deliveryLegs.length > 1
+    ? deliveryLegs.slice(0, -1).map((leg) => leg.toHubId).filter(Boolean)
     : pickArray(record, ['relay_hub_ids', 'relayHubIds']).map(String);
   const estimatedArrivalDate = estimatedArrivalAt ? new Date(estimatedArrivalAt) : undefined;
   const eta = pickString(record, ['eta']) || (
@@ -593,7 +605,11 @@ function mapRouteLeg(raw: unknown): PlannedRouteLeg {
     batteryCapacityWh: pickOptionalNumber(record, ['battery_capacity_wh', 'batteryCapacityWh']),
     batteryConsumptionPct: pickOptionalNumber(record, ['battery_consumption_pct', 'batteryConsumptionPct']),
     minimumReservePct: pickOptionalNumber(record, ['minimum_reserve_pct', 'minimumReservePct']),
-    feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
+    feasible: (() => {
+      const feasible = pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']);
+      const selectable = pickOptionalBoolean(record, ['is_selectable', 'isSelectable']);
+      return feasible === false || selectable === false ? false : feasible ?? selectable;
+    })(),
   };
 }
 
@@ -624,6 +640,13 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
     from_hub_code: from,
     to_hub_code: to,
     distance_km: distance,
+    leg_type: pickString(item, ['leg_type', 'legType']) || undefined,
+    is_dispatch: pickOptionalBoolean(item, ['is_dispatch', 'isDispatch']),
+    payload_kg: pickOptionalNumber(item, ['payload_kg', 'payloadKg']),
+    from_latitude: pickOptionalNumber(item, ['from_latitude', 'fromLatitude']),
+    from_longitude: pickOptionalNumber(item, ['from_longitude', 'fromLongitude']),
+    to_latitude: pickOptionalNumber(item, ['to_latitude', 'toLatitude']),
+    to_longitude: pickOptionalNumber(item, ['to_longitude', 'toLongitude']),
     sequence_no: pickOptionalNumber(item, ['sequence_no', 'sequenceNo']),
     from_hub_id: pickOptionalNumber(item, ['from_hub_id', 'fromHubId']),
     to_hub_id: pickOptionalNumber(item, ['to_hub_id', 'toHubId']),
@@ -647,8 +670,13 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
   const legDetails = legRecords.map(mapRouteLegSnapshot).filter((leg): leg is RouteLegSnapshot => Boolean(leg));
   // relayHubs is an array of NAMES in BE's new response, not IDs.
   // Use intermediate leg.to_hub_id instead, so Hub + Battery lookups work.
-  const derivedRelayIds = legRecords.length > 1
-    ? legRecords.slice(0, -1).map((leg) => pickString(asRecord(leg), ['to_hub_id', 'toHubId'])).filter(Boolean)
+  const deliveryLegs = legRecords.filter((leg) => {
+    const record = asRecord(leg);
+    return pickString(record, ['leg_type', 'legType']).toUpperCase() !== 'DISPATCH' &&
+      !pickBoolean(record, ['is_dispatch', 'isDispatch']);
+  });
+  const derivedRelayIds = deliveryLegs.length > 1
+    ? deliveryLegs.slice(0, -1).map((leg) => pickString(asRecord(leg), ['to_hub_id', 'toHubId'])).filter(Boolean)
     : [];
   const explicitRelayIds = pickArray(record, ['relay_hub_ids', 'relayHubIds']).map((hub) =>
     isRecord(hub) ? pickString(hub, ['id', 'hub_id', 'hubId']) : String(hub),
@@ -676,7 +704,7 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
-    infeasibleReason: pickString(record, ['infeasible_reason', 'infeasibleReason']) || undefined,
+    infeasibleReason: pickString(record, ['unselectable_reason', 'unselectableReason', 'infeasible_reason', 'infeasibleReason']) || undefined,
     legs: legRecords.map(mapRouteLeg),
     relayBatteryPlan: (detailedPlan.length > 0 ? detailedPlan : relayBatteryStatus).map(mapRelayBattery),
     rawRelayBatteryStatus: relayBatteryStatus,
@@ -915,16 +943,37 @@ export async function updateIncidentStatusApi(
   return mapIncident(payload);
 }
 
-/** GET /operator/missions/eligible-batteries — actual compatibility check belongs to BE. */
+/** BE v2 order-scoped batteries API (with fallback for deployed legacy endpoints).
+ * For Cross-Hub Dispatch the authoritative endpoint must return batteries at the drone's
+ * current Hub; the Create Mission screen validates that Hub without inventing availability. */
 export async function getEligibleMissionBatteriesApi(
   droneId: string,
   orderId: string,
+  crossHubCurrentHubId?: string,
 ): Promise<EligibleMissionBattery[]> {
   if (!droneId.trim() || !orderId.trim()) return [];
-  const query = new URLSearchParams({ drone_id: droneId.trim(), order_id: orderId.trim() });
-  const response = await operatorApiRequest<unknown>(
-    `/operator/missions/eligible-batteries?${query.toString()}`,
-  );
+  const id = encodeURIComponent(orderId.trim());
+  const droneQuery = new URLSearchParams({ drone_id: droneId.trim() }).toString();
+  const legacyQuery = new URLSearchParams({ drone_id: droneId.trim(), order_id: orderId.trim() }).toString();
+  const paths = crossHubCurrentHubId ? [
+    // Cross-hub: check actual donor Hub, not the package origin Hub.
+    `/operator/missions/eligible-batteries?${new URLSearchParams({ drone_id: droneId.trim(), hub_id: crossHubCurrentHubId }).toString()}`,
+    `/orders/${id}/eligible-batteries?${droneQuery}`,
+    `/operator/orders/${id}/eligible-batteries?${droneQuery}`,
+  ] : [
+    `/operator/orders/${id}/eligible-batteries?${droneQuery}`,
+    `/operator/missions/eligible-batteries?${legacyQuery}`,
+    `/orders/${id}/eligible-batteries?${droneQuery}`,
+  ];
+  let response: unknown;
+  for (const [index, path] of paths.entries()) {
+    try {
+      response = await operatorApiRequest<unknown>(path);
+      break;
+    } catch (error) {
+      if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status) || index === paths.length - 1) throw error;
+    }
+  }
   const payload = parseJsonString(response);
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
@@ -948,6 +997,10 @@ export async function getEligibleMissionBatteriesApi(
       hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
       droneId: pickString(nested, ['drone_id', 'droneId']) || undefined,
       availableStatus: pickString(nested, ['available_status', 'availableStatus']) || undefined,
+      isSelectable: pickOptionalBoolean(nested, ['is_selectable', 'isSelectable']),
+      unavailableReason: pickString(nested, ['unavailable_reason', 'unavailableReason']) || undefined,
+      assignedMissionId: pickString(nested, ['assigned_mission_id', 'assignedMissionId']) || undefined,
+      isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']),
     } as EligibleMissionBattery;
   }).filter((item): item is EligibleMissionBattery => item !== null);
 }
@@ -1014,6 +1067,13 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
         to_hub_code: leg.to_hub_code,
         distance_km: leg.distance_km,
         sequence_no: leg.sequence_no,
+        leg_type: leg.leg_type,
+        is_dispatch: leg.is_dispatch,
+        payload_kg: leg.payload_kg,
+        from_latitude: leg.from_latitude,
+        from_longitude: leg.from_longitude,
+        to_latitude: leg.to_latitude,
+        to_longitude: leg.to_longitude,
         from_hub_id: leg.from_hub_id,
         to_hub_id: leg.to_hub_id,
         from_hub_name: leg.from_hub_name,
