@@ -8,16 +8,30 @@ import { OperatorPanel } from '../../components/OperatorPanel';
 import { getMissionTelemetryApi, type LiveTrackingDrone, type MissionTelemetryPoint } from '../../api/missionApi';
 import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuery } from '../../hooks/useMissionQueries';
 import { operatorQueryKeys } from '../../query/queryKeys';
-import { LiveMapTiler, type LiveMapTilerHandle } from './LiveMapTiler';
+import { LiveMapTiler, type LiveMapTilerHandle, type LiveMapStyle } from './LiveMapTiler';
 import { OperationPageShell } from './OperationPageShell';
 import './operations-enhanced.css';
 import './digital-twin-live.css';
+import './live-map-style-picker.css';
 
 type Health = LiveTrackingDrone['health'];
 type Filter = 'All' | Health;
 type LogEvent = { key: string; time: string; missionId: string; droneId: string; level: Health; message: string };
 const FILTERS: Filter[] = ['All', 'Critical', 'Attention', 'Normal'];
 const STALE_MS = 10_000;
+const MAP_STYLE_STORAGE_KEY = 'droneoptai.operator.live-map-style';
+const MAP_CHOICES: { id: LiveMapStyle; label: string; description: string }[] = [
+  { id: 'default', label: 'Default', description: 'Current operations map' },
+  { id: 'streets', label: 'Streets', description: 'Roads and place names' },
+  { id: 'satellite', label: 'Satellite', description: 'Aerial imagery with labels' },
+];
+function storedMapStyle(): LiveMapStyle {
+  try {
+    const saved = window.localStorage.getItem(MAP_STYLE_STORAGE_KEY);
+    if (saved === 'streets' || saved === 'satellite') return saved;
+  } catch { /* Browser storage may be disabled; keep default map. */ }
+  return 'default';
+}
 const priority: Record<Health, number> = { Critical: 0, Attention: 1, Normal: 2 };
 const healthTone: Record<Health, 'danger' | 'warning' | 'success'> = { Critical: 'danger', Attention: 'warning', Normal: 'success' };
 function stale(timestamp?: string) {
@@ -56,6 +70,27 @@ export function LiveTrackingPage() {
   const [filter, setFilter] = useState<Filter>('All');
   const [logFilter, setLogFilter] = useState<'all' | 'selected'>('all');
   const [isMapExpanded, setMapExpanded] = useState(false);
+  const [mapStyle, setMapStyle] = useState<LiveMapStyle>(storedMapStyle);
+  const [mapStyleMenuOpen, setMapStyleMenuOpen] = useState(false);
+  const mapStyleMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try { window.localStorage.setItem(MAP_STYLE_STORAGE_KEY, mapStyle); } catch { /* optional preference */ }
+  }, [mapStyle]);
+  useEffect(() => {
+    if (!mapStyleMenuOpen) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !mapStyleMenuRef.current?.contains(event.target)) setMapStyleMenuOpen(false);
+    };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMapStyleMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('keydown', dismissEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('keydown', dismissEscape);
+    };
+  }, [mapStyleMenuOpen]);
   const mapRef = useRef<LiveMapTilerHandle>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const sortedDrone = useMemo(() => [...liveDrone].sort((a, b) => priority[a.health] - priority[b.health] || a.id.localeCompare(b.id)), [liveDrone]);
@@ -129,6 +164,43 @@ export function LiveTrackingPage() {
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
               <button type="button" title="Fit all hubs and aircraft" aria-label="Fit all hubs and aircraft" onClick={() => mapRef.current?.fitAll()}><Icon name="pin" size={17} /></button>
               <button type="button" title="Toggle top and angled views" aria-label="Toggle top and angled views" onClick={() => mapRef.current?.togglePitch()}><Icon name="radar" size={17} /></button>
+              <div className="live-map-style-picker" ref={mapStyleMenuRef}>
+                <button
+                  type="button"
+                  className={`live-map-style-trigger ${mapStyleMenuOpen ? 'is-open' : ''}`}
+                  title="Map type"
+                  aria-label="Choose map type"
+                  aria-expanded={mapStyleMenuOpen}
+                  aria-controls="live-map-style-options"
+                  onClick={() => setMapStyleMenuOpen(open => !open)}
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m12 3 9 4.5-9 4.5-9-4.5L12 3Z" />
+                    <path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5" />
+                  </svg>
+                </button>
+                {mapStyleMenuOpen && (
+                  <div id="live-map-style-options" className="live-map-style-menu" role="group" aria-label="Choose basemap">
+                    <div className="live-map-style-menu-title">Map type</div>
+                    {MAP_CHOICES.map(choice => (
+                      <button
+                        type="button"
+                        key={choice.id}
+                        className={`live-map-style-option ${mapStyle === choice.id ? 'is-selected' : ''}`}
+                        aria-pressed={mapStyle === choice.id}
+                        onClick={() => { setMapStyle(choice.id); setMapStyleMenuOpen(false); }}
+                      >
+                        <span className={`live-map-style-preview preview-${choice.id}`} aria-hidden="true" />
+                        <span className="live-map-style-option-copy">
+                          <strong>{choice.label}</strong>
+                          <small>{choice.description}</small>
+                        </span>
+                        {mapStyle === choice.id && <span className="live-map-style-selected-mark" aria-hidden="true">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button type="button" title={isMapExpanded ? 'Exit fullscreen (Esc)' : 'Expand map'} aria-label={isMapExpanded ? 'Exit fullscreen' : 'Expand map'} onClick={() => setMapExpanded(x => !x)}><Icon name={isMapExpanded ? 'collapse' : 'eye'} size={17} /></button>
             </div>
           </div>
@@ -138,6 +210,7 @@ export function LiveTrackingPage() {
               hubs={hubsQuery.data ?? []}
               drones={liveDrone}
               histories={mapHistories}
+              mapStyle={mapStyle}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
                 const matching = liveDrone.find(drone => drone.missionId === missionId);

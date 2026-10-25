@@ -72,9 +72,9 @@ type DeliveryDraftWithPricing = Omit<
 
   packageCategory:
 
-    | DeliveryDraft["packageCategory"]
+  | DeliveryDraft["packageCategory"]
 
-    | "";
+  | "";
 
   weightKg: number | "";
 
@@ -82,9 +82,9 @@ type DeliveryDraftWithPricing = Omit<
 
   deliveryMode:
 
-    | DeliveryDraft["deliveryMode"]
+  | DeliveryDraft["deliveryMode"]
 
-    | "";
+  | "";
 
   hasInsurance?: boolean;
 
@@ -184,9 +184,9 @@ export function CreateDeliveryPage() {
 
     : {
 
-        phone: "",
+      phone: "",
 
-      };
+    };
 
   const stepParam =
 
@@ -200,15 +200,15 @@ export function CreateDeliveryPage() {
 
     customerDeliveryService.getDraft() as
 
-      | DeliveryDraftWithPricing
+    | DeliveryDraftWithPricing
 
-      | null;
+    | null;
 
   const existingDraft =
 
     !isNewDelivery &&
 
-    storedDraft?.draftVersion === 5
+      storedDraft?.draftVersion === 5
 
       ? storedDraft
 
@@ -224,9 +224,9 @@ export function CreateDeliveryPage() {
 
     Number.isInteger(requestedStep) &&
 
-    requestedStep >= 0 &&
+      requestedStep >= 0 &&
 
-    requestedStep < steps.length
+      requestedStep < steps.length
 
       ? requestedStep
 
@@ -564,19 +564,19 @@ export function CreateDeliveryPage() {
 
     form.packageCategory &&
 
-      form.weightKg !== "" &&
+    form.weightKg !== "" &&
 
-      form.packageSize &&
+    form.packageSize &&
 
-      form.originArea &&
+    form.originArea &&
 
-      form.destinationArea &&
+    form.destinationArea &&
 
-      form.originArea !== form.destinationArea &&
+    form.originArea !== form.destinationArea &&
 
-      form.deliveryMode &&
+    form.deliveryMode &&
 
-      (form.deliveryMode !== "scheduled" || form.requestedDepartureAt),
+    (form.deliveryMode !== "scheduled" || form.requestedDepartureAt),
 
   );
 
@@ -944,7 +944,7 @@ export function CreateDeliveryPage() {
 
           estimateError ||
 
-            "Please wait for the backend delivery estimate before reviewing the order.",
+          "Please wait for the backend delivery estimate before reviewing the order.",
 
         );
 
@@ -1066,7 +1066,7 @@ export function CreateDeliveryPage() {
 
                 ((step + 1) / steps.length) *
 
-                  100,
+                100,
 
               )}
 
@@ -1112,15 +1112,13 @@ export function CreateDeliveryPage() {
 
                   <span
 
-                    className={`block h-[3px] rounded-full transition ${
-
-                      active || completed
+                    className={`block h-[3px] rounded-full transition ${active || completed
 
                         ? "bg-orange-500"
 
                         : "bg-white/[0.10]"
 
-                    }`}
+                      }`}
 
                   />
 
@@ -1170,15 +1168,13 @@ export function CreateDeliveryPage() {
 
                   }}
 
-                  className={`relative px-5 py-4 text-left transition md:px-6 ${
-
-                    active
+                  className={`relative px-5 py-4 text-left transition md:px-6 ${active
 
                       ? "bg-white/[0.035]"
 
                       : "hover:bg-white/[0.018]"
 
-                  }`}
+                    }`}
 
                 >
 
@@ -1186,15 +1182,13 @@ export function CreateDeliveryPage() {
 
                     <span
 
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition ${
-
-                        active || completed
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition ${active || completed
 
                           ? "bg-orange-500 text-black"
 
                           : "border border-white/[0.12] text-white/[0.74]"
 
-                      }`}
+                        }`}
 
                     >
 
@@ -1210,9 +1204,7 @@ export function CreateDeliveryPage() {
 
                       <p
 
-                        className={`text-[14px] font-medium ${
-
-                          active
+                        className={`text-[14px] font-medium ${active
 
                             ? "text-white"
 
@@ -1222,7 +1214,7 @@ export function CreateDeliveryPage() {
 
                               : "text-white/[0.74]"
 
-                        }`}
+                          }`}
 
                       >
 
@@ -1550,7 +1542,7 @@ export function CreateDeliveryPage() {
 
                       : estimateError ||
 
-                        "Select package details, hubs and delivery mode to calculate the price."}
+                      "Select package details, hubs and delivery mode to calculate the price."}
 
                   </p>
 
@@ -1912,37 +1904,37 @@ function PackageStep({
 
           "other" && (
 
-          <div className="mt-5 sm:mt-6">
+            <div className="mt-5 sm:mt-6">
 
-            <Field
+              <Field
 
-              label="Package description"
+                label="Package description"
 
-              value={
+                value={
 
-                form.packageDescription
+                  form.packageDescription
 
-              }
+                }
 
-              placeholder="Describe the package contents"
+                placeholder="Describe the package contents"
 
-              onChange={(value) =>
+                onChange={(value) =>
 
-                update(
+                  update(
 
-                  "packageDescription",
+                    "packageDescription",
 
-                  value,
+                    value,
 
-                )
+                  )
 
-              }
+                }
 
-            />
+              />
 
-          </div>
+            </div>
 
-        )}
+          )}
 
         <div className="mt-6 sm:mt-7">
 
@@ -1978,9 +1970,9 @@ function PackageStep({
 
                     : Number(
 
-                        event.target.value,
+                      event.target.value,
 
-                      ),
+                    ),
 
                 )
 
@@ -2008,17 +2000,15 @@ function PackageStep({
 
             <p
 
-              className={`text-[10px] font-medium sm:text-[11px] ${
+              className={`text-[10px] font-medium sm:text-[11px] ${form.weightKg !== "" &&
 
-                form.weightKg !== "" &&
-
-                form.weightKg > 10
+                  form.weightKg > 10
 
                   ? "text-red-400"
 
                   : "text-white/[0.72] sm:text-white"
 
-              }`}
+                }`}
 
             >
 
@@ -2080,15 +2070,13 @@ function PackageStep({
 
                   }
 
-                  className={`min-h-[92px] rounded-xl border p-3 text-left transition sm:min-h-0 sm:rounded-lg sm:p-4 ${
-
-                    active
+                  className={`min-h-[92px] rounded-xl border p-3 text-left transition sm:min-h-0 sm:rounded-lg sm:p-4 ${active
 
                       ? "border-orange-500 bg-orange-500/[0.055]"
 
                       : "border-white/[0.08] bg-[#19151a] hover:border-white/[0.18]"
 
-                  }`}
+                    }`}
 
                 >
 
@@ -2096,15 +2084,13 @@ function PackageStep({
 
                     <p
 
-                      className={`text-[18px] font-semibold sm:text-[20px] ${
-
-                        active
+                      className={`text-[18px] font-semibold sm:text-[20px] ${active
 
                           ? "text-orange-400"
 
                           : "text-white"
 
-                      }`}
+                        }`}
 
                     >
 
@@ -2114,15 +2100,13 @@ function PackageStep({
 
                     <span
 
-                      className={`h-2 w-2 rounded-full ${
-
-                        active
+                      className={`h-2 w-2 rounded-full ${active
 
                           ? "bg-orange-500"
 
                           : "bg-white/10"
 
-                      }`}
+                        }`}
 
                     />
 
@@ -2190,9 +2174,9 @@ function PackageStep({
 
                       ? PACKAGE_SIZE_RULES[
 
-                          form.packageSize
+                        form.packageSize
 
-                        ].dimensions
+                      ].dimensions
 
                       : "—"
 
@@ -2212,9 +2196,9 @@ function PackageStep({
 
                   ? PACKAGE_SIZE_RULES[
 
-                      form.packageSize
+                    form.packageSize
 
-                    ].description
+                  ].description
 
                   : "Select a package size to view its limits."
 
@@ -2234,15 +2218,13 @@ function PackageStep({
 
           <label
 
-            className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition sm:mt-5 sm:p-5 ${
-
-              form.hasInsurance
+            className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition sm:mt-5 sm:p-5 ${form.hasInsurance
 
                 ? "border-orange-500/[0.45] bg-orange-500/[0.05]"
 
                 : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.16]"
 
-            }`}
+              }`}
 
           >
 
@@ -2292,13 +2274,13 @@ function PackageStep({
 
               <p className="mt-1.5 text-[11px] leading-5 text-white/[0.48] sm:text-[12px]">
 
-                Optional package protection. Insurance is calculated by Backend as 10% of the core fee.
+                Optional package protection. Insurance is calculated as 10% of the core fee.
 
               </p>
 
               <p className="mt-1 text-[10px] leading-5 text-white/[0.34] sm:text-[11px]">
 
-                Turning this option on or off automatically requests a new backend estimate, so the displayed total always follows the latest quotation.
+                Turning this option on or off automatically requests a new estimate, so the displayed total always follows the latest quotation.
 
               </p>
 
@@ -2674,55 +2656,55 @@ function ScheduleStep({
 
         "scheduled" && (
 
-        <div className="mt-5 max-w-[460px] sm:mt-7">
+          <div className="mt-5 max-w-[460px] sm:mt-7">
 
-          <FieldLabel>
+            <FieldLabel>
 
-            Preferred departure
+              Preferred departure
 
-          </FieldLabel>
+            </FieldLabel>
 
-          <input
+            <input
 
-            type="datetime-local"
+              type="datetime-local"
 
-            min={minimumSchedule}
+              min={minimumSchedule}
 
-            value={
+              value={
 
-              form.requestedDepartureAt
+                form.requestedDepartureAt
 
-            }
+              }
 
-            onChange={(event) =>
+              onChange={(event) =>
 
-              update(
+                update(
 
-                "requestedDepartureAt",
+                  "requestedDepartureAt",
 
-                event.target.value,
+                  event.target.value,
 
-              )
+                )
 
-            }
+              }
 
-            className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
+              className="mt-2 h-[50px] w-full rounded-lg border border-white/[0.1] bg-[#19151a] px-3 text-[14px] text-white outline-none transition hover:border-white/[0.17] focus:border-orange-500 sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px]"
 
-          />
+            />
 
-          <p className="mt-2 text-[10px] leading-5 text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
+            <p className="mt-2 text-[10px] leading-5 text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
 
-            Scheduled departure must be at
+              Scheduled departure must be at
 
-            least 3 hours from the current
+              least 3 hours from the current
 
-            time.
+              time.
 
-          </p>
+            </p>
 
-        </div>
+          </div>
 
-      )}
+        )}
 
       <div className="mt-6 rounded-xl border border-orange-500/[0.14] bg-orange-500/[0.045] p-4 sm:mt-8 sm:rounded-lg sm:p-5">
 
@@ -2982,15 +2964,13 @@ function Field({
 
         }
 
-        className={`mt-2 h-[50px] w-full rounded-lg border px-3 text-[14px] outline-none transition sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] ${
-
-          readOnly
+        className={`mt-2 h-[50px] w-full rounded-lg border px-3 text-[14px] outline-none transition sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] ${readOnly
 
             ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.68] sm:text-white/[0.84]"
 
             : "border-white/[0.1] bg-[#1d181d] text-white placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:placeholder:text-white/[0.42]"
 
-        }`}
+          }`}
 
       />
 
@@ -3094,15 +3074,13 @@ function ModeButton({
 
       onClick={onClick}
 
-      className={`rounded-xl border p-4 text-left transition sm:rounded-lg sm:p-5 ${
-
-        active
+      className={`rounded-xl border p-4 text-left transition sm:rounded-lg sm:p-5 ${active
 
           ? "border-orange-500 bg-orange-500/[0.05]"
 
           : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.18]"
 
-      }`}
+        }`}
 
     >
 
@@ -3116,15 +3094,13 @@ function ModeButton({
 
         <span
 
-          className={`h-2.5 w-2.5 rounded-full border ${
-
-            active
+          className={`h-2.5 w-2.5 rounded-full border ${active
 
               ? "border-orange-500 bg-orange-500"
 
               : "border-white/[0.20] bg-transparent"
 
-          }`}
+            }`}
 
         />
 
@@ -3256,7 +3232,7 @@ function CreatePriceBreakdown({
 
       price.serviceFee -
 
-        details.expressSurcharge,
+      details.expressSurcharge,
 
     ) > 0.5;
 
@@ -3434,15 +3410,13 @@ function PriceLine({
 
       <span
 
-        className={`text-[11px] leading-5 sm:text-[12px] ${
-
-          strong
+        className={`text-[11px] leading-5 sm:text-[12px] ${strong
 
             ? "font-semibold text-white/[0.68]"
 
             : "text-white/[0.42]"
 
-        }`}
+          }`}
 
       >
 
@@ -3452,9 +3426,7 @@ function PriceLine({
 
       <span
 
-        className={`text-right text-[12px] leading-5 ${
-
-          strong
+        className={`text-right text-[12px] leading-5 ${strong
 
             ? "font-semibold text-white"
 
@@ -3464,7 +3436,7 @@ function PriceLine({
 
               : "font-medium text-white/[0.78]"
 
-        }`}
+          }`}
 
       >
 
