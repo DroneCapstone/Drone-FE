@@ -126,10 +126,10 @@ export function useIncidentQuery(incidentId: string) {
   });
 }
 
-export function useEligibleMissionBatteriesQuery(orderId: string, droneId: string) {
+export function useEligibleMissionBatteriesQuery(orderId: string, droneId: string, crossHubCurrentHubId?: string) {
   return useQuery({
-    queryKey: operatorQueryKeys.eligibleMissionBatteries(orderId, droneId),
-    queryFn: () => getEligibleMissionBatteriesApi(droneId, orderId),
+    queryKey: operatorQueryKeys.eligibleMissionBatteries(orderId, droneId, crossHubCurrentHubId),
+    queryFn: () => getEligibleMissionBatteriesApi(droneId, orderId, crossHubCurrentHubId),
     enabled: Boolean(orderId.trim() && droneId.trim()),
     staleTime: 0,
   });

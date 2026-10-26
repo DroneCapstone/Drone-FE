@@ -2,6 +2,7 @@ import { Icon } from '../../../components/ui/Icon';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { RouteOption } from '../types/operator';
 import { DEFAULT_BATTERY_RESERVE_PCT } from '../utils/droneEligibility';
+import { getRouteLegBatteryUse } from '../utils/routeBatteryUse';
 import { formatMissionTime } from '../utils/missionTiming';
 
 /** Relay Hub labels only; allocation & availability come from BE Analyze. */
@@ -47,6 +48,7 @@ export function RouteOptionCard({
   onViewDetails,
 }: RouteOptionCardProps) {
   const hasRelay = Boolean(route.relayHubIds?.length);
+  const hasDispatch = route.legDetails?.some(leg => leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH') === true;
   const legs = (route.legDetails ?? []).map((leg, index) => ({
     from: leg.from_hub_name || (leg.from_hub_id != null ? resolveHubName?.(String(leg.from_hub_id)) : null) || leg.from_hub_code,
     to: leg.to_hub_name || (leg.to_hub_id != null ? resolveHubName?.(String(leg.to_hub_id)) : null) || leg.to_hub_code,
@@ -57,6 +59,8 @@ export function RouteOptionCard({
     batteryModel: leg.battery_model ?? route.legs?.[index]?.batteryModel,
     batteryChargePct: leg.battery_charge_pct ?? route.legs?.[index]?.batteryChargePct,
     batteryEnergyWh: leg.battery_energy_wh ?? route.legs?.[index]?.batteryEnergyWh,
+    isDispatch: leg.is_dispatch === true || leg.leg_type?.toUpperCase() === 'DISPATCH',
+    payloadKg: leg.payload_kg,
   }));
   // Older API responses only provide leg IDs. Do not invent leg distances or energy.
   if (!legs.length && route.legs?.length) {
@@ -70,6 +74,8 @@ export function RouteOptionCard({
       batteryModel: leg.batteryModel,
       batteryChargePct: leg.batteryChargePct,
       batteryEnergyWh: leg.batteryEnergyWh,
+      isDispatch: false,
+      payloadKg: undefined,
     }));
   }
 
@@ -78,6 +84,7 @@ export function RouteOptionCard({
 
   return (
     <article className={`mission-route-card${selected ? ' is-selected' : ''}${expanded ? ' is-expanded' : ''}`}>
+      <div className="mission-route-overview">
       <button
         type="button"
         className="mission-route-select"
@@ -108,11 +115,15 @@ export function RouteOptionCard({
           <span><small>Energy</small><strong>{displayEnergy(route.predictedEnergyWh)}</strong></span>
         </span>
       </button>
+      <button type="button" className="text-button mission-route-ai-details" onClick={onViewDetails}>
+        View AI details
+      </button>
+      </div>
 
       {expanded && (
         <div className="mission-route-detail">
           <div className="mission-route-section-head">
-            <strong>{hasRelay ? 'Relay Flight Plan' : 'Direct Flight Plan'}</strong>
+            <strong>{hasRelay ? 'Relay Flight Plan' : hasDispatch ? 'Flight Plan' : 'Direct Flight Plan'}</strong>
             <small>{legs.length ? `${legs.length} ${legs.length === 1 ? 'leg' : 'legs'}` : ''}</small>
           </div>
           <div className="mission-route-legs">
@@ -120,6 +131,7 @@ export function RouteOptionCard({
               <div className="mission-route-leg" key={`${route.id}-leg-${index}`}>
                 <span className="mission-route-leg-number">{index + 1}</span>
                 <div className="mission-route-leg-places">
+                  {leg.isDispatch && <small>Dispatch flight · 0 kg (no package)</small>}
                   <strong>{leg.from}</strong>
                   <span><Icon name="arrow" size={13} />{leg.to}</span>
                   {(leg.energyWh !== undefined || leg.batteryAfter !== undefined) && (
@@ -128,7 +140,7 @@ export function RouteOptionCard({
                   <small className="mission-route-leg-battery">
                     {leg.batteryId
                       ? <>Battery <strong>{leg.batteryId}</strong>{leg.batteryModel ? ` · ${leg.batteryModel}` : ''}{leg.batteryChargePct !== undefined ? ` · ${displayPct(leg.batteryChargePct)}` : ''}{leg.batteryEnergyWh !== undefined ? ` · ${displayEnergy(leg.batteryEnergyWh)}` : ''}</>
-                      : index > 0 ? 'Relay battery not assigned' : 'Origin battery not provided'}
+                      : leg.isDispatch ? 'Dispatch battery not provided' : hasRelay && index > 0 ? 'Relay battery not assigned' : 'Battery not provided'}
                   </small>
                 </div>
                 {Number.isFinite(leg.distanceKm) && <span className="mission-route-leg-distance">{leg.distanceKm.toFixed(2)} km</span>}
@@ -178,8 +190,17 @@ export function RouteOptionCard({
           <section className="mission-route-energy-section">
             <div className="mission-route-section-head"><strong>Energy & timing</strong></div>
             <div className="mission-route-detail-grid">
-              <span><small>Battery use</small><strong>{hasRelay ? 'Per leg' : displayPct(route.batteryConsumptionPct)}</strong></span>
-              <span><small>Battery after</small><strong>{displayPct(remainingBattery)}</strong></span>
+              <span>
+                <small>{hasRelay ? 'Battery use by leg' : 'Battery use'}</small>
+                <strong style={hasRelay ? { fontSize: 13, lineHeight: 1.6 } : undefined}>
+                  {hasRelay
+                    ? getRouteLegBatteryUse(route).map((leg) =>
+                        `Leg ${leg.legNumber}: ${displayPct(leg.batteryUsePct)}`,
+                      ).join(' · ') || '—'
+                    : displayPct(route.batteryConsumptionPct)}
+                </strong>
+              </span>
+              <span><small>{hasRelay ? 'Battery after final leg' : 'Battery after'}</small><strong>{displayPct(remainingBattery)}</strong></span>
               <span><small>Minimum reserve</small><strong>{DEFAULT_BATTERY_RESERVE_PCT}%</strong></span>
               <span><small>Risk</small><strong>{route.risk}</strong></span>
               <span><small>Planned start</small><strong>{formatMissionTime(plannedStartAt)}</strong></span>
@@ -189,10 +210,6 @@ export function RouteOptionCard({
         </div>
       )}
 
-      <div className="mission-route-footer">
-        <strong>{route.confidencePct}% confidence</strong>
-        <button type="button" className="text-button" onClick={onViewDetails}>View AI details</button>
-      </div>
     </article>
   );
 }

@@ -146,6 +146,16 @@ const TelemetryPage = lazyPage(
   "TelemetryPage",
 );
 
+const FlightHistoryPage = lazyPage(
+  () => import("../features/operator/pages/operations/FlightHistoryPage"),
+  "FlightHistoryPage",
+);
+
+const FlightReplayPage = lazyPage(
+  () => import("../features/operator/pages/operations/FlightReplayPage"),
+  "FlightReplayPage",
+);
+
 /* =========================================================
    AI DECISION CENTER
 ========================================================= */
@@ -298,6 +308,16 @@ export const operatorRoutes: RouteObject[] = [
   {
     path: "operations/live",
     element: <LiveTrackingPage />,
+  },
+
+  {
+    path: "operations/history",
+    element: <FlightHistoryPage />,
+  },
+
+  {
+    path: "operations/history/:missionId",
+    element: <FlightReplayPage />,
   },
 
   {

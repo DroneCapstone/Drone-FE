@@ -27,6 +27,7 @@ export const operatorNavigation: OperatorNavItem[] = [
     icon: 'radar',
     children: [
       { label: 'Live tracking', path: '/operator/operations/live' },
+      { label: 'Flight history', path: '/operator/operations/history' },
       { label: 'Telemetry', path: '/operator/operations/telemetry' },
       { label: 'Incidents', path: '/operator/operations/incidents' },
     ],
