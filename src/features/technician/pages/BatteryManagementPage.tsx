@@ -22,9 +22,7 @@ import {
 
   ChevronRight,
 
-  History,
-
-  X,
+  Search,
 
 } from "lucide-react";
 
@@ -66,8 +64,6 @@ import {
 
 import {
 
-  type BatteryHistoryRecord,
-
   type BatteryStatus,
 
   type HubBattery,
@@ -79,8 +75,6 @@ import {
 import {
 
   useBatteriesQuery,
-
-  useBatteryHistoryQuery,
 
 } from "../hooks/useBatteryQueries";
 
@@ -159,9 +153,6 @@ export function BatteryManagementPage() {
 
 
 
-  const historyQuery =
-
-    useBatteryHistoryQuery();
 
 
 
@@ -171,11 +162,10 @@ export function BatteryManagementPage() {
 
 
 
-  const history: BatteryHistoryRecord[] =
-
-    historyQuery.data ?? [];
 
 
+
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [statusFilter, setStatusFilter] =
 
@@ -187,9 +177,6 @@ export function BatteryManagementPage() {
 
 
 
-  const [historyOpen, setHistoryOpen] =
-
-    useState(false);
 
   const [page, setPage] = useState(1);
 
@@ -211,35 +198,26 @@ export function BatteryManagementPage() {
 
 
 
-  const hubLabel =
-
-    hubBatteries[0]?.hub ||
-
-    "your managed hub";
 
 
 
-  const visibleBatteries = useMemo(
+  const visibleBatteries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
 
-    () =>
+    return hubBatteries.filter((battery) => {
+      const matchesStatus =
+        statusFilter === "All status" || battery.status === statusFilter;
 
-      hubBatteries.filter(
+      const matchesSearch =
+        !query ||
+        battery.id.toLowerCase().includes(query) ||
+        (battery.backendId ?? "").toLowerCase().includes(query) ||
+        (battery.serialNumber ?? "").toLowerCase().includes(query) ||
+        (battery.model ?? "").toLowerCase().includes(query);
 
-        (battery) =>
-
-          statusFilter ===
-
-            "All status" ||
-
-          battery.status ===
-
-            statusFilter,
-
-      ),
-
-    [hubBatteries, statusFilter],
-
-  );
+      return matchesStatus && matchesSearch;
+    });
+  }, [hubBatteries, statusFilter, searchQuery]);
 
 
 
@@ -282,7 +260,7 @@ export function BatteryManagementPage() {
 
       title="Battery management"
 
-      description={`Shared battery inventory at ${hubLabel}. Charge level and charging status are loaded from the backend.`}
+      description={``}
 
     >
 
@@ -306,7 +284,7 @@ export function BatteryManagementPage() {
 
           value={readyCount}
 
-          helper="100% · Waiting for use"
+          helper=""
 
         />
 
@@ -318,7 +296,7 @@ export function BatteryManagementPage() {
 
           value={chargingCount}
 
-          helper="Automatically becomes Ready when charging completes"
+          helper=""
 
         />
 
@@ -330,7 +308,7 @@ export function BatteryManagementPage() {
 
           value={hubBatteries.length}
 
-          helper="Physical batteries in inventory"
+          helper=""
 
         />
 
@@ -341,6 +319,25 @@ export function BatteryManagementPage() {
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
 
         <CardContent className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--tech-border)] p-4">
+
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+            <div className="relative min-w-[240px] flex-1">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tech-subtle)]"
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search battery ID or model..."
+                aria-label="Search batteries by ID, serial number or model"
+                className="tech-control h-11 w-full pl-9 pr-3 !text-[13px]"
+              />
+            </div>
 
           <DropdownSelect
 
@@ -366,28 +363,9 @@ export function BatteryManagementPage() {
             className="min-w-[190px]"
 
           />
+          </div>
 
 
-
-          <button
-
-            type="button"
-
-            onClick={() =>
-
-              setHistoryOpen(true)
-
-            }
-
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--tech-border)] px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500"
-
-          >
-
-            <History size={15} />
-
-            View history
-
-          </button>
 
         </CardContent>
 
@@ -632,7 +610,7 @@ export function BatteryManagementPage() {
 
                 <p className="text-[14px] text-[var(--tech-muted)]">
 
-                  No batteries match this status.
+                  No batteries match your search or status filter.
 
                 </p>
 
@@ -700,162 +678,6 @@ export function BatteryManagementPage() {
       </Card>
 
 
-
-      {historyOpen && (
-
-        <div
-
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-6"
-
-          onMouseDown={(event) => {
-
-            if (
-
-              event.target ===
-
-              event.currentTarget
-
-            ) {
-
-              setHistoryOpen(false);
-
-            }
-
-          }}
-
-        >
-
-          <div className="flex max-h-[82vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
-
-              <div>
-
-                <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
-
-                  Battery history
-
-                </h2>
-
-
-
-                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-
-                  Local session history for battery removal, charging completion and mission use. Backend does not currently expose a battery-history endpoint.
-
-                </p>
-
-              </div>
-
-
-
-              <button
-
-                type="button"
-
-                onClick={() =>
-
-                  setHistoryOpen(false)
-
-                }
-
-                className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-
-              >
-
-                <X size={19} />
-
-              </button>
-
-            </div>
-
-
-
-            <div className="min-h-0 flex-1 overflow-auto">
-
-              <div className="min-w-[1040px]">
-
-                <div className="sticky top-0 z-10 grid grid-cols-[130px_170px_120px_130px_130px_190px_1fr] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
-
-                  <Header>Battery</Header>
-
-                  <Header>Action</Header>
-
-                  <Header>Charge</Header>
-
-                  <Header>Mission</Header>
-
-                  <Header>Drone</Header>
-
-                  <Header>Time</Header>
-
-                  <Header>Note</Header>
-
-                </div>
-
-
-
-                {history.length > 0 ? (
-
-                  history.map(
-
-                    (record) => (
-
-                      <div
-
-                        key={record.id}
-
-                        className="grid grid-cols-[130px_170px_120px_130px_130px_190px_1fr] gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]"
-
-                      >
-
-                        <span className="font-semibold text-[var(--tech-text)]">
-
-                          {record.batteryId}
-
-                        </span>
-
-                        <span>{record.action}</span>
-
-                        <span>{record.chargeLevelPct}%</span>
-
-                        <span>{record.missionId ?? "—"}</span>
-
-                        <span>{record.droneId ?? "—"}</span>
-
-                        <span>{record.occurredAt}</span>
-
-                        <span className="text-[var(--tech-muted)]">
-
-                          {record.note ?? "—"}
-
-                        </span>
-
-                      </div>
-
-                    ),
-
-                  )
-
-                ) : (
-
-                  <div className="px-6 py-12 text-center text-[13px] text-[var(--tech-muted)]">
-
-                    No local battery history yet.
-
-                  </div>
-
-                )}
-
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
 
     </TechnicianPageShell>
 
