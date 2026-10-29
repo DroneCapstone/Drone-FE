@@ -173,7 +173,7 @@ function isPreflightMissionState(value?: string) {
   );
 }
 
-/** Completed = landed at final hub, still waiting for Technician confirmation. */
+/** Completed = flight finished; final-hub receipt and customer pickup are separate events. */
 export function isCompletedMissionState(value?: string) {
   return normalizedKey(value ?? "") === "COMPLETED";
 }
@@ -485,8 +485,9 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       "—",
     ),
     status,
+    // BE 2026-10-18: arrival_confirmed_at means CUSTOMER PICKUP, not Tech physical intake.
     arrivalConfirmedAt:
-      pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "") || undefined,
+      pickString(value, ["hub_arrival_confirmed_at", "physical_arrival_confirmed_at", "receipt_confirmed_at"], "") || undefined,
     // BE says relay confirmation writes At hub, but the Incoming table also
     // documents At hub as a possible pre-confirmation state. Only a BE flag,
     // timestamp or a subsequent Ready (successful battery swap) proves receipt.
@@ -494,7 +495,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
       ? true
       : handlingKey === "INCOMING" ? false
       : pickBoolean(value, ["arrival_confirmed", "is_arrival_confirmed"], false) ||
-        Boolean(pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at"], "")),
+        Boolean(pickString(value, ["hub_arrival_confirmed_at", "physical_arrival_confirmed_at", "receipt_confirmed_at"], "")),
     intakeCompleted: (
       pickBoolean(value, ["intake_completed", "inspection_completed", "hub_intake_completed"], false) ||
       Boolean(pickString(value, ["intake_completed_at", "hub_intake_completed_at"], ""))
@@ -551,7 +552,7 @@ export async function confirmTransitArrivalOnServer(input: {
 
 /** GET /fleet/history is the single source of truth, including after reload.
  * Keep the raw list mapping here; the Technician History UI displays only
- * arrivals with arrival_confirmed_at returned by Backend. */
+ * completed missions, including those where customer pickup is still pending. */
 export async function refreshTransitMissionHistoryFromApi(): Promise<TransitMissionHistory[]> {
   const result = await getTransitHistoryApi();
   return unwrapList(result).map(mapApiTransitHistory).filter(
@@ -574,8 +575,8 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   // These are different events: arriving/flight ending is NOT technician receipt.
   const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
   const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
-  // Do not use end_time as the Technician confirmation: that would falsely mark unconfirmed arrivals as handled.
-  const confirmedAt = pickString(value, ["arrival_confirmed_at", "confirmed_arrival_at", "handled_at"], "");
+  // Per BE, arrival_confirmed_at is CUSTOMER PICKUP confirmation, not Tech drone receipt.
+  const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at"], "");
   const originHubId = pickNumber(value, ["origin_hub_id"], -1);
   const destinationHubId = pickNumber(value, ["destination_hub_id"], -1);
   const currentHubId = pickNumber(value, ["drone_current_hub_id", "current_hub_id", "hub_id"], -1);
@@ -593,9 +594,8 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const outcome = ["CANCELLED", "CANCELED"].includes(normalizedKey(state)) ? "Cancelled" :
     normalizedKey(state) === "FAILED" ? "Failed" :
     isIncidentMissionState(state) ? "Sent to maintenance" :
-    confirmedAt ? "Arrival confirmed" :
     (isCompletedMissionState(state) || normalizedKey(state) === "MISSION_COMPLETED")
-      ? "Returned to hub" : "Continued";
+      ? "Completed" : "Continued";
   return {
     id: `BE-${id}-${pickString(value, ["leg_id", "mission_leg_id"], "") || id}`,
     missionId: id,
@@ -616,8 +616,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     origin: getHubName(["origin_hub_name", "origin_hub", "origin"], originHubId),
     hub: getHubName(["hub_name", "hub", "target_hub_name"], currentHubId),
     destination: getHubName(["destination_hub_name", "destination_hub", "destination"], destinationHubId),
-    // Kept for backwards compatibility. Do NOT substitute mission completed_at
-    // or updated_at here; those are not Technician receipt timestamps.
+    // For UI history only: pickup time is distinct from physical arrival time.
     handledAt: confirmedAt || "—",
     outcome,
   };

@@ -908,7 +908,7 @@ export function TransitMissionsPage() {
                   <HistoryHeader>Battery</HistoryHeader>
                   <HistoryHeader>Arrived at hub</HistoryHeader>
                   <HistoryHeader>Flight ended at</HistoryHeader>
-                  <HistoryHeader>Confirmation recorded at</HistoryHeader>
+                  <HistoryHeader>Customer pickup at</HistoryHeader>
                   <HistoryHeader>Mission / Result</HistoryHeader>
                 </div>
 
@@ -978,7 +978,7 @@ export function TransitMissionsPage() {
                               {formatHistoryTimestamp(item.arrivalConfirmedAt)}
                             </p>
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {item.arrivalConfirmedAt ? "Confirmation recorded" : "Not recorded"}
+                              {item.arrivalConfirmedAt ? "Customer pickup confirmed" : "Awaiting customer pickup"}
                             </p>
                           </div>
                           <div>

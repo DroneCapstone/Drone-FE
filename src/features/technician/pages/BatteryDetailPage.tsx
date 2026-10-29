@@ -273,6 +273,11 @@ export function BatteryDetailPage() {
               description=""
               icon={<Cpu size={17} />}
             >
+              {battery.lifecycleStatus?.toLowerCase() === "expired" ? (
+                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-red-500">Battery expired — replace before use.</p>
+              ) : battery.daysUntilExpiry !== undefined && battery.daysUntilExpiry < 30 ? (
+                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-orange-500">Battery lifecycle expires soon ({battery.daysUntilExpiry} days left).</p>
+              ) : null}
               <InfoRow label="Lifecycle status" value={battery.lifecycleStatus ?? "—"} />
               <InfoRow
                 label="Days until expiry"
