@@ -316,6 +316,7 @@ export function addMaintenanceRecord(
 
 function maintenanceDisplayId(prefix: string, value: string, width = 4) {
   if (!value) return "";
+  if (prefix === "DR" && /^DRN[-_]/i.test(value)) return value.toUpperCase();
   if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
   const match = value.match(/(\d+)$/);
   return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;

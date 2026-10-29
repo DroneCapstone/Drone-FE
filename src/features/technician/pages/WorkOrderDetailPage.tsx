@@ -50,7 +50,6 @@ import {
 
 import {
   useFleetQuery,
-  useUpdateDroneStatusMutation,
 } from "../hooks/useFleetQueries";
 
 const inspectionItems = [
@@ -83,9 +82,6 @@ export function WorkOrderDetailPage() {
 
   const createMaintenanceRecordMutation =
     useCreateMaintenanceRecordMutation();
-
-  const updateDroneStatusMutation =
-    useUpdateDroneStatusMutation();
 
   const order =
     workOrderQuery.data;
@@ -279,13 +275,9 @@ export function WorkOrderDetailPage() {
         },
       });
 
-      // Drone fleet state only changes after the record and work order
-      // succeed. If this final request fails, BE must reconcile the already
-      // completed work order; never report an entirely successful operation.
-      await updateDroneStatusMutation.mutateAsync({
-        droneId: order.droneId,
-        status: droneStatus,
-      });
+      // BE now owns drone status transitions when Work Order is closed.
+      // Do NOT force PATCH status=AVAILABLE here: pending alerts may cause 409,
+      // and the close operation may already have succeeded on Backend.
 
       const completedAt = formatMaintenanceTime();
       addMaintenanceRecord({
@@ -515,12 +507,12 @@ export function WorkOrderDetailPage() {
           {/* Update Drone Status */}
           <Section
             icon={Check}
-            title="Update drone status"
+            title="Resulting status (record only)"
           >
             <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-              Select the resulting
-              technical status after
-              maintenance.
+              Record the expected technical status for the maintenance record.
+              Actual fleet availability is controlled by Backend work-order
+              closure and pending maintenance alerts.
             </p>
 
             <select

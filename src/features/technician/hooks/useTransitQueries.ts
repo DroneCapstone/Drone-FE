@@ -72,6 +72,10 @@ export function useConfirmTransitArrivalMutation() {
           queryKey:
             technicianQueryKeys.maintenanceAlerts(),
         }),
+        // A final-hub drone receipt creates a pickup-pending order in BE.
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.confirmations(),
+        }),
         queryClient.invalidateQueries({ queryKey: [...technicianQueryKeys.transit(), "history"] }),
       ]);
     },

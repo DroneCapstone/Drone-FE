@@ -221,6 +221,9 @@ export function useCreateWorkOrderMutation() {
           queryKey:
             technicianQueryKeys.maintenanceAlerts(),
         }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.fleet(),
+        }),
       ]);
     },
   });
@@ -252,6 +255,12 @@ export function useUpdateWorkOrderMutation() {
             technicianQueryKeys.workOrder(
               variables.workOrderId,
             ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.fleet(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.maintenanceAlerts(),
         }),
       ]);
     },
