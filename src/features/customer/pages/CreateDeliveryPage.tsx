@@ -1620,34 +1620,60 @@ export function CreateDeliveryPage() {
 
       </div>
 
-
       {/* Mobile-only fixed navigation: always accessible while scrolling. */}
+
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.12] bg-[#161217]/95 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md sm:hidden">
+
         <div className="mx-auto grid w-full max-w-[600px] grid-cols-[auto_minmax(0,1fr)] gap-3">
+
           {step > 0 ? (
+
             <button
+
               type="button"
+
               onClick={back}
+
               className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.12] px-4 text-[13px] font-medium text-white/[0.78] transition active:bg-white/[0.04]"
+
             >
+
               <ArrowLeft size={16} />
+
               Back
+
             </button>
+
           ) : (
+
             <div aria-hidden="true" />
+
           )}
+
           <button
+
             type="button"
+
             onClick={next}
+
             className="group inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
+
           >
+
             {step === steps.length - 1 ? "Review delivery" : "Continue"}
+
             <ArrowRight
+
               size={16}
+
               className="transition-transform group-hover:translate-x-0.5"
+
             />
+
           </button>
+
         </div>
+
       </div>
 
     </div>
@@ -1818,6 +1844,12 @@ function PackageStep({
 
     form.packageCategory === "fragile";
 
+  // Keep the decimal separator visible while the customer is typing (e.g. "2.").
+  // The delivery draft and backend still receive a number, not a string.
+  const [weightInput, setWeightInput] = useState(
+    () => form.weightKg === "" ? "" : String(form.weightKg),
+  );
+
   return (
 
     <section>
@@ -1956,33 +1988,33 @@ function PackageStep({
 
             <input
 
-              type="number"
+              type="text"
 
-              min="0.1"
+              inputMode="decimal"
 
-              max="10"
+              value={weightInput}
 
-              step="0.1"
+              onChange={(event) => {
 
-              value={form.weightKg}
+                const value = event.target.value.replace(/,/g, ".");
 
-              onChange={(event) =>
+                if (!/^\d*(?:\.\d*)?$/.test(value)) return;
+
+                setWeightInput(value);
 
                 update(
 
                   "weightKg",
 
-                  event.target.value === ""
+                  value === "" || value === "." ? "" : Number(value),
 
-                    ? ""
+                );
 
-                    : Number(
+              }}
 
-                        event.target.value,
+              onBlur={() =>
 
-                      ),
-
-                )
+                setWeightInput(form.weightKg === "" ? "" : String(form.weightKg))
 
               }
 
@@ -2002,8 +2034,7 @@ function PackageStep({
 
             <p className="text-[10px] text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
 
-              Maximum supported payload
-
+             
             </p>
 
             <p
@@ -2224,7 +2255,7 @@ function PackageStep({
 
             <p className="mt-3 text-[10px] leading-5 text-white/[0.40] sm:text-[11px]">
 
-              The backend estimate is the source of truth for the final delivery quotation.
+             
 
             </p>
 
@@ -2296,12 +2327,7 @@ function PackageStep({
 
               </p>
 
-              <p className="mt-1 text-[10px] leading-5 text-white/[0.34] sm:text-[11px]">
-
-                Turning this option on or off automatically requests a new backend estimate, so the displayed total always follows the latest quotation.
-
-              </p>
-
+             
             </div>
 
           </label>
