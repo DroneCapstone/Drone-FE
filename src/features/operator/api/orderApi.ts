@@ -425,8 +425,8 @@ export async function getEligibleDronesApi(
     const selectability = raw.is_selectable ?? raw.isSelectable;
     return {
       id,
-      // Preserve the existing card title; BE `name` does not alter current UI.
-      name: `DR-${id}`,
+      // Preserve the actual BE drone name; use `id` as the displayed code.
+      name: raw.name?.trim() || id,
       displayId: id,
       model: raw.model?.trim() || '—',
       hubId: droneHubId,

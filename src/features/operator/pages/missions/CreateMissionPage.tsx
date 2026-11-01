@@ -732,7 +732,7 @@ export function CreateMissionPage() {
                 </div>
                 <dl className="mission-review-energy-metrics">
                   <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Predicted battery use by leg' : 'Predicted battery use'}</dt>
+                    <dt>{selectedRoute.relayHubIds?.length ? 'Predicted battery consumption' : 'Predicted battery consumption'}</dt>
                     <dd>
                       {selectedRoute.relayHubIds?.length ? (
                         getRouteLegBatteryUse(selectedRoute).length ? (
@@ -749,7 +749,7 @@ export function CreateMissionPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Expected remaining (final leg)' : 'Expected remaining'}</dt>
+                    <dt>{selectedRoute.relayHubIds?.length ? 'Expected remaining' : 'Expected remaining'}</dt>
                     <dd>{selectedRouteEnergy && Number.isFinite(selectedRouteEnergy.remainingBattery) ? `${selectedRouteEnergy.remainingBattery}%` : '—'}</dd>
                   </div>
                   <div><dt>Minimum reserve</dt><dd>{DEFAULT_BATTERY_RESERVE_PCT}%</dd></div>

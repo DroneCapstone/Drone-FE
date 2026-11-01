@@ -457,7 +457,7 @@
   font-weight: 400;
 }
 .page-content .mission-builder .mission-review-leg-use strong {
-  color: #f97316;
+  color: var(--text);
   font-size: 22px;
   font-weight: 700;
   line-height: 1.3;
