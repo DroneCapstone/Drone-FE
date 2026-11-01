@@ -88,9 +88,11 @@ function getLine(h: MissionTelemetryPoint[]): Point[] {
 }
 
 function emptyCollection() {
-  return {type: 'FeatureCollection' as const, features: [] as Array<{
-    type: 'Feature'; properties: Record<string, string>; geometry: {type: 'LineString'; coordinates: Point[]};
-  }>};
+  return {
+    type: 'FeatureCollection' as const, features: [] as Array<{
+      type: 'Feature'; properties: Record<string, string>; geometry: { type: 'LineString'; coordinates: Point[] };
+    }>
+  };
 }
 
 function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMissionId?: string) {
@@ -98,41 +100,45 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   for (const [missionId, history] of Object.entries(histories)) {
     const coordinates = getLine(history);
     if (coordinates.length < 2) continue;
-    data.features.push({ type: 'Feature', properties: {selected: String(missionId === selectedMissionId)}, geometry: {type: 'LineString', coordinates} });
+    data.features.push({ type: 'Feature', properties: { selected: String(missionId === selectedMissionId) }, geometry: { type: 'LineString', coordinates } });
   }
   if (!map.getSource('droneoptai-trails')) {
-    map.addSource('droneoptai-trails', {type: 'geojson', data});
+    map.addSource('droneoptai-trails', { type: 'geojson', data });
   } else {
     (map.getSource('droneoptai-trails') as maplibregl.GeoJSONSource).setData(data);
   }
   if (!map.getLayer('droneoptai-trails')) {
-    map.addLayer({id:'droneoptai-trails',type:'line',source:'droneoptai-trails',
-      layout: {'line-cap':'round','line-join':'round'},
-      paint: {'line-color':['case',['==',['get','selected'],'true'],'#fb923c','#38bdf8'],
-        'line-opacity':['case',['==',['get','selected'],'true'],0.94,0.38],
-        'line-width':['case',['==',['get','selected'],'true'],4.5,2.5]}});
+    map.addLayer({
+      id: 'droneoptai-trails', type: 'line', source: 'droneoptai-trails',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#fb923c', '#38bdf8'],
+        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.94, 0.38],
+        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 4.5, 2.5]
+      }
+    });
   }
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({hubs,drones,histories,mapStyle,selectedMissionId,onSelectMission}, ref) {
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, mapStyle, selectedMissionId, onSelectMission }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
   const dronesRef = useRef(new Map<string, MovingMarker>());
-  const stateRef = useRef({hubs,drones,histories,selectedMissionId,onSelectMission});
-  stateRef.current = {hubs,drones,histories,selectedMissionId,onSelectMission};
+  const stateRef = useRef({ hubs, drones, histories, selectedMissionId, onSelectMission });
+  stateRef.current = { hubs, drones, histories, selectedMissionId, onSelectMission };
   const followRef = useRef<string | null>(null);
   // Changing the basemap must never reconstruct the map or its DOM markers.
   const mapStyleRef = useRef<LiveMapStyle>(mapStyle);
   mapStyleRef.current = mapStyle;
   const appliedStyleUrlRef = useRef(MAP_STYLE(mapStyle, themeNow()));
-  const [ready,setReady] = useState(false);
-  const [error,setError] = useState('');
-  const [isFollowing,setIsFollowing] = useState(false);
-  const [showHubs,setShowHubs] = useState(true);
-  const [showTrails,setShowTrails] = useState(true);
-  const [showWeather,setShowWeather] = useState(true);
-  const [viewLabel,setViewLabel] = useState('Expanded Ho Chi Minh City');
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState('');
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [showHubs, setShowHubs] = useState(true);
+  const [showTrails, setShowTrails] = useState(true);
+  const [showWeather, setShowWeather] = useState(true);
+  const [viewLabel, setViewLabel] = useState('Expanded Ho Chi Minh City');
 
   function fitAll() {
     const map = mapRef.current;
@@ -141,16 +147,16 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     setIsFollowing(false);
     const bounds = new maplibregl.LngLatBounds();
     let count = 0;
-    for (const h of stateRef.current.hubs) { const pt=asPoint(h.longitude,h.latitude);if(pt){bounds.extend(pt);count++;}}
-    for (const d of stateRef.current.drones) { const pt=asPoint(d.longitude,d.latitude);if(pt){bounds.extend(pt);count++;}}
-    if (count > 0) map.fitBounds(bounds,{padding:75,maxZoom:13,duration:900});
-    else map.flyTo({center:INITIAL_CENTER,zoom:8,duration:800});
+    for (const h of stateRef.current.hubs) { const pt = asPoint(h.longitude, h.latitude); if (pt) { bounds.extend(pt); count++; } }
+    for (const d of stateRef.current.drones) { const pt = asPoint(d.longitude, d.latitude); if (pt) { bounds.extend(pt); count++; } }
+    if (count > 0) map.fitBounds(bounds, { padding: 75, maxZoom: 13, duration: 900 });
+    else map.flyTo({ center: INITIAL_CENTER, zoom: 8, duration: 800 });
     setViewLabel('Hub network');
   }
-  function focus(missionId:string) {
+  function focus(missionId: string) {
     const map = mapRef.current;
-    const drone = stateRef.current.drones.find(d=>d.missionId===missionId);
-    const point = drone && asPoint(drone.longitude,drone.latitude);
+    const drone = stateRef.current.drones.find(d => d.missionId === missionId);
+    const point = drone && asPoint(drone.longitude, drone.latitude);
     if (!map || !point) return;
     // Follow the displayed marker's current animated location rather than
     // jumping ahead to the latest fix while an animation is in progress.
@@ -161,52 +167,54 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     // Follow needs a readable zoom immediately: continuous map.jumpTo() calls
     // from the GPS animation would otherwise cancel an in-progress easeTo zoom.
     // Zoom 16 makes the 15-25 m GPS steps clearly visible (~7-11 px in HCMC).
-    map.jumpTo({center:displayed ?? point,zoom:Math.max(map.getZoom(),16),pitch:45});
+    map.jumpTo({ center: displayed ?? point, zoom: Math.max(map.getZoom(), 16), pitch: 45 });
   }
-  useImperativeHandle(ref,()=>({
-    zoomIn:()=>mapRef.current?.zoomIn({duration:350}),
-    zoomOut:()=>mapRef.current?.zoomOut({duration:350}),
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => mapRef.current?.zoomIn({ duration: 350 }),
+    zoomOut: () => mapRef.current?.zoomOut({ duration: 350 }),
     fitAll,
     focus,
-    togglePitch:()=>{const m=mapRef.current;if(m)m.easeTo({pitch:m.getPitch()>15?0:50,bearing:m.getBearing(),duration:400});},
+    togglePitch: () => { const m = mapRef.current; if (m) m.easeTo({ pitch: m.getPitch() > 15 ? 0 : 50, bearing: m.getBearing(), duration: 400 }); },
   }));
 
-  useEffect(()=>{
-    if(!host.current || !MAPTILER_KEY) return;
-    let disposed=false;
-    let map:MapLibreMap;
+  useEffect(() => {
+    if (!host.current || !MAPTILER_KEY) return;
+    let disposed = false;
+    let map: MapLibreMap;
     try {
-      map=new maplibregl.Map({
-        container:host.current,
-        style:appliedStyleUrlRef.current,
-        center:INITIAL_CENTER,
-        zoom:8,
-        minZoom:5,
-        maxZoom:20,
-        pitch:0,
-        maxPitch:65,
-        attributionControl:false,
-        cooperativeGestures:false,
+      map = new maplibregl.Map({
+        container: host.current,
+        style: appliedStyleUrlRef.current,
+        center: INITIAL_CENTER,
+        zoom: 8,
+        minZoom: 5,
+        maxZoom: 20,
+        pitch: 0,
+        maxPitch: 65,
+        attributionControl: false,
+        cooperativeGestures: false,
         canvasContextAttributes: { antialias: true },
       });
-      map.addControl(new maplibregl.AttributionControl({compact:true}),'bottom-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
       map.dragRotate.enable();
       map.touchZoomRotate.enableRotation();
       map.scrollZoom.enable();
-      mapRef.current=map;
+      mapRef.current = map;
       // The expanded city's geographic extent is broad; it is not a new administrative-boundary polygon.
-      map.fitBounds([[106.05,8.55],[108.25,11.55]],{padding:24,duration:0});
-      map.on('load',()=>{if(!disposed){setReady(true);setError('');}});
-      map.on('style.load',()=>{if(!disposed)setError('');});
-      map.on('error',(e)=>{if(!disposed && e.error){
-        const message = String(e.error.message||'');
-        if (/401|403|unauthoriz|forbidden|api key|network|fetch|style|tile/i.test(message))
-          setError('Unable to load the map. Check the MapTiler API key, Allowed HTTP Origins and your Internet connection.');
-      }});
-    } catch(e){setError(e instanceof Error?e.message:'Unable to initialize the map.');return;}
-    const resizeObserver = new ResizeObserver(()=>{ if(!disposed)map.resize(); });
+      map.fitBounds([[106.05, 8.55], [108.25, 11.55]], { padding: 24, duration: 0 });
+      map.on('load', () => { if (!disposed) { setReady(true); setError(''); } });
+      map.on('style.load', () => { if (!disposed) setError(''); });
+      map.on('error', (e) => {
+        if (!disposed && e.error) {
+          const message = String(e.error.message || '');
+          if (/401|403|unauthoriz|forbidden|api key|network|fetch|style|tile/i.test(message))
+            setError('Unable to load the map. Check the MapTiler API key, Allowed HTTP Origins and your Internet connection.');
+        }
+      });
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to initialize the map.'); return; }
+    const resizeObserver = new ResizeObserver(() => { if (!disposed) map.resize(); });
     resizeObserver.observe(host.current);
-    const themeObserver = new MutationObserver(()=>{
+    const themeObserver = new MutationObserver(() => {
       const current = mapRef.current;
       if (!current) return;
       const nextStyleUrl = MAP_STYLE(mapStyleRef.current, themeNow());
@@ -215,19 +223,19 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       // The style.load listener below restores flight trails after switching.
       current.setStyle(nextStyleUrl);
     });
-    themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
-    return()=>{
-      disposed=true;
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => {
+      disposed = true;
       themeObserver.disconnect();
       resizeObserver.disconnect();
-      for(const m of hubsRef.current.values())m.remove();
+      for (const m of hubsRef.current.values()) m.remove();
       hubsRef.current.clear();
-      for(const m of dronesRef.current.values()){if(m.frame)cancelAnimationFrame(m.frame);m.marker.remove();}
+      for (const m of dronesRef.current.values()) { if (m.frame) cancelAnimationFrame(m.frame); m.marker.remove(); }
       dronesRef.current.clear();
       map.remove();
-      mapRef.current=null;
+      mapRef.current = null;
     };
-  },[]);
+  }, []);
 
   // Switch only the basemap; preserve center, zoom, pitch, live markers, and Follow.
   // MapLibre re-emits style.load; the existing trail-sync effect re-adds GeoJSON.
@@ -245,9 +253,9 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     }
   }, [mapStyle]);
 
-  useEffect(()=>{
-    if(!ready || !mapRef.current)return;
-    const map=mapRef.current;
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
     function sync() {
       // style.load fires after the new style can accept custom layers.
       // No isStyleLoaded() gate: that check can still be false while tiles load.
@@ -261,20 +269,20 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       }
     }
     if (map.isStyleLoaded()) sync();
-    map.on('style.load',sync);
+    map.on('style.load', sync);
     return () => {
       map.off('style.load', sync);
     };
-  },[ready,histories,selectedMissionId,showTrails]);
-  useEffect(()=>{
-    if(!ready || !mapRef.current)return;
-    const map=mapRef.current;
-    const current=new Set<string>();
+  }, [ready, histories, selectedMissionId, showTrails]);
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    const current = new Set<string>();
     for (const hub of hubs) {
-      const point=asPoint(hub.longitude,hub.latitude);
-      if(!point)continue;
+      const point = asPoint(hub.longitude, hub.latitude);
+      if (!point) continue;
       current.add(hub.id);
-      let marker=hubsRef.current.get(hub.id);
+      let marker = hubsRef.current.get(hub.id);
       if (!marker) {
         const elem = document.createElement('div');
         elem.className = 'live-geo-hub';
@@ -285,8 +293,8 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         label.className = 'live-geo-hub-label';
         elem.append(badge, label);
 
-        const popup = new maplibregl.Popup({closeButton:false,offset:22});
-        marker = new maplibregl.Marker({element:elem,anchor:'center'})
+        const popup = new maplibregl.Popup({ closeButton: false, offset: 22 });
+        marker = new maplibregl.Marker({ element: elem, anchor: 'center' })
           .setLngLat(point).setPopup(popup).addTo(map);
         hubsRef.current.set(hub.id, marker);
         // Listeners are installed once, and always access the current popup.
@@ -307,45 +315,45 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         ['Position', `${point[1].toFixed(5)}, ${point[0].toFixed(5)}`],
       ]));
     }
-    for(const [id,marker] of hubsRef.current){if(!current.has(id)){marker.remove();hubsRef.current.delete(id);}}
-  },[hubs,ready,showHubs]);
+    for (const [id, marker] of hubsRef.current) { if (!current.has(id)) { marker.remove(); hubsRef.current.delete(id); } }
+  }, [hubs, ready, showHubs]);
 
-  useEffect(()=>{
-    if(!ready || !mapRef.current)return;
-    const map=mapRef.current;
-    const active=new Set<string>();
-    for(const drone of drones){
-      const pt=asPoint(drone.longitude,drone.latitude);
-      if(!pt)continue;
-      const id=drone.missionId||drone.id;
+  useEffect(() => {
+    if (!ready || !mapRef.current) return;
+    const map = mapRef.current;
+    const active = new Set<string>();
+    for (const drone of drones) {
+      const pt = asPoint(drone.longitude, drone.latitude);
+      if (!pt) continue;
+      const id = drone.missionId || drone.id;
       active.add(id);
-      let moving=dronesRef.current.get(id);
-      if(!moving){
-        const element=document.createElement('button');element.type='button';
-        element.className='live-geo-drone';element.title=`Follow ${drone.id}`;
-        const body=document.createElement('span');body.className='live-geo-drone-symbol';body.innerHTML=OLD_DRONE_SVG;
-        const text=document.createElement('span');text.className='live-geo-drone-label';
-        element.append(body,text);
-        element.addEventListener('click',(evt)=>{
-          evt.preventDefault();evt.stopPropagation();
+      let moving = dronesRef.current.get(id);
+      if (!moving) {
+        const element = document.createElement('button'); element.type = 'button';
+        element.className = 'live-geo-drone'; element.title = `Follow ${drone.id}`;
+        const body = document.createElement('span'); body.className = 'live-geo-drone-symbol'; body.innerHTML = OLD_DRONE_SVG;
+        const text = document.createElement('span'); text.className = 'live-geo-drone-label';
+        element.append(body, text);
+        element.addEventListener('click', (evt) => {
+          evt.preventDefault(); evt.stopPropagation();
           stateRef.current.onSelectMission(id);
           focus(id);
         });
-        const popup=new maplibregl.Popup({closeButton:false,offset:23});
-        const marker=new maplibregl.Marker({element,anchor:'center'}).setLngLat(pt).setPopup(popup).addTo(map);
-        element.addEventListener('mouseenter',()=>popup.setLngLat(marker.getLngLat()).addTo(map));
-        element.addEventListener('mouseleave',()=>popup.remove());
+        const popup = new maplibregl.Popup({ closeButton: false, offset: 23 });
+        const marker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat(pt).setPopup(popup).addTo(map);
+        element.addEventListener('mouseenter', () => popup.setLngLat(marker.getLngLat()).addTo(map));
+        element.addEventListener('mouseleave', () => popup.remove());
         const initialFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
-        moving={marker,element,popup,position:pt,lastFixAt:Number.isFinite(initialFixAt)?initialFixAt:undefined};
-        dronesRef.current.set(id,moving);
+        moving = { marker, element, popup, position: pt, lastFixAt: Number.isFinite(initialFixAt) ? initialFixAt : undefined };
+        dronesRef.current.set(id, moving);
       }
-      moving.element.className=`live-geo-drone health-${drone.health.toLowerCase()} ${selectedMissionId===id?'selected':''}`;
+      moving.element.className = `live-geo-drone health-${drone.health.toLowerCase()} ${selectedMissionId === id ? 'selected' : ''}`;
       const droneLabel = moving.element.querySelector('.live-geo-drone-label');
       if (droneLabel) droneLabel.textContent = drone.id;
-      moving.popup.setDOMContent(createPopup(drone.id,[
-        ['Mission',drone.missionId],['Status',drone.health],['Altitude',drone.altitudeM!=null?`${drone.altitudeM.toFixed(1)} m`:'—'],
-        ['Battery',drone.batteryVoltage!=null?`${drone.batteryVoltage.toFixed(2)} V`:'—'],
-        ['Updated',drone.lastUpdated?new Date(drone.lastUpdated).toLocaleTimeString('en-GB'):'—'],
+      moving.popup.setDOMContent(createPopup(drone.id, [
+        ['Mission', drone.missionId], ['Status', drone.health], ['Altitude', drone.altitudeM != null ? `${drone.altitudeM.toFixed(1)} m` : '—'],
+        ['Battery', drone.batteryVoltage != null ? `${drone.batteryVoltage.toFixed(2)} V` : '—'],
+        ['Updated', drone.lastUpdated ? new Date(drone.lastUpdated).toLocaleTimeString('en-GB') : '—'],
       ]));
       moving.popup.setLngLat(moving.marker.getLngLat());
       const parsedFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
@@ -387,15 +395,17 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         moving.position = pt;
         moving.lastFixAt = fixAt;
         if (import.meta.env.DEV) {
-          console.info('[DroneOptAI GPS]', { missionId: id, drone: drone.id,
+          console.info('[DroneOptAI GPS]', {
+            missionId: id, drone: drone.id,
             previous: start, received: pt, lastUpdated: drone.lastUpdated,
             jumpMeters: Math.round(jumpMeters),
-            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : 'ANIMATE 3s' });
+            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : 'ANIMATE 3s'
+          });
         }
         if (longGap || abnormalJump) {
           moving.marker.setLngLat(pt);
           moving.popup.setLngLat(pt);
-          if (followRef.current === id) map.jumpTo({center:pt});
+          if (followRef.current === id) map.jumpTo({ center: pt });
           moving.frame = undefined;
           continue;
         }
@@ -409,7 +419,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
           ];
           moving!.marker.setLngLat(next);
           if (moving!.popup.isOpen()) moving!.popup.setLngLat(next);
-          if (followRef.current === id) map.jumpTo({center:next});
+          if (followRef.current === id) map.jumpTo({ center: next });
           if (t < 1) moving!.frame = requestAnimationFrame(animate);
           else moving!.frame = undefined;
         };
@@ -419,38 +429,40 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         moving.lastFixAt = fixAt;
       }
     }
-    for(const [id,moving] of dronesRef.current){if(!active.has(id)){
-      if(moving.frame)cancelAnimationFrame(moving.frame);
-      moving.marker.remove();dronesRef.current.delete(id);
-      if(followRef.current===id){followRef.current=null;setIsFollowing(false);}
-    }}
-  },[drones,selectedMissionId,ready]);
+    for (const [id, moving] of dronesRef.current) {
+      if (!active.has(id)) {
+        if (moving.frame) cancelAnimationFrame(moving.frame);
+        moving.marker.remove(); dronesRef.current.delete(id);
+        if (followRef.current === id) { followRef.current = null; setIsFollowing(false); }
+      }
+    }
+  }, [drones, selectedMissionId, ready]);
 
-  const selected = drones.find(d=>d.missionId===selectedMissionId);
+  const selected = drones.find(d => d.missionId === selectedMissionId);
   return <div className="live-geo-shell">
     <div ref={host} className="live-geo-map" role="application" aria-label="Live geographic drone map of Ho Chi Minh City" />
-    {!MAPTILER_KEY&&<div className="live-geo-error">MapTiler API key is not configured. Add VITE_MAPTILER_API_KEY to .env.local and restart Vite.</div>}
-    {error&&<div className="live-geo-error" role="alert">{error}</div>}
+    {!MAPTILER_KEY && <div className="live-geo-error">MapTiler API key is not configured. Add VITE_MAPTILER_API_KEY to .env.local and restart Vite.</div>}
+    {error && <div className="live-geo-error" role="alert">{error}</div>}
     <div className="live-geo-badge">{viewLabel}</div>
     <div className="live-geo-controls">
-      <button type="button" onClick={()=>{followRef.current=null;setIsFollowing(false);mapRef.current?.fitBounds([[106.05,8.55],[108.25,11.55]],{padding:24,duration:900});setViewLabel('Expanded Ho Chi Minh City');}}>Entire city</button>
+      <button type="button" onClick={() => { followRef.current = null; setIsFollowing(false); mapRef.current?.fitBounds([[106.05, 8.55], [108.25, 11.55]], { padding: 24, duration: 900 }); setViewLabel('Expanded Ho Chi Minh City'); }}>Entire city</button>
       <button type="button" onClick={fitAll}>Hub network</button>
-      {isFollowing&&<button type="button" onClick={()=>{followRef.current=null;setIsFollowing(false);setViewLabel('Hub network');}}>Stop following</button>}
+      {isFollowing && <button type="button" onClick={() => { followRef.current = null; setIsFollowing(false); setViewLabel('Hub network'); }}>Stop following</button>}
     </div>
-    {showWeather&&selected&&<div className="live-geo-weather">
+    {showWeather && selected && <div className="live-geo-weather">
       <strong>Observed weather · selected aircraft</strong>
       <span>{selected.id}</span>
-      <div><span>Temperature</span><b>{selected.weather?.temperature!==undefined?`${selected.weather.temperature.toFixed(1)}°C`:'—'}</b></div>
-      <div><span>Wind</span><b>{selected.weather?.windSpeed!==undefined?`${selected.weather.windSpeed.toFixed(1)}`:'—'}</b></div>
-      <div><span>Humidity</span><b>{selected.weather?.humidity!==undefined?`${selected.weather.humidity.toFixed(0)}%`:'—'}</b></div>
-      <div><span>Wind direction</span><b>{selected.weather?.windDirection!==undefined?`${Math.round(selected.weather.windDirection)}°`:'—'}</b></div>
+      <div><span>Temperature</span><b>{selected.weather?.temperature !== undefined ? `${selected.weather.temperature.toFixed(1)}°C` : '—'}</b></div>
+      <div><span>Wind</span><b>{selected.weather?.windSpeed !== undefined ? `${selected.weather.windSpeed.toFixed(1)}` : '—'}</b></div>
+      <div><span>Humidity</span><b>{selected.weather?.humidity !== undefined ? `${selected.weather.humidity.toFixed(0)}%` : '—'}</b></div>
+      <div><span>Wind direction</span><b>{selected.weather?.windDirection !== undefined ? `${Math.round(selected.weather.windDirection)}°` : '—'}</b></div>
       <small>Weather at aircraft location, not district-wide conditions.</small>
     </div>}
     <div className="live-geo-layers" role="group" aria-label="Map layers">
-      <button type="button" aria-pressed={showHubs} onClick={()=>setShowHubs(v=>!v)} className={showHubs?'active':''}>Hubs</button>
-      <button type="button" aria-pressed={showTrails} onClick={()=>setShowTrails(v=>!v)} className={showTrails?'active':''}>Flight trails</button>
-      <button type="button" aria-pressed={showWeather} onClick={()=>setShowWeather(v=>!v)} className={showWeather?'active':''}>Weather</button>
+      <button type="button" aria-pressed={showHubs} onClick={() => setShowHubs(v => !v)} className={showHubs ? 'active' : ''}>Hubs</button>
+      <button type="button" aria-pressed={showTrails} onClick={() => setShowTrails(v => !v)} className={showTrails ? 'active' : ''}>Flight trails</button>
+      <button type="button" aria-pressed={showWeather} onClick={() => setShowWeather(v => !v)} className={showWeather ? 'active' : ''}>Weather</button>
     </div>
-    <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div>
+    {/* <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div> */}
   </div>;
 });
