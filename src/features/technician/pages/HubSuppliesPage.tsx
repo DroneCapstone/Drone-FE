@@ -1,276 +1,394 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useQueries } from "@tanstack/react-query";
 import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Minus,
-  Package,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
+  AlertTriangle, ChevronLeft, ChevronRight,
+  Package, Plus, RefreshCw, Search, X,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
-import type { HubSupply, HubSupplyInput } from "../api/hubSuppliesApi";
-import {
-  useAdjustHubSupplyMutation,
-  useCreateHubSupplyMutation,
-  useDeleteHubSupplyMutation,
-  useHubSuppliesQuery,
-  useUpdateHubSupplyMutation,
-} from "../hooks/useHubSuppliesQueries";
 import { formatApiDateTime } from "../api/httpClient";
+import { getHubSupplyDetailApi, type HubSupply, type PartsRequest, type PartRequestStatus } from "../api/hubSuppliesApi";
+import {
+  useFulfillPartsRequestMutation,
+  useHubSuppliesQuery,
+  useHubSupplyDetailQuery,
+  useMyPartsRequestsQuery,
+  usePartsRequestDetailQuery,
+  useRequestPartsMutation,
+  useUseHubPartsMutation,
+  inventoryDetailKey,
+} from "../hooks/useHubSuppliesQueries";
 
 const PAGE_SIZE = 9;
-// UI-only threshold, not a Backend-owned low-stock/notification rule.
-const LOW_STOCK_THRESHOLD = 5;
 const inputClass = "tech-control h-10 w-full rounded-md px-3 text-[13px]";
-type EditorState = { id?: number; itemName: string; quantity: string; unit: string };
-const EMPTY_EDITOR: EditorState = { itemName: "", quantity: "0", unit: "" };
+const subtle = "text-[var(--tech-muted)]";
+const outlineBtn = "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[var(--tech-border)] px-3 text-[12px] text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-40";
+const primaryBtn = "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50";
+type Tab = "inventory" | "requests";
+type StockFilter = "All" | "Low stock" | "Out of stock";
+type RequestFilter = "All" | PartRequestStatus;
+type RequestEditor = { partCategoryId: string; quantity: string; description: string; droneId: string };
+const blankRequest: RequestEditor = { partCategoryId: "", quantity: "1", description: "", droneId: "" };
 
-function normalizeEditor(input: EditorState): HubSupplyInput {
-  const quantity = Number(input.quantity);
-  if (!input.itemName.trim()) throw new Error("Supply name is required.");
-  if (!input.unit.trim()) throw new Error("Unit is required (for example: chiếc, bộ, cái).");
-  if (!Number.isInteger(quantity) || quantity < 0) {
-    throw new Error("Quantity must be a non-negative whole number.");
-  }
-  return { item_name: input.itemName.trim(), quantity, unit: input.unit.trim() };
+function readableDate(value: string | null | undefined) {
+  return value ? formatApiDateTime(value, "—") : "—";
+}
+function nameFallback(categoryId: number) {
+  return `Part category #${categoryId}`;
+}
+function Pagination({ count, page, onPageChange }: { count: number; page: number; onPageChange: (page: number) => void }) {
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tech-border)] px-4 py-3 text-[11px] text-[var(--tech-muted)]">
+      <span>{count ? `Showing ${(current - 1) * PAGE_SIZE + 1}–${Math.min(current * PAGE_SIZE, count)} of ${count}` : "0 records"}</span>
+      <div className="flex items-center gap-1">
+        <button type="button" className={outlineBtn} title="Previous page" disabled={current === 1} onClick={() => onPageChange(current - 1)}><ChevronLeft size={14} /></button>
+        {Array.from({ length: pages }, (_, i) => i + 1).map(n => (
+          <button key={n} type="button" onClick={() => onPageChange(n)}
+            className={`h-8 min-w-8 rounded-md px-2 ${current === n ? "bg-orange-500 font-semibold text-black" : "border border-[var(--tech-border)] text-[var(--tech-text-secondary)]"}`}>{n}</button>
+        ))}
+        <button type="button" className={outlineBtn} title="Next page" disabled={current === pages} onClick={() => onPageChange(current + 1)}><ChevronRight size={14} /></button>
+      </div>
+    </div>
+  );
+}
+function StockName({ supply }: { supply: HubSupply }) {
+  // List endpoint only contains part_category_id. Details include the actual name.
+  // Each visible row is a cached independent query; stock table doesn't block on details.
+  const detail = useHubSupplyDetailQuery(supply.id);
+  const category = detail.data?.partCategory ?? supply.partCategory;
+  return (
+    <>
+      <p className="font-semibold text-[var(--tech-text)]">{category?.name ?? nameFallback(supply.partCategoryId)}</p>
+      <p className={`mt-1 text-[10px] ${subtle}`}>Inventory #{supply.id} · Category #{supply.partCategoryId}</p>
+    </>
+  );
+}
+function CategoryName({ categoryId, inventory }: { categoryId: number; inventory: HubSupply[] }) {
+  const record = inventory.find(item => item.partCategoryId === categoryId);
+  const detail = useHubSupplyDetailQuery(record?.id);
+  return <span>{detail.data?.partCategory?.name ?? record?.partCategory?.name ?? nameFallback(categoryId)}</span>;
+}
+function InventoryRow({
+  row, number, onUse, onRequest, onDetails,
+}: {
+  row: HubSupply; number: number; onUse: (row: HubSupply) => void;
+  onRequest: (row: HubSupply) => void; onDetails: (row: HubSupply) => void;
+}) {
+  return (
+    <tr className="hover:bg-[var(--tech-surface-2)]">
+      <td className={`px-4 py-4 text-center ${subtle}`}>{number}</td>
+      <td className="px-4 py-4"><StockName supply={row} /></td>
+      <td className={`px-4 py-4 text-center ${subtle}`}>{row.hubId || "—"}</td>
+      <td className="px-4 py-4 text-center font-semibold text-[var(--tech-text)]">{row.quantity}</td>
+      <td className={`px-4 py-4 text-center ${subtle}`}>{row.minStockThreshold}</td>
+      <td className="px-4 py-4 text-center">
+        {row.quantity === 0 ? <span className="text-red-500">Out of stock</span> : row.isLowStock
+          ? <span className="inline-flex items-center gap-1 text-orange-500"><AlertTriangle size={13} /> Low stock</span>
+          : <span className="text-emerald-500">In stock</span>}
+      </td>
+      <td className={`px-4 py-4 text-center ${subtle}`}>{readableDate(row.updatedAt)}</td>
+      <td className="px-4 py-4"><div className="flex justify-end gap-2">
+        <button type="button" className={outlineBtn} onClick={() => onDetails(row)}>Details</button>
+        <button type="button" className={outlineBtn} disabled={row.quantity === 0} onClick={() => onUse(row)}>Use</button>
+        <button type="button" className={primaryBtn} onClick={() => onRequest(row)}>Request</button>
+      </div></td>
+    </tr>
+  );
+}
+function RequestStatus({ status }: { status: PartRequestStatus }) {
+  const style = status === "Approved" ? "text-emerald-500 border-emerald-500/30"
+    : status === "Rejected" ? "text-red-500 border-red-500/30"
+      : status === "Fulfilled" ? "text-[var(--tech-muted)] border-[var(--tech-border)]"
+        : "text-orange-500 border-orange-500/30";
+  return <span className={`inline-flex rounded-md border px-2 py-1 text-[11px] font-medium ${style}`}>{status}</span>;
+}
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-[17px] font-semibold text-[var(--tech-text)]">{title}</h2>
+          <button type="button" className={outlineBtn} aria-label="Close dialog" onClick={onClose}><X size={17}/></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+function StockDetails({ id, onClose }: { id: number; onClose: () => void }) {
+  const q = useHubSupplyDetailQuery(id);
+  const record = q.data;
+  const category = record?.partCategory;
+  return <Modal title="Inventory details" onClose={onClose}>
+    {q.isPending ? <p className={subtle}>Loading details...</p> : q.isError ? <p className="text-red-500">{q.error instanceof Error ? q.error.message : "Failed to load details."}</p> : record && (
+      <div className="space-y-3 text-[13px] text-[var(--tech-text)]">
+        <p><strong>Part:</strong> {category?.name ?? nameFallback(record.partCategoryId)}</p>
+        <p><strong>Inventory ID:</strong> #{record.id}</p><p><strong>Part category ID:</strong> #{record.partCategoryId}</p>
+        <p><strong>Category type:</strong> {category?.categoryType || "—"}</p>
+        <p><strong>Quantity:</strong> {record.quantity} · <strong>Min stock:</strong> {record.minStockThreshold}</p>
+        <p><strong>Compatible drones:</strong> {category?.compatibleDroneModels.length ? category.compatibleDroneModels.join(", ") : "—"}</p>
+        <p><strong>Unit cost:</strong> {category?.unitCost != null ? category.unitCost.toLocaleString("vi-VN") + " VND" : "—"}</p>
+        <p><strong>Description:</strong> {category?.description || "—"}</p>
+        <p><strong>Updated:</strong> {readableDate(record.updatedAt)}</p>
+      </div>
+    )}
+  </Modal>;
+}
+function RequestDetails({ id, onClose }: { id: number; onClose: () => void }) {
+  const q = usePartsRequestDetailQuery(id);
+  const item = q.data;
+  return <Modal title={`Request #${id}`} onClose={onClose}>
+    {q.isPending ? <p className={subtle}>Loading request...</p> : q.isError ? <p className="text-red-500">{q.error instanceof Error ? q.error.message : "Failed to load details."}</p> : item && (
+      <div className="space-y-3 text-[13px] text-[var(--tech-text)]">
+        <p><strong>Status:</strong> <RequestStatus status={item.status}/></p>
+        <p><strong>Category ID:</strong> #{item.partCategoryId}</p>
+        <p><strong>Quantity needed:</strong> {item.quantityNeeded}</p>
+        <p><strong>Reason:</strong> {item.description || "—"}</p>
+        <p><strong>Drone ID:</strong> {item.droneId || "—"}</p>
+        <p><strong>Admin note:</strong> {item.adminNote || "—"}</p>
+        <p><strong>Reviewed by:</strong> {item.reviewedBy || "—"} · {readableDate(item.reviewedAt)}</p>
+        <p><strong>Actual cost:</strong> {item.actualCost != null ? item.actualCost.toLocaleString("vi-VN") + " VND" : "—"}</p>
+        <p><strong>Requested:</strong> {readableDate(item.createdAt)}</p>
+        <p><strong>Received:</strong> {readableDate(item.fulfilledAt)}</p>
+      </div>
+    )}
+  </Modal>;
 }
 
 export function HubSuppliesPage() {
-  const suppliesQuery = useHubSuppliesQuery();
-  const createMutation = useCreateHubSupplyMutation();
-  const updateMutation = useUpdateHubSupplyMutation();
-  const adjustMutation = useAdjustHubSupplyMutation();
-  const deleteMutation = useDeleteHubSupplyMutation();
+  const [tab, setTab] = useState<Tab>("inventory");
+  const inventoryQuery = useHubSuppliesQuery();
+  const requestsQuery = useMyPartsRequestsQuery();
+  const requestMutation = useRequestPartsMutation();
+  const useMutation = useUseHubPartsMutation();
+  const fulfillMutation = useFulfillPartsRequestMutation();
   const [search, setSearch] = useState("");
-  const [stockFilter, setStockFilter] = useState<"All" | "Low stock" | "Out of stock">("All");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("All");
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("All");
   const [page, setPage] = useState(1);
-  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [requestEditor, setRequestEditor] = useState<RequestEditor | null>(null);
+  const [useTarget, setUseTarget] = useState<HubSupply | null>(null);
+  const [useQuantity, setUseQuantity] = useState("1");
+  const [receiptTarget, setReceiptTarget] = useState<PartsRequest | null>(null);
+  const [stockDetailsId, setStockDetailsId] = useState<number | null>(null);
+  const [requestDetailsId, setRequestDetailsId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [workingId, setWorkingId] = useState<number | null>(null);
-  const [deleteCandidate, setDeleteCandidate] = useState<HubSupply | null>(null);
 
-  const supplies = suppliesQuery.data ?? [];
+  const supplies = inventoryQuery.data ?? [];
+  const requests = requestsQuery.data ?? [];
+  // The list API doesn't return a part name. Fetch detail in parallel without
+  // delaying initial list rendering, so Search can also match names.
+  const detailQueries = useQueries({
+    queries: supplies.map(row => ({
+      queryKey: inventoryDetailKey(row.id),
+      queryFn: () => getHubSupplyDetailApi(row.id),
+      staleTime: 5 * 60_000,
+      gcTime: 60 * 60_000,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const categoryNames = useMemo(() => new Map(supplies.map((row, index) => [
+    row.id, detailQueries[index]?.data?.partCategory?.name ?? row.partCategory?.name ?? "",
+  ])), [supplies, detailQueries]);
+  const lowStockCount = supplies.filter(row => row.isLowStock).length;
   const totalQuantity = supplies.reduce((sum, row) => sum + row.quantity, 0);
-  const lowStockCount = supplies.filter((row) => row.quantity < LOW_STOCK_THRESHOLD).length;
-  const filtered = useMemo(() => {
-    const query = search.toLowerCase().trim();
-    return supplies.filter((item) => {
-      const matchesText = !query || String(item.id).includes(query) ||
-        item.itemName.toLowerCase().includes(query) || item.unit.toLowerCase().includes(query);
-      const matchesStock = stockFilter === "All" ||
-        (stockFilter === "Low stock" && item.quantity < LOW_STOCK_THRESHOLD) ||
-        (stockFilter === "Out of stock" && item.quantity === 0);
-      return matchesText && matchesStock;
-    });
-  }, [supplies, search, stockFilter]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const activePage = Math.min(page, pageCount);
-  const visible = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
-  const isSaving = createMutation.isPending || updateMutation.isPending;
-
+  const filteredInventory = useMemo(() => supplies.filter(row => {
+    const query = search.trim().toLowerCase();
+    const matches = !query || String(row.id).includes(query) || String(row.partCategoryId).includes(query) ||
+      categoryNames.get(row.id)?.toLowerCase().includes(query);
+    const stock = stockFilter === "All" || (stockFilter === "Low stock" && row.isLowStock) ||
+      (stockFilter === "Out of stock" && row.quantity === 0);
+    return matches && stock;
+  }), [supplies, search, stockFilter, categoryNames]);
+  const filteredRequests = useMemo(() => requests.filter(item => {
+    const query = search.trim().toLowerCase();
+    const matches = !query || String(item.id).includes(query) || String(item.partCategoryId).includes(query) ||
+      item.description.toLowerCase().includes(query) || (item.droneId ?? "").toLowerCase().includes(query);
+    return matches && (requestFilter === "All" || item.status === requestFilter);
+  }), [requests, search, requestFilter]);
+  const current = tab === "inventory" ? filteredInventory : filteredRequests;
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(current.length / PAGE_SIZE)));
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visibleInventory = filteredInventory.slice(start, start + PAGE_SIZE);
+  const visibleRequests = filteredRequests.slice(start, start + PAGE_SIZE);
   const clearMessage = () => { setErrorMessage(""); setSuccessMessage(""); };
-  const openAdd = () => { clearMessage(); setEditor({ ...EMPTY_EDITOR }); };
-  const openEdit = (row: HubSupply) => {
+  const switchTab = (next: Tab) => { setTab(next); setSearch(""); setPage(1); clearMessage(); };
+  const openRequest = (row?: HubSupply) => {
     clearMessage();
-    setEditor({ id: row.id, itemName: row.itemName, quantity: String(row.quantity), unit: row.unit });
+    setRequestEditor({ ...blankRequest, partCategoryId: row ? String(row.partCategoryId) : "",
+      description: row?.isLowStock ? "Inventory below minimum stock threshold" : "" });
   };
-  const save = async (event: FormEvent<HTMLFormElement>) => {
+  const saveRequest = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!editor || isSaving) return;
-    try {
-      setErrorMessage("");
-      const payload = normalizeEditor(editor);
-      if (editor.id !== undefined) {
-        await updateMutation.mutateAsync({ id: editor.id, payload });
-        setSuccessMessage("Supply updated successfully.");
-      } else {
-        await createMutation.mutateAsync(payload);
-        setSuccessMessage("Supply added successfully.");
-      }
-      setEditor(null);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to save supply.");
+    if (!requestEditor || requestMutation.isPending) return;
+    const category = Number(requestEditor.partCategoryId);
+    const quantity = Number(requestEditor.quantity);
+    if (!Number.isSafeInteger(category) || category < 1 || !Number.isSafeInteger(quantity) || quantity < 1 || !requestEditor.description.trim()) {
+      setErrorMessage("Choose a valid category, positive quantity and enter the reason."); return;
     }
-  };
-  const adjust = async (row: HubSupply, delta: number) => {
-    if (workingId !== null || row.quantity + delta < 0) return;
-    setWorkingId(row.id);
     clearMessage();
     try {
-      await adjustMutation.mutateAsync({ id: row.id, delta });
-      setSuccessMessage(`${row.itemName}: quantity updated.`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to adjust inventory.");
-    } finally { setWorkingId(null); }
+      await requestMutation.mutateAsync({ part_category_id: category, quantity_needed: quantity,
+        description: requestEditor.description.trim(), ...(requestEditor.droneId.trim() ? { drone_id: requestEditor.droneId.trim() } : {}) });
+      setRequestEditor(null); setSuccessMessage("Request sent to Admin successfully.");
+      setTab("requests"); setSearch(""); setPage(1);
+    } catch (e) { setErrorMessage(e instanceof Error ? e.message : "Unable to request parts."); }
   };
-  const remove = async () => {
-    if (!deleteCandidate || deleteMutation.isPending) return;
+  const useParts = async () => {
+    if (!useTarget || useMutation.isPending) return;
+    const qty = Number(useQuantity);
+    if (!Number.isSafeInteger(qty) || qty < 1 || qty > useTarget.quantity) {
+      setErrorMessage("Quantity used must be between 1 and available stock."); return;
+    }
     clearMessage();
     try {
-      await deleteMutation.mutateAsync(deleteCandidate.id);
-      setDeleteCandidate(null);
-      setSuccessMessage("Supply record deleted.");
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to delete supply.");
-      setDeleteCandidate(null);
-    }
+      await useMutation.mutateAsync({ inventoryId: useTarget.id, quantityUsed: qty });
+      setSuccessMessage(`${qty} part(s) deducted from inventory.`);
+      setUseTarget(null);
+    } catch (e) { setErrorMessage(e instanceof Error ? e.message : "Unable to use parts."); }
   };
+  const confirmReceipt = async () => {
+    if (!receiptTarget || receiptTarget.status !== "Approved" || fulfillMutation.isPending) return;
+    clearMessage();
+    try {
+      await fulfillMutation.mutateAsync(receiptTarget.id);
+      setReceiptTarget(null);
+      setSuccessMessage("Parts received. Backend has updated hub inventory.");
+    } catch (e) { setErrorMessage(e instanceof Error ? e.message : "Unable to confirm receipt."); }
+  };
+  const activeQuery = tab === "inventory" ? inventoryQuery : requestsQuery;
+  const error = activeQuery.error instanceof Error ? activeQuery.error.message : "";
 
   return (
-    <TechnicianPageShell
-      title="Hub supplies"
-      description="Consumable maintenance materials stored at your assigned hub. Inventory changes are saved to Backend."
-    >
-      {errorMessage && (
-        <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">
-          {errorMessage} <button type="button" className="ml-3 underline" onClick={() => setErrorMessage("")}>Dismiss</button>
-        </div>
-      )}
+    <TechnicianPageShell title="Hub supplies" description="">
+      {errorMessage && <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">{errorMessage}<button type="button" className="ml-3 underline" onClick={() => setErrorMessage("")}>Dismiss</button></div>}
       {successMessage && <p role="status" className="mb-4 text-[13px] text-emerald-500">{successMessage}</p>}
-      {suppliesQuery.error instanceof Error && (
-        <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">
-          {suppliesQuery.error.message}
-          <button type="button" onClick={() => void suppliesQuery.refetch()} className="ml-3 font-semibold underline">Retry</button>
-        </div>
-      )}
-
+      {error && <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">{error}<button className="ml-3 underline" type="button" onClick={() => void activeQuery.refetch()}>Retry</button></div>}
       <div className="mb-4 grid gap-4 md:grid-cols-3">
         {[
-          { title: "Supply items", value: suppliesQuery.isPending ? "—" : supplies.length, note: "Distinct inventory records" },
-          { title: "Total quantity", value: suppliesQuery.isPending ? "—" : totalQuantity, note: "Across all units (mixed types)" },
-          { title: "Low stock", value: suppliesQuery.isPending ? "—" : lowStockCount, note: `Quantity < ${LOW_STOCK_THRESHOLD} · UI-only threshold` },
-        ].map((stat) => (
-          <Card key={stat.title} className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-            <CardContent className="p-5">
-              <p className="text-[12px] text-[var(--tech-text-secondary)]">{stat.title}</p>
-              <p className="mt-3 text-[28px] font-semibold text-[var(--tech-text)]">{stat.value}</p>
-              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">{stat.note}</p>
-            </CardContent>
-          </Card>
-        ))}
+          { label: "Supply categories", value: inventoryQuery.isPending ? "—" : supplies.length, note: "" },
+          { label: "Total quantity", value: inventoryQuery.isPending ? "—" : totalQuantity, note: "" },
+          { label: "Low stock", value: inventoryQuery.isPending ? "—" : lowStockCount, note: "" },
+        ].map(card => <Card key={card.label} className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none"><CardContent className="p-5">
+          <p className="text-[12px] text-[var(--tech-text-secondary)]">{card.label}</p>
+          <p className="mt-3 text-[28px] font-semibold text-[var(--tech-text)]">{card.value}</p>
+          <p className={`mt-1 text-[11px] ${subtle}`}>{card.note}</p>
+        </CardContent></Card>)}
       </div>
-
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+        <div className="flex items-center gap-4 border-b border-[var(--tech-border)] px-4 pt-2">
+          {([{ id: "inventory", label: "Inventory" }, { id: "requests", label: "My requests" }] as const).map(item => (
+            <button key={item.id} type="button" onClick={() => switchTab(item.id)}
+              className={`border-b-2 px-2 py-3 text-[13px] font-medium ${tab === item.id ? "border-orange-500 text-orange-500" : "border-transparent text-[var(--tech-muted)]"}`}>{item.label}{item.id === "requests" ? ` (${requests.length})` : ""}</button>
+          ))}
+        </div>
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[230px] flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3 top-3 text-[var(--tech-muted)]" />
-            <input type="search" className={`${inputClass} pl-9`} placeholder="Search supply ID, name or unit..." value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+            <Search size={15} className="pointer-events-none absolute left-3 top-3 text-[var(--tech-muted)]"/>
+            <input type="search" className={`${inputClass} pl-9`} value={search} placeholder={tab === "inventory" ? "Search inventory or category ID..." : "Search request ID, category or reason..."} onChange={e => { setSearch(e.target.value); setPage(1); }}/>
           </div>
-          <select className={`${inputClass} !w-[155px]`} value={stockFilter}
-            onChange={(event) => { setStockFilter(event.target.value as typeof stockFilter); setPage(1); }}>
-            <option>All</option><option>Low stock</option><option>Out of stock</option>
-          </select>
-          <button type="button" onClick={() => void suppliesQuery.refetch()}
-            disabled={suppliesQuery.isFetching} title="Refresh supplies"
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 text-[12px] text-[var(--tech-text-secondary)] disabled:opacity-60">
-            <RefreshCw size={15} className={suppliesQuery.isFetching ? "animate-spin" : ""} /> Refresh
-          </button>
-          <button type="button" onClick={openAdd}
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600">
-            <Plus size={16} /> Add supply
-          </button>
+          {tab === "inventory" ? <select className={`${inputClass} !w-[155px]`} value={stockFilter} onChange={e => { setStockFilter(e.target.value as StockFilter); setPage(1); }}><option>All</option><option>Low stock</option><option>Out of stock</option></select>
+            : <select className={`${inputClass} !w-[155px]`} value={requestFilter} onChange={e => { setRequestFilter(e.target.value as RequestFilter); setPage(1); }}><option>All</option><option>Pending</option><option>Approved</option><option>Rejected</option><option>Fulfilled</option></select>}
+          <button className={`${outlineBtn} h-10`} type="button" disabled={activeQuery.isFetching} onClick={() => void activeQuery.refetch()}><RefreshCw size={15} className={activeQuery.isFetching ? "animate-spin" : ""}/> Refresh</button>
+          <button type="button" className={`${primaryBtn} h-10`} onClick={() => openRequest()}><Plus size={16}/> Request parts</button>
         </div>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-[12px]">
-              <thead className="border-b border-[var(--tech-border)] bg-[var(--tech-surface-2)] text-[10px] uppercase tracking-wide text-[var(--tech-subtle)]">
-                <tr><th className="px-4 py-4 text-center">No.</th><th className="px-4 py-4 text-left">Item / ID</th>
-                  <th className="px-4 py-4 text-center">Hub ID</th><th className="px-4 py-4 text-center">Quantity</th>
-                  <th className="px-4 py-4 text-center">Unit</th><th className="px-4 py-4 text-center">Updated</th>
-                  <th className="px-4 py-4 text-right">Actions</th></tr>
-              </thead>
+            {tab === "inventory" ? <table className="w-full min-w-[1050px] text-[12px]">
+              <thead className="border-b border-[var(--tech-border)] bg-[var(--tech-surface-2)] text-[10px] uppercase tracking-wide text-[var(--tech-subtle)]"><tr>
+                <th className="px-4 py-4 text-center">No.</th><th className="px-4 py-4 text-left">Part / ID</th><th className="px-4 py-4 text-center">Hub ID</th>
+                <th className="px-4 py-4 text-center">Quantity</th><th className="px-4 py-4 text-center">Min stock</th><th className="px-4 py-4 text-center">Stock status</th>
+                <th className="px-4 py-4 text-center">Updated</th><th className="px-4 py-4 text-right">Actions</th>
+              </tr></thead>
               <tbody className="divide-y divide-[var(--tech-border)]">
-                {visible.map((row, index) => (
-                  <tr key={row.id} className="hover:bg-[var(--tech-surface-2)]">
-                    <td className="px-4 py-4 text-center text-[var(--tech-muted)]">{(activePage - 1) * PAGE_SIZE + index + 1}</td>
-                    <td className="px-4 py-4"><p className="font-semibold text-[var(--tech-text)]">{row.itemName}</p>
-                      <p className="mt-1 text-[10px] text-[var(--tech-muted)]">#{row.id}</p></td>
-                    <td className="px-4 py-4 text-center text-[var(--tech-muted)]">{row.hubId || "—"}</td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`font-semibold ${row.quantity < LOW_STOCK_THRESHOLD ? "text-orange-500" : "text-[var(--tech-text)]"}`}>{row.quantity}</span>
-                      {row.quantity < LOW_STOCK_THRESHOLD && <span title="Low stock" className="ml-1 inline-block align-middle text-orange-500"><AlertTriangle size={13} /></span>}
-                    </td>
-                    <td className="px-4 py-4 text-center text-[var(--tech-muted)]">{row.unit}</td>
-                    <td className="px-4 py-4 text-center text-[var(--tech-muted)]">{row.updatedAt ? formatApiDateTime(row.updatedAt) : "—"}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button type="button" title="Remove one unit" aria-label={`Remove one ${row.itemName}`} disabled={workingId !== null || row.quantity === 0}
-                          onClick={() => void adjust(row, -1)} className="rounded-md border border-[var(--tech-border)] p-1.5 text-[var(--tech-muted)] hover:text-orange-500 disabled:opacity-30"><Minus size={15} /></button>
-                        <button type="button" title="Add one unit" aria-label={`Add one ${row.itemName}`} disabled={workingId !== null}
-                          onClick={() => void adjust(row, 1)} className="rounded-md border border-[var(--tech-border)] p-1.5 text-[var(--tech-muted)] hover:text-orange-500 disabled:opacity-30"><Plus size={15} /></button>
-                        <button type="button" title="Edit supply" aria-label={`Edit ${row.itemName}`} onClick={() => openEdit(row)} className="rounded-md border border-[var(--tech-border)] p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><Pencil size={15} /></button>
-                        <button type="button" title="Delete record" aria-label={`Delete ${row.itemName}`} onClick={() => { clearMessage(); setDeleteCandidate(row); }}
-                          className="rounded-md border border-[var(--tech-border)] p-1.5 text-[var(--tech-muted)] hover:text-red-500"><Trash2 size={15} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {visible.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-14 text-center text-[13px] text-[var(--tech-muted)]">
-                    {suppliesQuery.isPending ? "Loading hub supplies..." : suppliesQuery.isError && !suppliesQuery.data ? "Unable to load hub supplies." : "No supplies match the current filters."}
-                  </td></tr>
-                )}
+                {visibleInventory.map((row, index) => <InventoryRow key={row.id} row={row} number={start + index + 1} onUse={item => { clearMessage(); setUseTarget(item); setUseQuantity("1"); }} onRequest={openRequest} onDetails={item => setStockDetailsId(item.id)}/>)}
+                {!visibleInventory.length && <tr><td colSpan={8} className={`px-4 py-14 text-center text-[13px] ${subtle}`}>
+                  {inventoryQuery.isPending ? "Loading hub inventory..." : inventoryQuery.isError && !inventoryQuery.data ? "Unable to load hub inventory." : "No inventory matches the current filters."}
+                </td></tr>}
               </tbody>
-            </table>
+            </table> : <table className="w-full min-w-[930px] text-[12px]">
+              <thead className="border-b border-[var(--tech-border)] bg-[var(--tech-surface-2)] text-[10px] uppercase tracking-wide text-[var(--tech-subtle)]"><tr>
+                <th className="px-4 py-4 text-center">No.</th><th className="px-4 py-4 text-left">Request / Part</th><th className="px-4 py-4 text-center">Quantity</th>
+                <th className="px-4 py-4 text-center">Requested at</th><th className="px-4 py-4 text-center">Status</th><th className="px-4 py-4 text-right">Actions</th>
+              </tr></thead><tbody className="divide-y divide-[var(--tech-border)]">
+                {visibleRequests.map((item, index) => <tr key={item.id} className="hover:bg-[var(--tech-surface-2)]">
+                  <td className={`px-4 py-4 text-center ${subtle}`}>{start + index + 1}</td>
+                  <td className="px-4 py-4"><p className="font-semibold text-[var(--tech-text)]"><CategoryName categoryId={item.partCategoryId} inventory={supplies}/></p>
+                    <p className={`mt-1 text-[10px] ${subtle}`}>Request #{item.id} · Category #{item.partCategoryId}</p>
+                    <p className={`mt-1 max-w-xs truncate text-[11px] ${subtle}`} title={item.description}>{item.description}</p></td>
+                  <td className="px-4 py-4 text-center text-[var(--tech-text)]">{item.quantityNeeded}</td>
+                  <td className={`px-4 py-4 text-center ${subtle}`}>{readableDate(item.createdAt)}</td>
+                  <td className="px-4 py-4 text-center"><RequestStatus status={item.status}/></td>
+                  <td className="px-4 py-4"><div className="flex justify-end gap-2">
+                    <button type="button" className={outlineBtn} onClick={() => setRequestDetailsId(item.id)}>Details</button>
+                    {item.status === "Approved" && <button type="button" className={primaryBtn} onClick={() => { clearMessage(); setReceiptTarget(item); }}>Confirm receipt</button>}
+                  </div></td>
+                </tr>)}
+                {!visibleRequests.length && <tr><td colSpan={6} className={`px-4 py-14 text-center text-[13px] ${subtle}`}>
+                  {requestsQuery.isPending ? "Loading supply requests..." : requestsQuery.isError && !requestsQuery.data ? "Unable to load requests." : "No requests match the current filters."}
+                </td></tr>}
+              </tbody></table>}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tech-border)] px-4 py-3 text-[11px] text-[var(--tech-muted)]">
-            <span>{filtered.length ? `Showing ${(activePage - 1) * PAGE_SIZE + 1}–${Math.min(activePage * PAGE_SIZE, filtered.length)} of ${filtered.length}` : "0 supplies"}</span>
-            <div className="flex items-center gap-1">
-              <button type="button" title="Previous page" disabled={activePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-md border border-[var(--tech-border)] p-2 disabled:opacity-30"><ChevronLeft size={14} /></button>
-              {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
-                <button type="button" key={number} onClick={() => setPage(number)}
-                  className={`h-8 min-w-8 rounded-md px-2 ${activePage === number ? "bg-orange-500 font-semibold text-black" : "border border-[var(--tech-border)] text-[var(--tech-text-secondary)]"}`}>{number}</button>
-              ))}
-              <button type="button" title="Next page" disabled={activePage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} className="rounded-md border border-[var(--tech-border)] p-2 disabled:opacity-30"><ChevronRight size={14} /></button>
-            </div>
-          </div>
+          <Pagination count={current.length} page={currentPage} onPageChange={setPage}/>
         </CardContent>
       </Card>
-      <p className="mt-3 flex items-center gap-2 text-[11px] text-[var(--tech-muted)]"><Package size={13} /> Inventory changes are scoped to your Technician hub by Backend. Low stock warnings on this page are display-only.</p>
+      
 
-      {editor && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" role="presentation">
-          <div role="dialog" aria-modal="true" aria-label={editor.id ? "Edit hub supply" : "Add hub supply"} className="w-full max-w-md rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-[17px] font-semibold text-[var(--tech-text)]">{editor.id ? "Edit hub supply" : "Add hub supply"}</h2>
-              <button type="button" aria-label="Close" onClick={() => { setEditor(null); clearMessage(); }} className="text-[var(--tech-muted)]"><X size={18} /></button>
-            </div>
-            {errorMessage && <p role="alert" className="mb-3 text-[12px] text-red-500">{errorMessage}</p>}
-            <form onSubmit={(e) => void save(e)} className="space-y-4">
-              <label className="block text-[12px] text-[var(--tech-text-secondary)]">Supply name
-                <input className={`mt-1 ${inputClass}`} autoFocus value={editor.itemName} maxLength={150} onChange={(e) => setEditor((old) => old && { ...old, itemName: e.target.value })} placeholder="e.g. Propeller DJI Matrice 100" required />
-              </label>
-              <label className="block text-[12px] text-[var(--tech-text-secondary)]">Quantity
-                <input className={`mt-1 ${inputClass}`} type="number" min="0" step="1" value={editor.quantity} onChange={(e) => setEditor((old) => old && { ...old, quantity: e.target.value })} required />
-              </label>
-              <label className="block text-[12px] text-[var(--tech-text-secondary)]">Unit
-                <input className={`mt-1 ${inputClass}`} value={editor.unit} maxLength={30} onChange={(e) => setEditor((old) => old && { ...old, unit: e.target.value })} placeholder="e.g. chiếc, bộ, cái" required />
-              </label>
-              <p className="text-[11px] text-[var(--tech-muted)]">The Backend automatically assigns your hub. There is no hub selector for Technician.</p>
-              <div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setEditor(null)} className="rounded-md border border-[var(--tech-border)] px-4 py-2 text-[12px] text-[var(--tech-text-secondary)]">Cancel</button>
-                <button type="submit" disabled={isSaving} className="rounded-md bg-orange-500 px-4 py-2 text-[12px] font-semibold text-black disabled:opacity-50">{isSaving ? "Saving..." : "Save supply"}</button></div>
-            </form>
-          </div>
+      {requestEditor && <Modal title="Request parts" onClose={() => { if (!requestMutation.isPending) setRequestEditor(null); }}>
+        <form className="space-y-4" onSubmit={e => void saveRequest(e)}>
+          <label className="block text-[12px] text-[var(--tech-text-secondary)]">Part category ID
+            <input type="number" min="1" step="1" required autoFocus className={`mt-1 ${inputClass}`} list="inventory-part-categories"
+              value={requestEditor.partCategoryId} onChange={e => setRequestEditor(old => old && { ...old, partCategoryId: e.target.value })}/>
+            <datalist id="inventory-part-categories">{supplies.map(item => <option key={item.id} value={item.partCategoryId}>{categoryNames.get(item.id) || nameFallback(item.partCategoryId)}</option>)}</datalist>
+            <span className={`mt-1 block text-[11px] ${subtle}`}>Use the category ID shown in inventory. For new categories, ask Admin for its ID.</span>
+          </label>
+          <label className="block text-[12px] text-[var(--tech-text-secondary)]">Quantity needed
+            <input type="number" min="1" step="1" required className={`mt-1 ${inputClass}`} value={requestEditor.quantity} onChange={e => setRequestEditor(old => old && { ...old, quantity: e.target.value })}/>
+          </label>
+          <label className="block text-[12px] text-[var(--tech-text-secondary)]">Reason for request
+            <textarea required rows={3} className="tech-control mt-1 w-full rounded-md px-3 py-2 text-[13px]" value={requestEditor.description}
+              onChange={e => setRequestEditor(old => old && { ...old, description: e.target.value })} placeholder="Why are these parts needed?"/>
+          </label>
+          <label className="block text-[12px] text-[var(--tech-text-secondary)]">Drone ID (optional)
+            <input type="text" className={`mt-1 ${inputClass}`} placeholder="DRN-0002" value={requestEditor.droneId}
+              onChange={e => setRequestEditor(old => old && { ...old, droneId: e.target.value })}/>
+          </label>
+          {errorMessage && <p className="text-[12px] text-red-500">{errorMessage}</p>}
+          <p className={`text-[11px] ${subtle}`}>Submitting a request does not change inventory. Admin approval and physical receipt are required.</p>
+          <div className="flex justify-end gap-2"><button type="button" className={outlineBtn} onClick={() => setRequestEditor(null)}>Cancel</button><button type="submit" disabled={requestMutation.isPending} className={primaryBtn}>{requestMutation.isPending ? "Sending..." : "Send request"}</button></div>
+        </form>
+      </Modal>}
+
+      {useTarget && <Modal title="Use parts" onClose={() => { if (!useMutation.isPending) setUseTarget(null); }}>
+        <p className={`mb-4 text-[13px] ${subtle}`}>Inventory #{useTarget.id} · Available: {useTarget.quantity}. This action deducts stock.</p>
+        <label className="block text-[12px] text-[var(--tech-text-secondary)]">Quantity used
+          <input className={`mt-1 ${inputClass}`} type="number" min="1" max={useTarget.quantity} step="1" value={useQuantity} onChange={e => setUseQuantity(e.target.value)}/>
+        </label>
+        {errorMessage && <p className="mt-2 text-[12px] text-red-500">{errorMessage}</p>}
+        <div className="mt-5 flex justify-end gap-2"><button type="button" className={outlineBtn} onClick={() => setUseTarget(null)}>Cancel</button>
+          <button type="button" className={primaryBtn} disabled={useMutation.isPending} onClick={() => void useParts()}>{useMutation.isPending ? "Saving..." : "Confirm use"}</button>
         </div>
-      )}
-      {deleteCandidate && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
-          <div role="alertdialog" aria-modal="true" aria-label="Confirm delete supply" className="w-full max-w-md rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-2xl">
-            <div className="flex items-center gap-2"><AlertTriangle size={18} className="text-red-500" /><h2 className="text-[17px] font-semibold text-[var(--tech-text)]">Delete supply record?</h2></div>
-            <p className="mt-3 text-[13px] text-[var(--tech-muted)]">This deletes <strong className="text-[var(--tech-text)]">{deleteCandidate.itemName}</strong> (#{deleteCandidate.id}) from inventory. Use Edit or adjust quantity to 0 if the item is still tracked.</p>
-            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDeleteCandidate(null)} className="rounded-md border border-[var(--tech-border)] px-4 py-2 text-[12px]">Cancel</button>
-              <button type="button" disabled={deleteMutation.isPending} onClick={() => void remove()} className="rounded-md bg-red-600 px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-50">{deleteMutation.isPending ? "Deleting..." : "Delete"}</button></div>
-          </div>
+      </Modal>}
+
+      {receiptTarget && <Modal title="Confirm parts received" onClose={() => { if (!fulfillMutation.isPending) setReceiptTarget(null); }}>
+        <div className="space-y-2 text-[13px] text-[var(--tech-text)]">
+          <p><strong>Request:</strong> #{receiptTarget.id}</p>
+          <p><strong>Part category ID:</strong> #{receiptTarget.partCategoryId}</p>
+          <p><strong>Approved quantity:</strong> {receiptTarget.quantityNeeded}</p>
+          <p><strong>Status:</strong> <RequestStatus status={receiptTarget.status}/></p>
+          <p className={subtle}>Only confirm after the physical items have arrived at your hub. Backend automatically increases inventory. Do not confirm twice.</p>
         </div>
-      )}
+        {errorMessage && <p className="mt-3 text-[12px] text-red-500">{errorMessage}</p>}
+        <div className="mt-5 flex justify-end gap-2"><button type="button" className={outlineBtn} onClick={() => setReceiptTarget(null)}>Cancel</button>
+          <button type="button" className={primaryBtn} disabled={fulfillMutation.isPending} onClick={() => void confirmReceipt()}>
+            {fulfillMutation.isPending ? "Confirming..." : "Confirm receipt"}</button>
+        </div>
+      </Modal>}
+      {stockDetailsId !== null && <StockDetails id={stockDetailsId} onClose={() => setStockDetailsId(null)}/>}
+      {requestDetailsId !== null && <RequestDetails id={requestDetailsId} onClose={() => setRequestDetailsId(null)}/>}
     </TechnicianPageShell>
   );
 }
