@@ -22,6 +22,8 @@ export function useConfirmPickupMutation() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: technicianQueryKeys.confirmations() }),
         queryClient.invalidateQueries({ queryKey: technicianQueryKeys.outbound() }),
+        // /history includes arrival_confirmed_at, now populated by customer pickup.
+        queryClient.invalidateQueries({ queryKey: [...technicianQueryKeys.transit(), "history"] }),
       ]);
     },
   });

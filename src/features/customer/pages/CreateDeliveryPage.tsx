@@ -1114,9 +1114,9 @@ export function CreateDeliveryPage() {
 
                     className={`block h-[3px] rounded-full transition ${active || completed
 
-                        ? "bg-orange-500"
+                      ? "bg-orange-500"
 
-                        : "bg-white/[0.10]"
+                      : "bg-white/[0.10]"
 
                       }`}
 
@@ -1170,9 +1170,9 @@ export function CreateDeliveryPage() {
 
                   className={`relative px-5 py-4 text-left transition md:px-6 ${active
 
-                      ? "bg-white/[0.035]"
+                    ? "bg-white/[0.035]"
 
-                      : "hover:bg-white/[0.018]"
+                    : "hover:bg-white/[0.018]"
 
                     }`}
 
@@ -1184,9 +1184,9 @@ export function CreateDeliveryPage() {
 
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition ${active || completed
 
-                          ? "bg-orange-500 text-black"
+                        ? "bg-orange-500 text-black"
 
-                          : "border border-white/[0.12] text-white/[0.74]"
+                        : "border border-white/[0.12] text-white/[0.74]"
 
                         }`}
 
@@ -1206,13 +1206,13 @@ export function CreateDeliveryPage() {
 
                         className={`text-[14px] font-medium ${active
 
-                            ? "text-white"
+                          ? "text-white"
 
-                            : completed
+                          : completed
 
-                              ? "text-white/[0.92]"
+                            ? "text-white/[0.92]"
 
-                              : "text-white/[0.74]"
+                            : "text-white/[0.74]"
 
                           }`}
 
@@ -1612,34 +1612,60 @@ export function CreateDeliveryPage() {
 
       </div>
 
-
       {/* Mobile-only fixed navigation: always accessible while scrolling. */}
+
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.12] bg-[#161217]/95 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md sm:hidden">
+
         <div className="mx-auto grid w-full max-w-[600px] grid-cols-[auto_minmax(0,1fr)] gap-3">
+
           {step > 0 ? (
+
             <button
+
               type="button"
+
               onClick={back}
+
               className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.12] px-4 text-[13px] font-medium text-white/[0.78] transition active:bg-white/[0.04]"
+
             >
+
               <ArrowLeft size={16} />
+
               Back
+
             </button>
+
           ) : (
+
             <div aria-hidden="true" />
+
           )}
+
           <button
+
             type="button"
+
             onClick={next}
+
             className="group inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition active:bg-orange-400"
+
           >
+
             {step === steps.length - 1 ? "Review delivery" : "Continue"}
+
             <ArrowRight
+
               size={16}
+
               className="transition-transform group-hover:translate-x-0.5"
+
             />
+
           </button>
+
         </div>
+
       </div>
 
     </div>
@@ -1810,6 +1836,12 @@ function PackageStep({
 
     form.packageCategory === "fragile";
 
+  // Keep the decimal separator visible while the customer is typing (e.g. "2.").
+  // The delivery draft and backend still receive a number, not a string.
+  const [weightInput, setWeightInput] = useState(
+    () => form.weightKg === "" ? "" : String(form.weightKg),
+  );
+
   return (
 
     <section>
@@ -1948,33 +1980,33 @@ function PackageStep({
 
             <input
 
-              type="number"
+              type="text"
 
-              min="0.1"
+              inputMode="decimal"
 
-              max="10"
+              value={weightInput}
 
-              step="0.1"
+              onChange={(event) => {
 
-              value={form.weightKg}
+                const value = event.target.value.replace(/,/g, ".");
 
-              onChange={(event) =>
+                if (!/^\d*(?:\.\d*)?$/.test(value)) return;
+
+                setWeightInput(value);
 
                 update(
 
                   "weightKg",
 
-                  event.target.value === ""
+                  value === "" || value === "." ? "" : Number(value),
 
-                    ? ""
+                );
 
-                    : Number(
+              }}
 
-                      event.target.value,
+              onBlur={() =>
 
-                    ),
-
-                )
+                setWeightInput(form.weightKg === "" ? "" : String(form.weightKg))
 
               }
 
@@ -1994,7 +2026,6 @@ function PackageStep({
 
             <p className="text-[10px] text-white/[0.48] sm:text-[11px] sm:text-white/[0.72]">
 
-              Maximum supported payload
 
             </p>
 
@@ -2002,11 +2033,11 @@ function PackageStep({
 
               className={`text-[10px] font-medium sm:text-[11px] ${form.weightKg !== "" &&
 
-                  form.weightKg > 10
+                form.weightKg > 10
 
-                  ? "text-red-400"
+                ? "text-red-400"
 
-                  : "text-white/[0.72] sm:text-white"
+                : "text-white/[0.72] sm:text-white"
 
                 }`}
 
@@ -2072,9 +2103,9 @@ function PackageStep({
 
                   className={`min-h-[92px] rounded-xl border p-3 text-left transition sm:min-h-0 sm:rounded-lg sm:p-4 ${active
 
-                      ? "border-orange-500 bg-orange-500/[0.055]"
+                    ? "border-orange-500 bg-orange-500/[0.055]"
 
-                      : "border-white/[0.08] bg-[#19151a] hover:border-white/[0.18]"
+                    : "border-white/[0.08] bg-[#19151a] hover:border-white/[0.18]"
 
                     }`}
 
@@ -2086,9 +2117,9 @@ function PackageStep({
 
                       className={`text-[18px] font-semibold sm:text-[20px] ${active
 
-                          ? "text-orange-400"
+                        ? "text-orange-400"
 
-                          : "text-white"
+                        : "text-white"
 
                         }`}
 
@@ -2102,9 +2133,9 @@ function PackageStep({
 
                       className={`h-2 w-2 rounded-full ${active
 
-                          ? "bg-orange-500"
+                        ? "bg-orange-500"
 
-                          : "bg-white/10"
+                        : "bg-white/10"
 
                         }`}
 
@@ -2208,7 +2239,7 @@ function PackageStep({
 
             <p className="mt-3 text-[10px] leading-5 text-white/[0.40] sm:text-[11px]">
 
-              The backend estimate is the source of truth for the final delivery quotation.
+
 
             </p>
 
@@ -2220,9 +2251,9 @@ function PackageStep({
 
             className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition sm:mt-5 sm:p-5 ${form.hasInsurance
 
-                ? "border-orange-500/[0.45] bg-orange-500/[0.05]"
+              ? "border-orange-500/[0.45] bg-orange-500/[0.05]"
 
-                : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.16]"
+              : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.16]"
 
               }`}
 
@@ -2966,9 +2997,9 @@ function Field({
 
         className={`mt-2 h-[50px] w-full rounded-lg border px-3 text-[14px] outline-none transition sm:mt-2.5 sm:h-[54px] sm:px-4 sm:text-[15px] ${readOnly
 
-            ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.68] sm:text-white/[0.84]"
+          ? "cursor-not-allowed border-white/[0.07] bg-white/[0.025] text-white/[0.68] sm:text-white/[0.84]"
 
-            : "border-white/[0.1] bg-[#1d181d] text-white placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:placeholder:text-white/[0.42]"
+          : "border-white/[0.1] bg-[#1d181d] text-white placeholder:text-white/[0.30] hover:border-white/[0.17] focus:border-orange-500 sm:placeholder:text-white/[0.42]"
 
           }`}
 
@@ -3076,9 +3107,9 @@ function ModeButton({
 
       className={`rounded-xl border p-4 text-left transition sm:rounded-lg sm:p-5 ${active
 
-          ? "border-orange-500 bg-orange-500/[0.05]"
+        ? "border-orange-500 bg-orange-500/[0.05]"
 
-          : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.18]"
+        : "border-white/[0.09] bg-[#19151a] hover:border-white/[0.18]"
 
         }`}
 
@@ -3096,9 +3127,9 @@ function ModeButton({
 
           className={`h-2.5 w-2.5 rounded-full border ${active
 
-              ? "border-orange-500 bg-orange-500"
+            ? "border-orange-500 bg-orange-500"
 
-              : "border-white/[0.20] bg-transparent"
+            : "border-white/[0.20] bg-transparent"
 
             }`}
 
@@ -3412,9 +3443,9 @@ function PriceLine({
 
         className={`text-[11px] leading-5 sm:text-[12px] ${strong
 
-            ? "font-semibold text-white/[0.68]"
+          ? "font-semibold text-white/[0.68]"
 
-            : "text-white/[0.42]"
+          : "text-white/[0.42]"
 
           }`}
 
@@ -3428,13 +3459,13 @@ function PriceLine({
 
         className={`text-right text-[12px] leading-5 ${strong
 
-            ? "font-semibold text-white"
+          ? "font-semibold text-white"
 
-            : muted
+          : muted
 
-              ? "font-medium text-white/[0.30]"
+            ? "font-medium text-white/[0.30]"
 
-              : "font-medium text-white/[0.78]"
+            : "font-medium text-white/[0.78]"
 
           }`}
 

@@ -122,20 +122,11 @@ export function MaintenanceAlertsPage() {
     .trim()
     .toLowerCase();
 
+  // BE filters by Technician hub and is authoritative for alert status.
+  // Never suppress a pending Backend alert because localStorage says a WO was created.
   const activeAlerts = useMemo(
-    () =>
-      maintenanceAlerts.filter(
-        (alert) =>
-          !alertLogs.some(
-            (log) =>
-              log.alertId ===
-                alert.id &&
-              log.status ===
-                "Handled",
-          ),
-      ),
-    // API data changes after the initial render; recalculate on every update.
-    [maintenanceAlerts, alertLogs],
+    () => maintenanceAlerts.filter((alert) => alert.status !== "Handled"),
+    [maintenanceAlerts],
   );
 
   const filteredAlerts = useMemo(
@@ -217,7 +208,7 @@ export function MaintenanceAlertsPage() {
   return (
     <TechnicianPageShell
       title="Maintenance alerts"
-      description="Technical alerts from schedules, incidents reported by Operator, and hub inspections."
+      description=""
     >
       {/* ACTIVE ALERTS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">

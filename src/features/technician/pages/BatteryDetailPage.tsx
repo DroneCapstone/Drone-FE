@@ -1,5 +1,7 @@
 import {
   type ReactNode,
+  useEffect,
+  useState,
 } from "react";
 
 import {
@@ -7,6 +9,7 @@ import {
   BatteryCharging,
   BatteryFull,
   Box,
+  Clock3,
   Cpu,
   MapPin,
   Plane,
@@ -41,8 +44,33 @@ function formatDroneId(value?: string) {
   return `Drone #${value}`;
 }
 
+/** FE countdown is display-only. BE remains authoritative for charging status. */
+function formatBatteryEta(battery: {
+  status: "Ready" | "Charging";
+  estimatedReadyAt?: string;
+  estimatedMinutesRemaining?: number;
+}, now: number): string {
+  if (battery.status !== "Charging") return "—";
+  if (!battery.estimatedReadyAt) return "ETA unavailable";
+  const readyAt = Date.parse(battery.estimatedReadyAt);
+  if (!Number.isFinite(readyAt)) return "ETA unavailable";
+  const remaining = Math.max(0, Math.ceil((readyAt - now) / 1000));
+  if (!remaining) return "Awaiting BE update";
+  const hours = Math.floor(remaining / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function BatteryDetailPage() {
   const navigate = useNavigate();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const { batteryId } = useParams();
 
   const batteriesQuery = useBatteriesQuery();
@@ -72,7 +100,7 @@ export function BatteryDetailPage() {
   return (
     <TechnicianPageShell
       title={battery?.id ?? "Battery details"}
-      description="Battery specification, current assignment and system information."
+      description=""
       action={detailAction}
     >
       <button
@@ -86,7 +114,7 @@ export function BatteryDetailPage() {
         Back to Battery management
       </button>
 
-      {batteriesQuery.isPending && (
+      {batteriesQuery.isPending && !battery && (
         <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
           <CardContent className="px-6 py-14 text-center text-[14px] text-[var(--tech-muted)]">
             Loading battery details...
@@ -100,7 +128,7 @@ export function BatteryDetailPage() {
         </div>
       )}
 
-      {!batteriesQuery.isPending && !battery && (
+      {!batteriesQuery.isPending && !batteriesQuery.isError && !battery && (
         <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
           <CardContent className="px-6 py-14 text-center">
             <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
@@ -138,7 +166,7 @@ export function BatteryDetailPage() {
               value={`${battery.chargeLevelPct}%`}
               helper={
                 battery.status === "Ready"
-                  ? "Ready for use"
+                  ? (battery.droneId ? `Fully charged · installed on ${battery.droneId}` : "Fully charged")
                   : "Currently charging"
               }
             >
@@ -166,19 +194,23 @@ export function BatteryDetailPage() {
                   ? `${battery.capacityWh} Wh`
                   : "—"
               }
-              helper="Capacity returned by Backend"
+              helper=""
             />
           </div>
 
           <div className="grid gap-5 xl:grid-cols-2">
             <InfoCard
               title="Battery information"
-              description="Core information stored for this physical battery."
+              description=""
               icon={<Cpu size={17} />}
             >
               <InfoRow
                 label="Battery ID"
                 value={battery.id}
+              />
+              <InfoRow
+                label="Serial number"
+                value={battery.serialNumber ?? "—"}
               />
               <InfoRow
                 label="Model"
@@ -197,24 +229,28 @@ export function BatteryDetailPage() {
                 value={`${battery.chargeLevelPct}%`}
               />
               <InfoRow
-                label="Status"
+                label="Charging status"
                 value={battery.status}
+              />
+              <InfoRow
+                label="Backend status"
+                value={battery.backendStatus ?? "—"}
                 last
               />
             </InfoCard>
 
             <InfoCard
               title="Current assignment"
-              description="Where the battery is currently stored or installed."
+              description=""
               icon={<MapPin size={17} />}
             >
               <InfoRow
                 label="Current hub"
-                value={
-                  battery.hubId
-                    ? battery.hub
-                    : "—"
-                }
+                value={battery.hubId ? battery.hub : "—"}
+              />
+              <InfoRow
+                label="Hub ID"
+                value={battery.hubId ?? "—"}
               />
               <InfoRow
                 label="Installed drone"
@@ -226,6 +262,44 @@ export function BatteryDetailPage() {
                     <Plane size={14} />
                   ) : undefined
                 }
+                last
+              />
+            </InfoCard>
+          </div>
+
+          <div className="mt-5 grid gap-5 xl:grid-cols-2">
+            <InfoCard
+              title="Battery lifecycle"
+              description=""
+              icon={<Cpu size={17} />}
+            >
+              {battery.lifecycleStatus?.toLowerCase() === "expired" ? (
+                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-red-500">Battery expired — replace before use.</p>
+              ) : battery.daysUntilExpiry !== undefined && battery.daysUntilExpiry < 30 ? (
+                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-orange-500">Battery lifecycle expires soon ({battery.daysUntilExpiry} days left).</p>
+              ) : null}
+              <InfoRow label="Lifecycle status" value={battery.lifecycleStatus ?? "—"} />
+              <InfoRow
+                label="Days until expiry"
+                value={battery.daysUntilExpiry !== undefined ? `${battery.daysUntilExpiry} days` : "—"}
+              />
+              <InfoRow label="Last charged at" value={battery.lastChargedAt ?? "—"} last />
+            </InfoCard>
+            <InfoCard
+              title="Charging information"
+              description=""
+              icon={<Clock3 size={17} />}
+            >
+              <InfoRow
+                label="Estimated minutes remaining"
+                value={battery.status === "Charging" && battery.estimatedMinutesRemaining !== undefined && battery.estimatedMinutesRemaining > 0
+                  ? `${battery.estimatedMinutesRemaining} min`
+                  : battery.status === "Charging" ? "ETA unavailable" : "—"}
+              />
+              <InfoRow
+                label="Time left"
+                value={formatBatteryEta(battery, now)}
+                last
               />
             </InfoCard>
           </div>
@@ -236,9 +310,7 @@ export function BatteryDetailPage() {
                 <h2 className="text-[15px] font-semibold text-[var(--tech-text)]">
                   System information
                 </h2>
-                <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-                  Audit timestamps managed by Backend.
-                </p>
+                
               </div>
 
               <div className="grid md:grid-cols-2">

@@ -450,7 +450,7 @@ export function TechnicianNotificationsPage() {
   return (
     <TechnicianPageShell
       title="Notifications"
-      description="Operational updates and reminders that require Technician awareness."
+      description=""
     >
       {/* FILTERS */}
       <div className="mb-4 flex items-center justify-between gap-4">

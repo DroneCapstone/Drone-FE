@@ -28,6 +28,7 @@ export type MaintenanceAlert = {
   title: string;
   source: AlertSource;
   createdAt: string;
+  status?: AlertStatus; // Backend status is authoritative; local WO log must not hide Pending alerts.
 
   missionId?: string;
   legId?: string;
@@ -221,6 +222,7 @@ export function resetDemoMaintenanceAlerts() {
 
 function alertDisplayId(prefix: string, value: string, width = 3) {
   if (!value) return "";
+  if (prefix === "DR" && /^DRN[-_]/i.test(value)) return value.toUpperCase();
   if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
   const match = value.match(/(\d+)$/);
   return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
@@ -247,6 +249,9 @@ function mapApiMaintenanceAlert(value: unknown): MaintenanceAlert | null {
     id: alertDisplayId("ALT", rawId, 3),
     drone: droneName || droneId,
     droneId,
+    status: ["HANDLED", "ACKNOWLEDGED", "RESOLVED", "COMPLETED"].includes(
+      pickString(value, ["status"], "Pending").trim().toUpperCase(),
+    ) ? "Handled" : "Pending",
     title: pickString(value, ["title", "message", "issue_description", "reason"], "Maintenance alert"),
     source: normalizeAlertSource(
       pickString(value, ["source", "alert_type", "type"], "Schedule"),
