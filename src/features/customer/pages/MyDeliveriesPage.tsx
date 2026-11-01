@@ -11,10 +11,11 @@ type DeliverySummary = ReturnType<
   typeof customerDeliveryService.getOrderSummariesByCustomer
 >[number];
 
-type DeliveryTab = "all" | "paid" | "received" | "in-transit" | "delivered";
+type DeliveryTab = "all" | "unpaid" | "paid" | "received" | "in-transit" | "delivered";
 
 const DELIVERY_TABS: ReadonlyArray<{ key: DeliveryTab; label: string }> = [
   { key: "all", label: "All" },
+  { key: "unpaid", label: "Unpaid" },
   { key: "paid", label: "Paid" },
   { key: "received", label: "Received" },
   { key: "in-transit", label: "In transit" },
@@ -24,10 +25,11 @@ const DELIVERY_TABS: ReadonlyArray<{ key: DeliveryTab; label: string }> = [
 const ORDERS_PER_PAGE = 8;
 
 /**
- * UI-only grouping: the backend still owns the actual order status.
- * Null means the order has not entered these 4 stages (e.g., unpaid,
- * cancelled or unrecognised), so it remains visible in All.
- * Important: arrival at destination hub is NOT recipient collection.
+ * UI-only grouping: statuses remain authoritative in the backend.
+ * Group orders into distinct customer-facing stages without inventing a status.
+ * A waiting-for-drop-off label takes priority over generic AT_HUB codes so an
+ * unreceived package cannot mistakenly appear in Received.
+ * Unknown, cancelled, and refunded orders remain visible in All.
  */
 function getDeliveryTab(order: DeliverySummary): Exclude<DeliveryTab, "all"> | null {
   const code = String(order.orderStatus ?? "").trim().toLowerCase();
@@ -37,52 +39,52 @@ function getDeliveryTab(order: DeliverySummary): Exclude<DeliveryTab, "all"> | n
   const statuses = `${code} ${customer}`;
   const tokens = `${statuses} ${label}`.replace(/[_-]/g, " ");
 
-  if (/cancel|reject|order expired|refund/.test(tokens)) return null;
+  // Cancelled/expired/refunded orders are kept in All, not in active stages.
+  if (/cancel|reject|order expired|refund/.test(tokens) ||
+      /^(cancelled|canceled|refunded)$/.test(payment)) return null;
 
-  // The destination hub has the parcel; the recipient has NOT picked it up.
-  if (
-    /delivered_to_hub|at_destination_hub|ready_for_pickup|destination_received/.test(statuses) ||
-    /arrived at destination|destination hub|ready for (pick ?up|collection)|awaiting (recipient )?(pick ?up|collection)/.test(tokens)
-  ) {
-    return "in-transit";
-  }
+  const paid = /^(paid|completed|success|succeeded)$/.test(payment);
+  const unpaid = /^(pending|unpaid|not_paid|failed|awaiting_payment|pending_payment|payment_pending|payment_required)$/.test(payment);
+  const awaitingPayment =
+    /awaiting_payment|pending_payment|payment_required|payment_pending/.test(statuses) ||
+    /awaiting payment|payment pending|payment required|unpaid|not paid|pay now|complete payment/.test(label);
+  const awaitingDropOff =
+    /awaiting[_ -]?(package[_ -]?)?(drop[_ -]?off|handover)|pending[_ -]?(drop[_ -]?off|handover)/.test(`${statuses} ${label}`) ||
+    /bring (your |the )?package to|waiting for (package|customer) (drop[_ -]?off|handover)/.test(label);
 
-  // Only recipient handover, or a definite BE completion, closes delivery.
+  // Payment is an explicit prerequisite for package processing.
+  // A waiting-for-drop-off order is NOT Received even if a generic code says AT_HUB.
+  if (unpaid && !paid) return "unpaid";
+  if (awaitingPayment && !paid) return "unpaid";
+  if (awaitingDropOff) return paid ? "paid" : null;
+
+  // The parcel is collected by the recipient; only this completes delivery.
   if (
     /picked_up|package_collected|recipient_collected|handed_over_to_recipient|received_by_recipient/.test(statuses) ||
     /\b(picked up by recipient|collected by recipient|delivered to recipient|delivery completed|order completed)\b/.test(tokens) ||
     /^(delivered|completed)$/.test(code)
-  ) {
-    return "delivered";
-  }
+  ) return "delivered";
+
+  // Arrival at destination is NOT final handover to the recipient.
+  if (
+    /delivered_to_hub|at_destination_hub|ready_for_pickup|destination_received/.test(statuses) ||
+    /arrived at destination|destination hub|ready for (pick ?up|collection)|awaiting (recipient )?(pick ?up|collection)/.test(tokens)
+  ) return "in-transit";
 
   if (
     /in_delivery|in_transit|out_for_delivery|flight_started|mission_in_progress/.test(statuses) ||
     /in transit|out for delivery|drone (departed|flying)|in flight|on the way/.test(tokens)
-  ) {
-    return "in-transit";
-  }
+  ) return "in-transit";
 
   if (
-    /package_received_at_origin|received_at_origin|at_hub|scheduled|mission_ready|preparing/.test(statuses) ||
-    /received at origin|preparing delivery|flight scheduled|mission (planned|ready)/.test(tokens)
-  ) {
-    return "received";
-  }
+    /package_received_at_origin|received_at_origin|\bat_hub\b|scheduled|mission_ready|preparing/.test(statuses) ||
+    /received at origin|package received at (origin )?hub|preparing delivery|flight scheduled|mission (planned|ready)/.test(tokens)
+  ) return "received";
 
-  // No misleading 'Paid' badge for an order awaiting or failing payment.
-  if (
-    /awaiting_payment|pending_payment|payment_required/.test(statuses) ||
-    /awaiting payment|payment pending|unpaid|pay now/.test(label) ||
-    (payment && payment !== "paid")
-  ) {
-    return null;
-  }
+  // Confirmed paid, not yet received at origin hub.
+  if (paid) return "paid";
 
-  // After confirmed payment but before origin-hub receipt.
-  if (payment === "paid") return "paid";
-
-  // Unknown/missing BE status must not be assigned to a guessed stage.
+  // Missing or contradictory backend fields are not guessed into a stage.
   return null;
 }
 

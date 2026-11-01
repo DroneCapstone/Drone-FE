@@ -509,6 +509,14 @@ export type PaymentStatusResponse = {
    CUSTOMER API
 ========================================================= */
 
+/**
+ * Last detail response in this running session. This is NOT persisted and
+ * never grants deletion by itself: the DELETE endpoint is authoritative.
+ * Keeping the raw response allows a page using loadOrderSummaryFromBackend()
+ * to check mission_id without issuing a duplicate GET.
+ */
+const lastOrderDetailById = new Map<string, unknown>();
+
 export const customerApi = {
   getProfile() {
     return apiRequest<CustomerProfileApi>("/api/v1/users/me");
@@ -556,10 +564,27 @@ export const customerApi = {
   },
 
   /** Refresh just the currently selected order. */
-  getOrder(orderId: string) {
-    return apiRequest<unknown>(
+  async getOrder(orderId: string) {
+    const response = await apiRequest<unknown>(
       `/api/v1/customer/orders/${encodeURIComponent(orderId)}`,
     );
+    lastOrderDetailById.set(orderId, response);
+    return response;
+  },
+
+  /** Read the raw detail that the existing detail-page request just fetched. */
+  getLastOrderDetail(orderId: string): unknown {
+    return lastOrderDetailById.get(orderId) ?? null;
+  },
+
+  /** Backend permits deletion only while the order is PENDING, unpaid and has no mission. */
+  async deleteOrder(orderId: string) {
+    const result = await apiRequest<unknown>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}`,
+      { method: "DELETE" },
+    );
+    lastOrderDetailById.delete(orderId);
+    return result;
   },
 
   /** Track only the selected order. Actual event timestamps depend on BE. */
