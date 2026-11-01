@@ -760,7 +760,7 @@ function BackendOrderDetails({
 
           {changeNotice && <StatusChangeNotice text={changeNotice} onClose={onDismiss} />}
 
-          {refreshError && <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">Unable to refresh now. Showing the last known backend status.</p>}
+          {refreshError && <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">Unable to refresh now. Showing the last known status.</p>}
 
           <DeliveryProgressTimeline order={order} events={events} />
 

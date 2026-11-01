@@ -10,6 +10,9 @@ import './live-maptiler.css';
 // Must be set before constructing the first Map (including React Strict Mode remounts).
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
+/** Basemap choice for Live Tracking. Does not affect GPS or mission data. */
+export type LiveMapStyle = 'default' | 'streets' | 'satellite';
+
 export interface LiveMapTilerHandle {
   zoomIn: () => void;
   zoomOut: () => void;
@@ -22,6 +25,7 @@ type Props = {
   hubs: MissionHubSummary[];
   drones: LiveTrackingDrone[];
   histories: Record<string, MissionTelemetryPoint[]>;
+  mapStyle: LiveMapStyle;
   selectedMissionId?: string;
   onSelectMission: (missionId: string) => void;
 };
@@ -39,8 +43,16 @@ type MovingMarker = {
 const GPS_INTERVAL_MS = 3000;
 const INITIAL_CENTER: Point = [106.78, 10.83];
 const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? '').trim();
-const MAP_STYLE = (theme: 'dark' | 'light') =>
-  `https://api.maptiler.com/maps/${theme === 'dark' ? 'dataviz-v4-dark' : 'dataviz-v4-light'}/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`;
+// MapTiler style IDs: grayscale current map, colorful Replay streets,
+// and Hybrid (satellite imagery + road/place labels).
+const MAP_STYLE = (choice: LiveMapStyle, theme: 'dark' | 'light') => {
+  const styleId = choice === 'satellite'
+    ? 'hybrid-v4'
+    : choice === 'streets'
+      ? (theme === 'dark' ? 'streets-v4-dark' : 'streets-v4')
+      : (theme === 'dark' ? 'dataviz-v4-dark' : 'dataviz-v4-light');
+  return `https://api.maptiler.com/maps/${styleId}/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`;
+};
 const themeNow = (): 'dark' | 'light' => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
 const asPoint = (longitude?: number, latitude?: number): Point | null => {
   if (typeof longitude !== 'number' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return null;
@@ -102,7 +114,7 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   }
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({hubs,drones,histories,selectedMissionId,onSelectMission}, ref) {
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({hubs,drones,histories,mapStyle,selectedMissionId,onSelectMission}, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
@@ -110,8 +122,10 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   const stateRef = useRef({hubs,drones,histories,selectedMissionId,onSelectMission});
   stateRef.current = {hubs,drones,histories,selectedMissionId,onSelectMission};
   const followRef = useRef<string | null>(null);
-  // Prevent setStyle being repeated when the theme attribute changes to the same value.
-  const appliedThemeRef = useRef<'dark' | 'light'>(themeNow());
+  // Changing the basemap must never reconstruct the map or its DOM markers.
+  const mapStyleRef = useRef<LiveMapStyle>(mapStyle);
+  mapStyleRef.current = mapStyle;
+  const appliedStyleUrlRef = useRef(MAP_STYLE(mapStyle, themeNow()));
   const [ready,setReady] = useState(false);
   const [error,setError] = useState('');
   const [isFollowing,setIsFollowing] = useState(false);
@@ -164,7 +178,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     try {
       map=new maplibregl.Map({
         container:host.current,
-        style:MAP_STYLE(appliedThemeRef.current),
+        style:appliedStyleUrlRef.current,
         center:INITIAL_CENTER,
         zoom:8,
         minZoom:5,
@@ -183,6 +197,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       // The expanded city's geographic extent is broad; it is not a new administrative-boundary polygon.
       map.fitBounds([[106.05,8.55],[108.25,11.55]],{padding:24,duration:0});
       map.on('load',()=>{if(!disposed){setReady(true);setError('');}});
+      map.on('style.load',()=>{if(!disposed)setError('');});
       map.on('error',(e)=>{if(!disposed && e.error){
         const message = String(e.error.message||'');
         if (/401|403|unauthoriz|forbidden|api key|network|fetch|style|tile/i.test(message))
@@ -193,12 +208,12 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     resizeObserver.observe(host.current);
     const themeObserver = new MutationObserver(()=>{
       const current = mapRef.current;
-      const nextTheme = themeNow();
-      if (!current || nextTheme === appliedThemeRef.current) return;
-      appliedThemeRef.current = nextTheme;
-      // Changing the style discards custom GeoJSON layers. The style.load
-      // listener below recreates them with the latest telemetry.
-      current.setStyle(MAP_STYLE(nextTheme));
+      if (!current) return;
+      const nextStyleUrl = MAP_STYLE(mapStyleRef.current, themeNow());
+      if (nextStyleUrl === appliedStyleUrlRef.current) return;
+      appliedStyleUrlRef.current = nextStyleUrl;
+      // The style.load listener below restores flight trails after switching.
+      current.setStyle(nextStyleUrl);
     });
     themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     return()=>{
@@ -213,6 +228,22 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       mapRef.current=null;
     };
   },[]);
+
+  // Switch only the basemap; preserve center, zoom, pitch, live markers, and Follow.
+  // MapLibre re-emits style.load; the existing trail-sync effect re-adds GeoJSON.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const nextStyleUrl = MAP_STYLE(mapStyle, themeNow());
+    if (nextStyleUrl === appliedStyleUrlRef.current) return;
+    appliedStyleUrlRef.current = nextStyleUrl;
+    try {
+      setError('');
+      map.setStyle(nextStyleUrl);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Unable to change map style.');
+    }
+  }, [mapStyle]);
 
   useEffect(()=>{
     if(!ready || !mapRef.current)return;
