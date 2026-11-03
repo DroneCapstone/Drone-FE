@@ -1,15 +1,15 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
-import { adminRefunds } from "../../data/adminData";
+import { getPrototypeRefunds } from "../../services/prototypeWorkflow";
 import { formatVnd } from "../../utils/adminDisplay";
 
 export function RefundsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
-  const visible = useMemo(() => adminRefunds.filter((refund) => `${refund.id} ${refund.paymentId} ${refund.orderId} ${refund.customerName}`.toLowerCase().includes(query.toLowerCase()) && (status === "all" || refund.status === status)), [query, status]);
+  const visible = getPrototypeRefunds().filter((refund) => `${refund.id} ${refund.paymentId} ${refund.orderId} ${refund.customerName}`.toLowerCase().includes(query.toLowerCase()) && (status === "all" || refund.status === status));
 
   return (
     <AdminPageShell title="Refunds" description="Track full-refund requests and processing status. Partial refunds and disputes remain out of scope.">

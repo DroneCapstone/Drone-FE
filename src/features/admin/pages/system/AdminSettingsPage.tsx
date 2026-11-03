@@ -17,7 +17,7 @@ export function AdminSettingsPage() {
 
   return (
     <AdminPageShell title="System Settings" description="Configure cross-system operational thresholds and notification policies. Backend remains the final enforcement point." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
-      <div className="settings-grid">
+      <div className="mb-3">
         <OperatorPanel title="Mission & fleet" eyebrow="OPERATIONAL THRESHOLDS">
           <div className="fields two">
             <label><span>Mission timeout (minutes)</span><input type="number" min={30} max={720} value={settings.missionTimeoutMinutes} onChange={(e) => setSettings({ ...settings, missionTimeoutMinutes: Number(e.target.value) })} /></label>
@@ -29,25 +29,16 @@ export function AdminSettingsPage() {
           {settings.lowBatteryWarningPct >= settings.minimumMissionBatteryPct ? <p className="mt-4 text-sm text-[var(--red)]">Low battery warning must be lower than minimum mission battery.</p> : null}
         </OperatorPanel>
 
-        <OperatorPanel title="Battery health" eyebrow="LIFECYCLE POLICY">
-          <div className="fields two">
-            <label><span>Minimum SOH (%)</span><input type="number" min={1} max={100} value={settings.minimumBatterySohPct} onChange={(e) => setSettings({ ...settings, minimumBatterySohPct: Number(e.target.value) })} /></label>
-            <label><span>Maximum cell delta (V)</span><input type="number" min={0.01} step="0.01" value={settings.maximumCellVoltageDelta} onChange={(e) => setSettings({ ...settings, maximumCellVoltageDelta: Number(e.target.value) })} /></label>
-            <label><span>Energy safety reserve (%)</span><input type="number" min={0} max={50} value={settings.batterySafetyReservePct} onChange={(e) => setSettings({ ...settings, batterySafetyReservePct: Number(e.target.value) })} /></label>
-          </div>
-          <p className="mt-4 text-sm text-[var(--muted)]">SOH below the configured minimum creates a retirement recommendation; it does not automatically retire the battery.</p>
-        </OperatorPanel>
+
       </div>
 
-      <OperatorPanel title="Notification settings" eyebrow="CHANNEL & EVENT POLICY" className="mt-3" >
+      <OperatorPanel title="Notification settings" eyebrow="CHANNEL & EVENT POLICY" >
         <div id="notifications" className="toggle-list">
           {[
             ["Payment notifications", "Payment success, failure and reconciliation events", "paymentNotifications"],
             ["Order status notifications", "Customer order lifecycle changes", "orderStatusNotifications"],
             ["Mission incident notifications", "Important mission incident events", "missionIncidentNotifications"],
             ["Maintenance notifications", "Drone and battery maintenance changes", "maintenanceNotifications"],
-            ["Battery health notifications", "SOH, cycle and cell-health warnings", "batteryHealthNotifications"],
-            ["Retirement recommendations", "Notify Admin when a battery requires lifecycle review", "retirementRecommendationNotifications"],
             ["System notifications", "Critical administrative platform notices", "systemNotifications"],
             ["Email channel", "Send supported Admin notifications by email", "emailNotifications"],
           ].map(([label, detail, key]) => (

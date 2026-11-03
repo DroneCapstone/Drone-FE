@@ -18,7 +18,7 @@ import {
   getAdminHubs,
   getAdminUsers,
 } from "../services/adminStore";
-import { batteryHealthTone } from "../utils/adminDisplay";
+import { getReplacementRequests } from "../services/prototypeWorkflow";
 
 type RevenuePeriod = "Today" | "7 Days" | "Month";
 
@@ -69,19 +69,15 @@ export function AdminDashboardPage() {
   const maintenanceDrones = drones.filter((drone) => drone.status === "MAINTENANCE").length;
   const inFlightDrones = drones.filter((drone) => drone.status === "IN_FLIGHT").length;
 
-  const healthyBatteries = batteries.filter(
-    (battery) => battery.administrativeStatus === "ACTIVE" && battery.sohPct >= 90,
+  const activeBatteries = batteries.filter((battery) => battery.administrativeStatus === "ACTIVE").length;
+  const retiredBatteries = batteries.filter((battery) => battery.administrativeStatus === "RETIRED").length;
+  const readyBatteries = batteries.filter((battery) =>
+    battery.administrativeStatus === "ACTIVE" && battery.operationalStatus === "READY" && !battery.inspectionPending,
   ).length;
-  const degradedBatteries = batteries.filter(
-    (battery) =>
-      battery.administrativeStatus === "ACTIVE" &&
-      battery.sohPct >= 80 &&
-      battery.sohPct < 90,
+  const pendingBatteryVerification = batteries.filter((battery) =>
+    battery.administrativeStatus === "ACTIVE" && battery.inspectionPending,
   ).length;
-  const retirementReview = batteries.filter(
-    (battery) =>
-      battery.retirementRecommended && battery.administrativeStatus !== "RETIRED",
-  ).length;
+  const pendingApprovals = getReplacementRequests().filter((request) => request.status === "PENDING").length;
 
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
   const customerCount = users.filter((user) => user.role === "customer").length;
@@ -124,6 +120,10 @@ export function AdminDashboardPage() {
       title="Dashboard"
       description="System-wide overview of revenue, missions, users, hubs, fleet and battery lifecycle."
     >
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--admin-border)] p-3 text-sm">
+        <span><strong>{pendingApprovals}</strong> replacement requests waiting for approval</span>
+        <Link className="text-button" to="/admin/approvals">Review approvals</Link>
+      </div>
       <div className="metric-grid">
         <MetricCard
           label="Revenue today"
@@ -267,11 +267,11 @@ export function AdminDashboardPage() {
           note={`${maintenanceDrones} maintenance · ${inFlightDrones} in flight`}
         />
         <MetricCard
-          label="Battery review"
-          value={String(retirementReview)}
-          delta={retirementReview ? "Attention" : "Healthy"}
-          tone={retirementReview ? "warning" : "success"}
-          note={`${healthyBatteries} healthy · ${degradedBatteries} degraded`}
+          label="Batteries"
+          value={String(batteries.length)}
+          delta={`${readyBatteries} ready`}
+          tone="info"
+          note={`${activeBatteries} active · ${retiredBatteries} retired`}
         />
       </div>
 
@@ -292,8 +292,8 @@ export function AdminDashboardPage() {
         </OperatorPanel>
 
         <OperatorPanel
-          title="Fleet & battery health"
-          eyebrow="ASSET HEALTH"
+          title="Fleet & battery status"
+          eyebrow="ASSET STATUS"
           action={<Link className="text-button" to="/admin/network/batteries">View batteries</Link>}
         >
           <div className="admin-health-list">
@@ -306,19 +306,19 @@ export function AdminDashboardPage() {
               <StatusBadge tone={maintenanceDrones ? "warning" : "success"}>Maintenance</StatusBadge>
             </div>
             <div className="admin-health-row">
-              <span><small>Healthy batteries</small><strong>{healthyBatteries}</strong></span>
-              <StatusBadge tone="success">SOH ≥ 90%</StatusBadge>
+              <span><small>Ready batteries</small><strong>{readyBatteries}</strong></span>
+              <StatusBadge tone="success">Ready</StatusBadge>
             </div>
             <div className="admin-health-row">
-              <span><small>Retirement review</small><strong>{retirementReview}</strong></span>
-              <StatusBadge tone={retirementReview ? "warning" : "success"}>Review</StatusBadge>
+              <span><small>Pending verification</small><strong>{pendingBatteryVerification}</strong></span>
+              <StatusBadge tone={pendingBatteryVerification ? "warning" : "success"}>Pending</StatusBadge>
             </div>
           </div>
         </OperatorPanel>
 
         <OperatorPanel title="Attention" eyebrow="ADMIN REVIEW">
           <div className="alert-list admin-dashboard-alerts">
-            {adminAlerts.map((alert) => (
+            {adminAlerts.filter((alert) => alert.source !== "Battery Health").map((alert) => (
               <div className="alert-row" key={alert.id}>
                 <div>
                   <strong>{alert.title}</strong>
@@ -342,24 +342,21 @@ export function AdminDashboardPage() {
       </div>
 
       <OperatorPanel
-        title="Battery health watchlist"
-        eyebrow="LIFECYCLE"
+        title="Recent battery records"
+        eyebrow="BATTERY LIFECYCLE"
         action={<Link className="text-button" to="/admin/network/batteries">Open battery management</Link>}
       >
         <div className="rank-list">
           {batteries
             .slice()
-            .sort((a, b) => a.sohPct - b.sohPct)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
             .slice(0, 5)
             .map((battery, index) => (
               <span key={battery.id}>
                 <b>{index + 1}</b>
-                <span>
-                  <strong>{battery.id}</strong>
-                  <i><em style={{ width: `${battery.sohPct}%` }} /></i>
-                </span>
-                <StatusBadge tone={batteryHealthTone(battery.sohPct)}>
-                  {battery.sohPct}% SOH
+                <span><strong>{battery.id}</strong><small>{battery.model} · {battery.hubId}</small></span>
+                <StatusBadge tone={battery.administrativeStatus === "RETIRED" ? "neutral" : "success"}>
+                  {battery.administrativeStatus}
                 </StatusBadge>
               </span>
             ))}

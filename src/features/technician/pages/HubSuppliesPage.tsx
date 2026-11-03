@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
+import { PrototypeReplacementPanel } from "../components/PrototypeReplacementPanel";
 import { formatApiDateTime } from "../api/httpClient";
 import { getHubSupplyDetailApi, type HubSupply, type PartsRequest, type PartRequestStatus } from "../api/hubSuppliesApi";
 import {
@@ -264,6 +265,7 @@ export function HubSuppliesPage() {
 
   return (
     <TechnicianPageShell title="Hub supplies" description="">
+      <div className="grid gap-4 lg:grid-cols-2"><PrototypeReplacementPanel type="PART" /><PrototypeReplacementPanel type="BATTERY" /></div>
       {errorMessage && <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">{errorMessage}<button type="button" className="ml-3 underline" onClick={() => setErrorMessage("")}>Dismiss</button></div>}
       {successMessage && <p role="status" className="mb-4 text-[13px] text-emerald-500">{successMessage}</p>}
       {error && <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">{error}<button className="ml-3 underline" type="button" onClick={() => void activeQuery.refetch()}>Retry</button></div>}

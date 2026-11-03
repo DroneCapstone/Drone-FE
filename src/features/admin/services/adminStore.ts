@@ -86,7 +86,20 @@ export function saveAdminUsers(users: AdminUser[]) {
 export function upsertAdminUser(user: AdminUser) {
   const current = getAdminUsers();
   const exists = current.some((item) => item.id === user.id);
-  saveAdminUsers(exists ? current.map((item) => (item.id === user.id ? user : item)) : [user, ...current]);
+  const updated = exists ? current.map((item) => (item.id === user.id ? user : item)) : [user, ...current];
+  saveAdminUsers(updated);
+  // Keep hub staffing counts in sync with the Admin User's assigned hub.
+  const hubs = getAdminHubs();
+  let dirty = false;
+  const nextHubs = hubs.map((hub) => {
+    const staff = updated.filter((item) => item.role === 'technician' && item.status === 'ACTIVE' && item.hubId === hub.id).map((item) => item.id);
+    const ids = [...new Set(staff)];
+    const currentIds = hub.technicianIds ?? [];
+    if (JSON.stringify([...currentIds].sort()) === JSON.stringify([...ids].sort())) return hub;
+    dirty = true;
+    return { ...hub, technicianIds: ids };
+  });
+  if (dirty) saveAdminHubs(nextHubs);
 }
 
 export function getAdminSettings(): AdminSettings {
@@ -104,6 +117,8 @@ export function saveAdminSettings(settings: AdminSettings) {
 }
 
 export function resetAdminDemoData() {
-  [HUBS_KEY, DRONES_KEY, BATTERIES_KEY, USERS_KEY, SETTINGS_KEY].forEach((key) => localStorage.removeItem(key));
+  [HUBS_KEY, DRONES_KEY, BATTERIES_KEY, USERS_KEY, SETTINGS_KEY,
+    'droneoptai.prototype.v1.parts', 'droneoptai.prototype.v1.requests', 'droneoptai.prototype.v1.activity',
+    'droneoptai.prototype.v1.payments', 'droneoptai.prototype.v1.refunds', 'droneoptai.prototype.v1.expenses'].forEach((key) => localStorage.removeItem(key));
   window.dispatchEvent(new CustomEvent("admin-data-updated", { detail: { key: "all" } }));
 }

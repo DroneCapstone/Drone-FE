@@ -1,10 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { LogOut } from "lucide-react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import droneOptLogo from "../../../assets/images/droneopt-logo.png";
 import { Icon } from "../../../components/ui/Icon";
 import { useAuth } from "../../auth/hooks/useAuth";
-import { adminNavigation } from "../adminNavigation";
+import { adminNavigation, getActiveAdminChildPath } from "../adminNavigation";
 
 interface AdminSidebarProps {
   collapsed: boolean;
@@ -57,6 +57,7 @@ export function AdminSidebar({
               pathname === item.path ||
               pathname.startsWith(`${item.path}/`) ||
               Boolean(item.children?.some((child) => childIsActive(pathname, child.path)));
+            const activeChildPath = getActiveAdminChildPath(pathname, item.children ?? []);
             const NavIcon = item.icon;
 
             return (
@@ -82,9 +83,15 @@ export function AdminSidebar({
                       transition={{ duration: 0.16, ease: "easeOut" }}
                     >
                       {item.children.map((child) => (
-                        <NavLink key={child.path} to={child.path} onClick={onCloseMobile}>
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          className={activeChildPath === child.path ? "active" : undefined}
+                          aria-current={activeChildPath === child.path ? "page" : undefined}
+                          onClick={onCloseMobile}
+                        >
                           {child.label}
-                        </NavLink>
+                        </Link>
                       ))}
                     </motion.div>
                   ) : null}

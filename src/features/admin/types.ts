@@ -81,6 +81,8 @@ export interface AdminUser {
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
+  invitationSentAt?: string; // Prototype metadata only, no email delivery.
+  accessResetAt?: string;
 }
 
 export interface AdminPayment {
