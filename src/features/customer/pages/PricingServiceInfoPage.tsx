@@ -122,7 +122,7 @@ export function PricingServiceInfoPage() {
 
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,16,20,0.82),rgba(17,16,20,0.08)_44%,rgba(17,16,20,0.02))]" />
 
-            <div className="absolute bottom-5 right-5 rounded-2xl border border-white/[0.12] bg-black/50 px-4 py-3 backdrop-blur-md">
+            <div className="customer-keep-dark absolute bottom-5 right-5 rounded-2xl border border-white/[0.12] bg-black/50 px-4 py-3 backdrop-blur-md">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.96]">
                 Final price
               </p>
@@ -529,7 +529,7 @@ function CommerceServiceCard({
           : "border-white/[0.10]"
       }`}
     >
-      <div className="relative h-[155px] sm:h-[180px]">
+      <div className="customer-keep-dark relative h-[155px] sm:h-[180px]">
         <img
           src={image}
           alt=""

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useState,
 } from "react";
 
@@ -7,6 +8,8 @@ import {
   Bell,
   LogOut,
   Menu,
+  Moon,
+  Sun,
   X,
 } from "lucide-react";
 
@@ -15,6 +18,9 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+
+import "../customerTheme.css";
+import { setCustomerTheme, useCustomerTheme } from "../customerTheme";
 
 import logo from "../../../assets/images/home/logo.png";
 import { useAuth } from "../../auth/hooks/useAuth";
@@ -48,6 +54,15 @@ const navigation = [
 ];
 
 export function CustomerHeader() {
+  const theme = useCustomerTheme();
+  const isLight = theme === "light";
+
+  // Customer-only: never change the Operator, Technician or Admin themes.
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-customer-theme", theme);
+    return () => { document.documentElement.removeAttribute("data-customer-theme"); };
+  }, [theme]);
+
   const [
     mobileOpen,
     setMobileOpen,
@@ -261,6 +276,15 @@ export function CustomerHeader() {
 
           {/* DESKTOP ACCOUNT */}
           <div className="hidden items-center gap-2 lg:flex">
+            <button
+              type="button"
+              onClick={() => setCustomerTheme(isLight ? "dark" : "light")}
+              className="customer-theme-icon-button flex h-9 w-9 items-center justify-center rounded-lg text-white/72 transition hover:bg-white/[0.07] hover:text-orange-400"
+              aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+              title={isLight ? "Dark mode" : "Light mode"}
+            >
+              {isLight ? <Moon size={17} /> : <Sun size={17} />}
+            </button>
             <Link
               to="/customer/notifications"
               className={`relative flex h-9 w-9 items-center justify-center text-white/48 transition hover:text-white ${
@@ -469,6 +493,24 @@ export function CustomerHeader() {
             </div>
           </Link>
 
+          <div className="customer-appearance mx-4 mb-2 mt-1 flex items-center justify-between gap-3 rounded-xl border border-white/[0.10] bg-white/[0.025] p-3">
+            <div className="flex items-center gap-2.5 text-white/80">
+              {isLight ? <Sun size={16} className="text-orange-500" /> : <Moon size={16} className="text-orange-400" />}
+              <span className="text-[12px] font-medium">Appearance</span>
+            </div>
+            <div className="flex rounded-lg border border-white/[0.10] bg-white/[0.035] p-0.5" role="group" aria-label="Customer appearance">
+              <button type="button" onClick={() => setCustomerTheme("dark")}
+                aria-pressed={!isLight}
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${!isLight ? "bg-orange-500 text-black" : "text-white/62 hover:text-white"}`}>
+                Dark
+              </button>
+              <button type="button" onClick={() => setCustomerTheme("light")}
+                aria-pressed={isLight}
+                className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition ${isLight ? "bg-orange-500 text-black" : "text-white/62 hover:text-white"}`}>
+                Light
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             onClick={
