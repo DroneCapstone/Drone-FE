@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { PageHeader } from "../../operator/components/PageHeader";
-import { adminNavigation } from "../adminNavigation";
+import { adminNavigation, getActiveAdminChildPath } from "../adminNavigation";
 
 function isChildActive(pathname: string, path: string) {
   return pathname === path || pathname.startsWith(`${path}/`);
@@ -22,6 +22,7 @@ export function AdminPageShell({
   const section = adminNavigation.find((item) =>
     item.children?.some((child) => isChildActive(pathname, child.path)),
   );
+  const activeChildPath = getActiveAdminChildPath(pathname, section?.children ?? []);
 
   return (
     <>
@@ -29,9 +30,14 @@ export function AdminPageShell({
       {section?.children?.length ? (
         <nav className="subtabs" aria-label={`${section.label} navigation`}>
           {section.children.map((child) => (
-            <NavLink key={child.path} to={child.path} className={isChildActive(pathname, child.path) ? "active" : ""}>
+            <Link
+              key={child.path}
+              to={child.path}
+              className={activeChildPath === child.path ? "active" : undefined}
+              aria-current={activeChildPath === child.path ? "page" : undefined}
+            >
               {child.label}
-            </NavLink>
+            </Link>
           ))}
         </nav>
       ) : null}

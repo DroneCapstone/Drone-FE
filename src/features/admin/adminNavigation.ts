@@ -26,6 +26,7 @@ export const adminNavigation: AdminNavigationItem[] = [
     children: [
       { label: "Hubs", path: "/admin/network/hubs" },
       { label: "Drones", path: "/admin/network/drones" },
+      { label: "Spare Parts", path: "/admin/network/drones/spare-parts" },
       { label: "Batteries", path: "/admin/network/batteries" },
     ],
   },
@@ -49,3 +50,17 @@ export const adminNavigation: AdminNavigationItem[] = [
   { label: "System Settings", path: "/admin/settings", icon: Settings },
   { label: "Profile", path: "/admin/profile", icon: UserRound },
 ];
+
+/**
+ * Resolve one active navigation child even when child paths are nested.
+ * Example: /network/drones/spare-parts must select Spare Parts, not Drones.
+ * Drone detail URLs still select the Drones child.
+ */
+export function getActiveAdminChildPath(
+  pathname: string,
+  children: NonNullable<AdminNavigationItem["children"]>,
+): string | undefined {
+  return children
+    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0]?.path;
+}

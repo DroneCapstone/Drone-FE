@@ -193,3 +193,41 @@ export const adminDashboardMissionSummary = {
 
 // Kept for compatibility with any older admin UI import.
 export const revenueSeries = adminRevenueTrend["7 Days"].values;
+
+/**
+ * Prototype-only system logs, used by SystemLogsPage.
+ * These are sample entries, NOT runtime/backend logs.
+ */
+export const adminSystemLogs = [
+  {
+    id: "SYS-DEMO-001",
+    level: "INFO",
+    service: "Prototype",
+    message: "Demo event: administration prototype initialized (sample only).",
+    occurredAt: "2026-10-04T09:00:00+07:00",
+  },
+  {
+    id: "SYS-DEMO-002",
+    level: "WARN",
+    service: "Mission Monitoring",
+    message: "Demo warning: a telemetry update was delayed (sample only).",
+    occurredAt: "2026-10-04T09:12:00+07:00",
+  },
+  {
+    id: "SYS-DEMO-003",
+    level: "ERROR",
+    service: "Payment Gateway",
+    message: "Demo error: simulated payment gateway timeout (sample only).",
+    occurredAt: "2026-10-04T09:25:00+07:00",
+  },
+] as const;
+
+/** Seed activity feed from existing demo audit events. New prototype actions
+ * are displayed separately via getPrototypeActivity() in ActivityLogPage. */
+export const adminActivityLogs = adminAuditLogs.map((log) => ({
+  id: `ACT-${log.id}`,
+  user: log.actor,
+  activity: `${log.action.replace(/_/g, " ")} · ${log.entityType} ${log.entityId}`,
+  module: log.entityType,
+  occurredAt: log.occurredAt,
+}));

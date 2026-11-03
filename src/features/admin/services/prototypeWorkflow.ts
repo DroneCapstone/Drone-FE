@@ -54,7 +54,114 @@ export function saveSparePart(part: SparePart) {
   if (i >= 0) items[i] = part; else items.unshift(part);
   write('parts',items); recordPrototypeActivity('admin','Admin',i >= 0 ? 'UPDATE_PART' : 'CREATE_PART',part.id);
 }
-export function getReplacementRequests(): ReplacementRequest[] { return read('requests', [] as ReplacementRequest[]); }
+/**
+ * Approval examples for a fresh Admin/Technician prototype.
+ * References (hub / drone / battery / technician / part) match the Admin seed catalog.
+ * Fixed IDs allow a one-time, non-destructive merge into existing browser data.
+ * These are fictional demonstration records; they are not Backend work orders.
+ */
+function demoReplacementRequests(): ReplacementRequest[] {
+  return [
+    {
+      id: 'REQ-DEMO-001', type: 'PART', partId: 'PART-MOTOR', droneId: 'DR-003',
+      hubId: 'hub-01', quantity: 1, technician: 'Tran An Technician',
+      reason: 'Motor overheats and vibrates during the maintenance inspection; replacement is required.',
+      status: 'PENDING', createdAt: '2026-11-03T08:40:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-002', type: 'PART', partId: 'PART-PROP', droneId: 'DR-010',
+      hubId: 'hub-06', quantity: 2, technician: 'Do Minh Technician',
+      reason: 'Two propellers have visible cracks after inspection; request safe replacement parts.',
+      status: 'PENDING', createdAt: '2026-11-03T09:15:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-003', type: 'BATTERY', batteryId: 'BAT-010', droneId: 'DR-010',
+      hubId: 'hub-06', quantity: 1, technician: 'Do Minh Technician',
+      reason: 'Battery health is below the operating threshold and the drone is under maintenance.',
+      status: 'PENDING', createdAt: '2026-11-03T09:50:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-004', type: 'BATTERY', batteryId: 'BAT-003', droneId: 'DR-003',
+      hubId: 'hub-01', quantity: 1, technician: 'Tran An Technician',
+      reason: 'Battery shows unstable voltage readings during the preflight maintenance check.',
+      status: 'PENDING', createdAt: '2026-11-03T10:25:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-005', type: 'PART', partId: 'PART-GPS', droneId: 'DR-003',
+      hubId: 'hub-01', quantity: 1, technician: 'Tran An Technician',
+      reason: 'GPS/GNSS module intermittently loses its signal during the diagnostic test.',
+      status: 'APPROVED', createdAt: '2026-11-02T08:20:00+07:00',
+      reviewedAt: '2026-11-02T10:05:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'Replacement authorized; awaiting delivery and Technician confirmation.',
+    },
+    {
+      id: 'REQ-DEMO-006', type: 'BATTERY', batteryId: 'BAT-012',
+      hubId: 'hub-02', quantity: 1, technician: 'Le Vy Technician',
+      reason: 'Battery pack failed the cell-voltage balance check during storage inspection.',
+      status: 'APPROVED', createdAt: '2026-11-02T09:10:00+07:00',
+      reviewedAt: '2026-11-02T14:30:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'One replacement battery approved for Hub HCM-02.',
+    },
+    {
+      id: 'REQ-DEMO-007', type: 'PART', partId: 'PART-ESC', droneId: 'DR-010',
+      hubId: 'hub-06', quantity: 1, technician: 'Do Minh Technician',
+      reason: 'Electronic speed controller failed diagnostics and must be replaced.',
+      status: 'FULFILLED', createdAt: '2026-10-30T08:00:00+07:00',
+      reviewedAt: '2026-10-30T10:30:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'Replacement ESC supplied to Hub HCM-06.',
+      fulfilledAt: '2026-11-01T15:10:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-008', type: 'BATTERY', batteryId: 'BAT-015',
+      hubId: 'hub-06', quantity: 1, technician: 'Do Minh Technician',
+      reason: 'Damaged battery was retired; a new battery is required for the Hub stock.',
+      status: 'FULFILLED', createdAt: '2026-10-29T08:25:00+07:00',
+      reviewedAt: '2026-10-29T14:20:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'Replacement battery approved and delivered.',
+      fulfilledAt: '2026-10-31T11:35:00+07:00',
+    },
+    {
+      id: 'REQ-DEMO-009', type: 'PART', partId: 'PART-FC', droneId: 'DR-003',
+      hubId: 'hub-01', quantity: 1, technician: 'Tran An Technician',
+      reason: 'Request to replace the flight controller after an intermittent sensor warning.',
+      status: 'REJECTED', createdAt: '2026-10-31T09:05:00+07:00',
+      reviewedAt: '2026-10-31T11:45:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'Run the calibration and diagnostic tests before replacing the flight controller.',
+    },
+    {
+      id: 'REQ-DEMO-010', type: 'BATTERY', batteryId: 'BAT-007', droneId: 'DR-007',
+      hubId: 'hub-03', quantity: 1, technician: 'Pham Khoa Technician',
+      reason: 'Requested replacement following a low-charge observation during inspection.',
+      status: 'REJECTED', createdAt: '2026-10-30T13:10:00+07:00',
+      reviewedAt: '2026-10-31T09:30:00+07:00', reviewedBy: 'System Administrator',
+      adminNote: 'No damage confirmed. Recharge and inspect the existing battery first.',
+    },
+  ];
+}
+
+/**
+ * Seed once per browser profile, preserving every real/prototype request the user made.
+ * Do not use write() here: this getter can run during a React render and must not
+ * dispatch an update event synchronously while the component is rendering.
+ */
+export function getReplacementRequests(): ReplacementRequest[] {
+  const current = read('requests', [] as ReplacementRequest[]);
+  try {
+    const marker = `${prefix}approval-demo-seeded-v1`;
+    if (localStorage.getItem(marker) === '1') return current;
+
+    const seen = new Set(current.map((request) => request.id));
+    const examples = demoReplacementRequests().filter((request) => !seen.has(request.id));
+    const seeded = [...current, ...examples].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    localStorage.setItem(`${prefix}requests`, JSON.stringify(seeded));
+    localStorage.setItem(marker, '1');
+    return seeded;
+  } catch {
+    // For environments without localStorage, still show examples without changing anything.
+    return current.length ? current : demoReplacementRequests();
+  }
+}
+
 export function submitReplacement(input: Omit<ReplacementRequest,'id'|'createdAt'|'status'>): ReplacementRequest {
   if (!input.reason.trim() || !input.hubId || input.quantity < 1 || !Number.isInteger(input.quantity)) throw new Error('Hub, reason and valid quantity are required.');
   if (input.type === 'PART' && (!input.partId || !getSpareParts().some(p=>p.id === input.partId && p.active))) throw new Error('Choose an active spare part.');
