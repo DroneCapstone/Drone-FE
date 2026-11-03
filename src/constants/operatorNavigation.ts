@@ -38,7 +38,8 @@ export const operatorNavigation: OperatorNavItem[] = [
     icon: 'spark',
     children: [
       { label: 'Mission analysis', path: '/operator/ai/mission-analysis' },
-      { label: 'Scenario simulation', path: '/operator/ai/simulation' },
+      // Scenario simulation disabled — keep for future re-enable.
+      // { label: 'Scenario simulation', path: '/operator/ai/simulation' },
       { label: 'Model insights', path: '/operator/ai/model-insights' },
     ],
   },

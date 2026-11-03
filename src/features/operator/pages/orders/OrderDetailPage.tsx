@@ -78,7 +78,7 @@ export function OrderDetailPage() {
 
   return (
     <OrderPageShell active="/operator/orders/all">
-      <div className="detail-layout">
+      <div className="detail-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <div className="detail-main">
           <OperatorPanel>
             <div className="mission-hero">
@@ -163,6 +163,8 @@ export function OrderDetailPage() {
           )}
         </div>
 
+        {/* Customer details are intentionally hidden from Operator Order Detail.
+            Keep the original UI here for potential role-based access in the future.
         <aside className="detail-side">
           <OperatorPanel title="Customer">
             <dl className="key-values">
@@ -173,6 +175,7 @@ export function OrderDetailPage() {
             </dl>
           </OperatorPanel>
         </aside>
+        */}
       </div>
     </OrderPageShell>
   );

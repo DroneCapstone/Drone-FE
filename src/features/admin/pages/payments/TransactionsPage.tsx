@@ -56,7 +56,7 @@ export function TransactionsPage() {
         <DialogContent>
           <div className="p-5">
             <DialogTitle className="text-lg font-semibold">Refund {selected?.id}?</DialogTitle>
-            <p className="mt-2 text-sm text-muted-foreground">Full refund of {selected ? formatVnd(selected.amountVnd) : ""}. Production eligibility and refund execution must be authorized by Backend.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Full refund of {selected ? formatVnd(selected.amountVnd) : ""}. Production eligibility and refund execution must be authorized.</p>
             <div className="form-actions mt-5"><ActionButton variant="secondary" onClick={() => setRefundOpen(false)}>Cancel</ActionButton><ActionButton variant="danger" onClick={refund}>Confirm refund</ActionButton></div>
           </div>
         </DialogContent>

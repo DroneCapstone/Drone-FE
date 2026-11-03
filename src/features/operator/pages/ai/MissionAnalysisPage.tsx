@@ -84,7 +84,7 @@ export function MissionAnalysisPage() {
     return (
       <AiPageShell active="/operator/ai/mission-analysis">
         <OperatorPanel title="Mission analysis">
-          <div className="operator-empty-state">Loading route analysis from Backend…</div>
+          <div className="operator-empty-state">Loading route analysis…</div>
         </OperatorPanel>
       </AiPageShell>
     );

@@ -168,13 +168,14 @@ const MissionAnalysisPage = lazyPage(
   "MissionAnalysisPage",
 );
 
-const SimulationPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ai/SimulationPage"
-    ),
-  "SimulationPage",
-);
+// Scenario simulation disabled — leave lazy import commented for future re-enable.
+// const SimulationPage = lazyPage(
+//   () =>
+//     import(
+//       "../features/operator/pages/ai/SimulationPage"
+//     ),
+//   "SimulationPage",
+// );
 
 const ModelInsightsPage = lazyPage(
   () =>
@@ -339,10 +340,11 @@ export const operatorRoutes: RouteObject[] = [
     element: <MissionAnalysisPage />,
   },
 
-  {
-    path: "ai/simulation",
-    element: <SimulationPage />,
-  },
+  // Scenario simulation disabled — leave route commented for future re-enable.
+  // {
+  //   path: "ai/simulation",
+  //   element: <SimulationPage />,
+  // },
 
   {
     path: "ai/model-insights",

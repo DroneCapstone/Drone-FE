@@ -39,7 +39,9 @@ export function ModelInsightsPage() {
           <div className="reasoning-block"><p>Use Model Insights for periodic review: predicted vs actual energy, duration error, drift, and global feature behavior. It does not change a live Mission.</p></div>
           <dl className="key-values">
             <div><dt>Mission planning</dt><dd>Use Mission Analysis instead</dd></div>
+            {/* Scenario simulation disabled — do not link users to an unavailable feature.
             <div><dt>What-if testing</dt><dd>Use Scenario Simulation</dd></div>
+            */}
             <div><dt>Live Mission</dt><dd>AI may alert, but cannot silently alter execution</dd></div>
             <div><dt>Completed Mission</dt><dd>Compare predicted vs actual outcomes</dd></div>
           </dl>

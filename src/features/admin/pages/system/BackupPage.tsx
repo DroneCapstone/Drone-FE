@@ -6,7 +6,7 @@ import { resetAdminDemoData } from "../../services/adminStore";
 export function BackupPage() {
   const [message, setMessage] = useState("");
   const exportSnapshot = () => {
-    const payload = { exportedAt: new Date().toISOString(), type: "frontend-demo-snapshot", note: "Production backup must be implemented by Backend/database infrastructure." };
+    const payload = { exportedAt: new Date().toISOString(), type: "frontend-demo-snapshot", note: "Production backup must be implemented/database infrastructure." };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = `droneoptai-admin-snapshot-${Date.now()}.json`; anchor.click(); URL.revokeObjectURL(url);
