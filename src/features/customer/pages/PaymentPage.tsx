@@ -966,11 +966,6 @@ export function PaymentPage() {
 
                 </a>
 
-                <p className="mt-2 text-center text-[10px] leading-5 text-white/[0.40]">
-
-                  Continue to PayOS to complete payment. After a successful payment, PayOS will use the return URL configured by the backend to return to DroneOptAI.
-
-                </p>
 
               </div>
 

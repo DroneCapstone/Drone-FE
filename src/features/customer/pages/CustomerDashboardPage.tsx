@@ -124,7 +124,7 @@ export function CustomerDashboardPage() {
   return (
     <div className="min-h-[calc(100vh-72px)] bg-transparent pb-16">
       {/* FULL-WIDTH HERO */}
-      <section className="relative w-full overflow-hidden border-b border-white/[0.08] bg-[#080808] shadow-[0_20px_55px_rgba(0,0,0,0.30)]">
+      <section className="customer-keep-dark relative w-full overflow-hidden border-b border-white/[0.08] bg-[#080808] shadow-[0_20px_55px_rgba(0,0,0,0.30)]">
         <img
           src={
             dashboardHeroImage
@@ -133,8 +133,8 @@ export function CustomerDashboardPage() {
           className="absolute inset-0 h-full w-full object-cover object-[66%_center] sm:object-[70%_center]"
         />
 
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,5,6,0.96)_0%,rgba(5,5,6,0.88)_32%,rgba(5,5,6,0.54)_58%,rgba(5,5,6,0.12)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.20))]" />
+        <div className="customer-hero-overlay-primary absolute inset-0 bg-[linear-gradient(90deg,rgba(5,5,6,0.96)_0%,rgba(5,5,6,0.88)_32%,rgba(5,5,6,0.54)_58%,rgba(5,5,6,0.12)_100%)]" />
+        <div className="customer-hero-overlay-secondary absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.20))]" />
 
         <div className="relative mx-auto flex min-h-[400px] w-full max-w-[1440px] items-end px-4 py-7 sm:min-h-[470px] sm:px-6 sm:py-9 lg:min-h-[500px] lg:items-center lg:px-8 lg:py-10 xl:min-h-[520px] xl:px-10">
           <div className="max-w-[470px]">
@@ -374,7 +374,7 @@ function DeliveryOptionCard({
   return (
     <Link
       to={to}
-      className="group relative min-h-[215px] overflow-hidden rounded-[22px] border border-white/[0.10] bg-[#111014] shadow-[0_14px_34px_rgba(0,0,0,0.24)] sm:min-h-[245px] sm:rounded-[26px]"
+      className="customer-keep-dark group relative min-h-[215px] overflow-hidden rounded-[22px] border border-white/[0.10] bg-[#111014] shadow-[0_14px_34px_rgba(0,0,0,0.24)] sm:min-h-[245px] sm:rounded-[26px]"
     >
       <img
         src={image}
@@ -382,7 +382,7 @@ function DeliveryOptionCard({
         className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]"
       />
 
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.20)_36%,rgba(7,7,9,0.84)_76%,rgba(7,7,9,0.97)_100%)]" />
+      <div className="customer-card-overlay absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.20)_36%,rgba(7,7,9,0.84)_76%,rgba(7,7,9,0.97)_100%)]" />
 
       <div className="relative flex min-h-[215px] flex-col justify-end p-5 sm:min-h-[245px] sm:p-6">
         <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ffad42] text-black shadow-[0_10px_26px_rgba(255,173,66,0.24)] sm:h-12 sm:w-12">
