@@ -1,6 +1,6 @@
 /** Shared, browser-local prototype data for Admin and Technician.
  * Never changes operational API data or pretends to ship physical stock. */
-import { getAdminHubs } from './adminStore';
+import { getAdminDrones } from './adminStore';
 import type { AdminAuditLog, AdminPayment, AdminRefund } from '../types';
 import { adminPayments, adminRefunds } from '../data/adminData';
 
@@ -13,6 +13,7 @@ export interface ReplacementRequest {
   droneId?: string;
   batteryId?: string;
   partId?: string;
+  approvedPartId?: string; // Admin-selected compatible part, saved on approval.
   quantity: number;
   reason: string;
   technician: string;
@@ -29,7 +30,9 @@ export interface SparePart {
   compatibleModels: string;
   unitCostVnd: number;
   active: boolean;
-  stockByHub: Record<string,number>;
+  quantity: number; // Single Admin-controlled quantity, never per Hub.
+  /** Legacy prototype field, accepted only during one-way normalization. */
+  stockByHub?: Record<string, number>;
 }
 export interface PrototypeActivity {
   id: string; at: string; actor: string; role: 'admin' | 'technician'; action: string; target: string; detail?: string;
@@ -40,19 +43,137 @@ function read<T>(key: string, fallback: T): T {
   try { const raw = localStorage.getItem(prefix + key); return raw ? JSON.parse(raw) as T : fallback; } catch { return fallback; }
 }
 function write<T>(key: string, data: T) { localStorage.setItem(prefix + key, JSON.stringify(data)); updated(); }
-const catalog = [
-  ['PROP','Propeller'], ['MOTOR','Motor'], ['ESC','Electronic Speed Controller (ESC)'],
-  ['FC','Flight Controller'], ['GPS','GPS/GNSS Module'], ['COM','Communication Module'],
-  ['PDM','Power Distribution Module'], ['PAY','Payload Release Mechanism'],
-] as const;
-export function getSpareParts(): SparePart[] {
-  return read('parts', catalog.map(([id,name]) => ({ id:`PART-${id}`, name, compatibleModels:'Model-specific', unitCostVnd:0, active:true, stockByHub: Object.fromEntries(getAdminHubs().map((hub)=>[hub.id,4])) })));
+/** Commit related browser-local data together; restore the previous values if a write fails. */
+function writeTogether(entries: Array<[string, unknown]>) {
+  const before = entries.map(([key]) => [key, localStorage.getItem(prefix + key)] as const);
+  try {
+    for (const [key, value] of entries) localStorage.setItem(prefix + key, JSON.stringify(value));
+  } catch (error) {
+    for (const [key, raw] of before) {
+      try { if (raw === null) localStorage.removeItem(prefix + key); else localStorage.setItem(prefix + key, raw); } catch { /* no further recovery possible */ }
+    }
+    throw error;
+  }
+  updated();
 }
-export function saveSparePart(part: SparePart) {
-  if (!part.name.trim()) throw new Error('Part name is required.');
-  const items = getSpareParts(); const i = items.findIndex(p => p.id === part.id);
-  if (i >= 0) items[i] = part; else items.unshift(part);
-  write('parts',items); recordPrototypeActivity('admin','Admin',i >= 0 ? 'UPDATE_PART' : 'CREATE_PART',part.id);
+
+/** Exactly the eight component categories used in the Admin prototype. */
+export const CORE_SPARE_PART_CATEGORIES = [
+  { code: 'PROP', name: 'Propeller', model: 'DJI FlyCart 30', quantity: 2 },
+  { code: 'MOTOR', name: 'Motor', model: 'Matrice 350 RTK', quantity: 1 },
+  { code: 'ESC', name: 'Electronic Speed Controller (ESC)', model: 'DJI FlyCart 30', quantity: 2 },
+  { code: 'FC', name: 'Flight Controller', model: 'Matrice 350 RTK', quantity: 0 },
+  { code: 'GPS', name: 'GPS/GNSS Module', model: 'Matrice 350 RTK', quantity: 1 },
+  { code: 'COM', name: 'Communication Module', model: 'DJI FlyCart 30', quantity: 3 },
+  { code: 'PDM', name: 'Power Distribution Module', model: 'DJI FlyCart 30', quantity: 0 },
+  { code: 'PAY', name: 'Payload Release Mechanism', model: 'DJI FlyCart 30', quantity: 2 },
+] as const;
+
+const fallbackSpareParts = (): SparePart[] => CORE_SPARE_PART_CATEGORIES.map((item) => ({
+  id: `PART-${item.code}`, name: item.name, compatibleModels: item.model,
+  unitCostVnd: 0, active: true, quantity: item.quantity,
+}));
+
+/**
+ * Old mock used a fictional quantity of 4 at every Hub. No Hub holds spare
+ * parts in the agreed business flow. Preserve a single quantity (maximum
+ * legacy Hub value rather than multiplying artificial demo inventories).
+ * Real user-created Part IDs and request references remain unchanged.
+ */
+export function getSpareParts(): SparePart[] {
+  const defaults = fallbackSpareParts();
+  const saved = read('parts', defaults);
+  if (!Array.isArray(saved)) return defaults;
+  return saved.map((part) => {
+    const legacy = part.stockByHub;
+    const legacyQty = legacy && typeof legacy === 'object'
+      ? Math.max(0, ...Object.values(legacy).map((n) => Number(n) || 0)) : 0;
+    const demo = defaults.find((item) => item.id === part.id);
+    const quantity = Number.isInteger(part.quantity) && part.quantity >= 0 ? part.quantity : legacyQty;
+    const { stockByHub: _legacyStock, ...rest } = part;
+    void _legacyStock;
+    return {
+      ...rest,
+      compatibleModels: part.compatibleModels === 'Model-specific' && demo
+        ? demo.compatibleModels : part.compatibleModels,
+      quantity,
+    };
+  });
+}
+
+export interface PaidPartsPurchase { paid: boolean; actualUnitCostVnd: number }
+function makePaidExpense(part: SparePart, amount: number, count: number): PrototypeExpense {
+  return {
+    id: `EXP-PART-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    date: new Date().toISOString(), category: 'SPARE_PART',
+    amountVnd: count * amount,
+    description: `Paid purchase: ${count} × ${part.name} (${part.id}, ${part.compatibleModels})`,
+  };
+}
+function verifyPurchase(purchase: PaidPartsPurchase | undefined, count: number) {
+  if (!purchase?.paid) return;
+  if (count < 1 || !Number.isFinite(purchase.actualUnitCostVnd) || purchase.actualUnitCostVnd <= 0)
+    throw new Error('Enter a positive actual purchase price for the paid quantity.');
+}
+function verifyPart(part: SparePart) {
+  if (!part.id.trim() || !part.name.trim() || !part.compatibleModels.trim())
+    throw new Error('Part ID, component and drone model are required.');
+  if (!/^PART-[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(part.id))
+    throw new Error('Part ID must use PART-... with uppercase letters, numbers and hyphens.');
+  if (!Number.isInteger(part.quantity) || part.quantity < 0)
+    throw new Error('Quantity must be a non-negative whole number.');
+  if (!Number.isFinite(part.unitCostVnd) || part.unitCostVnd < 0)
+    throw new Error('Reference cost must be zero or greater.');
+}
+
+/** Create a SKU with initial quantity, or update its metadata without modifying quantity. */
+export function saveSparePart(part: SparePart, purchase?: PaidPartsPurchase) {
+  const normalized: SparePart = {
+    ...part, id: part.id.trim().toUpperCase(), name: part.name.trim(),
+    compatibleModels: part.compatibleModels.trim(),
+  };
+  delete normalized.stockByHub;
+  verifyPart(normalized);
+  const items = getSpareParts();
+  const index = items.findIndex((item) => item.id === normalized.id);
+  if (index >= 0 && items[index].quantity !== normalized.quantity)
+    throw new Error('Use Add quantity to increase available parts. Quantity cannot be edited here.');
+  if (items.some((item) => item.id !== normalized.id
+    && item.name.toLowerCase() === normalized.name.toLowerCase()
+    && item.compatibleModels.toLowerCase() === normalized.compatibleModels.toLowerCase()))
+    throw new Error('This component and compatible model already exist. Use Add quantity instead.');
+  if (index >= 0 && purchase?.paid) throw new Error('Use Add quantity to record additional purchases.');
+  verifyPurchase(purchase, index < 0 ? normalized.quantity : 0);
+  if (index >= 0) items[index] = normalized; else items.unshift(normalized);
+  const entries: Array<[string, unknown]> = [['parts', items]];
+  if (purchase?.paid) entries.push(['expenses', [makePaidExpense(normalized, purchase.actualUnitCostVnd, normalized.quantity), ...getPrototypeExpenses()]]);
+  writeTogether(entries);
+  recordPrototypeActivity('admin', 'Admin', index >= 0 ? 'UPDATE_PART' : 'CREATE_PART', normalized.id);
+}
+
+/** Add new available units to an existing SKU; never create a duplicate part. */
+export function addSparePartQuantity(id: string, added: number, purchase?: PaidPartsPurchase) {
+  if (!Number.isSafeInteger(added) || added <= 0) throw new Error('Enter a positive whole number of units.');
+  const parts = getSpareParts(); const part = parts.find((item) => item.id === id);
+  if (!part || !part.active) throw new Error('Only an active spare part can receive additional quantity.');
+  verifyPurchase(purchase, added);
+  part.quantity += added;
+  const entries: Array<[string, unknown]> = [['parts', parts]];
+  if (purchase?.paid) entries.push(['expenses', [makePaidExpense(part, purchase.actualUnitCostVnd, added), ...getPrototypeExpenses()]]);
+  writeTogether(entries);
+  recordPrototypeActivity('admin', 'Admin', 'ADD_PART_QUANTITY', id, `+${added}; available ${part.quantity}`);
+}
+
+function normalizedModel(value: string) { return value.trim().toLowerCase().replace(/\s+/g, ' '); }
+/** Supply only a part of the requested component category compatible with the damaged drone. */
+export function getCompatiblePartsForRequest(request: ReplacementRequest, parts = getSpareParts()): SparePart[] {
+  if (request.type !== 'PART' || !request.droneId) return [];
+  const original = parts.find((p) => p.id === request.partId);
+  const drone = getAdminDrones().find((d) => d.id === request.droneId);
+  if (!original || !drone) return [];
+  const targetModel = normalizedModel(drone.model);
+  return parts.filter((part) => part.active && normalizedModel(part.name) === normalizedModel(original.name)
+    && part.compatibleModels.split(/[,;\n]/).some((m) => normalizedModel(m) === targetModel));
 }
 /**
  * Approval examples for a fresh Admin/Technician prototype.
@@ -162,58 +283,68 @@ export function getReplacementRequests(): ReplacementRequest[] {
   }
 }
 
-export function submitReplacement(input: Omit<ReplacementRequest,'id'|'createdAt'|'status'>): ReplacementRequest {
+export function submitReplacement(input: Omit<ReplacementRequest, 'id' | 'createdAt' | 'status'>): ReplacementRequest {
   if (!input.reason.trim() || !input.hubId || input.quantity < 1 || !Number.isInteger(input.quantity)) throw new Error('Hub, reason and valid quantity are required.');
-  if (input.type === 'PART' && (!input.partId || !getSpareParts().some(p=>p.id === input.partId && p.active))) throw new Error('Choose an active spare part.');
+  if (input.type === 'PART' && (!input.partId || !getSpareParts().some(p => p.id === input.partId && p.active))) throw new Error('Choose an active spare part.');
   if (input.type === 'BATTERY' && !input.batteryId) throw new Error('Select a battery needing replacement.');
-  const item: ReplacementRequest = { ...input, id:`REQ-${Date.now()}-${Math.floor(Math.random()*10000)}`, createdAt:new Date().toISOString(),status:'PENDING' };
-  write('requests',[item,...getReplacementRequests()]); recordPrototypeActivity('technician',input.technician,'REQUEST_REPLACEMENT',item.id);
+  const item: ReplacementRequest = { ...input, id: `REQ-${Date.now()}-${Math.floor(Math.random() * 10000)}`, createdAt: new Date().toISOString(), status: 'PENDING' };
+  write('requests', [item, ...getReplacementRequests()]); recordPrototypeActivity('technician', input.technician, 'REQUEST_REPLACEMENT', item.id);
   return item;
 }
-export function reviewReplacement(id:string, decision:'APPROVED'|'REJECTED', note:string, actor='Admin') {
-  const items = getReplacementRequests(); const item=items.find(r=>r.id===id);
-  if (!item || item.status!=='PENDING') throw new Error('Only pending requests can be reviewed.');
-  if (decision==='REJECTED' && !note.trim()) throw new Error('A rejection reason is required.');
-  if (decision==='APPROVED' && item.type==='PART') {
-    // Approval authorizes provisioning; stock is NOT increased until receipt.
-    const part=getSpareParts().find(p=>p.id===item.partId);
-    if (!part?.active) throw new Error('The selected spare part is inactive or missing.');
+export function reviewReplacement(
+  id: string, decision: 'APPROVED' | 'REJECTED', note: string, actor = 'Admin', selectedPartId?: string,
+) {
+  const items = getReplacementRequests(); const item = items.find((request) => request.id === id);
+  if (!item || item.status !== 'PENDING') throw new Error('Only pending requests can be reviewed.');
+  if (decision === 'REJECTED' && !note.trim()) throw new Error('A rejection reason is required.');
+  let parts: SparePart[] | undefined;
+  if (decision === 'APPROVED' && item.type === 'PART') {
+    parts = getSpareParts();
+    const compatible = getCompatiblePartsForRequest(item, parts);
+    const selected = compatible.find((part) => part.id === (selectedPartId || item.partId));
+    if (!selected) throw new Error('Choose a matching active component and drone model. Missing Drone ID or compatibility information must be corrected before approval.');
+    if (!Number.isSafeInteger(item.quantity) || item.quantity < 1) throw new Error('Invalid replacement quantity.');
+    if (selected.quantity < item.quantity)
+      throw new Error(`Insufficient quantity for ${selected.id}: ${selected.quantity} available, ${item.quantity} required. Add quantity in Spare Parts before approval.`);
+    selected.quantity -= item.quantity; // Decrement exactly once, at Admin approval.
+    item.approvedPartId = selected.id;
   }
-  item.status=decision; item.adminNote=note.trim(); item.reviewedAt=new Date().toISOString(); item.reviewedBy=actor;
-  write('requests',items); recordPrototypeActivity('admin',actor,decision==='APPROVED'?'APPROVE_REPLACEMENT':'REJECT_REPLACEMENT',id,note);
+  item.status = decision; item.adminNote = note.trim();
+  item.reviewedAt = new Date().toISOString(); item.reviewedBy = actor;
+  if (parts) writeTogether([['parts', parts], ['requests', items]]);
+  else write('requests', items); // Battery workflow remains unchanged.
+  recordPrototypeActivity('admin', actor, decision === 'APPROVED' ? 'APPROVE_REPLACEMENT' : 'REJECT_REPLACEMENT', id,
+    item.approvedPartId ? `Supplied ${item.approvedPartId} × ${item.quantity}; ${note.trim()}` : note.trim());
 }
-export function confirmReplacementReceipt(id:string,technician='Technician') {
-  const items=getReplacementRequests(); const item=items.find(r=>r.id===id);
-  if (!item || item.status!=='APPROVED') throw new Error('Only approved requests can be received.');
-  item.status='FULFILLED'; item.fulfilledAt=new Date().toISOString();
-  if(item.type==='PART' && item.partId) {
-    const parts=getSpareParts(); const part=parts.find(p=>p.id===item.partId);
-    if(part){ part.stockByHub[item.hubId]=(part.stockByHub[item.hubId]||0)+item.quantity; write('parts',parts); }
-  }
-  write('requests',items); recordPrototypeActivity('technician',technician,'CONFIRM_RECEIPT',id);
+export function confirmReplacementReceipt(id: string, technician = 'Technician') {
+  const items = getReplacementRequests(); const item = items.find(r => r.id === id);
+  if (!item || item.status !== 'APPROVED') throw new Error('Only approved requests can be received.');
+  // Already debited at approval. Receipt only changes the request status.
+  item.status = 'FULFILLED'; item.fulfilledAt = new Date().toISOString();
+  write('requests', items); recordPrototypeActivity('technician', technician, 'CONFIRM_RECEIPT', id);
 }
 export function getPrototypeActivity(): PrototypeActivity[] { return read('activity', [] as PrototypeActivity[]); }
-export function recordPrototypeActivity(role:'admin'|'technician',actor:string,action:string,target:string,detail='') {
-  const a:PrototypeActivity={id:`LOG-${Date.now()}-${Math.floor(Math.random()*10000)}`,at:new Date().toISOString(),actor,role,action,target,detail};
-  write('activity',[a,...getPrototypeActivity()].slice(0,500));
+export function recordPrototypeActivity(role: 'admin' | 'technician', actor: string, action: string, target: string, detail = '') {
+  const a: PrototypeActivity = { id: `LOG-${Date.now()}-${Math.floor(Math.random() * 10000)}`, at: new Date().toISOString(), actor, role, action, target, detail };
+  write('activity', [a, ...getPrototypeActivity()].slice(0, 500));
 }
-export function getPrototypeAudit(): AdminAuditLog[] { return getPrototypeActivity().map(a=>({id:a.id,actor:a.actor,role:a.role,action:a.action,entityType:a.action.includes('USER')?'User':a.action.includes('REFUND')?'Payment':a.action.includes('PART')?'Spare Part':'Replacement',entityId:a.target,result:'SUCCESS',afterValue:a.detail,occurredAt:a.at})); }
-export function getPrototypePayments():AdminPayment[] {return read('payments',adminPayments);}
-export function getPrototypeRefunds():AdminRefund[] {return read('refunds',adminRefunds);}
-export function executePrototypeRefund(paymentId:string,reason:string) {
-  const payments=getPrototypePayments(); const payment=payments.find(p=>p.id===paymentId);
-  if(!payment || !payment.refundable || payment.status!=='PAID')throw new Error('Only eligible paid transactions can be refunded.');
-  const now=new Date().toISOString(); payment.status='REFUNDED';payment.refundable=false;payment.refundedAt=now;
-  payment.refundBlockReason='Already refunded'; write('payments',payments);
-  write('refunds',[{id:`REF-${Date.now()}`,paymentId:payment.id,orderId:payment.orderId,customerName:payment.customerName,amountVnd:payment.amountVnd,reason:reason.trim()||'Full refund (prototype)',status:'COMPLETED',requestedAt:now,processedAt:now},...getPrototypeRefunds()]);
-  recordPrototypeActivity('admin','Admin','ISSUE_REFUND',payment.id);
+export function getPrototypeAudit(): AdminAuditLog[] { return getPrototypeActivity().map(a => ({ id: a.id, actor: a.actor, role: a.role, action: a.action, entityType: a.action.includes('USER') ? 'User' : a.action.includes('REFUND') ? 'Payment' : a.action.includes('PART') ? 'Spare Part' : 'Replacement', entityId: a.target, result: 'SUCCESS', afterValue: a.detail, occurredAt: a.at })); }
+export function getPrototypePayments(): AdminPayment[] { return read('payments', adminPayments); }
+export function getPrototypeRefunds(): AdminRefund[] { return read('refunds', adminRefunds); }
+export function executePrototypeRefund(paymentId: string, reason: string) {
+  const payments = getPrototypePayments(); const payment = payments.find(p => p.id === paymentId);
+  if (!payment || !payment.refundable || payment.status !== 'PAID') throw new Error('Only eligible paid transactions can be refunded.');
+  const now = new Date().toISOString(); payment.status = 'REFUNDED'; payment.refundable = false; payment.refundedAt = now;
+  payment.refundBlockReason = 'Already refunded'; write('payments', payments);
+  write('refunds', [{ id: `REF-${Date.now()}`, paymentId: payment.id, orderId: payment.orderId, customerName: payment.customerName, amountVnd: payment.amountVnd, reason: reason.trim() || 'Full refund (prototype)', status: 'COMPLETED', requestedAt: now, processedAt: now }, ...getPrototypeRefunds()]);
+  recordPrototypeActivity('admin', 'Admin', 'ISSUE_REFUND', payment.id);
 }
-export function getUserActivity(userId:string) {return getPrototypeActivity().filter(a=>a.target===userId);}
+export function getUserActivity(userId: string) { return getPrototypeActivity().filter(a => a.target === userId); }
 
-export interface PrototypeExpense {id:string;date:string;category:'DRONE'|'BATTERY'|'SPARE_PART'|'OTHER';amountVnd:number;description:string;hubId?:string;}
-export function getPrototypeExpenses():PrototypeExpense[] {return read('expenses',[] as PrototypeExpense[]);}
-export function addPrototypeExpense(expense:Omit<PrototypeExpense,'id'|'date'>) {
-  if(!expense.description.trim()||!Number.isFinite(expense.amountVnd)||expense.amountVnd<=0)throw new Error('Enter an expense description and a positive amount.');
-  const item:PrototypeExpense={...expense,id:`EXP-${Date.now()}`,date:new Date().toISOString()};
-  write('expenses',[item,...getPrototypeExpenses()]);recordPrototypeActivity('admin','Admin','RECORD_EXPENSE',item.id,expense.description);
+export interface PrototypeExpense { id: string; date: string; category: 'DRONE' | 'BATTERY' | 'SPARE_PART' | 'OTHER'; amountVnd: number; description: string; hubId?: string; }
+export function getPrototypeExpenses(): PrototypeExpense[] { return read('expenses', [] as PrototypeExpense[]); }
+export function addPrototypeExpense(expense: Omit<PrototypeExpense, 'id' | 'date'>) {
+  if (!expense.description.trim() || !Number.isFinite(expense.amountVnd) || expense.amountVnd <= 0) throw new Error('Enter an expense description and a positive amount.');
+  const item: PrototypeExpense = { ...expense, id: `EXP-${Date.now()}`, date: new Date().toISOString() };
+  write('expenses', [item, ...getPrototypeExpenses()]); recordPrototypeActivity('admin', 'Admin', 'RECORD_EXPENSE', item.id, expense.description);
 }

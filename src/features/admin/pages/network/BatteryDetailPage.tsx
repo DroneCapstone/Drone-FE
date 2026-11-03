@@ -1,82 +1,108 @@
-import { useMemo, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
-import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
-import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { MetricCard } from "../../../operator/components/MetricCard";
-import { OperatorPanel } from "../../../operator/components/OperatorPanel";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { getAdminBatteries, getAdminHubs, getAdminSettings, upsertAdminBattery } from "../../services/adminStore";
-import { batteryHealthTone, batteryOperationalTone } from "../../utils/adminDisplay";
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { ActionButton } from '../../../../components/ui/ActionButton';
+import { Dialog, DialogContent, DialogTitle } from '../../../../components/ui/Dialog';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { getAdminBatteries, getAdminHubs, upsertAdminBattery } from '../../services/adminStore';
+import { canRetireBattery } from '../../services/batteryLifecycle';
+import { recordBatteryInspectionResult } from '../../services/adminReplacementSupply';
+import { getReplacementRequests } from '../../services/prototypeWorkflow';
+import { batteryOperationalTone } from '../../utils/adminDisplay';
 
+/** Admin manages the battery record and its lifecycle, not BMS diagnostics. */
 export function BatteryDetailPage() {
   const { batteryId } = useParams();
-  const initial = useMemo(() => getAdminBatteries().find((item) => item.id === batteryId), [batteryId]);
-  const [battery, setBattery] = useState(initial);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  if (!battery) return <Navigate to="/admin/network/batteries" replace />;
-  const settings = getAdminSettings();
-  const hub = getAdminHubs().find((item) => item.id === battery.hubId);
-  const safeEnergyAtCurrentSoc = battery.designEnergyWh * (battery.sohPct / 100) * (battery.chargeLevelPct / 100) * (1 - settings.batterySafetyReservePct / 100);
-  const canRetire = battery.administrativeStatus === "ACTIVE" && battery.retirementRecommended && battery.operationalStatus !== "INSTALLED" && !battery.droneId;
+  const [, setVersion] = useState(0);
+  const [retireOpen, setRetireOpen] = useState(false);
+  const [retireReason, setRetireReason] = useState('');
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const [passed, setPassed] = useState(true);
+  const [report, setReport] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    const listener = () => setVersion((value) => value + 1);
+    window.addEventListener('admin-data-updated', listener);
+    return () => window.removeEventListener('admin-data-updated', listener);
+  }, []);
 
+  const battery = getAdminBatteries().find((item) => item.id === batteryId);
+  if (!battery) return <Navigate to="/admin/network/batteries" replace />;
+  const hub = getAdminHubs().find((item) => item.id === battery.hubId);
+  const request = battery.replacementRequestId
+    ? getReplacementRequests().find((item) => item.id === battery.replacementRequestId)
+    : undefined;
+  const canRetire = canRetireBattery(battery);
+  const canRecordInspection = Boolean(
+    battery.inspectionPending && (!battery.replacementRequestId || request?.status === 'FULFILLED'),
+  );
   const retire = () => {
-    const next = { ...battery, administrativeStatus: "RETIRED" as const, operationalStatus: "MAINTENANCE" as const, retiredBy: "admin", retiredAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    setBattery(next);
+    if (!canRetire || !retireReason.trim()) return;
+    const next = {
+      ...battery,
+      administrativeStatus: 'RETIRED' as const,
+      operationalStatus: 'MAINTENANCE' as const,
+      retiredBy: 'admin', retiredAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      retirementReason: retireReason.trim(),
+    };
     upsertAdminBattery(next);
-    setConfirmOpen(false);
+    setRetireOpen(false);
+    setRetireReason('');
+    setNotice(`${battery.id} has been retired. Its record is preserved.`);
+  };
+  const saveInspection = () => {
+    try {
+      recordBatteryInspectionResult(battery.id, passed, report);
+      setInspectOpen(false); setError(''); setReport('');
+      setNotice(passed ? 'Technician verification recorded. Battery is Ready.' : 'Verification failed. Battery remains unavailable.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save verification.'); }
   };
 
-  return (
-    <AdminPageShell title={battery.id} description={`${battery.model} · ${hub?.name ?? "Unknown hub"}`} actions={battery.administrativeStatus === "ACTIVE" ? <ActionButton variant="danger" disabled={!canRetire} onClick={() => setConfirmOpen(true)}>Retire battery</ActionButton> : undefined}>
-      <div className="metric-grid">
-        <MetricCard label="Charge" value={`${battery.chargeLevelPct}%`} delta="SOC" tone="info" note="Current charge level" />
-        <MetricCard label="State of health" value={`${battery.sohPct}%`} delta={battery.sohPct < settings.minimumBatterySohPct ? "Below policy" : "Within policy"} tone={batteryHealthTone(battery.sohPct)} note={`Minimum ${settings.minimumBatterySohPct}%`} />
-        <MetricCard label="Cycle count" value={`${battery.cycleCount}`} delta={`/ ${battery.maxCycles}`} tone={battery.cycleCount >= battery.maxCycles ? "warning" : "success"} note="BMS / equivalent cycles" />
-        <MetricCard label="Safe energy" value={`${safeEnergyAtCurrentSoc.toFixed(1)} Wh`} delta={`${settings.batterySafetyReservePct}% reserve`} tone="info" note="SOH × SOC × reserve" />
+  return <AdminPageShell
+    title={battery.id}
+    description={`${battery.model} · ${hub?.name ?? battery.hubId}`}
+    actions={<>
+      {battery.inspectionPending && <ActionButton variant="secondary" disabled={!canRecordInspection}
+        onClick={() => { setInspectOpen(true); setError(''); }}>Record Technician verification</ActionButton>}
+      {battery.administrativeStatus === 'ACTIVE' && <ActionButton variant="danger" disabled={!canRetire}
+        onClick={() => {setRetireReason(battery.retirementReason === 'TECHNICIAN_REPORTED_FAILURE' ? 'Battery reported damaged by Technician' : ''); setRetireOpen(true);}}>Retire battery</ActionButton>}
+    </>}
+  >
+    {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
+    <OperatorPanel title="Battery information" eyebrow="IDENTITY & LIFECYCLE">
+      <div className="detail-list">
+        <span><small>Battery ID</small><strong>{battery.id}</strong></span>
+        <span><small>Battery model</small><strong>{battery.model}</strong></span>
+        <span><small>Serial number</small><strong>{battery.serialNumber}</strong></span>
+        <span><small>Assigned Hub</small><strong>{hub?.name ?? battery.hubId}</strong></span>
+        <span><small>Operational status</small><StatusBadge tone={batteryOperationalTone(battery.operationalStatus)}>{battery.inspectionPending ? 'PENDING VERIFICATION' : battery.operationalStatus}</StatusBadge></span>
+        <span><small>Lifecycle</small><StatusBadge tone={battery.administrativeStatus === 'RETIRED' ? 'neutral' : 'success'}>{battery.administrativeStatus}</StatusBadge></span>
+        {battery.replacementRequestId && <span><small>Replacement request</small><Link className="text-button" to={`/admin/approvals?request=${encodeURIComponent(battery.replacementRequestId)}`}>{battery.replacementRequestId}</Link></span>}
+        {(battery.administrativeStatus === 'RETIRED' || battery.retirementReason === 'TECHNICIAN_REPORTED_FAILURE') && battery.retirementReason && <span><small>Retirement / issue reason</small><strong>{battery.retirementReason === 'TECHNICIAN_REPORTED_FAILURE' ? 'Reported damaged by Technician' : battery.retirementReason === 'PHYSICAL_DAMAGE' ? 'Physical damage' : battery.retirementReason === 'MAX_CYCLE_REACHED' ? 'Previously retired under legacy policy' : battery.retirementReason === 'SOH_BELOW_THRESHOLD' ? 'Previously retired under legacy policy' : battery.retirementReason}</strong></span>}
+        {battery.retiredAt && <span><small>Retired at</small><strong>{new Date(battery.retiredAt).toLocaleString('en-GB')}</strong></span>}
+        {battery.inspectionNote && <span><small>Latest Technician verification</small><strong>{battery.inspectionNote}</strong></span>}
       </div>
+      {battery.inspectionPending && <p className="mt-4 text-sm text-[var(--admin-muted)]">This new battery is not available for missions until Technician receipt and verification are confirmed.</p>}
+      {battery.operationalStatus === 'INSTALLED' && <p className="mt-4 text-sm text-[var(--admin-muted)]">Retirement is disabled while this battery is installed. Technician must safely remove it first.</p>}
+    </OperatorPanel>
 
-      <div className="detail-grid">
-        <OperatorPanel title="Health assessment" eyebrow="BATTERY LIFECYCLE">
-          <div className="detail-list">
-            <span><small>Operational status</small><StatusBadge tone={batteryOperationalTone(battery.operationalStatus)}>{battery.operationalStatus}</StatusBadge></span>
-            <span><small>Administrative status</small><StatusBadge tone={battery.administrativeStatus === "ACTIVE" ? "success" : "neutral"}>{battery.administrativeStatus}</StatusBadge></span>
-            <span><small>Physical condition</small><StatusBadge tone={battery.physicalCondition === "NORMAL" ? "success" : "danger"}>{battery.physicalCondition}</StatusBadge></span>
-            <span><small>Retirement recommendation</small><StatusBadge tone={battery.retirementRecommended ? "warning" : "success"}>{battery.retirementRecommended ? "RECOMMENDED" : "NOT REQUIRED"}</StatusBadge></span>
-            <span><small>Reason</small><strong>{battery.retirementReason ?? "—"}</strong></span>
-          </div>
-        </OperatorPanel>
+    <Dialog open={inspectOpen} onOpenChange={(open) => !open && setInspectOpen(false)}><DialogContent><div className="p-5">
+      <DialogTitle className="text-lg font-semibold">Record Technician verification</DialogTitle>
+      <p className="mt-2 text-sm text-muted-foreground">Admin records the basic receipt and readiness result reported by Technician for {battery.id}.</p>
+      <label className="mt-4 block text-sm"><span>Result</span><select className="mt-2 w-full" value={passed ? 'PASS' : 'FAIL'} onChange={(event) => setPassed(event.target.value === 'PASS')}><option value="PASS">Passed — mark Ready</option><option value="FAIL">Failed — keep Maintenance</option></select></label>
+      <label className="mt-4 block text-sm"><span>Technician report / reference</span><textarea required className="mt-2 w-full rounded-md border border-border bg-transparent p-3" rows={3} value={report} onChange={(event) => setReport(event.target.value)} /></label>
+      {error && <p className="mt-3 text-sm text-red-500" role="alert">{error}</p>}
+      <div className="form-actions mt-4"><ActionButton variant="secondary" onClick={() => setInspectOpen(false)}>Cancel</ActionButton><ActionButton disabled={!report.trim()} onClick={saveInspection}>Save result</ActionButton></div>
+    </div></DialogContent></Dialog>
 
-        <OperatorPanel title="Capacity & cells" eyebrow="BMS / SYSTEM DATA">
-          <div className="detail-list">
-            <span><small>Design capacity</small><strong>{battery.designCapacityMah.toLocaleString()} mAh</strong></span>
-            <span><small>Full-charge capacity</small><strong>{battery.fullChargeCapacityMah.toLocaleString()} mAh</strong></span>
-            <span><small>Maximum cell delta</small><strong>{battery.maxCellVoltageDelta != null ? `${battery.maxCellVoltageDelta.toFixed(3)} V` : "—"}</strong></span>
-            <span><small>Policy threshold</small><strong>{settings.maximumCellVoltageDelta.toFixed(2)} V</strong></span>
-          </div>
-          {battery.cellVoltages?.length ? <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">{battery.cellVoltages.map((value, index) => <div className="rounded-lg bg-[var(--surface-2)] p-3" key={index}><small className="text-[var(--faint)]">Cell {index + 1}</small><strong className="mt-1 block">{value.toFixed(3)} V</strong></div>)}</div> : null}
-        </OperatorPanel>
-      </div>
-
-      <OperatorPanel title="Retirement policy" eyebrow="WHY THIS BATTERY IS FLAGGED">
-        <div className="detail-list">
-          <span><small>SOH rule</small><strong>{battery.sohPct}% {battery.sohPct < settings.minimumBatterySohPct ? `< ${settings.minimumBatterySohPct}% → review` : "→ pass"}</strong></span>
-          <span><small>Cycle rule</small><strong>{battery.cycleCount} / {battery.maxCycles} {battery.cycleCount >= battery.maxCycles ? "→ review" : "→ pass"}</strong></span>
-          <span><small>Cell delta rule</small><strong>{battery.maxCellVoltageDelta?.toFixed(3) ?? "—"} V {battery.maxCellVoltageDelta != null && battery.maxCellVoltageDelta >= settings.maximumCellVoltageDelta ? "→ inspection" : "→ pass"}</strong></span>
-          <span><small>Installed state</small><strong>{battery.droneId ? `Installed on ${battery.droneId}` : "Not installed"}</strong></span>
-        </div>
-        {!canRetire && battery.administrativeStatus === "ACTIVE" ? <p className="mt-4 text-sm text-[var(--muted)]">Retirement is enabled only when the battery is recommended for retirement and is not installed on a drone.</p> : null}
-      </OperatorPanel>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <div className="p-5">
-            <DialogTitle className="text-lg font-semibold">Retire {battery.id}?</DialogTitle>
-            <p className="mt-2 text-sm text-muted-foreground">This permanently removes the battery from operational use. Reason: {battery.retirementReason ?? "health recommendation"}.</p>
-            <div className="form-actions mt-5"><ActionButton variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</ActionButton><ActionButton variant="danger" onClick={retire}>Retire battery</ActionButton></div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </AdminPageShell>
-  );
+    <Dialog open={retireOpen} onOpenChange={(open) => !open && setRetireOpen(false)}><DialogContent><div className="p-5">
+      <DialogTitle className="text-lg font-semibold">Retire {battery.id}?</DialogTitle>
+      <p className="mt-2 text-sm text-muted-foreground">Retirement removes this battery from operational availability. Its Battery ID and history will be retained.</p>
+      <label className="mt-4 block text-sm"><span>Retirement reason (required)</span><textarea required className="mt-2 w-full rounded-md border border-border bg-transparent p-3" rows={3} value={retireReason} onChange={(event) => setRetireReason(event.target.value)} /></label>
+      <div className="form-actions mt-5"><ActionButton variant="secondary" onClick={() => setRetireOpen(false)}>Cancel</ActionButton><ActionButton variant="danger" disabled={!retireReason.trim()} onClick={retire}>Confirm retirement</ActionButton></div>
+    </div></DialogContent></Dialog>
+  </AdminPageShell>;
 }

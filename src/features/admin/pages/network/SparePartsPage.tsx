@@ -1,32 +1,228 @@
-import { useEffect,useMemo,useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { Dialog,DialogContent,DialogTitle } from '../../../../components/ui/Dialog';
-import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { Dialog, DialogContent, DialogTitle } from '../../../../components/ui/Dialog';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { MetricCard } from '../../../operator/components/MetricCard';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
-import { getAdminHubs } from '../../services/adminStore';
-import { getSpareParts,saveSparePart,type SparePart } from '../../services/prototypeWorkflow';
-const blank=():SparePart=>({id:'',name:'',compatibleModels:'',unitCostVnd:0,active:true,stockByHub:{}});
-export function SparePartsPage(){
-  const [version,setVersion]=useState(0),[query,setQuery]=useState(''),[editing,setEditing]=useState<SparePart|null>(null),[error,setError]=useState('');
-  useEffect(()=>{const fn=()=>setVersion(v=>v+1);window.addEventListener('admin-data-updated',fn);return()=>window.removeEventListener('admin-data-updated',fn);},[]);
-  const parts=useMemo(()=>getSpareParts(),[version]);const hubs=getAdminHubs();
-  const visible=parts.filter(p=>`${p.id} ${p.name} ${p.compatibleModels}`.toLowerCase().includes(query.toLowerCase()));
-  const save=(e:FormEvent)=>{e.preventDefault();if(!editing)return;try{const id=editing.id||`PART-${Date.now()}`;saveSparePart({...editing,id,name:editing.name.trim(),stockByHub:Object.fromEntries(Object.entries(editing.stockByHub).map(([hub,qty])=>[hub,Math.max(0,Math.trunc(Number(qty)||0))]))});setEditing(null);setError('');}catch(x){setError(x instanceof Error?x.message:'Invalid entry');}};
-  return <AdminPageShell title="Spare Parts" description="Manage core drone components, compatible models and prototype inventory by hub." actions={<><Link className="button button-secondary" to="/admin/approvals?type=PART">Review requests</Link><ActionButton onClick={()=>{setEditing(blank());setError('');}} icon="plus">Add spare part</ActionButton></>}>
-    <OperatorPanel className="flush-panel"><AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search parts or compatible models…" meta={`${visible.length} of ${parts.length} categories`}/>
-      <div className="table-wrap"><table><thead><tr><th>Part ID</th><th>Component</th><th>Compatible models</th><th>Total stock</th><th>Status</th><th>Action</th></tr></thead><tbody>
-        {visible.map(p=><tr key={p.id}><td>{p.id}</td><td><strong>{p.name}</strong></td><td>{p.compatibleModels||'—'}</td><td><strong>{Object.values(p.stockByHub).reduce((s,v)=>s+v,0)}</strong><small>Across {hubs.length} hubs</small></td><td><StatusBadge tone={p.active?'success':'neutral'}>{p.active?'Active':'Inactive'}</StatusBadge></td><td><ActionButton variant="ghost" onClick={()=>{setEditing({...p,stockByHub:{...p.stockByHub}});setError('');}}>Edit</ActionButton></td></tr>)}
-      </tbody></table></div></OperatorPanel>
-      <Dialog open={Boolean(editing)} onOpenChange={open=>!open&&setEditing(null)}><DialogContent>{editing&&<form onSubmit={save} className="p-5"><DialogTitle className="text-lg font-semibold">{editing.id?'Edit spare part':'Add spare part'}</DialogTitle><div className="fields two mt-4">
-        <label><span>Component name</span><input required value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></label>
-        <label><span>Compatible drone models</span><input required value={editing.compatibleModels} onChange={e=>setEditing({...editing,compatibleModels:e.target.value})}/></label>
-        <label><span>Unit cost (VND)</span><input min={0} type="number" value={editing.unitCostVnd} onChange={e=>setEditing({...editing,unitCostVnd:Math.max(0,Number(e.target.value))})}/></label>
-        <label><span>Availability</span><select value={editing.active?'ACTIVE':'INACTIVE'} onChange={e=>setEditing({...editing,active:e.target.value==='ACTIVE'})}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
-      </div><h3 className="mt-4 mb-2 font-semibold">Stock at hubs</h3><div className="fields two">{hubs.map(h=><label key={h.id}><span>{h.name}</span><input type="number" min={0} step={1} value={editing.stockByHub[h.id]??0} onChange={e=>setEditing({...editing,stockByHub:{...editing.stockByHub,[h.id]:Math.max(0,Math.trunc(Number(e.target.value)))}})}/></label>)}</div>
-      {error&&<p className="my-2 text-red-500" role="alert">{error}</p>}<div className="form-actions mt-5"><ActionButton type="button" variant="secondary" onClick={()=>setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save part</ActionButton></div>
-      </form>}</DialogContent></Dialog>
-  </AdminPageShell>;
+import { getAdminDrones } from '../../services/adminStore';
+import {
+  addSparePartQuantity, CORE_SPARE_PART_CATEGORIES, getSpareParts, saveSparePart,
+  type SparePart,
+} from '../../services/prototypeWorkflow';
+import { formatVnd } from '../../utils/adminDisplay';
+
+const LOW_QUANTITY = 1;
+const newPart = (): SparePart => ({
+  id: '', name: CORE_SPARE_PART_CATEGORIES[0].name, compatibleModels: '',
+  unitCostVnd: 0, active: true, quantity: 0,
+});
+
+export function SparePartsPage() {
+  const [params] = useSearchParams();
+  const [version, setVersion] = useState(0);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('ALL');
+  const [editing, setEditing] = useState<SparePart | null>(null);
+  const [editingMode, setEditingMode] = useState<'CREATE' | 'EDIT'>('CREATE');
+  const [restockingId, setRestockingId] = useState<string | null>(null);
+  const [added, setAdded] = useState(1);
+  const [paid, setPaid] = useState(false);
+  const [purchasePrice, setPurchasePrice] = useState(0);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const listener = () => setVersion((value) => value + 1);
+    window.addEventListener('admin-data-updated', listener);
+    return () => window.removeEventListener('admin-data-updated', listener);
+  }, []);
+
+  const parts = useMemo(() => getSpareParts(), [version]);
+  const droneModels = [...new Set(getAdminDrones().map((drone) => drone.model).filter(Boolean))].sort();
+  const restocking = parts.find((part) => part.id === restockingId);
+  const isNew = editingMode === 'CREATE';
+  const active = parts.filter((part) => part.active);
+  const visible = parts.filter((part) => {
+    if (!`${part.id} ${part.name} ${part.compatibleModels}`.toLowerCase().includes(query.toLowerCase())) return false;
+    if (filter === 'LOW' && (!part.active || part.quantity > LOW_QUANTITY)) return false;
+    if (filter === 'OUT' && (!part.active || part.quantity !== 0)) return false;
+    if (filter === 'ACTIVE' && !part.active) return false;
+    if (filter === 'INACTIVE' && part.active) return false;
+    return true;
+  });
+
+  // The Approvals page can deep-link to the correct part to replenish.
+  const restockQuery = params.get('restock');
+  useEffect(() => {
+    if (restockQuery && getSpareParts().some((part) => part.id === restockQuery)) {
+      setRestockingId(restockQuery);
+      setAdded(1);
+      setPaid(false);
+      setPurchasePrice(0);
+      setError('');
+    }
+  }, [restockQuery]);
+
+  const openAdd = () => {
+    setEditingMode('CREATE'); setEditing(newPart()); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+  };
+  const openEdit = (part: SparePart) => {
+    setEditingMode('EDIT'); setEditing({ ...part }); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+  };
+  const openRestock = (id: string) => {
+    setRestockingId(id); setAdded(1); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+  };
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    try {
+      if (isNew && parts.some((part) => part.id === editing.id.trim().toUpperCase())) throw new Error('Part ID already exists. Edit that part or use Add quantity.');
+      saveSparePart(editing, paid ? { paid: true, actualUnitCostVnd: purchasePrice } : undefined);
+      setSuccess(isNew ? 'Spare part created.' : 'Spare part updated.');
+      setEditing(null); setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to save spare part.');
+    }
+  };
+  const restock = (event: FormEvent) => {
+    event.preventDefault();
+    if (!restockingId) return;
+    try {
+      addSparePartQuantity(restockingId, added, paid ? { paid: true, actualUnitCostVnd: purchasePrice } : undefined);
+      setSuccess(`${added} unit(s) added to ${restockingId}.`);
+      setRestockingId(null); setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to add quantity.');
+    }
+  };
+
+  return (
+    <AdminPageShell
+      title="Spare Parts"
+      description=""
+      actions={<>
+        <Link className="button button-secondary" to="/admin/approvals?type=PART">Review requests</Link>
+        <ActionButton icon="plus" onClick={openAdd}>Add spare part</ActionButton>
+      </>}
+    >
+      {/* <div className="metric-grid">
+        <MetricCard label="Part models" value={String(parts.length)} delta="Catalog" tone="info" note="Registered component models" />
+        <MetricCard label="Available units" value={String(active.reduce((count, item) => count + item.quantity, 0))} delta="Quantity" tone="success" note="Admin-managed replacement parts" />
+        <MetricCard label="Low quantity" value={String(active.filter((item) => item.quantity <= LOW_QUANTITY).length)} delta={`≤ ${LOW_QUANTITY} units`} tone="warning" note="Add quantity when needed" />
+        <MetricCard label="Out of parts" value={String(active.filter((item) => item.quantity === 0).length)} delta="0 units" tone="neutral" note="Approval blocked until replenished" />
+      </div> */}
+      {success && <p role="status" className="mb-4 text-sm text-[var(--admin-green)]">{success}</p>}
+      <OperatorPanel className="flush-panel">
+        <AdminToolbar
+          searchValue={query} onSearchChange={setQuery}
+          placeholder="Search part ID, component or drone model…"
+          meta={`${visible.length} of ${parts.length} part models`}
+          filters={<select value={filter} onChange={(event) => setFilter(event.target.value)}>
+            <option value="ALL">All parts</option>
+            <option value="LOW">Low quantity</option>
+            <option value="OUT">Out of parts</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>}
+        />
+        <div className="table-wrap"><table>
+          <thead><tr><th>Part ID</th><th>Component</th><th>Drone model</th><th>Quantity</th><th>Actions</th></tr></thead>
+          <tbody>
+            {visible.map((part) => (
+              <tr key={part.id}>
+                <td><strong>{part.id}</strong></td>
+                <td><strong>{part.name}</strong><small>Reference cost: {part.unitCostVnd ? formatVnd(part.unitCostVnd) : 'Not set'}</small></td>
+                <td>{part.compatibleModels}</td>
+                <td>
+                  <strong
+                    className={part.active && part.quantity === 0
+                      ? "text-red-500"
+                      : part.active && part.quantity <= LOW_QUANTITY
+                        ? "text-orange-500"
+                        : undefined}
+                    title={part.active && part.quantity <= LOW_QUANTITY
+                      ? "Quantity low — add more spare parts"
+                      : undefined}
+                  >
+                    {part.quantity}
+                  </strong>
+                </td>
+                <td><div className="flex flex-wrap items-center gap-2">
+                  <ActionButton variant="ghost" onClick={() => openEdit(part)}>Edit</ActionButton>
+                  <ActionButton
+                    variant="secondary"
+                    disabled={!part.active}
+                    onClick={() => openRestock(part.id)}
+                    style={part.active && part.quantity <= LOW_QUANTITY
+                      ? { borderColor: "#FF6B00", color: "#FF6B00", backgroundColor: "transparent" }
+                      : undefined}
+                  >
+                    Add quantity
+                  </ActionButton>
+                </div></td>
+              </tr>
+            ))}
+            {!visible.length && <tr><td colSpan={5} className="text-center">No matching spare parts.</td></tr>}
+          </tbody>
+        </table></div>
+      </OperatorPanel>
+
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        {editing && <DialogContent className="max-h-[85vh] overflow-y-auto"><form onSubmit={save}>
+          <div className="border-b border-border p-5">
+            <DialogTitle className="text-lg font-semibold">{isNew ? 'Add spare part' : 'Edit spare part'}</DialogTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Each record is a component model, not a physical warehouse item.</p>
+          </div>
+          <div className="fields two p-5">
+            <label><span>Part ID</span><input required disabled={!isNew} placeholder="PART-M350-MOTOR-02" value={editing.id} onChange={(event) => setEditing({ ...editing, id: event.target.value.toUpperCase() })} /></label>
+            <label><span>Component</span><select required value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })}>
+              {CORE_SPARE_PART_CATEGORIES.map((item) => <option key={item.code} value={item.name}>{item.name}</option>)}
+            </select></label>
+            <label><span>Drone model</span><select required value={editing.compatibleModels} onChange={(event) => setEditing({ ...editing, compatibleModels: event.target.value })}>
+              <option value="">Select drone model</option>
+              {editing.compatibleModels && !droneModels.includes(editing.compatibleModels) && <option value={editing.compatibleModels}>{editing.compatibleModels}</option>}
+              {droneModels.map((model) => <option value={model} key={model}>{model}</option>)}
+            </select></label>
+            <label><span>Reference unit cost (VND)</span><input type="number" min={0} step={1} value={editing.unitCostVnd} onChange={(event) => setEditing({ ...editing, unitCostVnd: Number(event.target.value) })} /></label>
+            <label><span>Status</span><select value={editing.active ? 'ACTIVE' : 'INACTIVE'} onChange={(event) => setEditing({ ...editing, active: event.target.value === 'ACTIVE' })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+            <label><span>{isNew ? 'Initial quantity' : 'Current quantity (read only)'}</span><input type="number" min={0} step={1} disabled={!isNew} required value={editing.quantity} onChange={(event) => setEditing({ ...editing, quantity: Number(event.target.value) })} /></label>
+          </div>
+          {isNew && editing.quantity > 0 && <div className="mx-5 border-t border-border pt-4">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid — record expense</label>
+            {paid && <label className="mt-3 block text-sm"><span>Actual unit purchase price (VND)</span><input type="number" min={1} step={1} required value={purchasePrice || ''} onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>}
+          </div>}
+          {!isNew && <p className="px-5 text-xs text-muted-foreground">To increase quantity, use <strong>Add quantity</strong> from the table. Approving a replacement decreases quantity automatically.</p>}
+          {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
+          <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">{isNew ? 'Create spare part' : 'Save changes'}</ActionButton></div>
+        </form></DialogContent>}
+      </Dialog>
+
+      <Dialog open={Boolean(restockingId)} onOpenChange={(open) => !open && setRestockingId(null)}>
+        {restocking && <DialogContent className="max-h-[85vh] overflow-y-auto"><form onSubmit={restock}>
+          <div className="border-b border-border p-5">
+            <DialogTitle className="text-lg font-semibold">Add quantity</DialogTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{restocking.id} · {restocking.name} · {restocking.compatibleModels}</p>
+          </div>
+          <div className="fields two p-5">
+            <label><span>Current quantity</span><input readOnly value={restocking.quantity} /></label>
+            <label><span>Additional units</span><input type="number" min={1} step={1} required value={added} onChange={(event) => setAdded(Number(event.target.value))} /></label>
+          </div>
+          <div className="px-5 pb-4"><p className="text-sm font-semibold">Quantity after update: {Number.isSafeInteger(added) && added > 0 ? restocking.quantity + added : '—'}</p></div>
+          <div className="mx-5 border-t border-border pt-4">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid — record expense</label>
+            {paid && <div className="mt-3 fields two">
+              <label><span>Actual unit purchase price (VND)</span><input type="number" min={1} step={1} required value={purchasePrice || ''} onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>
+              <label><span>Cash outflow (VND)</span><input readOnly value={Number.isSafeInteger(added) && added > 0 ? formatVnd(added * purchasePrice) : '—'} /></label>
+            </div>}
+            <p className="mt-2 text-xs text-muted-foreground">Quantity is increased only after replacement parts are received. Only paid purchases create a cash expense; approving a request does not.</p>
+          </div>
+          {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
+          <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setRestockingId(null)}>Cancel</ActionButton><ActionButton type="submit">Confirm addition</ActionButton></div>
+        </form></DialogContent>}
+      </Dialog>
+    </AdminPageShell>
+  );
 }
