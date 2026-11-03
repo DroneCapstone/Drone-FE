@@ -73,10 +73,10 @@ export function HubsPage() {
       actions={<ActionButton icon="plus" onClick={() => setEditing({ ...emptyHub })}>Create hub</ActionButton>}
     >
       <div className="metric-grid">
-        <MetricCard label="Total hubs" value={String(hubs.length)} delta="Network" tone="info" note="Registered hubs" />
-        <MetricCard label="Active" value={String(hubs.filter((hub) => hub.status === "ACTIVE").length)} delta="Usable" tone="success" note="Eligible for new planning" />
-        <MetricCard label="Drones" value={String(drones.length)} delta="Assigned" tone="info" note="Across hub network" />
-        <MetricCard label="Batteries" value={String(batteries.length)} delta="Inventory" tone="info" note="Across hub network" />
+        <MetricCard label="Total hubs" value={String(hubs.length)} delta="" tone="info" note="" />
+        <MetricCard label="Active" value={String(hubs.filter((hub) => hub.status === "ACTIVE").length)} delta="" tone="success" note="" />
+        <MetricCard label="Drones" value={String(drones.length)} delta="" tone="info" note="" />
+        <MetricCard label="Batteries" value={String(batteries.length)} delta="" tone="info" note="" />
       </div>
 
       <HubDroneMap hubs={hubs} drones={drones} />
