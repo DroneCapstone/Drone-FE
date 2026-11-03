@@ -8,6 +8,7 @@ import { MetricCard } from "../../../operator/components/MetricCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
+import { recordPrototypeActivity } from "../../services/prototypeWorkflow";
 import { getAdminHubs, getAdminUsers, upsertAdminUser } from "../../services/adminStore";
 import type { AdminUser } from "../../types";
 import { userTone } from "../../utils/adminDisplay";
@@ -40,6 +41,7 @@ export function AdminUsersPage() {
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [creating, setCreating] = useState<AdminUser | null>(null);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     const listener = () => setVersion((value) => value + 1);
@@ -59,14 +61,23 @@ export function AdminUsersPage() {
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!creating) return;
+    const fullName = creating.fullName.trim();
+    const email = creating.email.trim().toLowerCase();
+    if (!fullName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setFormError('Enter a valid name and email.'); return; }
+    if (users.some(u => u.email.toLowerCase() === email)) { setFormError('This email is already registered.'); return; }
+    if (creating.role === 'technician' && !hubs.some(h => h.id === creating.hubId && h.status === 'ACTIVE')) { setFormError('Select an active hub for this technician.'); return; }
     const now = new Date().toISOString();
+    const newId = `${creating.role}-${Date.now()}`;
     upsertAdminUser({
       ...creating,
-      id: creating.id || `${creating.role}-${Date.now()}`,
+      id: newId,
+      fullName, email,
       hubId: creating.role === "technician" ? creating.hubId : undefined,
       createdAt: now,
       updatedAt: now,
     });
+    recordPrototypeActivity("admin", "Admin", "CREATE_USER", newId, `Role: ${creating.role}`);
+    setFormError("");
     setCreating(null);
   };
 
@@ -78,7 +89,7 @@ export function AdminUsersPage() {
     <AdminPageShell
       title="Users"
       description="Manage user access, role assignment and technician hub ownership."
-      actions={<ActionButton icon="plus" onClick={() => setCreating(newInternalUser())}>Create internal user</ActionButton>}
+      actions={<ActionButton icon="plus" onClick={() => { setFormError(""); setCreating(newInternalUser()); }}>Create internal user</ActionButton>}
     >
       <div className="metric-grid">
         <MetricCard label="Total users" value={String(users.length)} delta="Accounts" tone="info" note="All system users" />
@@ -182,11 +193,13 @@ export function AdminUsersPage() {
                     <span>Assigned hub</span>
                     <select required value={creating.hubId ?? ""} onChange={(e) => setCreating({ ...creating, hubId: e.target.value })}>
                       <option value="">Select hub</option>
-                      {hubs.map((hub) => <option value={hub.id} key={hub.id}>{hub.name}</option>)}
+                      {hubs.filter(h => h.status === "ACTIVE").map((hub) => <option value={hub.id} key={hub.id}>{hub.name}</option>)}
                     </select>
                   </label>
                 ) : null}
               </div>
+              {formError && <p className="px-5 pb-2 text-sm text-red-500" role="alert">{formError}</p>}
+              <p className="px-5 pb-3 text-xs text-muted-foreground">Prototype: Creating an account does not send an email or grant production login access.</p>
               <div className="form-actions border-t border-border p-5">
                 <ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton>
                 <ActionButton type="submit">Create account</ActionButton>

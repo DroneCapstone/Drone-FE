@@ -62,7 +62,7 @@ export function DronesPage() {
   };
 
   return (
-    <AdminPageShell title="Drones" description="Register drone master data and control administrative availability. Operational status remains read-only for Admin." actions={<ActionButton icon="plus" onClick={() => setCreating(newDrone(hubs[0]?.id))}>Register drone</ActionButton>}>
+    <AdminPageShell title="Drones" description="Register drone master data and control administrative availability. Operational status remains read-only for Admin." actions={<><Link className="text-button" to="/admin/network/drones/spare-parts">Spare Parts</Link><ActionButton icon="plus" onClick={() => setCreating(newDrone(hubs[0]?.id))}>Register drone</ActionButton></>}>
       <div className="metric-grid">
         <MetricCard label="Total drones" value={String(drones.length)} delta="Fleet" tone="info" note="Registered assets" />
         <MetricCard label="Available" value={String(drones.filter((d) => d.status === "AVAILABLE" && d.isActive).length)} delta="Ready" tone="success" note="Before eligibility checks" />

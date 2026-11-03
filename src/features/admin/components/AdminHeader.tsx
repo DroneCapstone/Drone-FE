@@ -11,6 +11,8 @@ import {
 import { Icon } from "../../../components/ui/Icon";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { adminAlerts } from "../data/adminData";
+import { getReplacementRequests } from "../services/prototypeWorkflow";
+import { useEffect, useState } from "react";
 
 function getInitials(name?: string) {
   if (!name) return "AD";
@@ -40,7 +42,9 @@ export function AdminHeader({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const displayName = user?.name || "Administrator";
-  const unreadCount = adminAlerts.length;
+  const [,setVersion]=useState(0);
+  useEffect(()=>{const fn=()=>setVersion(v=>v+1);window.addEventListener('admin-data-updated',fn);return()=>window.removeEventListener('admin-data-updated',fn);},[]);
+  const unreadCount = adminAlerts.length + getReplacementRequests().filter(r=>r.status==='PENDING').length;
 
   const handleLogout = () => {
     logout();
@@ -71,7 +75,7 @@ export function AdminHeader({
           <Icon name={isDark ? "sun" : "moon"} />
         </button>
 
-        <NavLink className="icon-button notification-button" to="/admin/settings#notifications" aria-label={`${unreadCount} admin alerts`}>
+        <NavLink className="icon-button notification-button" to="/admin/notifications" aria-label={`${unreadCount} admin alerts`}>
           <Icon name="bell" />
           {unreadCount > 0 ? <span className="notification-count" aria-hidden="true">{unreadCount}</span> : null}
         </NavLink>

@@ -124,6 +124,7 @@ export function AdminDashboardPage() {
       title="Dashboard"
       description="System-wide overview of revenue, missions, users, hubs, fleet and battery lifecycle."
     >
+      <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--admin-border)] p-3 text-sm"><span><strong>{getReplacementRequests().filter(r=>r.status==='PENDING').length}</strong> replacement requests waiting for approval</span><Link className="text-button" to="/admin/approvals">Review approvals</Link></div>
       <div className="metric-grid">
         <MetricCard
           label="Revenue today"

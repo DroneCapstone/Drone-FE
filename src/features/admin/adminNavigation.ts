@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  ClipboardCheck,
   CreditCard,
   Gauge,
   MapPinned,
@@ -28,6 +29,7 @@ export const adminNavigation: AdminNavigationItem[] = [
       { label: "Batteries", path: "/admin/network/batteries" },
     ],
   },
+  { label: "Approvals", path: "/admin/approvals", icon: ClipboardCheck },
   { label: "Users", path: "/admin/users", icon: Users },
   {
     label: "Payments",
@@ -36,9 +38,14 @@ export const adminNavigation: AdminNavigationItem[] = [
     children: [
       { label: "Transactions", path: "/admin/payments/transactions" },
       { label: "Refunds", path: "/admin/payments/refunds" },
+      { label: "Financial Overview", path: "/admin/payments/financial" },
     ],
   },
-  { label: "Audit Logs", path: "/admin/audit", icon: ScrollText },
+  { label: "Audit & Logs", path: "/admin/audit", icon: ScrollText, children: [
+    { label: "Audit Logs", path: "/admin/audit" },
+    { label: "Activity Logs", path: "/admin/audit/activity" },
+    { label: "System Logs", path: "/admin/audit/system" },
+  ] },
   { label: "System Settings", path: "/admin/settings", icon: Settings },
   { label: "Profile", path: "/admin/profile", icon: UserRound },
 ];

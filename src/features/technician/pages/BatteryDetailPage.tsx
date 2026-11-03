@@ -30,6 +30,8 @@ import {
   CardContent,
 } from "@/components/shadcn/ui/card";
 
+import { PrototypeReplacementPanel } from "../components/PrototypeReplacementPanel";
+
 import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
@@ -143,6 +145,7 @@ export function BatteryDetailPage() {
 
       {battery && (
         <>
+          <PrototypeReplacementPanel type="BATTERY" batteryId={battery.id} droneId={battery.droneId ?? undefined} />
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <StatusBadge
               status={battery.status}

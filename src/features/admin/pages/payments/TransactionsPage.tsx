@@ -6,23 +6,23 @@ import { MetricCard } from "../../../operator/components/MetricCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
-import { adminPayments } from "../../data/adminData";
+import { executePrototypeRefund, getPrototypePayments } from "../../services/prototypeWorkflow";
 import type { AdminPayment } from "../../types";
 import { formatVnd, paymentTone } from "../../utils/adminDisplay";
 
 export function TransactionsPage() {
-  const [items, setItems] = useState<AdminPayment[]>(adminPayments);
+  const [items, setItems] = useState<AdminPayment[]>(getPrototypePayments());
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [selected, setSelected] = useState<AdminPayment | null>(null);
   const [refundOpen, setRefundOpen] = useState(false);
 
   const visible = useMemo(() => items.filter((payment) => `${payment.id} ${payment.orderId} ${payment.customerName} ${payment.customerEmail}`.toLowerCase().includes(query.toLowerCase()) && (status === "all" || payment.status === status)), [items, query, status]);
-  const revenue = items.filter((item) => item.status === "PAID" || item.status === "REFUNDED").reduce((sum, item) => sum + item.amountVnd, 0);
+  const revenue = items.filter((item) => item.status === "PAID").reduce((sum, item) => sum + item.amountVnd, 0);
 
   const refund = () => {
     if (!selected?.refundable) return;
-    setItems((current) => current.map((item) => item.id === selected.id ? { ...item, status: "REFUNDED", refundable: false, refundBlockReason: "Transaction has already been refunded.", refundedAt: new Date().toISOString() } : item));
+    try {executePrototypeRefund(selected.id, 'Full refund approved by Admin (prototype)');setItems(getPrototypePayments());}catch(e){window.alert(e instanceof Error?e.message:'Refund failed.');return;}
     setRefundOpen(false);
     setSelected(null);
   };
@@ -30,7 +30,7 @@ export function TransactionsPage() {
   return (
     <AdminPageShell title="Transactions" description="Read payment activity linked to delivery orders and initiate full refunds when Backend eligibility allows it.">
       <div className="metric-grid">
-        <MetricCard label="Captured revenue" value={formatVnd(revenue)} delta="Payments" tone="success" note="Paid and refunded sample" />
+        <MetricCard label="Captured revenue" value={formatVnd(revenue)} delta="Payments" tone="success" note="Paid transactions after refunds (demo)" />
         <MetricCard label="Paid" value={String(items.filter((i) => i.status === "PAID").length)} delta="Captured" tone="success" note="Successful transactions" />
         <MetricCard label="Pending" value={String(items.filter((i) => i.status === "PENDING").length)} delta="Review" tone="warning" note="Awaiting confirmation" />
         <MetricCard label="Failed / refunded" value={String(items.filter((i) => i.status === "FAILED" || i.status === "REFUNDED").length)} delta="Closed" tone="neutral" note="No new capture" />

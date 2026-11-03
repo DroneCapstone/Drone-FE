@@ -4,12 +4,13 @@ import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { adminAuditLogs } from "../../data/adminData";
+import { getPrototypeAudit } from "../../services/prototypeWorkflow";
 
 export function AuditLogsPage() {
   const [query, setQuery] = useState("");
   const [role, setRole] = useState("all");
   const [result, setResult] = useState("all");
-  const visible = useMemo(() => adminAuditLogs.filter((log) => `${log.actor} ${log.action} ${log.entityType} ${log.entityId}`.toLowerCase().includes(query.toLowerCase()) && (role === "all" || log.role === role) && (result === "all" || log.result === result)), [query, role, result]);
+  const visible = useMemo(() => [...getPrototypeAudit(), ...adminAuditLogs].filter((log) => `${log.actor} ${log.action} ${log.entityType} ${log.entityId}`.toLowerCase().includes(query.toLowerCase()) && (role === "all" || log.role === role) && (result === "all" || log.result === result)), [query, role, result]);
 
   return (
     <AdminPageShell title="Audit Logs" description="Read-only trace of significant user and system actions for accountability and troubleshooting.">
