@@ -55,6 +55,44 @@ import {
   useBatteriesQuery,
 } from "../hooks/useBatteryQueries";
 
+import {
+  useDroneDetailQuery,
+  useFleetQuery,
+} from "../hooks/useFleetQueries";
+
+import type { HubBattery } from "../utils/batteryStorage";
+
+// DroneOptAI compatibility mapping for the three currently configured models.
+// Prefer explicit compatibility from the Backend battery record when provided.
+// This is an application rule, not a physical battery safety certification.
+const BATTERY_MODEL_BY_DRONE_MODEL: Record<string, string> = {
+  "dji flycart 15 heavy": "dji db2000",
+  "dji matrice 100": "tb48d",
+  "aurelia x6 pro": "aurelia ultrapower",
+};
+
+function normalizeModel(model: string): string {
+  return model.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isCompatibleTestBattery(battery: HubBattery, droneModel: string): boolean {
+  if (!droneModel || battery.status !== "Ready") return false;
+
+  if (battery.compatibleDroneModels?.length) {
+    return battery.compatibleDroneModels.some(
+      (compatibleModel) => normalizeModel(compatibleModel) === normalizeModel(droneModel),
+    );
+  }
+
+  const expectedBatteryModel = BATTERY_MODEL_BY_DRONE_MODEL[normalizeModel(droneModel)];
+  return Boolean(
+    expectedBatteryModel &&
+    battery.model &&
+    normalizeModel(battery.model) === expectedBatteryModel,
+  );
+}
+
+
 type AlertSource =
   | "Schedule"
   | "Incident"
@@ -153,10 +191,8 @@ export function WorkOrdersPage() {
   const batteriesQuery =
     useBatteriesQuery();
 
-  const readyBatteries =
-    (batteriesQuery.data ?? []).filter(
-      (battery) => battery.status === "Ready",
-    );
+  // Prefetch the hub fleet while Work Orders load; both APIs include model.
+  const fleetQuery = useFleetQuery();
 
   const workOrders: WorkOrder[] =
     workOrdersQuery.data ?? [];
@@ -215,8 +251,76 @@ export function WorkOrdersPage() {
       initialForm,
     );
 
+  // When opened from a Maintenance Alert, the Backend identifies the drone.
+  // Technician must not override the associated Drone ID or its model.
+  const [droneLockedFromAlert, setDroneLockedFromAlert] = useState(false);
+
   const [apiError, setApiError] =
     useState("");
+
+  // Prefer the model that BE already returns in GET /work-orders.
+  // If this drone has never had a WO, use GET /drones (already prefetched).
+  // A detail request is the final fallback, not an unconditional extra call.
+  const selectedDroneId = form.droneId.trim().toUpperCase();
+  const modelFromWorkOrders = workOrders.find(
+    (order) => order.droneId.trim().toUpperCase() === selectedDroneId &&
+      order.model?.trim() && order.model !== "—",
+  )?.model?.trim() ?? "";
+
+  const modelFromFleet = fleetQuery.data?.find(
+    (drone) => drone.id.trim().toUpperCase() === selectedDroneId &&
+      drone.model?.trim() && drone.model !== "—",
+  )?.model?.trim() ?? "";
+
+  const needsDroneDetail = Boolean(
+    createModalOpen && selectedDroneId &&
+    !modelFromWorkOrders && !modelFromFleet &&
+    !workOrdersQuery.isPending && !fleetQuery.isPending,
+  );
+  const droneDetailQuery = useDroneDetailQuery(
+    needsDroneDetail ? selectedDroneId : undefined,
+  );
+
+  const modelFromDetail =
+    droneDetailQuery.data?.id.trim().toUpperCase() === selectedDroneId &&
+    droneDetailQuery.data.model !== "—"
+      ? droneDetailQuery.data.model.trim()
+      : "";
+  const droneModel = modelFromWorkOrders || modelFromFleet || modelFromDetail;
+  const modelLoading = Boolean(
+    selectedDroneId && !droneModel &&
+    (workOrdersQuery.isPending || fleetQuery.isPending ||
+      (needsDroneDetail && droneDetailQuery.isPending)),
+  );
+
+  const compatibleReadyBatteries = useMemo(
+    () => (batteriesQuery.data ?? []).filter(
+      (battery) => isCompatibleTestBattery(battery, droneModel),
+    ),
+    [batteriesQuery.data, droneModel],
+  );
+
+  const selectedBatteryIsCompatible = compatibleReadyBatteries.some(
+    (battery) => (battery.backendId ?? battery.id) === form.batteryId,
+  );
+
+  // Clear stale battery selection if the drone/model or hub batteries change.
+  useEffect(() => {
+    if (!createModalOpen || batteriesQuery.isPending || modelLoading) return;
+    setForm((current) =>
+      current.batteryId &&
+      !compatibleReadyBatteries.some(
+        (battery) => (battery.backendId ?? battery.id) === current.batteryId,
+      )
+        ? { ...current, batteryId: "" }
+        : current,
+    );
+  }, [
+    createModalOpen,
+    batteriesQuery.isPending,
+    modelLoading,
+    compatibleReadyBatteries,
+  ]);
 
 
 
@@ -256,6 +360,7 @@ export function WorkOrdersPage() {
         undefined,
     });
 
+    setDroneLockedFromAlert(true);
     setCreateModalOpen(true);
 
     setSearchParams(
@@ -335,6 +440,7 @@ export function WorkOrdersPage() {
   const openCreateModal = () => {
     setApiError("");
     setForm(initialForm);
+    setDroneLockedFromAlert(false);
     setCreateModalOpen(true);
   };
 
@@ -378,10 +484,11 @@ export function WorkOrdersPage() {
     if (
       !form.droneId.trim() ||
       !form.batteryId.trim() ||
+      !selectedBatteryIsCompatible ||
       !form.title.trim()
     ) {
       setApiError(
-        "Drone ID, test Battery ID and issue description are required by Backend.",
+        "Select a drone, choose a compatible Ready battery, and describe the issue.",
       );
       return;
     }
@@ -995,47 +1102,65 @@ export function WorkOrdersPage() {
               }
             >
               <div className="space-y-4 px-6 py-5">
-                <Field label="Drone">
+                <Field label="Drone model">
                   <input
-                    required
-                    value={form.drone}
-                    onChange={(
-                      event,
-                    ) =>
-                      setForm(
-                        (current) => ({
-                          ...current,
-                          drone:
-                            event.target
-                              .value,
-                        }),
-                      )
-                    }
-                    placeholder="CX-09"
-                    className="tech-control h-10 w-full px-3 !text-[14px]"
+                    readOnly
+                    aria-readonly="true"
+                    value={droneModel || (
+                      !form.droneId.trim()
+                        ? "Select a Drone ID below"
+                        : modelLoading
+                          ? "Loading drone model..."
+                          : droneDetailQuery.isError
+                            ? "Unable to load drone model"
+                            : "Drone model unavailable"
+                    )}
+                    className="tech-control h-10 w-full cursor-default px-3 !text-[14px]"
                   />
                 </Field>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Drone ID">
-                    <input
-                      required
-                      value={form.droneId}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          droneId: event.target.value,
-                        }))
-                      }
-                      placeholder="DR-001"
-                      className="tech-control h-10 w-full px-3 !text-[14px]"
-                    />
+                    {droneLockedFromAlert ? (
+                      <input
+                        readOnly
+                        aria-readonly="true"
+                        value={form.droneId}
+                        className="tech-control h-10 w-full cursor-default px-3 !text-[14px]"
+                      />
+                    ) : (
+                      // Manual WO creation remains usable, but the technician
+                      // must SELECT an existing hub drone, not type an arbitrary ID.
+                      <select
+                        required
+                        value={form.droneId}
+                        disabled={fleetQuery.isPending}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            droneId: event.target.value,
+                            batteryId: "",
+                          }))
+                        }
+                        className="tech-control h-10 w-full px-3 !text-[14px]"
+                      >
+                        <option value="">
+                          {fleetQuery.isPending ? "Loading drones..." : "Select a drone"}
+                        </option>
+                        {(fleetQuery.data ?? []).map((drone) => (
+                          <option key={drone.id} value={drone.id}>
+                            {drone.id}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </Field>
 
                   <Field label="Test battery ID">
                     <select
                       required
-                      value={form.batteryId}
+                      disabled={!droneModel || batteriesQuery.isPending || modelLoading}
+                      value={selectedBatteryIsCompatible ? form.batteryId : ""}
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
@@ -1045,11 +1170,15 @@ export function WorkOrdersPage() {
                       className="tech-control h-10 w-full px-3 !text-[14px]"
                     >
                       <option value="">
-                        {batteriesQuery.isPending
-                          ? "Loading Ready batteries..."
-                          : "Select a Ready battery"}
+                        {!droneModel
+                          ? modelLoading
+                            ? "Loading drone model..."
+                            : "Enter a valid Drone ID first"
+                          : batteriesQuery.isPending
+                            ? "Loading Ready batteries..."
+                            : "Select a compatible Ready battery"}
                       </option>
-                      {readyBatteries.map((battery) => (
+                      {compatibleReadyBatteries.map((battery) => (
                         <option
                           key={battery.backendId ?? battery.id}
                           value={battery.backendId ?? battery.id}
@@ -1058,9 +1187,9 @@ export function WorkOrdersPage() {
                         </option>
                       ))}
                     </select>
-                    {!batteriesQuery.isPending && readyBatteries.length === 0 && (
+                    {droneModel && !batteriesQuery.isPending && compatibleReadyBatteries.length === 0 && (
                       <p className="mt-1 text-[11px] text-orange-500">
-                        No Ready battery is available at this hub.
+                        No Ready battery compatible with {droneModel} is available at this hub.
                       </p>
                     )}
                   </Field>
@@ -1087,14 +1216,7 @@ export function WorkOrdersPage() {
                   />
                 </Field>
 
-                <div className="rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 py-3">
-                  <p className="text-[12px] font-medium text-[var(--tech-text-secondary)]">
-                    The selected battery is a temporary test battery for diagnostics and power-on checks.
-                  </p>
-                  <p className="mt-1 text-[11px] leading-4 text-[var(--tech-muted)]">
-                    Battery inventory and charging remain in Battery Management. The selected value is the actual battery identifier returned by Backend, sent as a string. Priority and technician assignment are assigned by Backend.
-                  </p>
-                </div>
+                
               </div>
 
               <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
@@ -1124,7 +1246,7 @@ export function WorkOrdersPage() {
                   disabled={
                     createWorkOrderMutation.isPending ||
                     !form.droneId.trim() ||
-                    !form.batteryId.trim() ||
+                    !selectedBatteryIsCompatible ||
                     !form.title.trim()
                   }
                   className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"

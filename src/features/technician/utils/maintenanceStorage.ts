@@ -41,6 +41,8 @@ export type WorkOrder = {
   id: string;
   drone: string;
   droneId: string;
+  // Model returned by GET /technician/fleet/work-orders.
+  model?: string;
   batteryId?: string;
   title: string;
   priority: WorkOrderPriority;
@@ -316,7 +318,6 @@ export function addMaintenanceRecord(
 
 function maintenanceDisplayId(prefix: string, value: string, width = 4) {
   if (!value) return "";
-  if (prefix === "DR" && /^DRN[-_]/i.test(value)) return value.toUpperCase();
   if (value.toUpperCase().startsWith(`${prefix}-`)) return value.toUpperCase();
   const match = value.match(/(\d+)$/);
   return match ? `${prefix}-${match[1].padStart(width, "0")}` : `${prefix}-${value}`;
@@ -343,12 +344,17 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
   const rawDroneId = pickString(value, ["drone_id", "droneId"]);
   if (!rawId || !rawDroneId) return null;
 
-  const droneId = maintenanceDisplayId("DR", rawDroneId, 3);
+  // The Backend already returns IDs such as DRN-0006. Do not turn them
+  // into DR-0006, or matching the selected drone in the form will fail.
+  const droneId = rawDroneId.trim().toUpperCase().startsWith("DRN-")
+    ? rawDroneId.trim()
+    : maintenanceDisplayId("DR", rawDroneId, 3);
 
   return {
     id: maintenanceDisplayId("WO", rawId, 4),
     drone: pickString(value, ["drone_name", "drone_code", "drone"], droneId),
     droneId,
+    model: pickString(value, ["model", "drone_model"], "") || undefined,
     batteryId: (() => {
       const rawBatteryId = pickString(
         value,
@@ -522,7 +528,7 @@ export async function createWorkOrderOnServer(payload: {
   }
 
   const result = await createWorkOrderApi({
-    drone_id: toBackendNumericId(payload.droneId),
+    drone_id: payload.droneId.trim(),
     battery_id: batteryId,
     issue_description: payload.issueDescription,
   });
