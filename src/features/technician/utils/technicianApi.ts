@@ -720,7 +720,8 @@ export const getWorkOrdersApi = () =>
   technicianApiRequest("/technician/fleet/work-orders");
 
 export const createWorkOrderApi = (payload: {
-  drone_id: number;
+  // Keep the original identifier, e.g. "DRN-0013", not a numeric suffix.
+  drone_id: string;
   // Live API validation expects the original battery identifier as a string.
   battery_id: string;
   issue_description: string;

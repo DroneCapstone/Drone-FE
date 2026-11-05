@@ -184,15 +184,22 @@ export function TechnicianSidebar({
                     childPath ===
                       "/technician/fleet"
                   ) {
+                    // Hub fleet is active on the fleet list and drone details,
+                    // but NOT on Transit missions or Battery management.
+                    // Otherwise findIndex() always selects Hub fleet first,
+                    // leaving the orange indicator on the wrong child.
+                    const isTransitPath =
+                      pathname === "/technician/fleet/transit" ||
+                      pathname.startsWith("/technician/fleet/transit/");
+                    const isBatteryPath =
+                      pathname === "/technician/fleet/batteries" ||
+                      pathname.startsWith("/technician/fleet/batteries/");
+
                     return (
-                      pathname ===
-                        "/technician/fleet" ||
-                      (pathname.startsWith(
-                        "/technician/fleet/",
-                      ) &&
-                        !pathname.startsWith(
-                          "/technician/fleet/transit",
-                        ))
+                      pathname === "/technician/fleet" ||
+                      (pathname.startsWith("/technician/fleet/") &&
+                        !isTransitPath &&
+                        !isBatteryPath)
                     );
                   }
 
