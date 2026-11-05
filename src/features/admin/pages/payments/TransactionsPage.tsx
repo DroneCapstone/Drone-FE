@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { CreditCard, CircleCheck, Clock3, CircleX } from "lucide-react";
 import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
+import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { MetricCard } from "../../../operator/components/MetricCard";
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
@@ -29,11 +31,11 @@ export function TransactionsPage() {
 
   return (
     <AdminPageShell title="Transactions" description="Read payment activity linked to delivery orders and initiate full refunds when Backend eligibility allows it.">
-      <div className="metric-grid">
-        <MetricCard label="Captured revenue" value={formatVnd(revenue)} delta="Payments" tone="success" note="Paid transactions after refunds (demo)" />
-        <MetricCard label="Paid" value={String(items.filter((i) => i.status === "PAID").length)} delta="Captured" tone="success" note="Successful transactions" />
-        <MetricCard label="Pending" value={String(items.filter((i) => i.status === "PENDING").length)} delta="Review" tone="warning" note="Awaiting confirmation" />
-        <MetricCard label="Failed / refunded" value={String(items.filter((i) => i.status === "FAILED" || i.status === "REFUNDED").length)} delta="Closed" tone="neutral" note="No new capture" />
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminSummaryCard label="Captured revenue" value={formatVnd(revenue)} note="Paid transactions after refunds (demo)" icon={CreditCard} />
+        <AdminSummaryCard label="Paid" value={items.filter((i) => i.status === "PAID").length} note="Successful transactions" icon={CircleCheck} />
+        <AdminSummaryCard label="Pending" value={items.filter((i) => i.status === "PENDING").length} note="Awaiting confirmation" icon={Clock3} />
+        <AdminSummaryCard label="Failed / refunded" value={items.filter((i) => i.status === "FAILED" || i.status === "REFUNDED").length} note="No new capture" icon={CircleX} />
       </div>
 
       <OperatorPanel className="flush-panel">

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { Dialog, DialogContent, DialogTitle } from '../../../../components/ui/Dialog';
+import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { MetricCard } from '../../../operator/components/MetricCard';
 import { AdminPageShell } from '../../components/AdminPageShell';

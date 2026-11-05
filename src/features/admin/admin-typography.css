@@ -1,0 +1,109 @@
+/*
+ * DroneOptAI Admin typography scale (Hub Detail reference).
+ * Applied ONLY inside AdminLayout. Do not place these rules in index.css:
+ * Operator / Technician and the Customer app must remain unchanged.
+ *
+ * Reference (HubDetailPage.css):
+ *   section heading 14px | detail label/value 13.5px | table heading 13px
+ *   detail table 13.5px | view link 13px
+ *
+ * Intentional exclusions: AdminSummaryCard / metric-card / metric-grid,
+ * the .toolbar (search, filters, result counter), header/global search,
+ * navigation sidebar, AdminPageShell's 28px title, and Hub Detail itself.
+ */
+:root {
+  /* Namespaced design tokens only; selectors below remain Admin-only. */
+  --admin-detail-title-size: 14px;
+  --admin-detail-text-size: 13.5px;
+  --admin-detail-table-heading-size: 13px;
+  --admin-detail-caption-size: 12px;
+  --admin-detail-link-size: 13px;
+}
+
+/* Admin content defaults to the Hub Detail body size.  Explicit small
+ * captions, toolbar controls, metric numbers and 28px page titles keep their
+ * own styling by design. */
+.admin-typography {
+  font-size: var(--admin-detail-text-size);
+}
+.admin-typography .panel .text-sm:not(.toolbar *) {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Panels and section headings: same visual rank as Hub information. */
+.admin-typography .panel-head :is(h2, h3),
+.admin-typography .panel > :is(h2, h3) {
+  font-size: var(--admin-detail-title-size);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+/* Shared detail view labels/values (Drone, Battery, User, Account, etc.). */
+.admin-typography .detail-list > span > :is(small, strong),
+.admin-typography .key-values :is(dt, dd),
+.admin-typography .admin-user-activity :is(dt, dd) {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Panel body form labels and inputs, not list-page toolbar controls. */
+.admin-typography :is(.fields label > span, .select-field > span),
+.admin-typography :is(.fields input, .fields select, .fields textarea, .select-field select) {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Table text, matching the assigned-assets table in Hub Detail.
+   Keep toolbar's Search, filter selects and “N of N” untouched. */
+.admin-typography .table-wrap :is(td, td > strong) {
+  font-size: var(--admin-detail-text-size);
+}
+.admin-typography .table-wrap td > small {
+  font-size: var(--admin-detail-caption-size);
+}
+.admin-typography .table-wrap th {
+  font-size: var(--admin-detail-table-heading-size);
+  line-height: 1.45;
+}
+.admin-typography .table-wrap .text-button {
+  font-size: var(--admin-detail-link-size);
+}
+
+/* Shared tabs for Hubs/Drones/Batteries, Payments, Replacement Supplies, etc. */
+.admin-typography .subtabs a {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Approval detail cards have inline Tailwind text-xs/text-sm classes.  The
+   typography change is limited to their reported facts, not metric cards. */
+.admin-typography .admin-approval-facts :is(dt, dd),
+.admin-typography .admin-approval-facts .text-xs,
+.admin-typography .admin-approval-facts .text-sm {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Administrator user detail, where labels are styled independently. */
+.admin-typography .admin-user-hero-copy :is(p, small),
+.admin-typography .admin-user-role-label {
+  font-size: var(--admin-detail-text-size);
+}
+
+/* Radix Dialogs render in a Portal outside AdminLayout, hence their own class.
+   Do not change the global Dialog component shared with other roles. */
+.admin-dialog-typography {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--admin-detail-text-size);
+}
+.admin-dialog-typography :is(h2, h3) {
+  font-family: inherit;
+}
+.admin-dialog-typography h2 {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.admin-dialog-typography :is(p, label, label > span, .fields label > span, input, textarea, select) {
+  font-family: inherit;
+  font-size: var(--admin-detail-text-size);
+}
+.admin-dialog-typography :is(.fields input, .fields select, .fields textarea) {
+  font-size: var(--admin-detail-text-size);
+}

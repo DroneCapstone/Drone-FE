@@ -1,3 +1,5 @@
+import { NewBatteriesPage } from "./pages/replacement/NewBatteriesPage";
+import { useLocation } from "react-router-dom";
 import { Navigate, type RouteObject } from "react-router-dom";
 import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { HubsPage } from "./pages/network/HubsPage";
@@ -20,16 +22,27 @@ import { ActivityLogPage } from "./pages/system/ActivityLogPage";
 import { AdminNotificationsPage } from "./pages/system/AdminNotificationsPage";
 import { AdminProfilePage } from "./pages/profile/AdminProfilePage";
 
+/** Old links from Dashboard and Battery Detail keep their query parameters. */
+function LegacyReplacementRedirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+}
+
 export const adminRoutes: RouteObject[] = [
   { index: true, element: <Navigate to="dashboard" replace /> },
+  { path: "replacement", element: <Navigate to="/admin/replacement/requests" replace /> },
+  { path: "replacement/requests", element: <ApprovalsPage /> },
+  { path: "replacement/spare-parts", element: <SparePartsPage /> },
+  { path: "replacement/new-batteries", element: <NewBatteriesPage /> },
+
   { path: "dashboard", element: <AdminDashboardPage /> },
   { path: "network", element: <Navigate to="/admin/network/hubs" replace /> },
   { path: "network/hubs", element: <HubsPage /> },
   { path: "network/hubs/:hubId", element: <HubDetailPage /> },
   { path: "network/drones", element: <DronesPage /> },
   { path: "network/drones/:droneId", element: <DroneDetailPage /> },
-  { path: "network/drones/spare-parts", element: <SparePartsPage /> },
-  { path: "approvals", element: <ApprovalsPage /> },
+  { path: "network/drones/spare-parts", element: <LegacyReplacementRedirect to="/admin/replacement/spare-parts" /> },
+  { path: "approvals", element: <LegacyReplacementRedirect to="/admin/replacement/requests" /> },
   { path: "network/batteries", element: <BatteriesPage /> },
   { path: "network/batteries/:batteryId", element: <BatteryDetailPage /> },
   { path: "users", element: <AdminUsersPage /> },
