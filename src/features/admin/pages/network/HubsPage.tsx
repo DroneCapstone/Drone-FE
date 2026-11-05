@@ -70,7 +70,7 @@ export function HubsPage() {
   return (
     <AdminPageShell
       title="Hubs"
-      description="Manage hub master data and administrative availability. Operational hub handoff remains Technician-owned."
+      description=""
       actions={<ActionButton icon="plus" onClick={() => setEditing({ ...emptyHub })}>Create hub</ActionButton>}
     >
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -127,7 +127,7 @@ export function HubsPage() {
             <form onSubmit={save}>
               <div className="border-b border-border p-5">
                 <DialogTitle className="text-lg font-semibold">{editing.id ? "Edit hub" : "Create hub"}</DialogTitle>
-                <p className="mt-1 text-sm text-muted-foreground">Hub master data and administrative availability.</p>
+                {/* <p className="mt-1 text-sm text-muted-foreground">Hub master data and administrative availability.</p> */}
               </div>
               <div className="fields two p-5">
                 <label><span>Hub name</span><input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
