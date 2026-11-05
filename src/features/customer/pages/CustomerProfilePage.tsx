@@ -7,20 +7,24 @@ import {
   Mail,
   Phone,
   ShieldCheck,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   useEffect,
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/hooks/useAuth";
 import { customerProfileService } from "../services/customerProfileService";
+import { customerApi } from "../services/customerApi";
 
 export function CustomerProfilePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const cached = user
     ? customerProfileService.get(user.id)
@@ -30,6 +34,10 @@ export function CustomerProfilePage() {
   const [loading, setLoading] = useState(Boolean(user));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     if (!user) {
@@ -65,6 +73,26 @@ export function CustomerProfilePage() {
     };
   }, [user]);
 
+  // Keep the confirmation in-app, not in a native browser alert.
+  useEffect(() => {
+    if (!deleteOpen) return;
+
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !deleting) {
+        setDeleteOpen(false);
+        setDeleteConfirmed(false);
+        setDeleteError("");
+      }
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [deleteOpen, deleting]);
+
   if (!user) {
     return null;
   }
@@ -98,6 +126,38 @@ export function CustomerProfilePage() {
 
   const isSuccess =
     message === "Changes saved";
+
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteOpen(false);
+    setDeleteConfirmed(false);
+    setDeleteError("");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user || deleting || !deleteConfirmed) return;
+
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      // BE enforces business restrictions: active orders / ongoing missions.
+      // Only a successful DELETE should end the local session.
+      await customerApi.deleteMyAccount();
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete your account. Please try again.",
+      );
+      setDeleting(false);
+      return;
+    }
+
+    // This is a soft delete. Do not erase transaction/order records.
+    customerProfileService.remove(user.id);
+    logout();
+    navigate("/", { replace: true });
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1160px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8 xl:px-10">
@@ -335,6 +395,113 @@ export function CustomerProfilePage() {
           </div>
         </div>
       </section>
+
+      {/* Account deletion: intentionally separate from the editable contact form. */}
+      <section className="mt-6 rounded-[22px] border border-orange-500/[0.22] bg-[#151217]/94 px-5 py-5 sm:px-7 sm:py-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-semibold text-white sm:text-[18px]">Delete account</h2>
+            <p className="mt-1.5 max-w-[660px] text-[12px] leading-5 text-white/[0.58]">
+              Deactivate your account and prevent future sign-ins. Your delivery and payment history will be retained.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteConfirmed(false);
+              setDeleteError("");
+              setDeleteOpen(true);
+            }}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-orange-500/[0.38] bg-orange-500/[0.07] px-5 text-[13px] font-semibold text-orange-300 transition hover:bg-orange-500/[0.13] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            Delete my account
+          </button>
+        </div>
+      </section>
+
+      {deleteOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-[3px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeleteDialog();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            aria-describedby="delete-account-description"
+            className="w-full max-w-[440px] rounded-[22px] border border-white/[0.12] bg-[#161217]/95 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.48)] sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/[0.12] text-orange-300">
+                <Trash2 size={19} aria-hidden="true" />
+              </div>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={closeDeleteDialog}
+                aria-label="Close confirmation"
+                className="rounded-lg p-1.5 text-white/[0.50] transition hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <h2 id="delete-account-title" className="mt-4 text-[20px] font-semibold tracking-[-0.02em] text-white">
+              Delete your account?
+            </h2>
+            <p id="delete-account-description" className="mt-2 text-[13px] leading-6 text-white/[0.62]">
+              Your account will be deactivated and you won't be able to sign in again.
+              Order and payment records will remain in the system.
+            </p>
+            <p className="mt-2 text-[12px] leading-5 text-white/[0.52]">
+              Accounts with active deliveries cannot be deleted. The system will verify this before proceeding.
+            </p>
+
+            <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-white/[0.10] bg-white/[0.025] p-3.5">
+              <input
+                type="checkbox"
+                checked={deleteConfirmed}
+                disabled={deleting}
+                onChange={(event) => setDeleteConfirmed(event.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-orange-500"
+              />
+              <span className="text-[12px] leading-5 text-white/[0.78]">
+                I understand that I will lose access to this account.
+              </span>
+            </label>
+
+            {deleteError && (
+              <p role="alert" className="mt-4 rounded-xl border border-orange-500/[0.24] bg-orange-500/[0.07] px-3 py-3 text-[12px] leading-5 text-orange-300">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={closeDeleteDialog}
+                autoFocus
+                className="h-11 rounded-xl border border-white/[0.14] bg-white/[0.035] text-[13px] font-semibold text-white/[0.82] transition hover:bg-white/[0.07] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!deleteConfirmed || deleting}
+                onClick={() => void handleDeleteAccount()}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 text-[13px] font-semibold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                {deleting ? "Deleting…" : "Delete account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
