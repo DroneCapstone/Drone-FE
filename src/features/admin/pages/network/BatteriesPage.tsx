@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { BatteryCharging, CircleCheck, ClipboardCheck, Archive } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
-import { MetricCard } from '../../../operator/components/MetricCard';
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
@@ -34,11 +35,11 @@ export function BatteriesPage() {
   return <AdminPageShell title="Batteries"
     description="Manage Battery IDs already assigned to Hubs, operational status and lifecycle."
     actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries</Link>}>
-    <div className="metric-grid">
-      <MetricCard label="Total batteries" value={String(batteries.length)} delta="Registered" tone="info" note="Across the system" />
-      <MetricCard label="Ready" value={String(batteries.filter(isBatteryReady).length)} delta="Available" tone="success" note="Ready for assignment" />
-      <MetricCard label="Pending verification" value={String(batteries.filter((battery) => battery.administrativeStatus === 'ACTIVE' && battery.inspectionPending).length)} delta="New" tone="warning" note="Awaiting Technician confirmation" />
-      <MetricCard label="Retired" value={String(batteries.filter((battery) => battery.administrativeStatus === 'RETIRED').length)} delta="Lifecycle" tone="neutral" note="Kept in asset history" />
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminSummaryCard label="Total batteries" value={batteries.length} note="Across the system" icon={BatteryCharging} />
+      <AdminSummaryCard label="Ready" value={batteries.filter(isBatteryReady).length} note="Ready for assignment" icon={CircleCheck} />
+      <AdminSummaryCard label="Pending verification" value={batteries.filter((battery) => battery.administrativeStatus === 'ACTIVE' && battery.inspectionPending).length} note="Awaiting Technician confirmation" icon={ClipboardCheck} />
+      <AdminSummaryCard label="Retired" value={batteries.filter((battery) => battery.administrativeStatus === 'RETIRED').length} note="Kept in asset history" icon={Archive} />
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search Battery ID, model, serial or Hub…" meta={`${visible.length} of ${batteries.length} batteries`} filters={<>

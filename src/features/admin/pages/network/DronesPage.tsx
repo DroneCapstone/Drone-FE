@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Plane, CircleCheck, Wrench, RadioTower } from "lucide-react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
 import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { MetricCard } from "../../../operator/components/MetricCard";
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
@@ -63,11 +64,11 @@ export function DronesPage() {
 
   return (
     <AdminPageShell title="Drones" description="Register drone master data and control administrative availability. Operational status remains read-only for Admin." actions={<ActionButton icon="plus" onClick={() => setCreating(newDrone(hubs[0]?.id))}>Register drone</ActionButton>}>
-      <div className="metric-grid">
-        <MetricCard label="Total drones" value={String(drones.length)} delta="Fleet" tone="info" note="Registered assets" />
-        <MetricCard label="Available" value={String(drones.filter((d) => d.status === "AVAILABLE" && d.isActive).length)} delta="Ready" tone="success" note="Before eligibility checks" />
-        <MetricCard label="Maintenance" value={String(drones.filter((d) => d.status === "MAINTENANCE").length)} delta="Technician" tone="warning" note="Unavailable for missions" />
-        <MetricCard label="In flight" value={String(drones.filter((d) => d.status === "IN_FLIGHT").length)} delta="Live" tone="info" note="Cannot be deactivated" />
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminSummaryCard label="Total drones" value={drones.length} note="Registered assets" icon={Plane} />
+        <AdminSummaryCard label="Available" value={drones.filter((d) => d.status === "AVAILABLE" && d.isActive).length} note="Before eligibility checks" icon={CircleCheck} />
+        <AdminSummaryCard label="Maintenance" value={drones.filter((d) => d.status === "MAINTENANCE").length} note="Unavailable for missions" icon={Wrench} />
+        <AdminSummaryCard label="In flight" value={drones.filter((d) => d.status === "IN_FLIGHT").length} note="Cannot be deactivated" icon={RadioTower} />
       </div>
 
       <OperatorPanel className="flush-panel">

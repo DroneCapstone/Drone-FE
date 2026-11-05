@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, CheckCircle2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ClipboardList, ChevronDown, Clock3, PackageCheck, Truck, CircleCheckBig } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
-import { MetricCard } from '../../../operator/components/MetricCard';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 import { getAdminHubs, getAdminBatteries } from '../../services/adminStore';
@@ -30,6 +29,36 @@ const time = (date?: string) => date ? new Date(date).toLocaleString('en-GB') : 
 
 // Reuse Admin's compact 40px form-control visual language, including dark/light theme tokens.
 const approvalFieldClass = 'w-full min-w-0 rounded-md border border-[var(--admin-border)] !bg-[var(--admin-surface-2)] px-3 text-[13px] text-[var(--admin-text)] shadow-none outline-none transition-colors focus:!border-[#ff6b00] focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60';
+
+function CompactApprovalMetric({
+  label,
+  value,
+  note,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  note: string;
+  icon: typeof Clock3;
+}) {
+  return <div
+    className="min-w-0 px-4 py-3"
+    style={{
+      backgroundColor: '#FFFFFF',
+      border: '1px solid #DDE2E8',
+      borderRadius: 12,
+      boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05)',
+      minHeight: 112,
+    }}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <span className="min-w-0 text-xs font-medium text-[var(--admin-muted)]">{label}</span>
+      <Icon size={18} strokeWidth={1.8} className="shrink-0 text-[#FF6B00]" aria-hidden="true" />
+    </div>
+    <strong className="mt-1 block text-2xl font-bold leading-tight text-[var(--admin-text)]">{value}</strong>
+    <span className="mt-0.5 block text-[11px] text-[var(--admin-subtle)]">{note}</span>
+  </div>;
+}
 
 export function ApprovalsPage() {
   const [params, setParams] = useSearchParams();
@@ -60,7 +89,6 @@ export function ApprovalsPage() {
   const matchingParts = request?.type === 'PART' ? getMatchingPartOptions(request) : [];
   const matchingBatteries = request?.type === 'BATTERY' ? getMatchingBatteryOptions(request) : [];
   const selectedPart = matchingParts.find((part) => part.id === selectedItemId);
-  const damagedPart = request?.type === 'PART' ? parts.find((part) => part.id === request.partId) : undefined;
   const damagedBattery = request?.type === 'BATTERY' ? batteries.find((battery) => battery.id === request.batteryId) : undefined;
   const droneModel = request ? getRequestDroneModel(request) : undefined;
   const availablePart = matchingParts.find((part) => part.id === selectedItemId);
@@ -241,23 +269,21 @@ export function ApprovalsPage() {
                       className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--admin-muted)]" />
                   </span>
                 </label>
-                {!matchingBatteries.length && <p className="mt-2 text-xs text-orange-600">No new battery available for this model.</p>}
+                {!matchingBatteries.length && <p className="mt-2 text-xs text-orange-600">No available new battery found for this model. Create one in New Batteries.</p>}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link className="button button-secondary" to={`/admin/replacement/new-batteries?model=${encodeURIComponent(damagedBattery.model)}&returnTo=${encodeURIComponent(`/admin/replacement/requests?request=${request.id}`)}`}>
-                    Register / view new batteries
-                  </Link>
+                  <Link className="button button-secondary" to={`/admin/replacement/new-batteries?model=${encodeURIComponent(damagedBattery.model)}&returnTo=${encodeURIComponent(`/admin/approvals?request=${request.id}`)}`}>Manage new batteries</Link>
                 </div>
-              </> : <p className="text-sm text-red-500">Damaged battery not found.</p>}
+              </> : <p className="text-sm text-muted-foreground">Battery details unavailable.</p>}
             </>}
-            <div className="mt-4 flex justify-end border-t border-border pt-3">
-              <ActionButton disabled={!canSupply} onClick={confirmSupply}><CheckCircle2 size={16}/> Confirm supply</ActionButton>
+            <div className="form-actions mt-4">
+              <ActionButton onClick={confirmSupply} disabled={!canSupply}>Confirm supply</ActionButton>
             </div>
           </>}
 
           {(effective === 'SUPPLIED' || effective === 'RECEIVED') && <>
-            <h3 className="mb-3 text-sm font-medium">Supply details</h3>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-4 text-sm">
-              <div><dt className="text-xs text-muted-foreground">Provided</dt><dd className="mt-1 break-words font-semibold">{previouslySelected ?? 'Not recorded'}</dd></div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div><dt className="text-xs text-muted-foreground">Approved at</dt><dd className="mt-1 font-semibold">{time(request.reviewedAt)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Replacement item</dt><dd className="mt-1 font-semibold">{previouslySelected ?? '—'}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Quantity</dt><dd className="mt-1 font-semibold">{request.quantity}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Supplied at</dt><dd className="mt-1 font-semibold">{time(supply?.suppliedAt ?? request.reviewedAt)}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Receipt</dt><dd className="mt-1 font-semibold">{effective === 'RECEIVED' ? 'Confirmed' : 'Pending'}</dd></div>
@@ -277,11 +303,11 @@ export function ApprovalsPage() {
 
   const count = (state: AdminEffectiveStatus) => requests.filter((r) => getAdminEffectiveStatus(r) === state).length;
   return <AdminPageShell title="Requests & Approvals">
-    <div className="metric-grid">
-      <MetricCard label="Pending" value={String(count('PENDING'))} delta="Review" tone="warning" note="Waiting for Admin decision"/>
-      <MetricCard label="Approved" value={String(count('AWAITING_SUPPLY'))} delta="Supply needed" tone="info" note="Choose a replacement item"/>
-      <MetricCard label="Supplied" value={String(count('SUPPLIED'))} delta="Technician" tone="info" note="Awaiting receipt"/>
-      <MetricCard label="Received" value={String(count('RECEIVED'))} delta="Confirmed" tone="success" note="Technician confirmed receipt"/>
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <CompactApprovalMetric label="Pending review" value={count('PENDING')} note="Waiting for Admin decision" icon={Clock3} />
+      <CompactApprovalMetric label="Supply needed" value={count('AWAITING_SUPPLY')} note="Choose a replacement item" icon={PackageCheck} />
+      <CompactApprovalMetric label="Supplied" value={count('SUPPLIED')} note="Awaiting Technician receipt" icon={Truck} />
+      <CompactApprovalMetric label="Received" value={count('RECEIVED')} note="Technician confirmed receipt" icon={CircleCheckBig} />
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search request, damaged item or technician…" meta={`${visible.length} of ${requests.length} requests`} filters={<>
