@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { Dialog, DialogContent, DialogTitle } from '../../../../components/ui/Dialog';
+import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';

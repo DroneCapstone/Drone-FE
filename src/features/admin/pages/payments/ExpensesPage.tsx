@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CreditCard, RotateCcw, ReceiptText, TrendingUp } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { Dialog,DialogContent,DialogTitle } from '../../../../components/ui/Dialog';
+import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { AdminPageShell } from '../../components/AdminPageShell';

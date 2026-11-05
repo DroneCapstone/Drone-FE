@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { CreditCard, CircleCheck, Clock3, CircleX } from "lucide-react";
 import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
+import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";

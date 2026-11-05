@@ -153,7 +153,7 @@ export function ApprovalsPage() {
       {notice && <p role="status" className="mb-3 rounded-md border border-emerald-200 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
       {/* Shared two-card layout for ALL request statuses. */}
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <OperatorPanel>
+        <OperatorPanel className="admin-approval-facts">
           <div className="mb-3">
             <h2 className="flex items-center gap-2 text-base font-semibold">
               <ClipboardList size={18} color="#FF6B00"/> Technician's reported issue
@@ -200,7 +200,7 @@ export function ApprovalsPage() {
           </div>
         </OperatorPanel>
 
-        <OperatorPanel>
+        <OperatorPanel className="admin-approval-facts">
           <h2 className="mb-3 text-base font-semibold">{effective === 'PENDING' ? 'Approval decision' : effective === 'AWAITING_SUPPLY' ? 'Replacement supply' : effective === 'REJECTED' ? 'Rejection details' : 'Supply details'}</h2>
           {effective === 'PENDING' && <>
             <label className="block text-sm">

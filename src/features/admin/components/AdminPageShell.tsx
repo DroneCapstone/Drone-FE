@@ -61,7 +61,7 @@ export function AdminPageShell({
           <p
             style={{
               margin: "4px 0 0",
-              fontSize: 12,
+              fontSize: 13.5,
               fontWeight: 400,
               lineHeight: 1.5,
               letterSpacing: 0,
