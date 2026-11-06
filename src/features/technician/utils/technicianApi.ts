@@ -720,11 +720,12 @@ export const getWorkOrdersApi = () =>
   technicianApiRequest("/technician/fleet/work-orders");
 
 export const createWorkOrderApi = (payload: {
-  // Keep the original identifier, e.g. "DRN-0013", not a numeric suffix.
+  // Canonical backend IDs, e.g. "DRN-0013", never numeric suffix 13.
   drone_id: string;
-  // Live API validation expects the original battery identifier as a string.
-  battery_id: string;
+  // Optional in WORK_ORDER_INSPECTION_GUIDE.md; null for non-battery repairs.
+  battery_id?: string | null;
   issue_description: string;
+  alert_id?: number | null;
 }) =>
   technicianApiRequest("/technician/fleet/work-orders", {
     method: "POST",

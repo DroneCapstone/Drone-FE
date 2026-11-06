@@ -209,21 +209,14 @@ export function useCreateWorkOrderMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn:
-      createWorkOrderOnServer,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.maintenanceAlerts(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: technicianQueryKeys.fleet(),
-        }),
+    mutationFn: createWorkOrderOnServer,
+    onSuccess: () => {
+      // A successful POST is authoritative, even if subsequent GET fails.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.fleet() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
       ]);
     },
   });
@@ -256,12 +249,6 @@ export function useUpdateWorkOrderMutation() {
               variables.workOrderId,
             ),
         }),
-        queryClient.invalidateQueries({
-          queryKey: technicianQueryKeys.fleet(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: technicianQueryKeys.maintenanceAlerts(),
-        }),
       ]);
     },
   });
@@ -278,22 +265,18 @@ export function useUpdateWorkOrderInspectionMutation() {
       workOrderId: string;
       payload: Record<string, unknown>;
     }) =>
-      updateWorkOrderInspectionOnServer(
-        workOrderId,
-        payload,
-      ),
-    onSuccess: async (_, variables) => {
-      await Promise.all([
+      updateWorkOrderInspectionOnServer(workOrderId, payload),
+    onSuccess: (_result, variables) => {
+      // Refresh related screens in the background. A refetch failure must
+      // not override a successful inspection PATCH response.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
+          queryKey: technicianQueryKeys.workOrder(variables.workOrderId),
         }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrder(
-              variables.workOrderId,
-            ),
-        }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.fleet() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
       ]);
     },
   });

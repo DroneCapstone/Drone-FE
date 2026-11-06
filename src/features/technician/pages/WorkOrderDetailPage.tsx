@@ -31,26 +31,32 @@ import { Textarea } from "@/components/shadcn/ui/textarea";
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
 
 import {
-  addMaintenanceRecord,
   appendWorkOrderLog,
   formatMaintenanceTime,
   type WorkOrderStatus,
 } from "../utils/maintenanceStorage";
 
 import {
-  useCreateMaintenanceRecordMutation,
   useUpdateWorkOrderInspectionMutation,
-  useUpdateWorkOrderMutation,
   useWorkOrderQuery,
 } from "../hooks/useMaintenanceQueries";
 
-import {
-  type DroneStatus,
-} from "../utils/fleetStorage";
+// WorkOrder completion values as defined in WORK_ORDER_INSPECTION_GUIDE.md.
+type WorkOrderResultingDroneStatus = "Ready" | "Maintenance" | "Retired";
+
+import { TechnicianApiError } from "../utils/technicianApi";
 
 import {
   useFleetQuery,
 } from "../hooks/useFleetQueries";
+
+// A punctuation-only or placeholder action must never be submitted to BE.
+// Allow Vietnamese / English and count actual letters or numbers, not symbols.
+function hasMeaningfulCorrectiveAction(value: string): boolean {
+  const text = value.trim();
+  const characters = text.match(/[\p{L}\p{N}]/gu) ?? [];
+  return text.length >= 10 && characters.length >= 5;
+}
 
 const inspectionItems = [
   "Visual inspection of drone body",
@@ -74,14 +80,8 @@ export function WorkOrderDetailPage() {
   const fleetQuery =
     useFleetQuery();
 
-  const updateWorkOrderMutation =
-    useUpdateWorkOrderMutation();
-
   const updateInspectionMutation =
     useUpdateWorkOrderInspectionMutation();
-
-  const createMaintenanceRecordMutation =
-    useCreateMaintenanceRecordMutation();
 
   const order =
     workOrderQuery.data;
@@ -92,7 +92,9 @@ export function WorkOrderDetailPage() {
 
   const [apiError, setApiError] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
+  const [completionRequiresReview, setCompletionRequiresReview] = useState(false);
   const completionLock = useRef(false);
+  const startLock = useRef(false);
 
   const [
     workOrderStatus,
@@ -120,7 +122,7 @@ export function WorkOrderDetailPage() {
   const [
     droneStatus,
     setDroneStatus,
-  ] = useState<DroneStatus>(
+  ] = useState<WorkOrderResultingDroneStatus>(
     "Maintenance",
   );
 
@@ -172,35 +174,38 @@ export function WorkOrderDetailPage() {
     );
   }
 
-  const persistStatus = async (
-    nextStatus: WorkOrderStatus,
-    action: string,
-  ) => {
+  const startWorkOrder = async () => {
+    if (startLock.current || workOrderStatus !== "Pending") return;
+    startLock.current = true;
     try {
       setApiError("");
-      await updateWorkOrderMutation.mutateAsync({
+      // Official workflow: PATCH /inspection also starts a Work Order.
+      await updateInspectionMutation.mutateAsync({
         workOrderId: order.id,
         payload: {
-          status: nextStatus,
+          status: "In Progress",
+          action_taken: "Bắt đầu kiểm tra drone",
         },
       });
-
-      appendWorkOrderLog({
-        workOrderId: order.id,
-        drone: order.drone,
-        action,
-        status: nextStatus,
-        changedAt: formatMaintenanceTime(),
-        changedBy: order.assignedTo,
-      });
-
-      setWorkOrderStatus(nextStatus);
+      try {
+        appendWorkOrderLog({
+          workOrderId: order.id,
+          drone: order.drone,
+          action: "Work order started",
+          status: "In Progress",
+          changedAt: formatMaintenanceTime(),
+          changedBy: order.assignedTo,
+        });
+      } catch {
+        // Local history is best-effort; server PATCH already succeeded.
+      }
+      setWorkOrderStatus("In Progress");
     } catch (error) {
-      setApiError(
-        error instanceof Error
-          ? error.message
-          : "Unable to update work order status.",
-      );
+      setApiError(error instanceof Error ? error.message : "Unable to start work order.");
+      // If server may have accepted the PATCH, refresh rather than retry blindly.
+      void workOrderQuery.refetch();
+    } finally {
+      startLock.current = false;
     }
   };
 
@@ -220,10 +225,7 @@ export function WorkOrderDetailPage() {
       workOrderStatus ===
       "Pending"
     ) {
-      void persistStatus(
-        "In Progress",
-        "Work order started",
-      );
+      void startWorkOrder();
     }
   };
 
@@ -231,78 +233,83 @@ export function WorkOrderDetailPage() {
     checkedItems.length ===
     inspectionItems.length;
 
+  const correctiveActionIsValid =
+    hasMeaningfulCorrectiveAction(correctiveAction);
+
   const canComplete =
+    workOrderStatus === "In Progress" &&
     allInspectionCompleted &&
-    diagnosis.trim().length > 0 &&
-    correctiveAction.trim()
-      .length > 0;
+    correctiveActionIsValid;
 
   const completeWorkOrder = async () => {
-    if (!canComplete || completionLock.current || workOrderStatus === "Completed") return;
+    if (
+      !canComplete ||
+      completionLock.current ||
+      completionRequiresReview ||
+      isCompleting
+    ) return;
+
     completionLock.current = true;
     setIsCompleting(true);
-
     try {
       setApiError("");
 
-      // Persist the maintenance record BEFORE marking the Work Order Completed.
-      // A failed record creation must not produce a false Completed status.
-      // The utility checks for an existing record before POST to reduce retries.
-      await createMaintenanceRecordMutation.mutateAsync({
-        workOrderId: order.id,
-        droneId: order.droneId,
-        title: order.title,
-        diagnosis: diagnosis.trim(),
-        correctiveAction: correctiveAction.trim(),
-        resultingDroneStatus: droneStatus,
-        inspectionItems: [...checkedItems],
-      });
-
+      // BE contract (confirmed on 2026-11-05): PATCH /inspection is the ONLY
+      // write required to complete a Work Order. No Maintenance Record POST,
+      // extra Work Order PUT, or separate Drone status update is necessary.
+      // BE accepts Ready / Maintenance / Retired for resulting drone status.
       await updateInspectionMutation.mutateAsync({
         workOrderId: order.id,
         payload: {
           status: "Completed",
           action_taken: correctiveAction.trim(),
+          ...(diagnosis.trim() ? { diagnosis: diagnosis.trim() } : {}),
+          resulting_drone_status: droneStatus,
         },
       });
 
-      await updateWorkOrderMutation.mutateAsync({
-        workOrderId: order.id,
-        payload: {
+      try {
+        appendWorkOrderLog({
+          workOrderId: order.id,
+          drone: order.drone,
+          action: "Work order completed",
           status: "Completed",
-          diagnosis: diagnosis.trim(),
-          corrective_action: correctiveAction.trim(),
-        },
-      });
-
-      // BE now owns drone status transitions when Work Order is closed.
-      // Do NOT force PATCH status=AVAILABLE here: pending alerts may cause 409,
-      // and the close operation may already have succeeded on Backend.
-
-      const completedAt = formatMaintenanceTime();
-      addMaintenanceRecord({
-        id: `MR-${Date.now()}`,
-        workOrderId: order.id,
-        droneId: order.droneId,
-        drone: order.drone,
-        title: order.title,
-        priority: order.priority,
-        assignedTo: order.assignedTo,
-        diagnosis: diagnosis.trim(),
-        correctiveAction: correctiveAction.trim(),
-        inspectionItems: [...checkedItems],
-        resultingStatus: droneStatus,
-        createdAt: order.createdAt,
-        scheduledAt: order.scheduledAt,
-        completedAt,
-      });
+          changedAt: formatMaintenanceTime(),
+          changedBy: order.assignedTo,
+        });
+      } catch {
+        // Local history is best-effort; server PATCH already succeeded.
+      }
 
       setWorkOrderStatus("Completed");
       navigate("/technician/maintenance/work-orders", { replace: true });
     } catch (error) {
+      let explanation: string;
+      let mustVerifyServer = false;
+      if (error instanceof TechnicianApiError) {
+        if (error.status === 0) {
+          mustVerifyServer = true;
+          explanation =
+            "The browser could not read the response (network/CORS). " +
+            "The request may have reached the server; refresh and check its status.";
+        } else if (error.status >= 500) {
+          mustVerifyServer = true;
+          explanation =
+            `Backend returned HTTP ${error.status}. ` +
+            "Check the server logs for this exact Work Order and request payload.";
+        } else {
+          explanation = `Backend returned HTTP ${error.status}: ${error.message}`;
+        }
+      } else {
+        // React Query can also report a follow-up invalidation/refetch error
+        // after the PATCH was applied: verify the BE state before retrying.
+        mustVerifyServer = true;
+        explanation = error instanceof Error ? error.message : "Unknown error.";
+      }
+      if (mustVerifyServer) setCompletionRequiresReview(true);
       setApiError(
-        `${error instanceof Error ? error.message : "Unable to complete work order."} ` +
-        "Some earlier API steps may have succeeded. Refresh the Work Order before retrying to avoid duplicate operations.",
+        `Unable to confirm completion of Work Order ${order.id}. ${explanation}` +
+        (mustVerifyServer ? " Check the server state before trying again." : ""),
       );
     } finally {
       completionLock.current = false;
@@ -320,8 +327,8 @@ export function WorkOrderDetailPage() {
           disabled={
             !canComplete ||
             isCompleting ||
-            workOrderStatus ===
-              "Completed"
+            completionRequiresReview ||
+            updateInspectionMutation.isPending
           }
           onClick={
             completeWorkOrder
@@ -334,16 +341,27 @@ export function WorkOrderDetailPage() {
             ? "Completed"
             : isCompleting
               ? "Completing..."
-              : "Complete work order"}
+              : completionRequiresReview
+                ? "Check server state"
+                : "Complete work order"}
         </Button>
       }
     >
       {(apiError || workOrderQuery.error instanceof Error) && (
-        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+        <div role="alert" className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError ||
             (workOrderQuery.error instanceof Error
               ? workOrderQuery.error.message
               : "")}
+          {completionRequiresReview && (
+            <button
+              type="button"
+              className="ml-3 font-semibold underline"
+              onClick={() => window.location.reload()}
+            >
+              Reload work order
+            </button>
+          )}
         </div>
       )}
 
@@ -464,7 +482,7 @@ export function WorkOrderDetailPage() {
             <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
               Record the technical
               findings identified
-              during inspection.
+              during inspection (optional).
             </p>
 
             <Textarea
@@ -499,20 +517,28 @@ export function WorkOrderDetailPage() {
                   event.target.value,
                 )
               }
+              aria-invalid={correctiveAction.trim().length > 0 && !correctiveActionIsValid}
               placeholder="Record repair, adjustment, replacement or other corrective action..."
               className="min-h-[140px] resize-y overflow-auto border-[var(--tech-border)] bg-[var(--tech-surface-2)] text-[15px] leading-6 text-[var(--tech-text)]"
             />
+            {!correctiveActionIsValid && workOrderStatus !== "Completed" && (
+              <p className="mt-2 text-[12px] text-[var(--tech-muted)]">
+                Enter a meaningful corrective action (at least 10 characters,
+                including 5 letters or numbers). Symbols such as "." alone
+                are not accepted.
+              </p>
+            )}
           </Section>
 
           {/* Update Drone Status */}
           <Section
             icon={Check}
-            title="Resulting status (record only)"
+            title="Update drone status"
           >
             <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-              Record the expected technical status for the maintenance record.
-              Actual fleet availability is controlled by Backend work-order
-              closure and pending maintenance alerts.
+              Select the resulting
+              technical status after
+              maintenance.
             </p>
 
             <select
@@ -520,18 +546,14 @@ export function WorkOrderDetailPage() {
               onChange={(event) =>
                 setDroneStatus(
                   event.target
-                    .value as DroneStatus,
+                    .value as WorkOrderResultingDroneStatus,
                 )
               }
               className="tech-control h-10 w-full px-3"
             >
-              <option value="Available">
-                Available
-              </option>
-
-              <option value="Maintenance">
-                Maintenance
-              </option>
+              <option value="Ready">Ready (Available)</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Retired">Retired</option>
 
             </select>
           </Section>
@@ -560,6 +582,7 @@ export function WorkOrderDetailPage() {
                 <Meta
                   label="Model"
                   value={
+                    order.model ??
                     fleetDrone?.model ??
                     "—"
                   }
@@ -636,9 +659,7 @@ export function WorkOrderDetailPage() {
                 <TimelineItem
                   label="Corrective action"
                   completed={
-                    correctiveAction
-                      .trim()
-                      .length > 0
+                    correctiveActionIsValid
                   }
                 />
 
@@ -673,11 +694,12 @@ export function WorkOrderDetailPage() {
 
                     <p className="mt-1 text-[13px] leading-4 text-[var(--tech-muted)]">
                       Complete the
-                      inspection,
-                      diagnosis and
+                      inspection and
                       corrective action
                       before closing this
-                      work order.
+                      work order. Diagnosis
+                      is optional. The Work
+                      Order must be In Progress.
                     </p>
                   </div>
                 </div>
