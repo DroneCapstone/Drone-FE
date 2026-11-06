@@ -32,6 +32,7 @@ export function HubDetailPage() {
   return (
     <AdminPageShell
       title={hub.name}
+      backTo={{ path: "/admin/network/hubs", label: "Hubs" }}
       breadcrumbLabel="Hubs"
       description=""
       actions={<StatusBadge tone={hubTone(hub.status)}>{hub.status}</StatusBadge>}

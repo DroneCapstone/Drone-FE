@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import "./AdminDetailBack.css";
 import { adminNavigation, getActiveAdminChildPath } from "../adminNavigation";
 
 function isChildActive(pathname: string, path: string) {
@@ -23,12 +25,15 @@ export function AdminPageShell({
   title,
   description,
   actions,
+  backTo,
   children,
 }: {
   title: string;
   breadcrumbLabel?: string;
   description?: string;
   actions?: ReactNode;
+  /** Show a single back-to-list link instead of section navigation on detail pages. */
+  backTo?: { path: string; label: string };
   children: ReactNode;
 }) {
   const { pathname } = useLocation();
@@ -74,7 +79,14 @@ export function AdminPageShell({
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </header>
 
-      {section?.children?.length ? (
+      {backTo ? (
+        <div className="admin-detail-back-row">
+          <Link to={backTo.path} className="admin-detail-back-link">
+            <ArrowLeft size={17} strokeWidth={1.9} aria-hidden="true" />
+            <span>Back to {backTo.label}</span>
+          </Link>
+        </div>
+      ) : section?.children?.length ? (
         <nav className="subtabs" aria-label={`${section.label} navigation`}>
           {section.children.map((child) => (
             <Link

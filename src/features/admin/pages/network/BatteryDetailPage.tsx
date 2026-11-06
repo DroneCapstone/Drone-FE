@@ -64,6 +64,7 @@ export function BatteryDetailPage() {
 
   return <AdminPageShell
     title={battery.id}
+    backTo={{ path: "/admin/network/batteries", label: "Batteries" }}
     description={`${battery.model} · ${hub?.name ?? battery.hubId}`}
     actions={<>
       {battery.inspectionPending && <ActionButton variant="secondary" disabled={!canRecordInspection}

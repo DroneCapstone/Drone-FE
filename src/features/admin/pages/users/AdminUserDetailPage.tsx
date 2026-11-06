@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
 import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
 import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
@@ -26,7 +26,6 @@ function formatDate(value?: string) {
 
 export function AdminUserDetailPage() {
   const { userId } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const source = useMemo(() => getAdminUsers().find((item) => item.id === userId), [userId]);
   const [user, setUser] = useState<AdminUser | undefined>(source ? { ...source } : undefined);
@@ -95,10 +94,10 @@ export function AdminUserDetailPage() {
   return (
     <AdminPageShell
       title={user.fullName}
+      backTo={{ path: "/admin/users", label: "Users" }}
       description={`${user.email} · ${user.id}`}
       actions={(
         <div className="flex flex-wrap gap-2">
-          <ActionButton variant="secondary" onClick={() => navigate("/admin/users")}>Back to users</ActionButton>
           {!isEditing ? <ActionButton variant="secondary" onClick={startEdit}>Edit user</ActionButton> : null}
           <ActionButton
             variant={user.status === "ACTIVE" ? "danger" : "secondary"}
