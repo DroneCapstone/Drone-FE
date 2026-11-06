@@ -18,6 +18,7 @@ import {
 } from './prototypeWorkflow';
 import type { AdminBattery } from '../types';
 import './batteryLifecycle';
+import { getAvailableNewBatteries } from './adminNewBatterySupply';
 
 const PREFIX = 'droneoptai.prototype.v1.';
 const SUPPLY_KEY = `${PREFIX}admin-supply-v2`;
@@ -107,6 +108,8 @@ export function approveReplacementRequest(requestId: string, adminNote: string) 
     throw new Error('A spare part request requires a damaged component and Drone ID.');
   if (request.type === 'BATTERY' && !request.batteryId)
     throw new Error('A battery request requires the damaged Battery ID.');
+  if (request.type === 'BATTERY' && request.quantity !== 1)
+    throw new Error('Request one battery per replacement so every unit has its own Battery ID.');
   if (request.type === 'BATTERY' && !getAdminBatteries().some((battery) => battery.id === request.batteryId))
     throw new Error('The damaged Battery ID was not found. Verify it before approving.');
   if (request.type === 'BATTERY' && !getAdminHubs().some((hub) => hub.id === request.hubId && hub.status === 'ACTIVE'))
@@ -212,18 +215,28 @@ export function registerNewReplacementBattery(requestId: string, serialNumber: s
   return created;
 }
 
-/** Only the new Battery ID that Admin registered specifically for this request is selectable. */
+/** Replacement can use only an unused NEW battery controlled by Admin.
+ * It must NOT be a battery already assigned to a Hub or installed on a drone.
+ * Legacy requests with an already-registered Battery ID are still supported.
+ */
 export function getMatchingBatteryOptions(request: ReplacementRequest): AdminBattery[] {
-  if (request.type !== 'BATTERY') return [];
-  const record = getAdminSupplyRecord(request.id);
-  if (!record?.registeredBatteryId) return [];
-  const battery = getAdminBatteries().find((item) => item.id === record.registeredBatteryId);
-  const damaged = getAdminBatteries().find((item) => item.id === request.batteryId);
-  return battery && damaged && battery.model === damaged.model && battery.replacementRequestId === request.id && battery.hubId === request.hubId
-    && battery.administrativeStatus === 'ACTIVE' && battery.inspectionPending && !battery.droneId
-    && battery.operationalStatus === 'MAINTENANCE' ? [battery] : [];
+  if (request.type !== 'BATTERY' || request.quantity !== 1) return [];
+  const damaged = getAdminBatteries().find((battery) => battery.id === request.batteryId);
+  if (!damaged) return [];
+  const options = getAvailableNewBatteries(damaged.model);
+  const linkedId = getAdminSupplyRecord(request.id)?.registeredBatteryId;
+  const legacy = linkedId ? getAdminBatteries().find((battery) => battery.id === linkedId) : undefined;
+  if (legacy && legacy.model === damaged.model && legacy.hubId === request.hubId
+      && legacy.replacementRequestId === request.id && legacy.inspectionPending
+      && legacy.administrativeStatus === 'ACTIVE' && legacy.operationalStatus === 'MAINTENANCE'
+      && !legacy.droneId && !options.some((battery) => battery.id === legacy.id)) {
+    options.push(legacy);
+  }
+  // A request-specific battery registered by an earlier prototype must be
+  // supplied as that same ID; never leave it orphaned and supply another unit.
+  if (legacy && options.some((battery) => battery.id === legacy.id)) return [legacy];
+  return options;
 }
-
 
 /** Simple direct registration in Admin Battery Management (not tied to a replacement). */
 export function registerStandaloneBattery(model: string, hubId: string, serialNumber: string): AdminBattery {
@@ -292,6 +305,7 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
     reviewedBy: record.reviewedBy, adminNote: record.adminNote,
   };
   const parts = request.type === 'PART' ? getSpareParts() : undefined;
+  let batteryUpdates: AdminBattery[] | undefined;
   if (request.type === 'PART') {
     const matched = getMatchingPartOptions(request).find((part) => part.id === selectedItemId);
     const selected = parts?.find((part) => part.id === selectedItemId);
@@ -305,10 +319,23 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
   } else {
     if (request.quantity !== 1)
       throw new Error('Each battery is tracked by a unique Battery ID; please request one battery per request.');
-    if (!record.registeredBatteryId || selectedItemId !== record.registeredBatteryId
-      || !getMatchingBatteryOptions(request).some((battery) => battery.id === selectedItemId))
-      throw new Error('Register a new Battery ID for this specific request first. Existing batteries cannot be reused.');
+    const batteries = getAdminBatteries();
+    const chosen = batteries.find((battery) => battery.id === selectedItemId);
+    if (!chosen || !getMatchingBatteryOptions(request).some((battery) => battery.id === selectedItemId))
+      throw new Error('Choose an available NEW battery with the correct model from Replacement Supplies.');
+    // A previously unassigned Admin-owned battery is now supplied to the Hub.
+    // This is an UPDATE of the same Battery ID, not creation of another one.
+    if (chosen.replacementSupplyState === 'AVAILABLE') {
+      chosen.hubId = request.hubId;
+      chosen.replacementRequestId = request.id;
+      chosen.replacementSupplyState = 'SUPPLIED';
+      chosen.replacementSuppliedAt = time;
+      chosen.updatedAt = time;
+    } else if (!(record.registeredBatteryId === chosen.id && chosen.replacementRequestId === request.id)) {
+      throw new Error('This battery has already been allocated to another Hub or request.');
+    }
     record.selectedBatteryId = selectedItemId;
+    batteryUpdates = batteries;
   }
   record.stage = 'SUPPLIED';
   record.suppliedAt = time;
@@ -316,6 +343,7 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
   const requests = getReplacementRequests().map((item) => item.id === requestId ? updated : item);
   const entries: Array<[string, unknown]> = [[REQUEST_KEY, requests], [SUPPLY_KEY, records]];
   if (parts) entries.unshift([PART_KEY, parts]);
+  if (batteryUpdates) entries.unshift([BATTERY_KEY, batteryUpdates]);
   commit(entries);
   return record;
 }

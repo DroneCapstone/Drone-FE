@@ -1,0 +1,35 @@
+/*
+ * New Batteries: three white, elevated metrics.
+ * Use literal colors to prevent Admin theme variables or generic card
+ * styles from reverting these cards to gray/dark backgrounds.
+ * Scoped to this page's dedicated class, does not touch table/modal styles.
+ */
+.admin-app .new-batteries-stat-card {
+  background-color: #ffffff !important;
+  border: 1px solid #dfe3e8 !important;
+  border-radius: 12px !important;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.105),
+    0 2px 5px rgba(15, 23, 42, 0.045) !important;
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.admin-app .new-batteries-stat-card:hover {
+  border-color: #d4d9e0 !important;
+  box-shadow:
+    0 10px 26px rgba(15, 23, 42, 0.12),
+    0 3px 7px rgba(15, 23, 42, 0.045) !important;
+}
+
+/* Icons remain small, orange, right-aligned and without a square backing. */
+.admin-app .new-batteries-stat-card svg {
+  background: none !important;
+  box-shadow: none !important;
+}
+
+/* Preserve usability when Admin is switched to dark mode. */
+.admin-app[data-admin-theme="dark"] .new-batteries-stat-card {
+  background-color: #171a20 !important;
+  border-color: #3b414a !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25) !important;
+}

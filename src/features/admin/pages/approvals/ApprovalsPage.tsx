@@ -1,23 +1,19 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, CheckCircle2, ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, ClipboardList, ChevronDown, Clock3, PackageCheck, Truck, CircleCheckBig } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
-import { Dialog, DialogContent, DialogTitle } from '../../../../components/ui/Dialog';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
-import { MetricCard } from '../../../operator/components/MetricCard';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 import { getAdminHubs, getAdminBatteries } from '../../services/adminStore';
 import {
-  addSparePartQuantity, getReplacementRequests, getSpareParts, saveSparePart,
-  type ReplacementRequest, type SparePart,
+  getReplacementRequests, getSpareParts, type ReplacementRequest,
 } from '../../services/prototypeWorkflow';
 import {
   approveReplacementRequest, getAdminEffectiveStatus, getAdminSupplyRecord,
   getMatchingBatteryOptions, getMatchingPartOptions,
-  getRequestDroneModel, nextAdminBatteryId, registerNewReplacementBattery,
-  rejectReplacementRequest, supplyApprovedReplacement,
+  getRequestDroneModel, rejectReplacementRequest, supplyApprovedReplacement,
   type AdminEffectiveStatus,
 } from '../../services/adminReplacementSupply';
 
@@ -30,10 +26,39 @@ const tones: Record<AdminEffectiveStatus, 'warning' | 'info' | 'success' | 'dang
   RECEIVED: 'success', REJECTED: 'danger',
 };
 const time = (date?: string) => date ? new Date(date).toLocaleString('en-GB') : '—';
-const formatMoney = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' VND';
 
 // Reuse Admin's compact 40px form-control visual language, including dark/light theme tokens.
 const approvalFieldClass = 'w-full min-w-0 rounded-md border border-[var(--admin-border)] !bg-[var(--admin-surface-2)] px-3 text-[13px] text-[var(--admin-text)] shadow-none outline-none transition-colors focus:!border-[#ff6b00] focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60';
+
+function CompactApprovalMetric({
+  label,
+  value,
+  note,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  note: string;
+  icon: typeof Clock3;
+}) {
+  return <div
+    className="min-w-0 px-4 py-3"
+    style={{
+      backgroundColor: '#FFFFFF',
+      border: '1px solid #DDE2E8',
+      borderRadius: 12,
+      boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05)',
+      minHeight: 112,
+    }}
+  >
+    <div className="flex items-center justify-between gap-2">
+      <span className="min-w-0 text-xs font-medium text-[var(--admin-muted)]">{label}</span>
+      <Icon size={18} strokeWidth={1.8} className="shrink-0 text-[#FF6B00]" aria-hidden="true" />
+    </div>
+    <strong className="mt-1 block text-2xl font-bold leading-tight text-[var(--admin-text)]">{value}</strong>
+    <span className="mt-0.5 block text-[11px] text-[var(--admin-subtle)]">{note}</span>
+  </div>;
+}
 
 export function ApprovalsPage() {
   const [params, setParams] = useSearchParams();
@@ -45,15 +70,7 @@ export function ApprovalsPage() {
   const [selectedItemId, setSelectedItemId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [partModal, setPartModal] = useState<'CREATE' | 'ADD' | null>(null);
-  const [newPartId, setNewPartId] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [referenceCost, setReferenceCost] = useState(0);
-  const [paid, setPaid] = useState(false);
-  const [unitPrice, setUnitPrice] = useState(0);
-  const [batterySerial, setBatterySerial] = useState('');
-  const [batteryPaid, setBatteryPaid] = useState(false);
-  const [batteryPrice, setBatteryPrice] = useState(0);
+
 
   useEffect(() => {
     const listener = () => setVersion((value) => value + 1);
@@ -71,8 +88,7 @@ export function ApprovalsPage() {
   const effective = request ? getAdminEffectiveStatus(request) : 'PENDING';
   const matchingParts = request?.type === 'PART' ? getMatchingPartOptions(request) : [];
   const matchingBatteries = request?.type === 'BATTERY' ? getMatchingBatteryOptions(request) : [];
-  const selectedPart = parts.find((part) => part.id === selectedItemId);
-  const damagedPart = request?.type === 'PART' ? parts.find((part) => part.id === request.partId) : undefined;
+  const selectedPart = matchingParts.find((part) => part.id === selectedItemId);
   const damagedBattery = request?.type === 'BATTERY' ? batteries.find((battery) => battery.id === request.batteryId) : undefined;
   const droneModel = request ? getRequestDroneModel(request) : undefined;
   const availablePart = matchingParts.find((part) => part.id === selectedItemId);
@@ -81,13 +97,12 @@ export function ApprovalsPage() {
     const nextParams = new URLSearchParams(params);
     nextParams.set('request', next.id);
     setParams(nextParams);
-    setAdminNote(''); setError(''); setNotice(''); setSelectedItemId(''); setPartModal(null);
-    setBatterySerial(''); setBatteryPaid(false); setBatteryPrice(0);
+    setAdminNote(''); setError(''); setNotice(''); setSelectedItemId('');
   }
   function back() {
     const nextParams = new URLSearchParams(params);
     nextParams.delete('request'); setParams(nextParams);
-    setError(''); setNotice(''); setSelectedItemId(''); setPartModal(null);
+    setError(''); setNotice(''); setSelectedItemId('');
   }
   function run(action: () => void, message: string) {
     try { action(); setError(''); setNotice(message); }
@@ -104,55 +119,8 @@ export function ApprovalsPage() {
   }
   function confirmSupply() {
     if (!request) return;
-    const id = request.type === 'BATTERY'
-      ? getAdminSupplyRecord(request.id)?.registeredBatteryId ?? ''
-      : selectedItemId;
+    const id = selectedItemId;
     run(() => supplyApprovedReplacement(request.id, id), `Supplied ${id}.`);
-  }
-  function registerReplacementBattery(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!request || request.type !== 'BATTERY') return;
-    try {
-      const created = registerNewReplacementBattery(
-        request.id, batterySerial, batteryPaid ? batteryPrice : undefined,
-      );
-      setSelectedItemId(created.id);
-      setBatterySerial(''); setBatteryPaid(false); setBatteryPrice(0); setError('');
-      setNotice(`Registered ${created.id} for ${hubName(request.hubId)}.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to register battery.');
-    }
-  }
-  function openNewPart() {
-    setPartModal('CREATE'); setNewPartId(''); setQuantity(1); setReferenceCost(0);
-    setPaid(false); setUnitPrice(0); setError('');
-  }
-  function openAddPart() {
-    setPartModal('ADD'); setQuantity(1); setPaid(false); setUnitPrice(0); setError('');
-  }
-  function savePart(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!request || request.type !== 'PART') return;
-    try {
-      if (partModal === 'CREATE') {
-        if (!damagedPart || !droneModel) throw new Error('Request needs a known component and drone model.');
-        if (parts.some((part) => part.id === newPartId.trim().toUpperCase()))
-          throw new Error('Part ID already exists; select it or use Add quantity.');
-        const newPart: SparePart = {
-          id: newPartId.trim().toUpperCase(), name: damagedPart.name, compatibleModels: droneModel,
-          active: true, quantity, unitCostVnd: referenceCost,
-        };
-        saveSparePart(newPart, paid ? { paid: true, actualUnitCostVnd: unitPrice } : undefined);
-        setSelectedItemId(newPart.id);
-        setNotice(`Created ${newPart.id}.`);
-      } else if (partModal === 'ADD') {
-        if (!selectedPart) throw new Error('Select a spare part first.');
-        addSparePartQuantity(selectedPart.id, quantity,
-          paid ? { paid: true, actualUnitCostVnd: unitPrice } : undefined);
-        setNotice(`Added ${quantity} to ${selectedPart.id}.`);
-      }
-      setPartModal(null); setError('');
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save spare part.'); }
   }
 
   const item = (r: ReplacementRequest) => r.type === 'PART'
@@ -170,10 +138,8 @@ export function ApprovalsPage() {
       <ActionButton variant="secondary" onClick={back}>Back to approvals</ActionButton>
     </AdminPageShell>;
     const previouslySelected = supply?.selectedPartId ?? supply?.selectedBatteryId ?? request.approvedPartId;
-    const registeredBatteryId = supply?.registeredBatteryId ?? '';
-    const registeredBattery = batteries.find((battery) => battery.id === registeredBatteryId);
     const canSupply = request.type === 'BATTERY'
-      ? matchingBatteries.some((battery) => battery.id === registeredBatteryId)
+      ? matchingBatteries.some((battery) => battery.id === selectedItemId)
       : Boolean(selectedItemId && availablePart && availablePart.quantity >= request.quantity);
     const workOrderId = (request as ReplacementRequest & { workOrderId?: string }).workOrderId;
 
@@ -187,7 +153,7 @@ export function ApprovalsPage() {
       {notice && <p role="status" className="mb-3 rounded-md border border-emerald-200 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
       {/* Shared two-card layout for ALL request statuses. */}
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <OperatorPanel>
+        <OperatorPanel className="admin-approval-facts">
           <div className="mb-3">
             <h2 className="flex items-center gap-2 text-base font-semibold">
               <ClipboardList size={18} color="#FF6B00"/> Technician's reported issue
@@ -234,8 +200,8 @@ export function ApprovalsPage() {
           </div>
         </OperatorPanel>
 
-        <OperatorPanel>
-          <h2 className="mb-3 text-base font-semibold">Admin decision</h2>
+        <OperatorPanel className="admin-approval-facts">
+          <h2 className="mb-3 text-base font-semibold">{effective === 'PENDING' ? 'Approval decision' : effective === 'AWAITING_SUPPLY' ? 'Replacement supply' : effective === 'REJECTED' ? 'Rejection details' : 'Supply details'}</h2>
           {effective === 'PENDING' && <>
             <label className="block text-sm">
               <span>Review findings and notes</span>
@@ -248,7 +214,6 @@ export function ApprovalsPage() {
           </>}
 
           {effective === 'AWAITING_SUPPLY' && <>
-            <h3 className="mb-3 text-sm font-medium">Select replacement</h3>
             {request.type === 'PART' ? <>
               <label className="block text-sm">
                 <span className="text-[13px] text-[var(--admin-text-secondary)]">Compatible spare part</span>
@@ -279,43 +244,46 @@ export function ApprovalsPage() {
                 <div><span className="text-muted-foreground">Required</span><p className="mt-1 font-semibold">{request.quantity}</p></div>
                 <div><span className="text-muted-foreground">After</span><p className="mt-1 font-semibold">{selectedPart.quantity >= request.quantity ? selectedPart.quantity - request.quantity : 'Insufficient'}</p></div>
               </div>}
-              {!matchingParts.length && <p className="mt-2 text-xs text-orange-600">No compatible part registered.</p>}
+              {!matchingParts.length && <p className="mt-2 text-xs text-orange-600">No compatible spare part registered.</p>}
+              {selectedPart && selectedPart.quantity < request.quantity && <p className="mt-2 text-xs text-orange-600">Not enough quantity. Add more in Spare Parts before confirming.</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                <ActionButton variant="secondary" onClick={openNewPart}>Create part</ActionButton>
-                <ActionButton variant="secondary" disabled={!selectedPart} onClick={openAddPart}>Add quantity</ActionButton>
+                <Link className="button button-secondary" to="/admin/replacement/spare-parts">Manage spare parts</Link>
               </div>
             </> : <>
               {damagedBattery ? <>
-                {registeredBattery ? <div className="rounded-md border border-border px-3 py-3">
-                  <p className="text-xs text-muted-foreground">New battery</p>
-                  <p className="mt-1 text-sm font-semibold">{registeredBattery.id} · {registeredBattery.model}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Serial: {registeredBattery.serialNumber} · Pending inspection</p>
-                </div> : <form onSubmit={registerReplacementBattery} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-muted-foreground">New Battery ID</label><p className="mt-1 text-sm font-semibold">{nextAdminBatteryId(batteries)}</p></div>
-                    <div><label className="text-xs text-muted-foreground">Hub</label><p className="mt-1 text-sm font-semibold">{hubName(request.hubId)}</p></div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Model: <strong className="text-foreground">{damagedBattery.model}</strong></div>
-                  <label className="block text-sm"><span>New serial number</span>
-                    <input className={`${approvalFieldClass} mt-2 h-10`} required value={batterySerial} onChange={(event) => setBatterySerial(event.target.value)} placeholder="Enter battery serial number" />
-                  </label>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={batteryPaid} onChange={(event) => setBatteryPaid(event.target.checked)} /> Already paid</label>
-                  {batteryPaid && <label className="block text-sm"><span>Purchase price (VND)</span>
-                    <input className={`${approvalFieldClass} mt-2 h-10`} required type="number" min={1} step={1} value={batteryPrice || ''} onChange={(event) => setBatteryPrice(Number(event.target.value))} />
-                  </label>}
-                  <ActionButton type="submit">Register battery</ActionButton>
-                </form>}
-              </> : <p className="text-sm text-red-500">Damaged battery not found.</p>}
+                <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
+                  <div><p className="text-xs text-muted-foreground">Battery model</p><p className="mt-1 font-semibold">{damagedBattery.model}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Receiving Hub</p><p className="mt-1 font-semibold">{hubName(request.hubId)}</p></div>
+                </div>
+                <label className="block text-sm">
+                  <span className="text-[13px] text-[var(--admin-text-secondary)]">Available new battery</span>
+                  <span className="relative mt-2 block">
+                    <select aria-label="Available new battery" className={`${approvalFieldClass} h-10 appearance-none pr-10`}
+                      value={selectedItemId} onChange={(event) => { setSelectedItemId(event.target.value); setError(''); }}>
+                      <option value="">Select a new battery</option>
+                      {matchingBatteries.map((battery) => <option key={battery.id} value={battery.id}>
+                        {battery.id} · {battery.model} · {battery.serialNumber}
+                      </option>)}
+                    </select>
+                    <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true"
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--admin-muted)]" />
+                  </span>
+                </label>
+                {!matchingBatteries.length && <p className="mt-2 text-xs text-orange-600">No available new battery found for this model. Create one in New Batteries.</p>}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link className="button button-secondary" to={`/admin/replacement/new-batteries?model=${encodeURIComponent(damagedBattery.model)}&returnTo=${encodeURIComponent(`/admin/approvals?request=${request.id}`)}`}>Manage new batteries</Link>
+                </div>
+              </> : <p className="text-sm text-muted-foreground">Battery details unavailable.</p>}
             </>}
-            <div className="mt-4 flex justify-end border-t border-border pt-3">
-              <ActionButton disabled={!canSupply} onClick={confirmSupply}><CheckCircle2 size={16}/> Confirm supply</ActionButton>
+            <div className="form-actions mt-4">
+              <ActionButton onClick={confirmSupply} disabled={!canSupply}>Confirm supply</ActionButton>
             </div>
           </>}
 
           {(effective === 'SUPPLIED' || effective === 'RECEIVED') && <>
-            <h3 className="mb-3 text-sm font-medium">Supply details</h3>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-4 text-sm">
-              <div><dt className="text-xs text-muted-foreground">Provided</dt><dd className="mt-1 break-words font-semibold">{previouslySelected ?? 'Not recorded'}</dd></div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div><dt className="text-xs text-muted-foreground">Approved at</dt><dd className="mt-1 font-semibold">{time(request.reviewedAt)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Replacement item</dt><dd className="mt-1 font-semibold">{previouslySelected ?? '—'}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Quantity</dt><dd className="mt-1 font-semibold">{request.quantity}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Supplied at</dt><dd className="mt-1 font-semibold">{time(supply?.suppliedAt ?? request.reviewedAt)}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Receipt</dt><dd className="mt-1 font-semibold">{effective === 'RECEIVED' ? 'Confirmed' : 'Pending'}</dd></div>
@@ -330,44 +298,16 @@ export function ApprovalsPage() {
       </div>
       {error && <p role="alert" className="mt-3 rounded-md border border-red-200 px-3 py-2 text-sm text-red-600">{error}</p>}
 
-      <Dialog open={Boolean(partModal)} onOpenChange={(open) => !open && setPartModal(null)}>
-        {partModal && <DialogContent className="max-h-[85vh] overflow-y-auto"><form onSubmit={savePart}>
-          <div className="border-b border-border p-5">
-            <DialogTitle className="text-lg font-semibold">{partModal === 'CREATE' ? 'Create spare part' : 'Add quantity'}</DialogTitle>
-          </div>
-          <div className="fields two p-5">
-            {partModal === 'CREATE' && <>
-              <label><span>New Part ID</span><input required placeholder="PART-M350-MOTOR-02" value={newPartId} onChange={(event) => setNewPartId(event.target.value.toUpperCase())}/></label>
-              <label><span>Compatible model</span><input readOnly value={droneModel ?? ''}/></label>
-              <label><span>Reference price (VND)</span><input type="number" min={0} step={1} value={referenceCost} onChange={(event) => setReferenceCost(Number(event.target.value))}/></label>
-            </>}
-            {partModal === 'ADD' && <label><span>Part ID</span><input readOnly value={selectedPart?.id ?? ''}/></label>}
-            <label><span>Quantity</span><input required type="number" min={1} step={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}/></label>
-          </div>
-          <div className="mx-5 border-t border-border pt-4">
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)}/> Purchase paid</label>
-            {paid && <div className="mt-3 fields two">
-              <label><span>Actual price (VND)</span><input required type="number" min={1} step={1} value={unitPrice || ''} onChange={(event) => setUnitPrice(Number(event.target.value))}/></label>
-              <label><span>Expense</span><input readOnly value={formatMoney(quantity * unitPrice)}/></label>
-            </div>}
-          </div>
-          {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
-          <div className="form-actions border-t border-border p-5">
-            <ActionButton variant="secondary" onClick={() => setPartModal(null)}>Cancel</ActionButton>
-            <ActionButton type="submit">{partModal === 'CREATE' ? 'Create part' : 'Add quantity'}</ActionButton>
-          </div>
-        </form></DialogContent>}
-      </Dialog>
     </AdminPageShell>;
   }
 
   const count = (state: AdminEffectiveStatus) => requests.filter((r) => getAdminEffectiveStatus(r) === state).length;
-  return <AdminPageShell title="Approvals">
-    <div className="metric-grid">
-      <MetricCard label="Pending" value={String(count('PENDING'))} delta="Review" tone="warning" note="Waiting for Admin decision"/>
-      <MetricCard label="Approved" value={String(count('AWAITING_SUPPLY'))} delta="Supply needed" tone="info" note="Choose a replacement item"/>
-      <MetricCard label="Supplied" value={String(count('SUPPLIED'))} delta="Technician" tone="info" note="Awaiting receipt"/>
-      <MetricCard label="Received" value={String(count('RECEIVED'))} delta="Confirmed" tone="success" note="Technician confirmed receipt"/>
+  return <AdminPageShell title="Requests & Approvals">
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <CompactApprovalMetric label="Pending review" value={count('PENDING')} note="Waiting for Admin decision" icon={Clock3} />
+      <CompactApprovalMetric label="Supply needed" value={count('AWAITING_SUPPLY')} note="Choose a replacement item" icon={PackageCheck} />
+      <CompactApprovalMetric label="Supplied" value={count('SUPPLIED')} note="Awaiting Technician receipt" icon={Truck} />
+      <CompactApprovalMetric label="Received" value={count('RECEIVED')} note="Technician confirmed receipt" icon={CircleCheckBig} />
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search request, damaged item or technician…" meta={`${visible.length} of ${requests.length} requests`} filters={<>
