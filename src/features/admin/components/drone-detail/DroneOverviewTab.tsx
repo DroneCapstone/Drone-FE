@@ -29,7 +29,7 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
   const due = getMaintenanceDue(drone);
   const flightSummary = getDemoFlightSummary(drone.id, flights);
   return <div className="dd-overview">
-    <DetailCard eyebrow="DRONE MASTER DATA" title="Drone information"
+    <DetailCard title="Drone information"
       action={<button type="button" className="dd-edit-btn" onClick={onEdit}><Pencil size={16} aria-hidden="true" /> Edit</button>}>
       <div className="dd-master-fields-grid">
         <ReadonlyField label="Drone name">{drone.name}</ReadonlyField>
@@ -41,7 +41,7 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
     </DetailCard>
 
     <div className="dd-grid-two">
-      <DetailCard eyebrow="CURRENT STATE" title="Operational information">
+      <DetailCard title="Operational information">
         <div className="dd-rows">
           <DetailRow label="Operational status"><DetailBadge tone={drone.status === 'AVAILABLE' ? 'green' : drone.status === 'IN_FLIGHT' ? 'blue' : 'orange'}>{drone.status.replace(/_/g, ' ')}</DetailBadge></DetailRow>
           {/* <DetailRow label="z"><DetailBadge tone={drone.isActive ? 'green' : 'gray'}>{drone.isActive ? 'ACTIVE' : 'INACTIVE'}</DetailBadge></DetailRow> */}
@@ -50,7 +50,7 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
           <DetailRow label="Installed battery">{drone.installedBatteryId ? <Link className="dd-inline-link" to={`/admin/network/batteries/${encodeURIComponent(drone.installedBatteryId)}`}>{drone.installedBatteryId}<ExternalLink size={12} aria-hidden="true" /></Link> : '—'}</DetailRow>
         </div>
       </DetailCard>
-      <DetailCard eyebrow="MAINTENANCE OVERVIEW" title="Maintenance status" action={<DetailBadge tone={due.tone}>{due.label}</DetailBadge>}>
+      <DetailCard title="Maintenance status" action={<DetailBadge tone={due.tone}>{due.label}</DetailBadge>}>
         <div className="dd-rows">
           <DetailRow label="Open work orders (demo)"><button type="button" className="dd-action-link" onClick={() => onTabChange('orders')}>{orders.filter((o) => o.status !== 'COMPLETED').length} <ArrowRight size={14} aria-hidden="true" /></button></DetailRow>
           <DetailRow label="Last maintenance">{formatDroneDate(drone.lastMaintenanceAt)}</DetailRow>
@@ -61,12 +61,12 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
     </div>
 
     <div className="dd-grid-bottom">
-      <DetailCard eyebrow="RECENT MAINTENANCE RECORDS" title="Work orders"
+      <DetailCard title="Work orders"
         action={<button type="button" className="dd-action-link" onClick={() => onTabChange('orders')}>View all <ArrowRight size={14} aria-hidden="true" /></button>}>
         <DemoNote category="work orders" />
         <WorkOrdersTable orders={orders} recent onOpen={onOpenOrder} />
       </DetailCard>
-      <DetailCard eyebrow="FLIGHT SUMMARY" title="Flight activity">
+      <DetailCard title="Flight activity">
         <div className="dd-rows dd-flight-summary">
           <DetailRow label="Last flight">{formatDroneDate(flightSummary.latest ?? drone.lastFlightAt)}</DetailRow>
           <DetailRow label="Total flights (demo)">{flightSummary.count}</DetailRow>

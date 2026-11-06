@@ -1,16 +1,15 @@
 import type { ReactNode } from 'react';
 import type { DetailTab } from './droneDetailData';
 
-export function DetailCard({ title, eyebrow, action, children, className = '' }: {
+export function DetailCard({ title, action, children, className = '' }: {
   title: string;
-  eyebrow?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return <section className={`dd-card ${className}`}>
     <div className="dd-card-heading">
-      <div>{eyebrow && <div className="dd-eyebrow">{eyebrow}</div>}<h2 className="dd-card-title">{title}</h2></div>
+      <h2 className="dd-card-title">{title}</h2>
       {action && <div className="dd-card-action">{action}</div>}
     </div>
     {children}

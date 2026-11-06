@@ -21,7 +21,7 @@ export function DroneFlightHistoryTab({ droneId, flights, lastRecordedFlight, on
       <AdminSummaryCard label="Flight hours (demo)" value={summary.hours == null ? '—' : `${summary.hours} h`} icon={Clock3} />
       <AdminSummaryCard label="Latest flight" value={formatDroneDate(latest).split(',')[0]} icon={CalendarDays} />
     </div>
-    <DetailCard eyebrow="FLIGHT SUMMARY" title="Flight history" className="dd-tab-panel">
+    <DetailCard title="Flight history" className="dd-tab-panel">
       <div className="dd-toolbar"><label className="dd-search"><Search size={15} aria-hidden="true"/>
         <span className="sr-only">Search flights</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search flight, mission or route…"/></label>
         <span className="dd-toolbar-meta">{visible.length} sample records · Read only</span>

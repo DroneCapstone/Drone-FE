@@ -45,7 +45,7 @@ export function DroneDetailPage() {
   function saveDrone(draft: AdminDrone): string | null {
     // Read current store state at save time to avoid overwriting Technician-owned
     // fields that may have been updated since the Edit modal was opened.
-    const stored = getAdminDrones().find((item) => item.id === drone.id);
+    const stored = getAdminDrones().find((item) => item.id === droneId);
     if (!stored) return 'This drone no longer exists.';
     const name = draft.name.trim();
     const serialNumber = draft.serialNumber.trim();
@@ -72,7 +72,7 @@ export function DroneDetailPage() {
   }
 
   function toggleActive() {
-    const stored = getAdminDrones().find((item) => item.id === drone.id);
+    const stored = getAdminDrones().find((item) => item.id === droneId);
     if (!stored) { setError('Drone no longer exists.'); return; }
     if (stored.isActive && stored.status === 'IN_FLIGHT') { setError('Cannot deactivate a drone in flight.'); setConfirmActive(false); return; }
     const updated = { ...stored, isActive: !stored.isActive, updatedAt: new Date().toISOString() };

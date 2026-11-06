@@ -31,7 +31,7 @@ export function DroneWorkOrdersTab({ orders, onOpen }: { orders: DroneWorkOrder[
   const list = orders.filter((o) => (status === 'ALL' || o.status === status) &&
     `${o.id} ${o.issue} ${o.technician}`.toLowerCase().includes(search.trim().toLowerCase()));
   return <div className="dd-tab-stack">
-    <DetailCard eyebrow="TECHNICIAN OWNED" title="Work orders" className="dd-tab-panel">
+    <DetailCard title="Work orders" className="dd-tab-panel">
       <div className="dd-toolbar">
         <label className="dd-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search work orders</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work Order or issue…" /></label>

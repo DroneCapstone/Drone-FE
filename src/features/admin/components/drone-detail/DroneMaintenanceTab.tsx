@@ -25,7 +25,7 @@ export function DroneMaintenanceTab({ drone, orders, onOpenOrder }: {
       <AdminSummaryCard label="Completed work orders" value={done} icon={CircleCheckBig} />
     </div>
     <div className="dd-grid-two">
-      <DetailCard eyebrow="SCHEDULE" title="Maintenance overview">
+      <DetailCard title="Maintenance overview">
         <div className="dd-rows">
           <DetailRow label="Last maintenance">{formatDroneDate(drone.lastMaintenanceAt)}</DetailRow>
           <DetailRow label="Next maintenance">{formatDroneDate(drone.nextMaintenanceAt)}</DetailRow>
@@ -34,7 +34,7 @@ export function DroneMaintenanceTab({ drone, orders, onOpenOrder }: {
         </div>
         {note && <div className="dd-warning-note">{note}</div>}
       </DetailCard>
-      <DetailCard eyebrow="MAINTENANCE ACTIVITY" title="Recent technician records">
+      <DetailCard title="Recent technician records">
         <div className="dd-table-scroll"><table className="dd-table dd-maintenance-table"><thead><tr>
           <th>Work order</th><th>Issue</th><th>Status</th><th>Action</th>
         </tr></thead><tbody>{orders.map((r) => <tr key={r.id}>
