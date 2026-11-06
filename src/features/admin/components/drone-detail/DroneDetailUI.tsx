@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import type { DetailTab } from './droneDetailData';
 
-export function DetailCard({ eyebrow, title, action, children, className = '' }: {
-  eyebrow: string;
+export function DetailCard({ title, action, children, className = '' }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
@@ -10,7 +9,7 @@ export function DetailCard({ eyebrow, title, action, children, className = '' }:
 }) {
   return <section className={`dd-card ${className}`}>
     <div className="dd-card-heading">
-      <div><div className="dd-eyebrow">{eyebrow}</div><h2 className="dd-card-title">{title}</h2></div>
+      <h2 className="dd-card-title">{title}</h2>
       {action && <div className="dd-card-action">{action}</div>}
     </div>
     {children}
@@ -25,8 +24,9 @@ export function MasterFact({ label, children }: { label: string; children: React
 export function DetailBadge({ tone, children }: { tone: 'green' | 'blue' | 'red' | 'orange' | 'gray'; children: ReactNode }) {
   return <span className={`dd-badge dd-badge--${tone}`}>{children}</span>;
 }
-export function DemoNote({ category }: { category: string }) {
-  return <p className="dd-demo-note">Demo {category} · not connected to Technician/Operator API.</p>;
+export function DemoNote({ category: _category }: { category: string }) {
+  // The prototype keeps the note hidden without returning undefined JSX.
+  return null;
 }
 export const detailTabs: { id: DetailTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },

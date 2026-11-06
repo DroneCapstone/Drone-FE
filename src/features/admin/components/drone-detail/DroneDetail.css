@@ -63,10 +63,8 @@
   min-width: 0;
   padding: 18px 20px;
 }
-.admin-drone-detail .dd-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.admin-drone-detail .dd-card-heading > div:first-child { min-width: 0; }
-.admin-drone-detail .dd-eyebrow { font-size: 11px; letter-spacing: 1px; color: var(--dd-secondary); font-weight: 750; line-height: 1.3; }
-.admin-drone-detail h2.dd-card-title { font-size: 14px; color: var(--dd-text); font-weight: 650; line-height: 1.4; letter-spacing: -.1px; margin: 3px 0 0; }
+.admin-drone-detail .dd-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.admin-drone-detail h2.dd-card-title { font-size: 14px; color: var(--admin-text, #111827); font-weight: 650; line-height: 1.4; letter-spacing: -.1px; margin: 0; }
 .admin-drone-detail .dd-card-action { flex: 0 0 auto; }
 .admin-drone-detail .dd-edit-btn {
   border: 1px solid var(--dd-border);
@@ -136,7 +134,7 @@
 .admin-drone-detail .dd-empty { text-align:center; padding:26px 0 !important; }
 .admin-drone-detail .dd-muted-line { font-size: 13.5px; color:var(--dd-muted); margin:0 0 8px; }
 .admin-drone-detail .dd-note-spaced { margin:14px 0 0; }
-.admin-drone-detail .dd-toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:13px 0 14px; align-items:center; }
+.admin-drone-detail .dd-toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 14px; align-items:center; }
 .admin-drone-detail .dd-toolbar select,.admin-drone-detail .dd-search {
   min-height:38px;
   border:1px solid var(--dd-border);
@@ -195,4 +193,131 @@
   .admin-drone-detail .dd-card { padding:15px; }
   .admin-drone-detail .dd-row { align-items:start; }
   .admin-drone-detail .dd-progress { width:50px; }
+}
+
+/* ---------- Restore the original interactive HTML demo's functional layout ---------- */
+/* Overview: master fields are displayed like the demo's text inputs, but remain
+   read-only; the Edit action keeps the existing validated Admin popup. */
+.admin-drone-detail .dd-master-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 0 0 2px;
+}
+.admin-drone-detail .dd-readonly-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-drone-detail .dd-readonly-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dd-muted);
+  line-height: 1.4;
+}
+.admin-drone-detail .dd-readonly-control {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 11px;
+  color: var(--dd-text);
+  background: var(--admin-surface-2, #f8f9fa);
+  border: 1px solid var(--dd-border);
+  border-radius: 7px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.admin-drone-detail .dd-readonly-control .dd-inline-link { font-size: 13.5px; }
+
+/* Maintenance and Flight History: three small raised KPI cards from the HTML demo. */
+.admin-drone-detail .dd-kpis {
+  display: grid;
+  gap: 13px;
+}
+.admin-drone-detail .dd-kpis--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-drone-detail .dd-kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 98px;
+  padding: 16px 18px;
+  background: var(--dd-surface);
+  border: 1px solid var(--dd-border);
+  border-radius: 11px;
+  box-shadow: 0 4px 14px rgba(19, 38, 68, .06);
+}
+.admin-drone-detail .dd-kpi > span {
+  color: var(--dd-secondary);
+  font-size: 12px;
+}
+.admin-drone-detail .dd-kpi > strong {
+  color: var(--dd-text);
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 5px 0;
+}
+.admin-drone-detail .dd-kpi > strong.dd-kpi-schedule { font-size: 20px; }
+.admin-drone-detail .dd-kpi > strong.dd-kpi-date { font-size: 18px; }
+.admin-drone-detail .dd-kpi > strong.dd-kpi-red { color: #d12e3a; }
+.admin-drone-detail .dd-kpi > strong.dd-kpi-orange { color: #bd6d00; }
+.admin-drone-detail .dd-kpi > strong.dd-kpi-green { color: #038c58; }
+.admin-drone-detail .dd-kpi > small {
+  color: var(--dd-secondary);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.admin-drone-detail .dd-owner-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  border: 1px solid #ffe0c9;
+  background: #fff9f2;
+  padding: 12px 14px;
+  color: #9d5c20;
+  font-size: 12px;
+}
+.admin-drone-detail .dd-owner-banner svg { flex: 0 0 auto; }
+.admin-drone-detail .dd-owner-banner strong { font-weight: 700; }
+.admin-drone-detail .dd-owner-banner p { margin: 3px 0 0; font-size: 12px; line-height: 1.5; }
+.admin-drone-detail .dd-warning-note {
+  border: 1px solid #ffdfc6;
+  background: #fff9f4;
+  color: #9c561b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.admin-drone-detail .dd-role-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--dd-border);
+  border-radius: 9px;
+  background: var(--admin-surface-2, #f8fafc);
+  color: var(--dd-muted);
+  font-size: 12.5px;
+}
+.admin-drone-detail .dd-role-callout svg { flex: 0 0 auto; color: var(--dd-orange); }
+.admin-drone-detail .dd-toolbar-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dd-secondary);
+  white-space: nowrap;
+}
+.admin-drone-detail .dd-maintenance-table { min-width: 380px; }
+@media (max-width: 900px) {
+  .admin-drone-detail .dd-kpis--three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .admin-drone-detail .dd-kpis--three,
+  .admin-drone-detail .dd-master-fields-grid { grid-template-columns: 1fr; }
+  .admin-drone-detail .dd-toolbar-meta { width: 100%; margin-left: 0; }
 }

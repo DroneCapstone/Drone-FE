@@ -23,20 +23,43 @@ export interface DroneFlightRecord {
   status: 'COMPLETED';
 }
 
-// Explicitly isolated demo fixtures. No Technician/Operator API is called.
-// IDs are not relabeled: keep the real Admin DR-001 reference for this prototype.
+/** Isolated view-only fixtures, NOT shared with Technician or Operator API.
+ * Keep actual Admin Drone IDs (e.g. DR-001) to preserve Hub/Battery/Approval links.
+ */
 const demoOrders: DroneWorkOrder[] = [
-  { id: 'WO-DEMO-004', droneId: 'DR-001', issue: 'Motor inspection', status: 'IN_PROGRESS', technician: 'Tran An', updatedAt: '2026-11-06T10:24:00+07:00', diagnosis: 'Unusual vibration reported during inspection.', correctiveAction: 'Inspect motor mount and verify torque settings.' },
-  { id: 'WO-DEMO-003', droneId: 'DR-001', issue: 'Propeller replacement', status: 'COMPLETED', technician: 'Do Minh', updatedAt: '2026-10-29T16:12:00+07:00', diagnosis: 'Visible crack on a propeller.', correctiveAction: 'Replaced propeller and completed inspection.' },
-  { id: 'WO-DEMO-002', droneId: 'DR-001', issue: 'Battery connector inspection', status: 'IN_PROGRESS', technician: 'Tran An', updatedAt: '2026-11-04T09:30:00+07:00', diagnosis: 'Intermittent connection reported.', correctiveAction: 'Inspect contacts and document findings.' },
+  { id: 'WO-2026-004', droneId: 'DR-001', issue: 'Motor inspection', status: 'IN_PROGRESS', technician: 'Tran An', updatedAt: '2026-11-06T10:24:00+07:00', diagnosis: 'Abnormal vibration during routine inspection.', correctiveAction: 'Inspect mount and verify torque settings.' },
+  { id: 'WO-2026-003', droneId: 'DR-001', issue: 'Propeller replacement', status: 'COMPLETED', technician: 'Do Minh', updatedAt: '2026-10-29T16:12:00+07:00', diagnosis: 'A propeller had a visible surface crack.', correctiveAction: 'Replacement approved, installed and inspected.' },
+  { id: 'WO-2026-002', droneId: 'DR-001', issue: 'Battery connector inspection', status: 'IN_PROGRESS', technician: 'Tran An', updatedAt: '2026-11-04T09:30:00+07:00', diagnosis: 'Intermittent contact reported during preflight preparation.', correctiveAction: 'Inspect connector and document findings.' },
+  { id: 'WO-2026-010', droneId: 'DR-003', issue: 'Propeller inspection', status: 'IN_PROGRESS', technician: 'Do Minh', updatedAt: '2026-11-05T14:12:00+07:00', diagnosis: 'Minor chipping on propeller edge.', correctiveAction: 'Request replacement parts.' },
 ];
 const demoFlights: DroneFlightRecord[] = [
-  { id: 'FLT-DEMO-003', droneId: 'DR-001', missionId: 'MSN-DEMO-003', route: 'HCM-01 → HCM-02', departure: '2026-10-02T17:17:00+07:00', arrival: '2026-10-02T17:42:00+07:00', energy: '182.4 Wh', status: 'COMPLETED' },
-  { id: 'FLT-DEMO-002', droneId: 'DR-001', missionId: 'MSN-DEMO-002', route: 'HCM-01 → HCM-03', departure: '2026-09-30T16:02:00+07:00', arrival: '2026-09-30T16:29:00+07:00', energy: '201.6 Wh', status: 'COMPLETED' },
-  { id: 'FLT-DEMO-001', droneId: 'DR-001', missionId: 'MSN-DEMO-001', route: 'HCM-03 → HCM-01', departure: '2026-09-28T09:30:00+07:00', arrival: '2026-09-28T09:52:00+07:00', energy: '168.2 Wh', status: 'COMPLETED' },
+  { id: 'FLT-20261106-001', droneId: 'DR-001', missionId: 'MSN-20261106-002', route: 'HCM-01 → HCM-02', departure: '2026-11-06T08:17:00+07:00', arrival: '2026-11-06T08:42:00+07:00', energy: '182.4 Wh', status: 'COMPLETED' },
+  { id: 'FLT-20261104-012', droneId: 'DR-001', missionId: 'MSN-20261104-012', route: 'HCM-01 → HCM-03', departure: '2026-11-04T16:02:00+07:00', arrival: '2026-11-04T16:29:00+07:00', energy: '201.6 Wh', status: 'COMPLETED' },
+  { id: 'FLT-20261103-006', droneId: 'DR-001', missionId: 'MSN-20261103-008', route: 'HCM-03 → HCM-01', departure: '2026-11-03T09:30:00+07:00', arrival: '2026-11-03T09:52:00+07:00', energy: '168.2 Wh', status: 'COMPLETED' },
+  { id: 'FLT-20261030-001', droneId: 'DR-003', missionId: 'MSN-20261030-001', route: 'HCM-01 → HCM-02', departure: '2026-10-30T16:06:00+07:00', arrival: '2026-10-30T16:30:00+07:00', energy: '153.9 Wh', status: 'COMPLETED' },
 ];
+
 export const getDemoOrders = (id: string) => demoOrders.filter((r) => r.droneId === id);
 export const getDemoFlights = (id: string) => demoFlights.filter((r) => r.droneId === id);
+
+/** The original HTML prototype showed historical aggregates, but the table
+ * includes only a few sample records. Keep these two concepts distinct. */
+export function getDemoFlightSummary(droneId: string, flights: DroneFlightRecord[]) {
+  if (droneId === 'DR-001') return {
+    count: 128,
+    hours: 56.4,
+    latest: '2026-11-06T08:42:00+07:00',
+  };
+  const lastFlight = [...flights].sort((a, b) => b.departure.localeCompare(a.departure))[0];
+  return { count: flights.length, hours: null as number | null, latest: lastFlight?.arrival ?? lastFlight?.departure };
+}
+
+/** Read-only sample maintenance note for the Admin prototype. */
+export function getDemoMaintenanceNote(droneId: string): string {
+  if (droneId === 'DR-001') return 'Periodic inspection (500 flight hours)';
+  if (droneId === 'DR-003') return 'Propeller inspection required';
+  return '';
+}
 
 export const formatDroneDate = (date?: string) => {
   if (!date) return '—';
