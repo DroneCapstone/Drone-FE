@@ -44,7 +44,7 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
       <DetailCard eyebrow="CURRENT STATE" title="Operational information">
         <div className="dd-rows">
           <DetailRow label="Operational status"><DetailBadge tone={drone.status === 'AVAILABLE' ? 'green' : drone.status === 'IN_FLIGHT' ? 'blue' : 'orange'}>{drone.status.replace(/_/g, ' ')}</DetailBadge></DetailRow>
-          <DetailRow label="Admin state"><DetailBadge tone={drone.isActive ? 'green' : 'gray'}>{drone.isActive ? 'ACTIVE' : 'INACTIVE'}</DetailBadge></DetailRow>
+          {/* <DetailRow label="z"><DetailBadge tone={drone.isActive ? 'green' : 'gray'}>{drone.isActive ? 'ACTIVE' : 'INACTIVE'}</DetailBadge></DetailRow> */}
           <DetailRow label="Current Hub (prototype)">{hubName}</DetailRow>
           <DetailRow label="Battery level">{batteryLevel == null ? '—' : <span className="dd-progress-value">{batteryLevel}%<span className="dd-progress" aria-hidden="true"><span style={{ width: `${Math.min(100, Math.max(0, batteryLevel))}%` }} /></span></span>}</DetailRow>
           <DetailRow label="Installed battery">{drone.installedBatteryId ? <Link className="dd-inline-link" to={`/admin/network/batteries/${encodeURIComponent(drone.installedBatteryId)}`}>{drone.installedBatteryId}<ExternalLink size={12} aria-hidden="true" /></Link> : '—'}</DetailRow>

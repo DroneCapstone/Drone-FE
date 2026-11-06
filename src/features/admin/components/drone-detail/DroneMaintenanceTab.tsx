@@ -1,4 +1,5 @@
-import { AlertTriangle } from 'lucide-react';
+import { ClipboardList, CalendarClock, CircleCheckBig } from 'lucide-react';
+import { AdminSummaryCard } from '../AdminSummaryCard';
 import type { AdminDrone } from '../../types';
 import type { DroneWorkOrder } from './droneDetailData';
 import { formatDroneDate, getDemoMaintenanceNote, getMaintenanceDue } from './droneDetailData';
@@ -14,14 +15,14 @@ export function DroneMaintenanceTab({ drone, orders, onOpenOrder }: {
   const done = orders.filter((o) => o.status === 'COMPLETED').length;
   const note = getDemoMaintenanceNote(drone.id);
   return <div className="dd-tab-stack">
-    <div className="dd-owner-banner" role="note">
+    {/* <div className="dd-owner-banner" role="note">
       <AlertTriangle size={19} aria-hidden="true"/>
       <div><strong>Maintenance is Technician-owned</strong><p>Admin can inspect records and alerts here, but cannot complete inspections or close Work Orders.</p></div>
-    </div>
+    </div> */}
     <div className="dd-kpis dd-kpis--three">
-      <div className="dd-kpi"><span>Open work orders</span><strong>{open}</strong><small>Technician review required</small></div>
-      <div className="dd-kpi"><span>Maintenance schedule</span><strong className={`dd-kpi-schedule dd-kpi-${due.tone}`}>{due.label}</strong><small>{formatDroneDate(drone.nextMaintenanceAt)}</small></div>
-      <div className="dd-kpi"><span>Completed work orders</span><strong>{done}</strong><small>Recorded for this drone</small></div>
+      <AdminSummaryCard label="Open work orders" value={open} icon={ClipboardList} />
+      <AdminSummaryCard label="Maintenance schedule" value={due.label} icon={CalendarClock} />
+      <AdminSummaryCard label="Completed work orders" value={done} icon={CircleCheckBig} />
     </div>
     <div className="dd-grid-two">
       <DetailCard eyebrow="SCHEDULE" title="Maintenance overview">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight, PlaneTakeoff, Clock3, CalendarDays } from 'lucide-react';
+import { AdminSummaryCard } from '../AdminSummaryCard';
 import type { DroneFlightRecord } from './droneDetailData';
 import { formatDroneDate, getDemoFlightSummary } from './droneDetailData';
 import { DetailBadge, DetailCard } from './DroneDetailUI';
@@ -16,9 +17,9 @@ export function DroneFlightHistoryTab({ droneId, flights, lastRecordedFlight, on
   const latest = summary.latest ?? lastRecordedFlight;
   return <div className="dd-tab-stack">
     <div className="dd-kpis dd-kpis--three">
-      <div className="dd-kpi"><span>Total flights (mock)</span><strong>{summary.count}</strong><small>Historical mock aggregate</small></div>
-      <div className="dd-kpi"><span>Flight hours (mock)</span><strong>{summary.hours == null ? '—' : `${summary.hours} h`}</strong><small>Cumulative mock data</small></div>
-      <div className="dd-kpi"><span>Latest flight</span><strong className="dd-kpi-date">{formatDroneDate(latest).split(',')[0]}</strong><small>{formatDroneDate(latest).split(',')[1]?.trim() ?? '—'}</small></div>
+      <AdminSummaryCard label="Total flights (demo)" value={summary.count} icon={PlaneTakeoff} />
+      <AdminSummaryCard label="Flight hours (demo)" value={summary.hours == null ? '—' : `${summary.hours} h`} icon={Clock3} />
+      <AdminSummaryCard label="Latest flight" value={formatDroneDate(latest).split(',')[0]} icon={CalendarDays} />
     </div>
     <DetailCard eyebrow="FLIGHT SUMMARY" title="Flight history" className="dd-tab-panel">
       <div className="dd-toolbar"><label className="dd-search"><Search size={15} aria-hidden="true"/>

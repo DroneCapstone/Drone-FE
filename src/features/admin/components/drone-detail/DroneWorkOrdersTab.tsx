@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Wrench, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight } from 'lucide-react';
 import type { DroneWorkOrder } from './droneDetailData';
 import { formatDroneDate } from './droneDetailData';
 import { DetailBadge, DetailCard } from './DroneDetailUI';
@@ -18,7 +18,7 @@ export function WorkOrdersTable({ orders, onOpen, recent = false, showAction = f
       <td>{r.issue}</td>
       <td><DetailBadge tone={r.status === 'COMPLETED' ? 'green' : 'blue'}>{r.status === 'COMPLETED' ? 'COMPLETED' : 'IN PROGRESS'}</DetailBadge></td>
       <td>{r.technician}</td><td>{formatDroneDate(r.updatedAt)}</td>
-      {showAction && <td><button type="button" className="dd-action-link" onClick={() => onOpen(r)}>View details <ArrowRight size={13} aria-hidden="true"/></button></td>}
+      {showAction && <td><button type="button" className="dd-action-link" onClick={() => onOpen(r)}>View details <ArrowRight size={13} aria-hidden="true" /></button></td>}
     </tr>)}
       {!entries.length && <tr><td colSpan={showAction ? 6 : 5} className="dd-empty">No matching work orders.</td></tr>}
     </tbody>
@@ -33,15 +33,15 @@ export function DroneWorkOrdersTab({ orders, onOpen }: { orders: DroneWorkOrder[
   return <div className="dd-tab-stack">
     <DetailCard eyebrow="TECHNICIAN OWNED" title="Work orders" className="dd-tab-panel">
       <div className="dd-toolbar">
-        <label className="dd-search"><Search size={15} aria-hidden="true"/><span className="sr-only">Search work orders</span>
+        <label className="dd-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search work orders</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work Order or issue…" /></label>
         <select aria-label="Filter work orders" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="ALL">All status</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option>
         </select>
         <span className="dd-toolbar-meta">{list.length} work order(s) · View only</span>
       </div>
-      <WorkOrdersTable orders={list} onOpen={onOpen} showAction/>
+      <WorkOrdersTable orders={list} onOpen={onOpen} showAction />
     </DetailCard>
-    <div className="dd-role-callout"><Wrench size={16} aria-hidden="true"/><span>The Technician handles diagnosis, replacement requests, inspections, and completion. Admin views progress across the fleet.</span></div>
+    {/* <div className="dd-role-callout"><Wrench size={16} aria-hidden="true"/><span>The Technician handles diagnosis, replacement requests, inspections, and completion. Admin views progress across the fleet.</span></div> */}
   </div>;
 }

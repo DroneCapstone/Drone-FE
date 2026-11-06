@@ -54,6 +54,7 @@ export function getDemoFlightSummary(droneId: string, flights: DroneFlightRecord
   return { count: flights.length, hours: null as number | null, latest: lastFlight?.arrival ?? lastFlight?.departure };
 }
 
+/** Read-only sample maintenance note for the Admin prototype. */
 export function getDemoMaintenanceNote(droneId: string): string {
   if (droneId === 'DR-001') return 'Periodic inspection (500 flight hours)';
   if (droneId === 'DR-003') return 'Propeller inspection required';
