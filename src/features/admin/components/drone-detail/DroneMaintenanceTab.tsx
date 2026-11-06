@@ -1,8 +1,8 @@
+import { AlertTriangle } from 'lucide-react';
 import type { AdminDrone } from '../../types';
 import type { DroneWorkOrder } from './droneDetailData';
-import { formatDroneDate, getMaintenanceDue } from './droneDetailData';
-import { DetailBadge, DetailCard, DemoNote, MasterFact } from './DroneDetailUI';
-import { WorkOrdersTable } from './DroneWorkOrdersTab';
+import { formatDroneDate, getDemoMaintenanceNote, getMaintenanceDue } from './droneDetailData';
+import { DetailBadge, DetailCard, DetailRow } from './DroneDetailUI';
 
 export function DroneMaintenanceTab({ drone, orders, onOpenOrder }: {
   drone: AdminDrone;
@@ -10,18 +10,38 @@ export function DroneMaintenanceTab({ drone, orders, onOpenOrder }: {
   onOpenOrder: (order: DroneWorkOrder) => void;
 }) {
   const due = getMaintenanceDue(drone);
+  const open = orders.filter((o) => o.status !== 'COMPLETED').length;
+  const done = orders.filter((o) => o.status === 'COMPLETED').length;
+  const note = getDemoMaintenanceNote(drone.id);
   return <div className="dd-tab-stack">
-    <DetailCard eyebrow="TECHNICIAN OWNED" title="Maintenance overview">
-      <div className="dd-master-grid dd-master-grid--three">
-        <MasterFact label="Maintenance schedule"><DetailBadge tone={due.tone}>{due.label}</DetailBadge></MasterFact>
-        <MasterFact label="Last maintenance">{formatDroneDate(drone.lastMaintenanceAt)}</MasterFact>
-        <MasterFact label="Next maintenance">{formatDroneDate(drone.nextMaintenanceAt)}</MasterFact>
-      </div>
-      <p className="dd-muted-line dd-note-spaced">Technician owns inspections and Work Order updates. Admin access here is read-only.</p>
-    </DetailCard>
-    <DetailCard eyebrow="MAINTENANCE HISTORY" title="Maintenance records">
-      <DemoNote category="maintenance records"/>
-      <WorkOrdersTable orders={orders} onOpen={onOpenOrder}/>
-    </DetailCard>
+    <div className="dd-owner-banner" role="note">
+      <AlertTriangle size={19} aria-hidden="true"/>
+      <div><strong>Maintenance is Technician-owned</strong><p>Admin can inspect records and alerts here, but cannot complete inspections or close Work Orders.</p></div>
+    </div>
+    <div className="dd-kpis dd-kpis--three">
+      <div className="dd-kpi"><span>Open work orders</span><strong>{open}</strong><small>Technician review required</small></div>
+      <div className="dd-kpi"><span>Maintenance schedule</span><strong className={`dd-kpi-schedule dd-kpi-${due.tone}`}>{due.label}</strong><small>{formatDroneDate(drone.nextMaintenanceAt)}</small></div>
+      <div className="dd-kpi"><span>Completed work orders</span><strong>{done}</strong><small>Recorded for this drone</small></div>
+    </div>
+    <div className="dd-grid-two">
+      <DetailCard eyebrow="SCHEDULE" title="Maintenance overview">
+        <div className="dd-rows">
+          <DetailRow label="Last maintenance">{formatDroneDate(drone.lastMaintenanceAt)}</DetailRow>
+          <DetailRow label="Next maintenance">{formatDroneDate(drone.nextMaintenanceAt)}</DetailRow>
+          <DetailRow label="Status"><DetailBadge tone={due.tone}>{due.label}</DetailBadge></DetailRow>
+          <DetailRow label="Open work orders">{open}</DetailRow>
+        </div>
+        {note && <div className="dd-warning-note">{note}</div>}
+      </DetailCard>
+      <DetailCard eyebrow="MAINTENANCE ACTIVITY" title="Recent technician records">
+        <div className="dd-table-scroll"><table className="dd-table dd-maintenance-table"><thead><tr>
+          <th>Work order</th><th>Issue</th><th>Status</th><th>Action</th>
+        </tr></thead><tbody>{orders.map((r) => <tr key={r.id}>
+          <td><strong>{r.id}</strong></td><td>{r.issue}</td>
+          <td><DetailBadge tone={r.status === 'COMPLETED' ? 'green' : 'blue'}>{r.status === 'COMPLETED' ? 'COMPLETED' : 'IN PROGRESS'}</DetailBadge></td>
+          <td><button type="button" className="dd-action-link" onClick={() => onOpenOrder(r)}>View</button></td>
+        </tr>)}{!orders.length && <tr><td colSpan={4} className="dd-empty">No demo maintenance records.</td></tr>}</tbody></table></div>
+      </DetailCard>
+    </div>
   </div>;
 }

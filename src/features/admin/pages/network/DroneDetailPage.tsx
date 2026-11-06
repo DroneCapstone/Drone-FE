@@ -112,7 +112,7 @@ export function DroneDetailPage() {
         {tab === 'overview' && <DroneOverviewTab drone={drone} hubName={hubName} batteryLevel={batteryLevel} orders={orders} flights={flights} onEdit={() => { setIsEditing(true); setError(''); setNotice(''); }} onTabChange={setTab} onOpenOrder={setSelectedOrder}/>}
         {tab === 'maintenance' && <DroneMaintenanceTab drone={drone} orders={orders} onOpenOrder={setSelectedOrder}/>}
         {tab === 'orders' && <DroneWorkOrdersTab orders={orders} onOpen={setSelectedOrder}/>}
-        {tab === 'flights' && <DroneFlightHistoryTab flights={flights} lastRecordedFlight={drone.lastFlightAt} onOpen={setSelectedFlight}/>}
+        {tab === 'flights' && <DroneFlightHistoryTab droneId={drone.id} flights={flights} lastRecordedFlight={drone.lastFlightAt} onOpen={setSelectedFlight}/>}
       </div>
     </div>
     {isEditing && <DroneEditDialog drone={drone} hubs={hubs} onSave={saveDrone} onClose={() => setIsEditing(false)}/>}
