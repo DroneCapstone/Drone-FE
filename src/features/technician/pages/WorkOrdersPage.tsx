@@ -2,8 +2,6 @@ import {
 
   ArrowUpRight,
 
-  Eye,
-
   History,
 
   Plus,
@@ -25,6 +23,8 @@ import {
   useEffect,
 
   useMemo,
+
+  useRef,
 
   useState,
 
@@ -74,11 +74,8 @@ import {
 
   loadWorkOrderLogs,
 
-  loadMaintenanceRecords,
-
   fetchWorkOrderLogsFromApi,
-
-  type CompletedMaintenanceRecord,
+  fetchWorkOrderFromApi,
 
   type WorkOrder,
 
@@ -416,35 +413,16 @@ export function WorkOrdersPage() {
 
   ] = useState(false);
 
-
-
-  const [
-
-    maintenanceRecords,
-
-    setMaintenanceRecords,
-
-  ] = useState<
-
-    CompletedMaintenanceRecord[]
-
-  >(loadMaintenanceRecords);
-
-
-
-  const [
-
-    selectedRecord,
-
-    setSelectedRecord,
-
-  ] =
-
-    useState<CompletedMaintenanceRecord | null>(
-
-      null,
-
-    );
+  // History log status is an event snapshot (or may be omitted by BE).
+  // Display the current status ONLY when confirmed by a Work Order API GET.
+  const [historyCurrentStatuses, setHistoryCurrentStatuses] =
+    useState<Record<string, WorkOrderStatus>>({});
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyWarning, setHistoryWarning] = useState("");
+  // Keep the already loaded history while the Work Orders page is mounted.
+  // Closing and reopening its modal must not reissue all GET /logs requests.
+  const historyLoadedRef = useRef(false);
+  const historyFetchingRef = useRef(false);
 
 
 
@@ -851,67 +829,74 @@ export function WorkOrdersPage() {
 
 
   const openHistory = async () => {
-
-    setMaintenanceRecords(
-
-      loadMaintenanceRecords(),
-
-    );
-
     setHistoryOpen(true);
+    // Reuse loaded logs + verified statuses if user closes/reopens the popup.
+    // Also prevent a second concurrent fetch if opened while still loading.
+    if (historyLoadedRef.current || historyFetchingRef.current) return;
+    historyFetchingRef.current = true;
+    setHistoryLoading(true);
+    setHistoryWarning("");
 
+    try {
+      // Active rows deliberately hide Completed, but the history must
+      // resolve statuses from the FULL Work Orders response, including Completed.
+      const refreshed = await workOrdersQuery.refetch();
+      const latestOrders = refreshed.isSuccess ? (refreshed.data ?? []) : [];
+      const cachedLogs = loadWorkOrderLogs();
+      const allIds = Array.from(new Set([
+        ...latestOrders.map((order) => order.id),
+        ...cachedLogs.map((log) => log.workOrderId),
+      ]));
 
+      const logResults = await Promise.allSettled(
+        allIds.map((id) => fetchWorkOrderLogsFromApi(id)),
+      );
+      // fetchWorkOrderLogsFromApi maintains the local merged history cache;
+      // don't replace it with only logs returned from active orders.
+      const mergedLogs = loadWorkOrderLogs();
+      setWorkOrderLogs(mergedLogs);
 
-    if (workOrders.length === 0) {
+      const statuses: Record<string, WorkOrderStatus> = {};
+      latestOrders.forEach((order) => {
+        statuses[order.id] = order.status;
+      });
 
-      setWorkOrderLogs([]);
+      // Older history entries may refer to work orders not included in the
+      // current listing. Verify each such status with the detail endpoint.
+      const missingIds = Array.from(new Set(
+        mergedLogs.map((log) => log.workOrderId)
+          .filter((id) => !statuses[id]),
+      ));
+      if (missingIds.length > 0) {
+        const details = await Promise.allSettled(
+          missingIds.map((id) => fetchWorkOrderFromApi(id)),
+        );
+        details.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            statuses[missingIds[index]] = result.value.status;
+          }
+        });
+      }
+      setHistoryCurrentStatuses(statuses);
 
-      return;
-
+      // Store one fetched snapshot for this page session. On a later page
+      // visit (remount), history can refresh normally again.
+      historyLoadedRef.current = true;
+      if (refreshed.isError || logResults.some((r) => r.status === "rejected")) {
+        setHistoryWarning(
+          "Some history requests could not be refreshed. Unverified statuses are shown as —.",
+        );
+      }
+    } catch {
+      // A failed initial load is retryable when the history is opened again.
+      setHistoryWarning(
+        "Unable to verify all Work Order statuses from Backend. Please retry.",
+      );
+    } finally {
+      historyFetchingRef.current = false;
+      setHistoryLoading(false);
     }
-
-
-
-    const results = await Promise.allSettled(
-
-      workOrders.map((order) =>
-
-        fetchWorkOrderLogsFromApi(order.id),
-
-      ),
-
-    );
-
-
-
-    const apiLogs = results.flatMap((result) =>
-
-      result.status === "fulfilled"
-
-        ? result.value
-
-        : [],
-
-    );
-
-
-
-    setWorkOrderLogs(
-
-      apiLogs.length > 0
-
-        ? apiLogs
-
-        : loadWorkOrderLogs(),
-
-    );
-
   };
-
-
-
-
-
 
 
   const handleCreateWorkOrder = async (
@@ -928,9 +913,7 @@ export function WorkOrdersPage() {
 
       !form.droneId.trim() ||
 
-      !form.batteryId.trim() ||
-
-      !selectedBatteryIsCompatible ||
+      (Boolean(form.batteryId.trim()) && !selectedBatteryIsCompatible) ||
 
       !form.title.trim()
 
@@ -938,7 +921,7 @@ export function WorkOrdersPage() {
 
       setApiError(
 
-        "Select a drone, choose a compatible Ready battery, and describe the issue.",
+        "Select a drone, describe the issue, and choose a compatible Ready battery only if a test battery is needed.",
 
       );
 
@@ -1386,7 +1369,7 @@ export function WorkOrdersPage() {
 
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4">
 
-          <div className="flex max-h-[80vh] w-full max-w-[1050px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+          <div className="flex max-h-[80vh] w-full max-w-[920px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
 
             <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-4">
 
@@ -1397,6 +1380,7 @@ export function WorkOrdersPage() {
                   Work order history
 
                 </h2>
+                
 
 
 
@@ -1430,67 +1414,52 @@ export function WorkOrdersPage() {
 
             <div className="min-h-0 flex-1 overflow-auto">
 
-              <div className="min-w-[1030px]">
+              <div className="min-w-[850px]">
 
-                <div className="sticky top-0 z-10 grid grid-cols-[125px_110px_1fr_135px_165px_165px_120px] items-center border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+                <div className="sticky top-0 z-10 grid grid-cols-[130px_minmax(170px,1fr)_145px_200px_180px] items-center border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
 
                   <span>Work order</span>
 
-                  <span>Drone</span>
-
                   <span>Activity</span>
 
-                  <span>Status</span>
+                  <span>Current status</span>
 
                   <span>Changed by</span>
 
                   <span>Changed at</span>
 
-                  <span>Details</span>
-
                 </div>
 
 
 
-                {workOrderLogs.map(
+                {historyWarning && (
+                  <div role="status" className="px-5 py-2 text-[12px] text-orange-500">
+                    {historyWarning}
+                  </div>
+                )}
+
+                {historyLoading ? (
+                  <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
+                    Loading work order history and verifying statuses...
+                  </div>
+                ) : workOrderLogs.map(
 
                   (log) => {
 
-                    const record =
-
-                      maintenanceRecords.find(
-
-                        (item) =>
-
-                          item.workOrderId ===
-
-                          log.workOrderId,
-
-                      );
-
-
-
+                    const currentStatus = historyCurrentStatuses[log.workOrderId];
                     return (
 
                       <div
 
                         key={log.id}
 
-                        className="grid grid-cols-[125px_110px_1fr_135px_165px_165px_120px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
+                        className="grid grid-cols-[130px_minmax(170px,1fr)_145px_200px_180px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
 
                       >
 
                         <span className="text-center text-[14px] font-medium text-orange-500">
 
                           {log.workOrderId}
-
-                        </span>
-
-
-
-                        <span className="text-center text-[14px] text-[var(--tech-text)]">
-
-                          {log.drone}
 
                         </span>
 
@@ -1506,15 +1475,13 @@ export function WorkOrdersPage() {
 
                         <div className="flex justify-center">
 
-                          <WorkOrderStatusText
-
-                            status={
-
-                              log.status
-
-                            }
-
-                          />
+                          {currentStatus ? (
+                            <WorkOrderStatusText status={currentStatus} />
+                          ) : (
+                            <span className="text-[13px] text-[var(--tech-subtle)]" title="Current status has not been verified by Backend">
+                              —
+                            </span>
+                          )}
 
                         </div>
 
@@ -1536,54 +1503,6 @@ export function WorkOrdersPage() {
 
 
 
-                        <div className="flex justify-center">
-
-                          {log.status ===
-
-                            "Completed" &&
-
-                          record ? (
-
-                            <button
-
-                              type="button"
-
-                              onClick={() =>
-
-                                setSelectedRecord(
-
-                                  record,
-
-                                )
-
-                              }
-
-                              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500"
-
-                            >
-
-                              <Eye
-
-                                size={14}
-
-                              />
-
-                              View
-
-                            </button>
-
-                          ) : (
-
-                            <span className="text-[13px] text-[var(--tech-subtle)]">
-
-                              —
-
-                            </span>
-
-                          )}
-
-                        </div>
-
                       </div>
 
                     );
@@ -1594,7 +1513,7 @@ export function WorkOrdersPage() {
 
 
 
-                {workOrderLogs.length === 0 && (
+                {!historyLoading && workOrderLogs.length === 0 && (
 
                   <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
 
@@ -1605,338 +1524,6 @@ export function WorkOrdersPage() {
                 )}
 
               </div>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
-
-
-
-      {selectedRecord && (
-
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 px-4">
-
-          <div className="flex max-h-[86vh] w-full max-w-[860px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-
-            <div className="flex items-start justify-between border-b border-[var(--tech-border)] px-6 py-5">
-
-              <div>
-
-                <div className="flex items-center gap-3">
-
-                  <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
-
-                    Work completed
-
-                  </h2>
-
-
-
-                  <span className="text-[13px] font-semibold text-emerald-500">
-
-                    Completed
-
-                  </span>
-
-                </div>
-
-
-
-                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-
-                  {selectedRecord.workOrderId} ·{" "}
-
-                  {selectedRecord.drone}
-
-                </p>
-
-              </div>
-
-
-
-              <button
-
-                type="button"
-
-                onClick={() =>
-
-                  setSelectedRecord(
-
-                    null,
-
-                  )
-
-                }
-
-                className="text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-
-              >
-
-                <X size={18} />
-
-              </button>
-
-            </div>
-
-
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-
-                <DetailMeta
-
-                  label="Work order"
-
-                  value={
-
-                    selectedRecord.workOrderId
-
-                  }
-
-                />
-
-
-
-                <DetailMeta
-
-                  label="Drone"
-
-                  value={
-
-                    selectedRecord.drone
-
-                  }
-
-                />
-
-
-
-
-
-                <DetailMeta
-
-                  label="Resulting status"
-
-                  value={
-
-                    selectedRecord.resultingStatus
-
-                  }
-
-                />
-
-
-
-                <DetailMeta
-
-                  label="Technician"
-
-                  value={
-
-                    selectedRecord.assignedTo
-
-                  }
-
-                />
-
-
-
-                <DetailMeta
-
-                  label="Created"
-
-                  value={
-
-                    selectedRecord.createdAt
-
-                  }
-
-                />
-
-
-
-                <DetailMeta
-
-                  label="Scheduled"
-
-                  value={
-
-                    selectedRecord.scheduledAt ??
-
-                    "Not scheduled"
-
-                  }
-
-                />
-
-
-
-                <DetailMeta
-
-                  label="Completed"
-
-                  value={
-
-                    selectedRecord.completedAt
-
-                  }
-
-                />
-
-              </div>
-
-
-
-              <div className="mt-6">
-
-                <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
-
-                  Task
-
-                </h3>
-
-
-
-                <p className="mt-2 text-[15px] leading-6 text-[var(--tech-text)]">
-
-                  {selectedRecord.title}
-
-                </p>
-
-              </div>
-
-
-
-              <div className="mt-6 grid gap-5 md:grid-cols-2">
-
-                <DetailTextBlock
-
-                  title="Diagnosis"
-
-                  value={
-
-                    selectedRecord.diagnosis
-
-                  }
-
-                />
-
-
-
-                <DetailTextBlock
-
-                  title="Corrective action"
-
-                  value={
-
-                    selectedRecord.correctiveAction
-
-                  }
-
-                />
-
-              </div>
-
-
-
-              <div className="mt-6">
-
-                <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
-
-                  Inspection completed
-
-                </h3>
-
-
-
-                <div className="mt-3 grid gap-2 md:grid-cols-2">
-
-                  {selectedRecord.inspectionItems.map(
-
-                    (item) => (
-
-                      <div
-
-                        key={item}
-
-                        className="flex items-center gap-2 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 py-2.5"
-
-                      >
-
-                        <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
-
-                          ✓
-
-                        </span>
-
-
-
-                        <span className="text-[13px] text-[var(--tech-text-secondary)]">
-
-                          {item}
-
-                        </span>
-
-                      </div>
-
-                    ),
-
-                  )}
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-
-            <div className="flex justify-end border-t border-[var(--tech-border)] px-6 py-4">
-
-              <Button
-
-                type="button"
-
-                onClick={() =>
-
-                  setSelectedRecord(
-
-                    null,
-
-                  )
-
-                }
-
-                className="
-
-                  h-9 rounded-md
-
-                  border border-[var(--tech-border)]
-
-                  !bg-transparent px-4
-
-                  text-[13px]
-
-                  text-[var(--tech-text-secondary)]
-
-                  hover:!border-orange-500/50
-
-                  hover:!bg-transparent
-
-                  hover:!text-orange-500
-
-                "
-
-              >
-
-                Close
-
-              </Button>
 
             </div>
 
@@ -2112,11 +1699,9 @@ export function WorkOrdersPage() {
 
 
 
-                  <Field label="Test battery ID">
+                  <Field label="Test battery ID (optional)">
 
                     <select
-
-                      required
 
                       disabled={!droneModel || batteriesQuery.isPending || modelLoading}
 
@@ -2152,7 +1737,7 @@ export function WorkOrdersPage() {
 
                             ? "Loading Ready batteries..."
 
-                            : "Select a compatible Ready battery"}
+                            : "No battery needed / Select compatible Ready battery"}
 
                       </option>
 
@@ -2178,7 +1763,7 @@ export function WorkOrdersPage() {
 
                       <p className="mt-1 text-[11px] text-orange-500">
 
-                        No Ready battery compatible with {droneModel} is available at this hub.
+                        No compatible Ready battery found; you can still create a Work Order without a test battery.
 
                       </p>
 
@@ -2292,7 +1877,7 @@ export function WorkOrdersPage() {
 
                     !form.droneId.trim() ||
 
-                    !selectedBatteryIsCompatible ||
+                    (Boolean(form.batteryId.trim()) && !selectedBatteryIsCompatible) ||
 
                     !form.title.trim()
 
@@ -2365,86 +1950,6 @@ function WorkOrderStatusText({
       {status}
 
     </span>
-
-  );
-
-}
-
-
-
-function DetailMeta({
-
-  label,
-
-  value,
-
-}: {
-
-  label: string;
-
-  value: string;
-
-}) {
-
-  return (
-
-    <div className="rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-3">
-
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
-
-        {label}
-
-      </span>
-
-
-
-      <p className="mt-1.5 text-[14px] font-medium text-[var(--tech-text-secondary)]">
-
-        {value}
-
-      </p>
-
-    </div>
-
-  );
-
-}
-
-
-
-function DetailTextBlock({
-
-  title,
-
-  value,
-
-}: {
-
-  title: string;
-
-  value: string;
-
-}) {
-
-  return (
-
-    <div className="rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
-
-      <h3 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
-
-        {title}
-
-      </h3>
-
-
-
-      <p className="mt-3 whitespace-pre-wrap text-[14px] leading-6 text-[var(--tech-text-secondary)]">
-
-        {value}
-
-      </p>
-
-    </div>
 
   );
 

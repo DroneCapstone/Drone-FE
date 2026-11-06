@@ -30,8 +30,6 @@ import {
   CardContent,
 } from "@/components/shadcn/ui/card";
 
-import { PrototypeReplacementPanel } from "../components/PrototypeReplacementPanel";
-
 import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
@@ -39,6 +37,7 @@ import {
 import {
   useBatteriesQuery,
 } from "../hooks/useBatteryQueries";
+import type { BatteryStatus } from "../utils/batteryStorage";
 
 function formatDroneId(value?: string) {
   if (!value) return "—";
@@ -48,7 +47,7 @@ function formatDroneId(value?: string) {
 
 /** FE countdown is display-only. BE remains authoritative for charging status. */
 function formatBatteryEta(battery: {
-  status: "Ready" | "Charging";
+  status: BatteryStatus;
   estimatedReadyAt?: string;
   estimatedMinutesRemaining?: number;
 }, now: number): string {
@@ -145,7 +144,6 @@ export function BatteryDetailPage() {
 
       {battery && (
         <>
-          <PrototypeReplacementPanel type="BATTERY" batteryId={battery.id} droneId={battery.droneId ?? undefined} />
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <StatusBadge
               status={battery.status}
@@ -159,7 +157,7 @@ export function BatteryDetailPage() {
           <div className="mb-5 grid gap-4 md:grid-cols-2">
             <OverviewCard
               icon={
-                battery.status === "Ready" ? (
+                battery.status !== "Charging" ? (
                   <BatteryFull size={18} />
                 ) : (
                   <BatteryCharging size={18} />
@@ -168,9 +166,11 @@ export function BatteryDetailPage() {
               label="Charge level"
               value={`${battery.chargeLevelPct}%`}
               helper={
-                battery.status === "Ready"
-                  ? (battery.droneId ? `Fully charged · installed on ${battery.droneId}` : "Fully charged")
-                  : "Currently charging"
+                battery.status === "In Use"
+                  ? "Battery currently in use"
+                  : battery.status === "Ready"
+                    ? (battery.droneId ? `Fully charged · installed on ${battery.droneId}` : "Fully charged")
+                    : "Currently charging"
               }
             >
               <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--tech-surface-2)]">
@@ -276,11 +276,6 @@ export function BatteryDetailPage() {
               description=""
               icon={<Cpu size={17} />}
             >
-              {battery.lifecycleStatus?.toLowerCase() === "expired" ? (
-                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-red-500">Battery expired — replace before use.</p>
-              ) : battery.daysUntilExpiry !== undefined && battery.daysUntilExpiry < 30 ? (
-                <p role="alert" className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-orange-500">Battery lifecycle expires soon ({battery.daysUntilExpiry} days left).</p>
-              ) : null}
               <InfoRow label="Lifecycle status" value={battery.lifecycleStatus ?? "—"} />
               <InfoRow
                 label="Days until expiry"
@@ -347,14 +342,16 @@ export function BatteryDetailPage() {
 function StatusBadge({
   status,
 }: {
-  status: "Ready" | "Charging";
+  status: BatteryStatus;
 }) {
   return (
     <span
       className={
         status === "Ready"
           ? "inline-flex h-7 items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-3 text-[12px] font-semibold text-orange-500"
-          : "inline-flex h-7 items-center rounded-full border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 text-[12px] font-medium text-[var(--tech-text-secondary)]"
+          : status === "In Use"
+            ? "inline-flex h-7 items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-3 text-[12px] font-semibold text-sky-600 dark:text-sky-400"
+            : "inline-flex h-7 items-center rounded-full border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 text-[12px] font-medium text-[var(--tech-text-secondary)]"
       }
     >
       {status}
