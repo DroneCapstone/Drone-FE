@@ -1,0 +1,198 @@
+/* Drone Detail only. Follows the Admin IBM Plex Sans scale and the compact
+   spacing of the approved HTML prototype without changing other role styles. */
+.admin-drone-detail {
+  --dd-border: var(--admin-border, #e2e5e9);
+  --dd-soft-line: color-mix(in srgb, var(--dd-border) 72%, transparent);
+  --dd-text: var(--admin-text, #202124);
+  --dd-muted: var(--admin-muted, #667085);
+  --dd-secondary: var(--admin-subtle, #8792a2);
+  --dd-surface: var(--admin-surface, #fff);
+  --dd-orange: #ff6b00;
+  --dd-blue: #3276ff;
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13.5px;
+  color: var(--dd-text);
+}
+.admin-drone-detail .dd-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: max-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 4px;
+  border: 1px solid var(--dd-border);
+  border-radius: 10px;
+  background: var(--dd-surface);
+}
+.admin-drone-detail .dd-tab {
+  border: 0;
+  background: transparent;
+  color: var(--dd-muted);
+  border-radius: 7px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease;
+}
+.admin-drone-detail .dd-tab.is-active {
+  background: var(--admin-surface-3, #eef0f3);
+  color: var(--dd-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(12, 18, 34, .06);
+}
+.admin-drone-detail .dd-tab:hover:not(.is-active) { background: var(--admin-surface-2, #f8f9fa); color: var(--dd-text); }
+.admin-drone-detail .dd-tab:focus-visible,
+.admin-drone-detail button:focus-visible,
+.admin-drone-detail a:focus-visible {
+  outline: 2px solid #ff8d43;
+  outline-offset: 2px;
+}
+.admin-drone-detail .dd-overview,
+.admin-drone-detail .dd-tab-stack { display: grid; gap: 13px; }
+.admin-drone-detail .dd-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.admin-drone-detail .dd-grid-bottom { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 13px; }
+.admin-drone-detail .dd-card {
+  background: var(--dd-surface);
+  border: 1px solid var(--dd-border);
+  border-radius: 12px;
+  box-shadow: 0 3px 13px rgba(19, 38, 68, .045);
+  min-width: 0;
+  padding: 18px 20px;
+}
+.admin-drone-detail .dd-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.admin-drone-detail .dd-card-heading > div:first-child { min-width: 0; }
+.admin-drone-detail .dd-eyebrow { font-size: 11px; letter-spacing: 1px; color: var(--dd-secondary); font-weight: 750; line-height: 1.3; }
+.admin-drone-detail h2.dd-card-title { font-size: 14px; color: var(--dd-text); font-weight: 650; line-height: 1.4; letter-spacing: -.1px; margin: 3px 0 0; }
+.admin-drone-detail .dd-card-action { flex: 0 0 auto; }
+.admin-drone-detail .dd-edit-btn {
+  border: 1px solid var(--dd-border);
+  color: var(--dd-text);
+  background: var(--dd-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-drone-detail .dd-edit-btn:hover { color: var(--dd-orange); border-color: #ffc49b; }
+.admin-drone-detail .dd-master-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; row-gap: 12px; padding: 6px 0 1px; }
+.admin-drone-detail .dd-master-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.admin-drone-detail .dd-fact { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.admin-drone-detail .dd-fact-label { font-size: 13.5px; color: var(--dd-muted); font-weight: 400; line-height: 1.35; }
+.admin-drone-detail .dd-fact-value { font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--dd-text); overflow-wrap: anywhere; }
+.admin-drone-detail .dd-rows { margin: 0; }
+.admin-drone-detail .dd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 39px;
+  border-bottom: 1px solid var(--dd-soft-line);
+  padding: 8px 0;
+}
+.admin-drone-detail .dd-row:last-child { border-bottom: none; }
+.admin-drone-detail .dd-row-label { font-size: 13.5px; font-weight: 400; line-height: 1.4; color: var(--dd-muted); }
+.admin-drone-detail .dd-row-value { font-size: 13.5px; font-weight: 600; line-height: 1.4; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.admin-drone-detail .dd-badge,
+.dd-dialog .dd-badge {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.admin-drone-detail .dd-badge--green,.dd-dialog .dd-badge--green { color:#038c58; background:#e6f7ed; }
+.admin-drone-detail .dd-badge--blue,.dd-dialog .dd-badge--blue { color:#2568df; background:#eaf2ff; }
+.admin-drone-detail .dd-badge--orange,.dd-dialog .dd-badge--orange { color:#bd6d00; background:#fff0de; }
+.admin-drone-detail .dd-badge--red,.dd-dialog .dd-badge--red { color:#d12e3a; background:#ffe9ec; }
+.admin-drone-detail .dd-badge--gray,.dd-dialog .dd-badge--gray { color:#687385; background:#ecf0f3; }
+.admin-drone-detail a.dd-inline-link,
+.admin-drone-detail button.dd-inline-link { display: inline-flex; align-items: center; gap: 4px; color: var(--dd-blue); text-decoration: underline; background: none; padding: 0; border: 0; cursor: pointer; font-size: 13px; font-weight: 650; }
+.admin-drone-detail a.dd-inline-link:hover,.admin-drone-detail button.dd-inline-link:hover { color:var(--dd-orange); }
+.admin-drone-detail .dd-action-link { display:inline-flex; align-items:center; gap:5px; color:var(--dd-orange); background:none; border:0; padding:0; cursor:pointer; font-size:13px; font-weight:600; }
+.admin-drone-detail .dd-action-link:hover { text-decoration:underline; }
+.admin-drone-detail .dd-progress-value { display: inline-flex; gap:10px; align-items: center; }
+.admin-drone-detail .dd-progress { display: inline-block; flex: 0 0 auto; background: #e8ecf0; width: 90px; height: 6px; border-radius: 999px; overflow: hidden; }
+.admin-drone-detail .dd-progress > span { display:block; background:#16b982; height:100%; border-radius:999px; }
+.admin-drone-detail .dd-demo-note { margin: 0 0 7px; color: var(--dd-secondary); font-size: 11px; font-weight: 400; line-height: 1.45; }
+.admin-drone-detail .dd-table-scroll { overflow-x: auto; width: 100%; }
+.admin-drone-detail table.dd-table { border-collapse: collapse; width:100%; min-width: 490px; font-size:13.5px; line-height: 1.45; }
+.admin-drone-detail .dd-table th { color:var(--dd-secondary); text-align:left; font-size:13px; font-weight:650; text-transform:uppercase; white-space:nowrap; padding:11px 10px 10px 0; border-bottom: 1px solid var(--dd-soft-line); }
+.admin-drone-detail .dd-table td { padding: 12px 10px 12px 0; border-bottom:1px solid var(--dd-soft-line); color:var(--dd-muted); font-size:13.5px; vertical-align:middle; }
+.admin-drone-detail .dd-table td strong { color:var(--dd-text); font-size:13.5px; font-weight:650; }
+.admin-drone-detail .dd-table tr:last-child td { border-bottom:0; }
+.admin-drone-detail .dd-empty { text-align:center; padding:26px 0 !important; }
+.admin-drone-detail .dd-muted-line { font-size: 13.5px; color:var(--dd-muted); margin:0 0 8px; }
+.admin-drone-detail .dd-note-spaced { margin:14px 0 0; }
+.admin-drone-detail .dd-toolbar { display:flex; flex-wrap:wrap; gap:10px; margin:13px 0 14px; align-items:center; }
+.admin-drone-detail .dd-toolbar select,.admin-drone-detail .dd-search {
+  min-height:38px;
+  border:1px solid var(--dd-border);
+  border-radius:7px;
+  background: var(--admin-surface-2, #f8f9fa);
+  color:var(--dd-text);
+  font-size:13.5px;
+}
+.admin-drone-detail .dd-toolbar select { padding:0 11px; }
+.admin-drone-detail .dd-search { display:flex; align-items:center; gap:9px; padding:0 11px; flex:1 1 265px; max-width:400px; color:var(--dd-secondary); }
+.admin-drone-detail .dd-search input { background:transparent; border:0; outline:0; width:100%; min-width:0; color:var(--dd-text); font:inherit; }
+.admin-drone-detail .dd-view-flights { margin-top:15px; }
+.admin-drone-detail .dd-notice,.admin-drone-detail .dd-error { margin:0 0 13px; padding:10px 12px; border-radius:7px; font-size:13.5px; }
+.admin-drone-detail .dd-notice { background:#eaf7ef; border:1px solid #cbe9d4; color:#047347; }
+.admin-drone-detail .dd-error { background:#fff0f1; border:1px solid #f7cdd1; color:#b52432; }
+/* Radix Dialogs render through a Portal outside the Admin app, so their font
+   and form controls are explicitly scoped to the dialog class, not global CSS. */
+.dd-dialog {
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
+  font-size:13.5px;
+  color:var(--text, #202124);
+  max-height:84vh;
+  overflow-y:auto !important;
+}
+.dd-dialog :is(input,textarea,select,label,button,div,p,h2,span) { font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.dd-dialog .dd-dialog-head { padding:18px 20px 14px; border-bottom:1px solid var(--border, #e2e5e9); }
+.dd-dialog .dd-dialog-head h2 { font-size:18px; font-weight:650; margin:0; line-height:1.4; color:inherit; }
+.dd-dialog .dd-dialog-head p { color:var(--muted, #8590a0); margin:5px 0 0; font-size:12px; line-height:1.5; }
+.dd-dialog .dd-dialog-form { padding:17px 20px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px 16px; }
+.dd-dialog .dd-dialog-form label { min-width:0; color:var(--text, #202124); display:flex; flex-direction:column; font-size:13.5px; font-weight:600; gap:6px; }
+.dd-dialog .dd-dialog-form label > .dd-field-label { color:var(--text, #202124); }
+.dd-dialog .dd-dialog-form .dd-field-label em { font-style:normal; color:#db3946; }
+.dd-dialog .dd-dialog-form input, .dd-dialog .dd-dialog-form select { border:1px solid var(--border,#e2e5e9); background:var(--surface-2,#f8f9fa); border-radius:7px; height:39px; min-width:0; width:100%; padding:0 11px; color:var(--text,#202124); font-weight:400; font-size:13.5px; }
+.dd-dialog .dd-dialog-form :is(input,select):focus-visible { outline:2px solid #ff9c54; outline-offset:1px; }
+.dd-dialog .dd-dialog-form input[readonly],.dd-dialog .dd-dialog-form select:disabled { opacity:.75; cursor:not-allowed; }
+.dd-dialog .dd-dialog-hint { margin:0; padding:0 20px 13px; font-size:12px; color:var(--muted,#8590a0); line-height:1.5; }
+.dd-dialog .dd-dialog-error { margin:0 20px 13px; font-size:13.5px; color:#d12e3a; }
+.dd-dialog .dd-dialog-actions { border-top:1px solid var(--border,#e2e5e9); display:flex; gap:9px; justify-content:flex-end; padding:14px 20px; }
+.dd-dialog .dd-dialog-details { padding:8px 20px 14px; }
+.dd-dialog .dd-row { display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--border,#e2e5e9); padding:10px 0; font-size:13.5px; }
+.dd-dialog .dd-row:last-child { border-bottom:0; }
+.dd-dialog .dd-row-label { color:var(--muted,#8590a0); }
+.dd-dialog .dd-row-value { text-align:right; max-width:66%; color:var(--text,#202124); font-weight:600; overflow-wrap:anywhere; }
+@media (max-width: 950px) {
+  .admin-drone-detail .dd-grid-bottom { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .admin-drone-detail .dd-grid-two { grid-template-columns:1fr; }
+  .admin-drone-detail .dd-master-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .admin-drone-detail .dd-tabs { width:100%; }
+  .admin-drone-detail .dd-tab { flex:1 0 auto; text-align:center; padding:8px 10px; }
+  .dd-dialog .dd-dialog-form { grid-template-columns:1fr; }
+}
+@media (max-width: 400px) {
+  .admin-drone-detail .dd-master-grid { grid-template-columns:1fr; }
+  .admin-drone-detail .dd-card { padding:15px; }
+  .admin-drone-detail .dd-row { align-items:start; }
+  .admin-drone-detail .dd-progress { width:50px; }
+}
