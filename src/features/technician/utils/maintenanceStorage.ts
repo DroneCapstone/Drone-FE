@@ -41,7 +41,6 @@ export type WorkOrder = {
   id: string;
   drone: string;
   droneId: string;
-  // Model returned by GET /technician/fleet/work-orders.
   model?: string;
   batteryId?: string;
   title: string;
@@ -344,9 +343,8 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
   const rawDroneId = pickString(value, ["drone_id", "droneId"]);
   if (!rawId || !rawDroneId) return null;
 
-  // The Backend already returns IDs such as DRN-0006. Do not turn them
-  // into DR-0006, or matching the selected drone in the form will fail.
-  const droneId = rawDroneId.trim().toUpperCase().startsWith("DRN-")
+  // Preserve backend IDs exactly: DRN-0013 must NOT become DR-0013.
+  const droneId = /^DRN-/i.test(rawDroneId.trim())
     ? rawDroneId.trim()
     : maintenanceDisplayId("DR", rawDroneId, 3);
 
@@ -517,23 +515,24 @@ export async function fetchWorkOrderFromApi(workOrderId: string) {
 
 export async function createWorkOrderOnServer(payload: {
   droneId: string;
-  batteryId: string;
+  batteryId?: string;
   issueDescription: string;
 }) {
-  // The Work Order API expects a string battery identifier (e.g. BAT-0003).
-  // Do not convert a BAT code to a numeric suffix: it may not equal the DB ID.
-  const batteryId = payload.batteryId.trim();
-  if (!batteryId) {
-    throw new Error("Please select a valid battery before creating the work order.");
+  const droneId = payload.droneId.trim();
+  const description = payload.issueDescription.trim();
+  if (!droneId || !description) {
+    throw new Error("Drone ID and issue description are required.");
   }
-
+  // BE expects the full string ID; battery is optional per its guide.
   const result = await createWorkOrderApi({
-    drone_id: payload.droneId.trim(),
-    battery_id: batteryId,
-    issue_description: payload.issueDescription,
+    drone_id: droneId,
+    battery_id: payload.batteryId?.trim() || null,
+    issue_description: description,
   });
 
-  await refreshWorkOrdersFromApi();
+  // Successful POST is authoritative. A failed list GET should not make
+  // Technician think creation failed and accidentally retry the POST.
+  void refreshWorkOrdersFromApi().catch(() => undefined);
   return result;
 }
 
@@ -550,9 +549,10 @@ export async function updateWorkOrderInspectionOnServer(
   workOrderId: string,
   payload: Record<string, unknown>,
 ) {
-  const result = await updateWorkOrderInspectionApi(workOrderId, payload);
-  await refreshWorkOrdersFromApi();
-  return result;
+  // PATCH /inspection is the authoritative write for start and completion.
+  // Do not await GET /work-orders here: a failed GET must not falsely
+  // report a successful PATCH as failed and cause duplicate completion.
+  return updateWorkOrderInspectionApi(workOrderId, payload);
 }
 
 export async function createMaintenanceRecordOnServer(payload: {
