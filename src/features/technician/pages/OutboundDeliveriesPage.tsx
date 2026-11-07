@@ -26,6 +26,8 @@ import {
   useOutboundReadyMutation,
 } from "../hooks/useOutboundQueries";
 import { technicianQueryKeys } from "../hooks/queryKeys";
+import { historyFromConfirmedDispatch, mergeOutboundHistoryRows } from "../api/outboundHistoryApi";
+import type { OutboundDeliveryHistory } from "../utils/outboundDeliveryStorage";
 
 type Status = OutboundDelivery["status"];
 type ModeFilter = "ALL" | "EXPRESS" | "SCHEDULED";
@@ -148,8 +150,9 @@ function isBackendReady(delivery: OutboundDelivery): boolean {
 
 export function OutboundDeliveriesPage() {
   const queryClient = useQueryClient();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const outboundQuery = useOutboundDeliveriesQuery();
-  const historyQuery = useOutboundHistoryQuery();
+  const historyQuery = useOutboundHistoryQuery(historyOpen);
   const receiveMutation = useReceiveOutboundMutation();
   const outboundDispatchMutation = useOutboundDispatchMutation();
   const outboundReadyMutation = useOutboundReadyMutation();
@@ -157,7 +160,6 @@ export function OutboundDeliveriesPage() {
   const deliveries: OutboundDelivery[] = outboundQuery.data ?? [];
   const history = historyQuery.data ?? [];
 
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -284,7 +286,16 @@ export function OutboundDeliveriesPage() {
       }
 
       // BE has confirmed this endpoint supports the initial Origin departure.
-      await outboundDispatchMutation.mutateAsync(missionId);
+      const dispatchResult = await outboundDispatchMutation.mutateAsync(missionId);
+      // The POST response already confirms the actual departure at the origin.
+      // Add only this BE-confirmed event; do not fabricate client-side times.
+      const confirmed = historyFromConfirmedDispatch(delivery, dispatchResult);
+      if (confirmed) {
+        queryClient.setQueryData<OutboundDeliveryHistory[]>(
+          [...technicianQueryKeys.outbound(), "history"],
+          (existing) => mergeOutboundHistoryRows(existing ?? [], [confirmed]),
+        );
+      }
       setAcceptedDispatchIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
       setActionMessage("Dispatch accepted by Backend. Mission is starting; Hub Fleet and Battery Management are refreshing from the server.");
     } catch (error) {
@@ -329,7 +340,14 @@ export function OutboundDeliveriesPage() {
               <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{assignedCount}</strong> assigned</span>
               <span><strong className="font-semibold text-orange-500">{readyCount}</strong> ready</span>
             </div>
-            <button type="button" onClick={() => setHistoryOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500">
+            <button type="button" onClick={() => {
+              setHistoryOpen(true);
+              // An old cached [] must not suppress a new attempt to load
+              // history. Successful nonempty caches still reopen instantly.
+              if (historyQuery.data?.length === 0 && !historyQuery.isFetching) {
+                void historyQuery.refetch();
+              }
+            }} className="inline-flex h-9 items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500">
               <History size={14} /> View history
             </button>
           </div>
@@ -641,6 +659,12 @@ export function OutboundDeliveriesPage() {
               </div>
               <button type="button" aria-label="Close outbound history" onClick={() => setHistoryOpen(false)} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
             </div>
+            {historyQuery.isError && (
+              <div className="mx-6 mt-4 flex items-start justify-between gap-3 rounded-md border border-red-500/30 px-4 py-3 text-[12px] text-red-400">
+                <span>{historyQuery.error instanceof Error ? historyQuery.error.message : "Unable to retrieve history from Backend."}</span>
+                <button type="button" className="shrink-0 font-semibold underline" onClick={() => void historyQuery.refetch()}>Retry</button>
+              </div>
+            )}
             <div className="min-h-0 flex-1 overflow-auto">
               <div className="min-w-[1000px]">
                 <div className="sticky top-0 z-10 grid grid-cols-[140px_140px_145px_135px_1fr_160px_100px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
@@ -653,10 +677,21 @@ export function OutboundDeliveriesPage() {
                     <span className="truncate" title={item.droneId}>{display(item.droneId)}</span>
                     <span className="text-orange-500">{display(item.batteryId)}</span>
                     <span className="truncate" title={item.destination}>{display(item.destination)}</span>
-                    <span>{display(item.departedAt)}</span>
+                    <span>{formatDate(item.departedAt)}</span>
                     <span className="inline-flex items-center gap-1 text-orange-500"><Check size={13} />{item.result}</span>
                   </div>
-                )) : <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">No outbound history available.</div>}
+                )) : (
+                  <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">
+                    {historyQuery.isPending
+                      ? "Loading outbound history from Backend..."
+                      : historyQuery.isError
+                        ? "Unable to load outbound history."
+                        : "No recorded outbound departures found."}
+                    {!historyQuery.isPending && !historyQuery.isFetching && !historyQuery.isError && (
+                      <button type="button" onClick={() => void historyQuery.refetch()} className="mt-3 text-[12px] font-medium text-orange-500 underline">Refresh history from Backend</button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
