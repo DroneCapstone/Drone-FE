@@ -15,7 +15,7 @@ export function getBasicDroneEligibility(
   if (drone.technicalStatus !== 'Available') reasons.push(`Technical status: ${drone.technicalStatus}`);
   if (missions.some((mission) => (
     mission.droneId === drone.id &&
-    (mission.status === 'Scheduled' || mission.status === 'In Progress')
+    (mission.status === 'Scheduled' || mission.status === 'In Progress' || mission.status === 'Incident return')
   ))) reasons.push('Already assigned to an active mission');
   if (drone.maxPayloadKg < payloadKg) reasons.push(`Payload exceeds ${drone.maxPayloadKg} kg capacity`);
 
