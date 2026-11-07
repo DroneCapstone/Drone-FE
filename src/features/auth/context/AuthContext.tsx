@@ -20,7 +20,6 @@ import type {
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
-  UserRole,
 } from "../types/auth";
 
 export function AuthProvider({
@@ -31,13 +30,9 @@ export function AuthProvider({
       authService.getAccessToken(),
     );
 
-  const hasStoredDemoSession =
-    authService.isDemoSession();
-
   const [user, setUser] =
     useState<AuthUser | null>(() =>
-      hasStoredAccessToken ||
-        hasStoredDemoSession
+      hasStoredAccessToken
         ? authService.getCurrentUser()
         : null,
     );
@@ -50,8 +45,12 @@ export function AuthProvider({
   useEffect(() => {
     let active = true;
 
-    if (authService.isDemoSession()) {
-      return;
+    // Remove the persisted mock identity from old builds, if one exists.
+    const wasLegacyDemo =
+      sessionStorage.getItem("droneoptai.auth.demo") === "true";
+    sessionStorage.removeItem("droneoptai.auth.demo");
+    if (wasLegacyDemo && !authService.getAccessToken()) {
+      localStorage.removeItem("droneoptai.auth.user");
     }
 
     if (!authService.getAccessToken()) {
@@ -125,17 +124,6 @@ export function AuthProvider({
     [],
   );
 
-  const loginAsRole = useCallback(
-    (role: UserRole) => {
-      const nextUser =
-        authService.loginAsRole(role);
-
-      setUser(nextUser);
-      return nextUser;
-    },
-    [],
-  );
-
   const loginWithGoogle =
     useCallback(() => {
       authService.loginWithGoogle();
@@ -176,7 +164,6 @@ export function AuthProvider({
       register,
       forgotPassword,
       resetPassword,
-      loginAsRole,
       loginWithGoogle,
       completeGoogleLogin,
       logout,
@@ -188,7 +175,6 @@ export function AuthProvider({
       register,
       forgotPassword,
       resetPassword,
-      loginAsRole,
       loginWithGoogle,
       completeGoogleLogin,
       logout,

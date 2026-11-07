@@ -9,7 +9,6 @@ import type {
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
-  UserRole,
 } from "../types/auth";
 
 export interface AuthContextValue {
@@ -36,10 +35,6 @@ export interface AuthContextValue {
     payload:
       ResetPasswordPayload,
   ) => Promise<string>;
-
-  loginAsRole: (
-    role: UserRole,
-  ) => AuthUser;
 
   loginWithGoogle: () => void;
 

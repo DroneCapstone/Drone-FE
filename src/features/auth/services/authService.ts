@@ -10,14 +10,11 @@ import type {
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
-  UserRole,
 } from "../types/auth";
 
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const USER_KEY = "droneoptai.auth.user";
-const DEMO_SESSION_KEY =
-  "droneoptai.auth.demo";
 
 export class AuthApiError extends Error {
   status: number;
@@ -394,10 +391,6 @@ function persistTokens(
   tokens: AuthTokens,
   preserveExistingRefresh = false,
 ) {
-  sessionStorage.removeItem(
-    DEMO_SESSION_KEY,
-  );
-
   localStorage.setItem(
     ACCESS_TOKEN_KEY,
     tokens.accessToken,
@@ -438,9 +431,6 @@ function clearStoredSession() {
     localStorage.removeItem(key);
   });
 
-  sessionStorage.removeItem(
-    DEMO_SESSION_KEY,
-  );
 }
 
 function readStoredUser(): AuthUser | null {
@@ -684,36 +674,6 @@ async function performRefreshRequest(
   );
 }
 
-const MOCK_USERS: Record<
-  UserRole,
-  AuthUser
-> = {
-  operator: {
-    id: "mock-operator",
-    name: "Operator Demo",
-    email: "operator@droneopt.ai",
-    role: "operator",
-  },
-  customer: {
-    id: "mock-customer",
-    name: "Customer Demo",
-    email: "customer@droneopt.ai",
-    role: "customer",
-  },
-  admin: {
-    id: "mock-admin",
-    name: "Admin Demo",
-    email: "admin@droneopt.ai",
-    role: "admin",
-  },
-  technician: {
-    id: "mock-technician",
-    name: "Technician Demo",
-    email: "technician@droneopt.ai",
-    role: "technician",
-  },
-};
-
 export const authService = {
   getCurrentUser(): AuthUser | null {
     return readStoredUser();
@@ -728,14 +688,6 @@ export const authService = {
   getRefreshToken() {
     return localStorage.getItem(
       REFRESH_TOKEN_KEY,
-    );
-  },
-
-  isDemoSession() {
-    return (
-      sessionStorage.getItem(
-        DEMO_SESSION_KEY,
-      ) === "true"
     );
   },
 
@@ -940,21 +892,6 @@ export const authService = {
       clearStoredSession();
       return null;
     }
-  },
-
-  loginAsRole(
-    role: UserRole,
-  ): AuthUser {
-    const user = MOCK_USERS[role];
-
-    clearStoredSession();
-    persistUser(user);
-    sessionStorage.setItem(
-      DEMO_SESSION_KEY,
-      "true",
-    );
-
-    return user;
   },
 
   loginWithGoogle() {

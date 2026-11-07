@@ -6803,6 +6803,8 @@
   }
 
   .auth-password-wrap {
+    position: relative;
+
     display: flex;
 
     align-items: center;
@@ -6815,16 +6817,32 @@
 
     flex: 1;
 
+    width: 100%;
+
     height: 44px;
 
-    padding:
-      0 8px 0 13px;
+    /* Keep the Show/Hide button inside the same input area. */
+    padding: 0 62px 0 13px;
 
+    border: 0;
+
+    border-radius: 0;
+
+    outline: 0;
+
+    box-shadow: none;
+
+    background: transparent;
+  }
+
+  /* Prevent the inner input from drawing an extra focus frame. */
+  .auth-password-wrap input:focus,
+  .auth-password-wrap input:focus-visible {
     border: 0;
 
     outline: 0;
 
-    background: transparent;
+    box-shadow: none;
   }
 
   .auth-field>input::placeholder,
@@ -6853,9 +6871,17 @@
   /* Password toggle */
 
   .auth-password-toggle {
+    position: absolute;
+
+    top: 50%;
+
+    right: 7px;
+
+    transform: translateY(-50%);
+
     height: 30px;
 
-    margin-right: 7px;
+    margin-right: 0;
 
     padding:
       0 7px;
@@ -7638,78 +7664,6 @@
   }
 
 
-  /* =========================================================
-     DEMO ROLES
-     ========================================================= */
-
-  .auth-demo {
-    margin-top: 14px;
-  }
-
-  .auth-demo-label {
-    display: block;
-
-    margin-bottom: 7px;
-
-    color: #5f6570;
-
-    font-size: 8px;
-    font-weight: 600;
-
-    letter-spacing: 0.13em;
-  }
-
-  .auth-role-grid {
-    display: grid;
-
-    grid-template-columns:
-      repeat(4, 1fr);
-
-    gap: 6px;
-  }
-
-  .auth-role-grid button {
-    min-height: 31px;
-
-    padding: 0 7px;
-
-    border: 1px solid #292c33;
-    border-radius: 5px;
-
-    background: transparent;
-
-    color: #777e89;
-
-    font-family: inherit;
-
-    font-size: 9px;
-    font-weight: 500;
-
-    cursor: pointer;
-
-    transition:
-      color 0.15s ease,
-      border-color 0.15s ease,
-      background 0.15s ease;
-  }
-
-  .auth-role-grid button:hover {
-    color: #ff8a25;
-
-    border-color:
-      rgba(255,
-        122,
-        24,
-        0.45);
-
-    background:
-      rgba(255,
-        107,
-        0,
-        0.045);
-  }
-
-
   /* Bottom switch */
 
   .auth-switch-copy {
@@ -7799,10 +7753,6 @@
       min-height: 560px;
     }
 
-    .auth-role-grid {
-      grid-template-columns:
-        repeat(2, 1fr);
-    }
   }
 
 
@@ -9786,7 +9736,7 @@ button.alert-row:last-child {
   }
 }
 
-/* Operator flow refinement: Order -> Mission -> Destination Hub */
+/* Operator flow refinement: Order -> Mission -> Pick-up Point */
 .delivery-network-strip {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -9869,7 +9819,7 @@ button.alert-row:last-child {
   margin-top: 14px;
 }
 
-.mission-leg-list > div {
+.mission-leg-list>div {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -9927,4 +9877,599 @@ button.alert-row:last-child {
   .relay-route-note span {
     text-align: left;
   }
+}
+
+/* =========================================================
+   ADMIN — shared Operator visual system extensions
+   Only admin-specific compositions live here. Core shell,
+   header, sidebar, panels, metrics, tables and controls reuse
+   the Operator styles above.
+========================================================= */
+.admin-detail-grid,
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 13px;
+}
+
+.detail-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-list>span {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-list>span:last-child {
+  border-bottom: 0;
+}
+
+.detail-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-list strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.list-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-stack>span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.list-stack>span:last-child {
+  border-bottom: 0;
+}
+
+.list-stack strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.list-stack small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.toggle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+
+@media (max-width: 900px) {
+
+  .detail-grid,
+  .settings-grid,
+  .toggle-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   ADMIN DASHBOARD — Operator-aligned information hierarchy
+========================================================= */
+.admin-dashboard-primary {
+  align-items: stretch;
+}
+
+.admin-dashboard-primary>.card,
+.admin-dashboard-three>.card {
+  min-width: 0;
+}
+
+.admin-revenue-footer,
+.admin-mission-footer {
+  display: grid;
+  gap: 0;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-revenue-footer {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-mission-footer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-revenue-footer>span,
+.admin-mission-footer>span {
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border);
+}
+
+.admin-revenue-footer>span:last-child,
+.admin-mission-footer>span:last-child {
+  border-right: 0;
+}
+
+.admin-revenue-footer small,
+.admin-mission-footer small,
+.admin-health-row small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.admin-revenue-footer strong,
+.admin-mission-footer strong {
+  color: var(--text);
+  font: 700 17px 'Manrope';
+}
+
+.admin-mission-donut {
+  min-height: 238px;
+}
+
+.admin-dashboard-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin: 13px 0;
+}
+
+.admin-distribution-list,
+.admin-health-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-distribution-row {
+  padding: 10px 0 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-distribution-row:last-child,
+.admin-health-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-distribution-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-distribution-copy strong {
+  color: var(--text);
+  font: 700 14px 'Manrope';
+}
+
+.admin-distribution-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--surface-3);
+}
+
+.admin-distribution-track>span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--orange);
+}
+
+.admin-health-row {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-health-row>span {
+  min-width: 0;
+}
+
+.admin-health-row strong {
+  display: block;
+  color: var(--text);
+  font: 700 18px 'Manrope';
+}
+
+.admin-dashboard-alerts .alert-row {
+  align-items: flex-start;
+}
+
+@media (max-width: 1180px) {
+  .admin-dashboard-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-dashboard-three>.card:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+
+  .admin-dashboard-three,
+  .admin-revenue-footer,
+  .admin-mission-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-revenue-footer>span,
+  .admin-mission-footer>span {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .admin-revenue-footer>span:last-child,
+  .admin-mission-footer>span:last-child {
+    border-bottom: 0;
+  }
+}
+
+/* =========================================================
+   ADMIN USERS — compact list + Operator-style detail hierarchy
+========================================================= */
+.admin-user-role-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.admin-user-detail-layout {
+  align-items: start;
+}
+
+.admin-user-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-user-avatar {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--orange-soft);
+  border: 1px solid rgba(237, 116, 46, .18);
+  color: var(--orange);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.admin-user-hero-copy {
+  min-width: 0;
+}
+
+.admin-user-hero-copy h2 {
+  margin: 8px 0 2px;
+  font-size: 19px;
+}
+
+.admin-user-hero-copy p,
+.admin-user-hero-copy small {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-user-hero-copy p {
+  font-size: 13px;
+}
+
+.admin-user-hero-copy small {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.admin-user-hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.admin-user-key-values dd {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.admin-user-activity>div {
+  align-items: flex-start;
+  padding: 8px 0;
+}
+
+.admin-user-activity dd {
+  max-width: 58%;
+  text-align: right;
+  line-height: 1.45;
+}
+
+.admin-field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-inline-note {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-user-form-actions {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .admin-user-hero {
+    align-items: flex-start;
+  }
+
+  .admin-user-form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+
+/* Mission builder visual framing: clearer white outline for delivery network, drone cards, and route cards */
+.page-content .mission-builder .delivery-network-node,
+.page-content .mission-builder .hub-grid-select .hub-card,
+.page-content .mission-builder .eligible-drone-card,
+.page-content .mission-builder .route-option-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 0 0 4px var(--surface);
+}
+
+.page-content .mission-builder .eligible-drone-card.selectable-card:not(.active):hover,
+.page-content .mission-builder .route-option-card.selectable-card:not(.active):hover,
+.page-content .mission-builder .eligible-drone-card.selectable-card:not(.active):focus-visible,
+.page-content .mission-builder .route-option-card.selectable-card:not(.active):focus-visible {
+  box-shadow: 0 0 0 4px var(--surface);
+}
+
+.page-content .mission-builder .eligible-drone-card.selectable-card.active,
+.page-content .mission-builder .eligible-drone-card.selectable-card.active:hover,
+.page-content .mission-builder .eligible-drone-card.selectable-card.active:active,
+.page-content .mission-builder .eligible-drone-card.selectable-card.active:focus,
+.page-content .mission-builder .eligible-drone-card.selectable-card.active:focus-visible,
+.page-content .mission-builder .route-option-card.selectable-card.active,
+.page-content .mission-builder .route-option-card.selectable-card.active:hover,
+.page-content .mission-builder .route-option-card.selectable-card.active:active,
+.page-content .mission-builder .route-option-card.selectable-card.active:focus,
+.page-content .mission-builder .route-option-card.selectable-card.active:focus-visible {
+  border-color: var(--border) !important;
+  box-shadow: 0 0 0 4px var(--surface);
+}
+
+.page-content .mission-builder .delivery-network-strip {
+  gap: 22px;
+}
+
+.page-content .mission-builder .eligible-drone-grid,
+.page-content .mission-builder .route-option-list {
+  gap: 14px;
+}
+
+
+/* =========================================================
+   DRONEOPTAI AUTH - LIGHT MODE (FOLLOWS DEVICE / BROWSER)
+   Scoped to auth-page: no changes to Operator/Admin/Tech UI.
+   Dark Mode keeps the original styles above intact.
+   ========================================================= */
+@media (prefers-color-scheme: light) {
+  .auth-page {
+    color-scheme: light;
+    color: #1f2937;
+    background:
+      radial-gradient(circle at 9% 13%, rgba(255, 154, 66, 0.12), transparent 30%),
+      radial-gradient(circle at 89% 91%, rgba(255, 181, 120, 0.12), transparent 32%),
+      #f7f8fa;
+  }
+
+  .auth-page::after {
+    background: linear-gradient(120deg, transparent 28%, rgba(255, 112, 16, 0.04) 48%, transparent 68%);
+  }
+
+  .auth-page .auth-grid {
+    opacity: 0.34;
+    background-image:
+      linear-gradient(rgba(126, 133, 145, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(126, 133, 145, 0.08) 1px, transparent 1px);
+  }
+
+  .auth-page .auth-ambient { opacity: 0.11; }
+
+  .auth-page .auth-card {
+    border-color: #e6e8ec;
+    background: #ffffff;
+    box-shadow: 0 28px 75px rgba(52, 58, 70, 0.12);
+  }
+
+  .auth-page .auth-visual {
+    background:
+      radial-gradient(circle at 71% 43%, rgba(255, 146, 68, 0.11), transparent 40%),
+      linear-gradient(145deg, #fffaf6 0%, #fff3e8 54%, #fffaf7 100%);
+    border-right-color: rgba(223, 159, 112, 0.24);
+    border-bottom-color: rgba(223, 159, 112, 0.24);
+  }
+
+  /* Keep the original orbit animation and positions, only lighten the palette. */
+  .auth-page .auth-orbit {
+    border-color: rgba(255, 107, 0, 0.29);
+  }
+
+  .auth-page .auth-orbit::before {
+    background: #ff790c;
+    box-shadow: 0 0 14px rgba(255, 123, 18, 0.35);
+  }
+
+  .auth-page .auth-route-line {
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 0, 0.5), transparent);
+    opacity: 0.58;
+  }
+
+  .auth-page .auth-route-dot {
+    background: #ff7f17;
+    box-shadow: 0 0 12px rgba(255, 133, 26, 0.4);
+  }
+
+  .auth-page .auth-visual-mark { color: rgba(255, 107, 0, 0.032); }
+  .auth-page .auth-visual-copy h2 { color: #17202d; }
+  .auth-page .auth-visual-copy p,
+  .auth-page .auth-signal-row { color: #6b7280; }
+
+  .auth-page .auth-form-stage {
+    background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  }
+
+  .auth-page .auth-mode-tabs {
+    border-color: #e1e4e9;
+    background: #f5f6f8;
+  }
+
+  .auth-page .auth-mode-tabs button { color: #6b7280; }
+  .auth-page .auth-mode-tabs button:hover { color: #1f2937; }
+  .auth-page .auth-mode-tabs button.active {
+    color: #17130f;
+    background: #ff6b00;
+  }
+
+  .auth-page .auth-form-content h1 { color: #1f2937; }
+  .auth-page .auth-form-copy { color: #6b7280; }
+  .auth-page .auth-kicker,
+  .auth-page .auth-eyebrow { color: #ef6600; }
+  .auth-page .auth-field { color: #374151; }
+
+  .auth-page .auth-field > input,
+  .auth-page .auth-password-wrap {
+    border-color: #d9dde4;
+    background: #ffffff;
+  }
+
+  .auth-page .auth-field > input,
+  .auth-page .auth-password-wrap input { color: #1f2937; }
+
+  .auth-page .auth-field > input::placeholder,
+  .auth-page .auth-password-wrap input::placeholder { color: #9299a6; }
+
+  .auth-page .auth-field > input:focus,
+  .auth-page .auth-password-wrap:focus-within {
+    border-color: rgba(255, 107, 0, 0.75);
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.09);
+  }
+
+  /* Keep autofilled input text readable in Chrome's light mode. */
+  .auth-page .auth-field > input:-webkit-autofill,
+  .auth-page .auth-field > input:-webkit-autofill:focus,
+  .auth-page .auth-password-wrap input:-webkit-autofill,
+  .auth-page .auth-password-wrap input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1f2937;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+    transition: background-color 9999s ease-out;
+  }
+
+  .auth-page .auth-password-toggle { color: #6b7280; }
+  .auth-page .auth-password-toggle:hover {
+    color: #eb6500;
+    background: #fff1e6;
+  }
+
+  .auth-page .auth-google {
+    border-color: #d9dde4;
+    background: #ffffff;
+    color: #1f2937;
+  }
+
+  .auth-page .auth-google:hover {
+    border-color: #c6cbd4;
+    background: #f8f9fb;
+  }
+
+  .auth-page .auth-divider { color: #7d8490; }
+  .auth-page .auth-divider::before,
+  .auth-page .auth-divider::after { background: #e0e3e8; }
+
+  .auth-page .auth-switch-copy { color: #6b7280; }
+  .auth-page .auth-switch-copy button { color: #e76000; }
+  .auth-page .auth-switch-copy button:hover { color: #bd4c00; }
+  .auth-page .auth-security-note { color: #7b8491; }
+  .auth-page .auth-error {
+    border-color: rgba(210, 49, 55, 0.26);
+    background: #fff3f3;
+    color: #ad2630;
+  }
+}
+
+/* Login button only: centered label, no trailing arrow. */
+.auth-page .auth-submit-centered {
+  justify-content: center;
+  text-align: center;
 }
