@@ -1,18 +1,63 @@
-import { BatteryCharging, Search } from "lucide-react";
-import { useMemo, useState } from "react";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
-import { defaultAdminBatteries } from "../../data/adminData";
-import { getAdminHubs } from "../../services/adminStore";
+import { useEffect, useMemo, useState } from 'react';
+import { BatteryCharging, CircleCheck, ClipboardCheck, Archive } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
+import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { AdminToolbar } from '../../components/AdminToolbar';
+import { getAdminBatteries, getAdminHubs } from '../../services/adminStore';
+import { isBatteryReady } from '../../services/batteryLifecycle';
+import { batteryOperationalTone } from '../../utils/adminDisplay';
 
+/** Administrative asset list; no battery-health scoring or BMS diagnostics. */
 export function BatteriesPage() {
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [version, setVersion] = useState(0);
+  const [query, setQuery] = useState('');
+  const [operational, setOperational] = useState('all');
+  const [lifecycle, setLifecycle] = useState('all');
+  useEffect(() => {
+    const listener = () => setVersion((current) => current + 1);
+    window.addEventListener('admin-data-updated', listener);
+    return () => window.removeEventListener('admin-data-updated', listener);
+  }, []);
+  // Only Hub-assigned batteries appear in operational Battery Management.
+  // Admin-held new batteries have no Hub yet; they are managed in Replacement Supplies.
+  const batteries = useMemo(() => getAdminBatteries().filter((battery) => Boolean(battery.hubId)), [version]);
   const hubs = getAdminHubs();
-  const hubName = (id: string) => hubs.find((hub) => hub.id === id)?.name ?? id;
-  const visible = useMemo(() => defaultAdminBatteries.filter((battery) => (status === "all" || battery.status === status) && `${battery.id} ${battery.model} ${battery.serialNumber} ${battery.droneId ?? ""}`.toLowerCase().includes(query.toLowerCase())), [query, status]);
-  return <AdminPageShell title="Battery inventory" description="System-wide battery inventory aggregated from Technician hub battery management. Admin monitors allocation, health, cycle count and lifecycle state; charging/swap execution remains at the hub.">
-    <div className="grid gap-3 sm:grid-cols-4">{["Ready", "Charging", "In Use", "Maintenance"].map((item) => <div key={item} className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"><span className="text-[11px] text-[var(--admin-muted)]">{item}</span><strong className="mt-1 block text-2xl">{defaultAdminBatteries.filter((b) => b.status === item).length}</strong></div>)}</div>
-    <div className="mt-5 overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]"><div className="flex flex-wrap gap-3 border-b border-[var(--admin-border)] p-4"><div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2"><Search size={15} className="text-[var(--admin-muted)]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search battery..." className="w-full bg-transparent text-[12px] outline-none" /></div><select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 text-[12px]"><option value="all">All status</option><option>Ready</option><option>Charging</option><option>In Use</option><option>Maintenance</option><option>Retired</option></select></div><div className="overflow-x-auto admin-scrollbar"><table className="w-full min-w-[1050px] text-left text-[12px]"><thead className="bg-[var(--admin-surface-2)] text-[10px] uppercase tracking-wide text-[var(--admin-muted)]"><tr><th className="px-4 py-3">Battery</th><th className="px-4 py-3">Hub</th><th className="px-4 py-3">Drone</th><th className="px-4 py-3">Charge</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Health</th><th className="px-4 py-3">Cycles</th><th className="px-4 py-3">Updated</th></tr></thead><tbody className="divide-y divide-[var(--admin-border)]">{visible.map((battery) => <tr key={battery.id}><td className="px-4 py-3"><div className="flex items-center gap-2"><BatteryCharging size={15} className="text-orange-500" /><div><strong className="block">{battery.id}</strong><span className="text-[10px] text-[var(--admin-muted)]">{battery.model}</span></div></div></td><td className="px-4 py-3">{hubName(battery.hubId)}</td><td className="px-4 py-3">{battery.droneId ?? "Hub inventory"}</td><td className="px-4 py-3">{battery.chargeLevelPct}%</td><td className="px-4 py-3"><AdminStatusBadge tone={battery.status === "Ready" ? "success" : battery.status === "Maintenance" ? "danger" : battery.status === "Charging" ? "warning" : "info"}>{battery.status}</AdminStatusBadge></td><td className="px-4 py-3">{battery.healthPct}%</td><td className="px-4 py-3">{battery.cycleCount}</td><td className="px-4 py-3 text-[11px] text-[var(--admin-muted)]">{new Date(battery.updatedAt).toLocaleString("en-GB")}</td></tr>)}</tbody></table></div></div>
+  const hubName = (id: string) => hubs.find((hub) => hub.id === id)?.name ?? '—';
+  const visible = batteries.filter((battery) => {
+    const matchesQuery = `${battery.id} ${battery.model} ${battery.serialNumber} ${hubName(battery.hubId)}`.toLowerCase().includes(query.toLowerCase());
+    return matchesQuery && (operational === 'all' || operational === battery.operationalStatus)
+      && (lifecycle === 'all' || lifecycle === battery.administrativeStatus);
+  });
+
+  return <AdminPageShell title="Batteries"
+    description="Manage Battery IDs already assigned to Hubs, operational status and lifecycle."
+    actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries</Link>}>
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminSummaryCard label="Total batteries" value={batteries.length} note="Across the system" icon={BatteryCharging} />
+      <AdminSummaryCard label="Ready" value={batteries.filter(isBatteryReady).length} note="Ready for assignment" icon={CircleCheck} />
+      <AdminSummaryCard label="Pending verification" value={batteries.filter((battery) => battery.administrativeStatus === 'ACTIVE' && battery.inspectionPending).length} note="Awaiting Technician confirmation" icon={ClipboardCheck} />
+      <AdminSummaryCard label="Retired" value={batteries.filter((battery) => battery.administrativeStatus === 'RETIRED').length} note="Kept in asset history" icon={Archive} />
+    </div>
+    <OperatorPanel className="flush-panel">
+      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search Battery ID, model, serial or Hub…" meta={`${visible.length} of ${batteries.length} batteries`} filters={<>
+        <select value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option><option value="READY">Ready</option><option value="CHARGING">Charging</option><option value="INSTALLED">Installed</option><option value="MAINTENANCE">Maintenance</option></select>
+        <select value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option><option value="ACTIVE">Active</option><option value="RETIRED">Retired</option></select>
+      </>} />
+      <div className="table-wrap"><table>
+        <thead><tr><th>Battery</th><th>Serial number</th><th>Hub</th><th>Operational status</th><th>Lifecycle</th><th>Action</th></tr></thead>
+        <tbody>{visible.map((battery) => <tr key={battery.id}>
+          <td><strong>{battery.id}</strong><small>{battery.model}</small></td>
+          <td>{battery.serialNumber}</td>
+          <td><strong>{hubName(battery.hubId)}</strong></td>
+          <td><StatusBadge tone={batteryOperationalTone(battery.operationalStatus)}>{battery.inspectionPending ? 'PENDING VERIFICATION' : battery.operationalStatus}</StatusBadge></td>
+          <td><StatusBadge tone={battery.administrativeStatus === 'RETIRED' ? 'neutral' : 'success'}>{battery.administrativeStatus}</StatusBadge></td>
+          <td><Link className="text-button" to={`/admin/network/batteries/${battery.id}`}>View details</Link></td>
+        </tr>)}</tbody>
+      </table></div>
+    </OperatorPanel>
+
   </AdminPageShell>;
 }

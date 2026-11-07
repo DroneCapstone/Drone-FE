@@ -8,6 +8,7 @@ import type {
   Order,
   OrderStatus,
   PlanningState,
+  OrderPriorityLevel,
   OperatorDrone,
 } from '../types/operator';
 
@@ -24,14 +25,17 @@ export class OperatorApiError extends Error {
 }
 
 type BackendOrderStatus =
+  | 'AWAITING_DROP_OFF'
+  | 'AT_HUB'
   | 'PENDING'
   | 'IN_DELIVERY'
   | 'DELIVERED_TO_HUB'
   | 'CANCELLED';
 
-type BackendDeliveryMode = 'EXPRESS' | 'SCHEDULED';
+type BackendDeliveryMode = 'EXPRESS' | 'SCHEDULED' | 'NORMAL';
 
 type BackendPlanningState =
+  | 'WAITING_PACKAGE'
   | 'FUTURE'
   | 'READY_FOR_PLANNING'
   | 'PLANNED'
@@ -43,6 +47,11 @@ interface BackendOriginPackage {
   received_at?: string | null;
 }
 
+interface BackendOrderHub {
+  id: string | number;
+  name: string;
+}
+
 export interface BackendOperatorOrder {
   id: string;
   customer_id: string;
@@ -51,18 +60,29 @@ export interface BackendOperatorOrder {
   payload_kg: number;
   delivery_mode: BackendDeliveryMode;
   status: BackendOrderStatus;
-  planningState: BackendPlanningState;
+  planningState?: BackendPlanningState | null;
+  planning_state_label?: string | null;
+  can_create_mission?: boolean | null;
   originPackage?: BackendOriginPackage | null;
   requested_delivery_at?: string | null;
   estimated_window_start?: string | null;
   estimated_window_end?: string | null;
   planning_at?: string | null;
+  slack_minutes?: number | null;
+  priority_score?: number | null;
+  priority_level?: string | null;
+  coordination_deadline?: string | null;
+  customer_deadline?: string | null;
+  overdue_minutes?: number | null;
+  is_overdue?: boolean | null;
 
   // The current Swagger List Orders schema does not show these fields yet,
   // but the Operator table needs them to render Origin → Destination.
   // Keep them optional so FE is ready when BE adds them.
   origin_hub_id?: string | null;
   destination_hub_id?: string | null;
+  origin_hub?: BackendOrderHub | null;
+  destination_hub?: BackendOrderHub | null;
 
   // Optional fields that may be added by BE later without breaking this mapper.
   customer_name?: string | null;
@@ -85,14 +105,31 @@ interface BackendEligibleDronesHub {
 }
 
 interface BackendEligibleDrone {
-  id: string | number;
-  model: string;
-  maxPayloadKg: number;
+  id?: string | number;
+  drone_id?: string | number;
+  name?: string | null;
+  model?: string | null;
+  maxPayloadKg?: number;
+  payload_capacity_kg?: number;
+  current_hub_id?: string | number | null;
+  current_hub_name?: string | null;
+  hub_id?: string | number | null;
+  is_cross_hub?: boolean | null;
+  isCrossHub?: boolean | null;
+  is_selectable?: boolean | null;
+  isSelectable?: boolean | null;
+  unavailable_reason?: string | null;
+  battery_model?: string | null;
+  batteryModel?: string | null;
+  required_battery_model?: string | null;
+  requiredBatteryModel?: string | null;
+  compatible_battery_models?: string[];
 }
 
 interface BackendEligibleDronesResponse {
-  hub: BackendEligibleDronesHub;
-  drones: BackendEligibleDrone[];
+  hub?: Partial<BackendEligibleDronesHub>;
+  drones?: BackendEligibleDrone[];
+  data?: BackendEligibleDrone[] | { drones?: BackendEligibleDrone[]; hub?: Partial<BackendEligibleDronesHub> };
 }
 
 export interface EligibleDronesResult {
@@ -195,6 +232,10 @@ function unwrapOrderList(payload: unknown): BackendOperatorOrder[] {
 
 function mapStatus(status: BackendOrderStatus): OrderStatus {
   switch (status) {
+    case 'AWAITING_DROP_OFF':
+      return 'Awaiting Drop-off';
+    case 'AT_HUB':
+      return 'At Hub';
     case 'IN_DELIVERY':
       return 'In Delivery';
     case 'DELIVERED_TO_HUB':
@@ -208,13 +249,32 @@ function mapStatus(status: BackendOrderStatus): OrderStatus {
 }
 
 function mapDeliveryMode(mode: BackendDeliveryMode): DeliveryMode {
-  return mode === 'EXPRESS' ? 'Express' : 'Scheduled';
+  switch (mode) {
+    case 'EXPRESS': return 'Express';
+    case 'NORMAL': return 'Normal';
+    case 'SCHEDULED': default: return 'Scheduled';
+  }
 }
 
-function mapPlanningState(value: BackendPlanningState): PlanningState | undefined {
+function mapPriorityLevel(value?: string | null): OrderPriorityLevel | undefined {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === 'CRITICAL' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW') {
+    return normalized;
+  }
+  return undefined;
+}
+
+function finiteNumber(value?: number | null): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function mapPlanningState(value?: BackendPlanningState | null): PlanningState | undefined {
+  if (value == null || !String(value).trim()) return undefined;
   const normalized = String(value).trim().toUpperCase().replace(/[\s-]+/g, '_');
 
   switch (normalized) {
+    case 'WAITING_PACKAGE':
+      return 'Waiting for package';
     case 'FUTURE':
       return 'Future';
     case 'READY_FOR_PLANNING':
@@ -236,14 +296,14 @@ function validIso(value?: string | null) {
 
 function toOperatorOrder(raw: BackendOperatorOrder): Order {
   const requested = validIso(raw.requested_delivery_at);
-  const estimatedStart =
-    validIso(raw.estimated_window_start) ??
-    requested ??
-    validIso(raw.planning_at) ??
-    new Date().toISOString();
-  const estimatedEnd = validIso(raw.estimated_window_end) ?? estimatedStart;
-  const planningAt = validIso(raw.planning_at) ?? estimatedStart;
+  // Never synthesize an estimated window from requested/planning times.
+  // If BE did not return an endpoint, show '—' instead of a zero-minute trip.
+  const estimatedStart = validIso(raw.estimated_window_start) ?? '';
+  const estimatedEnd = validIso(raw.estimated_window_end) ?? '';
+  const planningAt = validIso(raw.planning_at) ?? estimatedStart ?? '';
   const createdAt = validIso(raw.created_at) ?? planningAt;
+  const originHubId = raw.origin_hub?.id ?? raw.origin_hub_id;
+  const destinationHubId = raw.destination_hub?.id ?? raw.destination_hub_id;
 
   return {
     id: String(raw.id),
@@ -252,11 +312,13 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     packageLabel: raw.package_label || '—',
     packageType: raw.package_type || '—',
     payloadKg: Number(raw.payload_kg ?? 0),
-    originHubId: raw.origin_hub_id ? String(raw.origin_hub_id) : '',
-    destinationHubId: raw.destination_hub_id ? String(raw.destination_hub_id) : '',
+    originHubId: originHubId !== null && originHubId !== undefined ? String(originHubId) : '',
+    originHubName: raw.origin_hub?.name?.trim() || undefined,
+    destinationHubId: destinationHubId !== null && destinationHubId !== undefined ? String(destinationHubId) : '',
+    destinationHubName: raw.destination_hub?.name?.trim() || undefined,
     deliveryMode: mapDeliveryMode(raw.delivery_mode),
     requestedDeliveryAt: requested,
-    requestedDate: (requested ?? estimatedStart).slice(0, 10),
+    requestedDate: (requested || estimatedStart || createdAt).slice(0, 10),
     initialEstimatedWindow: {
       start: estimatedStart,
       end: estimatedEnd,
@@ -267,7 +329,17 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
     },
     planningAt,
     planningState: mapPlanningState(raw.planningState),
+    planningStateLabel: raw.planning_state_label?.trim() || undefined,
+    canCreateMission: raw.can_create_mission === true,
+    priorityLevel: mapPriorityLevel(raw.priority_level),
+    priorityScore: finiteNumber(raw.priority_score),
+    slackMinutes: finiteNumber(raw.slack_minutes),
+    coordinationDeadline: validIso(raw.coordination_deadline),
+    customerDeadline: validIso(raw.customer_deadline),
+    overdueMinutes: finiteNumber(raw.overdue_minutes),
+    isOverdue: raw.is_overdue ?? undefined,
     status: mapStatus(raw.status),
+    originPackageReceived: raw.originPackage?.received === true,
     originHubReceivedAt:
       raw.originPackage?.received
         ? validIso(raw.originPackage.received_at) ?? undefined
@@ -308,36 +380,74 @@ export async function listOperatorOrdersApi(
 }
 
 
+/** Supports the deployed Operator endpoint and the BE-v2 documented endpoint.
+ * Do not switch to a different endpoint on validation/authorization/network failures. */
 export async function getEligibleDronesApi(
   orderId: string,
 ): Promise<EligibleDronesResult> {
   const normalizedOrderId = orderId.trim();
+  if (!normalizedOrderId) throw new OperatorApiError('Order ID is required.', 400);
 
-  if (!normalizedOrderId) {
-    throw new OperatorApiError('Order ID is required.', 400);
+  const encoded = encodeURIComponent(normalizedOrderId);
+  let payload: unknown;
+  try {
+    payload = await operatorApiRequest<unknown>(`/operator/orders/${encoded}/eligible-drones`);
+  } catch (error) {
+    if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status)) throw error;
+    payload = await operatorApiRequest<unknown>(`/orders/${encoded}/eligible-drones`);
   }
 
-  const payload = await operatorApiRequest<BackendEligibleDronesResponse>(
-    `/operator/orders/${encodeURIComponent(normalizedOrderId)}/eligible-drones`,
-  );
+  const envelope = isRecord(payload) ? payload : {};
+  const nested = isRecord(envelope.data) ? envelope.data : {};
+  const rawHub: Record<string, unknown> = isRecord(envelope.hub) ? envelope.hub : isRecord(nested.hub) ? nested.hub : {};
+  const rawDrones = Array.isArray(payload) ? payload
+    : Array.isArray(envelope.drones) ? envelope.drones
+    : Array.isArray(envelope.data) ? envelope.data
+    : Array.isArray(nested.drones) ? nested.drones : null;
+  if (rawDrones === null) {
+    throw new OperatorApiError('Eligible-drones API returned an unsupported response.', 502, payload);
+  }
 
-  const hubId = String(payload.hub.id);
-
+  const hubId = rawHub.id != null ? String(rawHub.id) : '';
+  const hubName = typeof rawHub.name === 'string' ? rawHub.name : '';
+  const drones = rawDrones.map((entry): OperatorDrone | null => {
+    if (!isRecord(entry)) return null;
+    const raw = entry as BackendEligibleDrone;
+    const rawId = raw.drone_id ?? raw.id;
+    if (rawId === null || rawId === undefined || String(rawId).trim() === '') return null;
+    const id = String(rawId);
+    const locatedAt = raw.current_hub_id ?? raw.hub_id;
+    const droneHubId = locatedAt != null ? String(locatedAt) : hubId;
+    const crossHub = raw.is_cross_hub === true || raw.isCrossHub === true ||
+      Boolean(hubId && droneHubId && droneHubId !== hubId);
+    const capacity = Number(raw.payload_capacity_kg ?? raw.maxPayloadKg ?? 0);
+    const compatibleModels = Array.isArray(raw.compatible_battery_models) ? raw.compatible_battery_models : [];
+    const selectability = raw.is_selectable ?? raw.isSelectable;
+    return {
+      id,
+      // Preserve the actual BE drone name; use `id` as the displayed code.
+      name: raw.name?.trim() || id,
+      displayId: id,
+      model: raw.model?.trim() || '—',
+      hubId: droneHubId,
+      hubName: raw.current_hub_name?.trim() || (droneHubId === hubId ? hubName : undefined),
+      isCrossHub: crossHub,
+      isSelectable: selectability !== false,
+      unavailableReason: raw.unavailable_reason?.trim() || undefined,
+      technicalStatus: 'Available',
+      maxPayloadKg: Number.isFinite(capacity) ? capacity : 0,
+      batteryModel: raw.requiredBatteryModel?.trim() || raw.required_battery_model?.trim() ||
+        raw.batteryModel?.trim() || raw.battery_model?.trim() ||
+        (compatibleModels.length === 1 ? compatibleModels[0] : undefined),
+    };
+  }).filter((drone): drone is OperatorDrone => drone !== null);
   return {
     hub: {
       id: hubId,
-      name: payload.hub.name,
-      totalDrones: Number(payload.hub.totalDrones ?? 0),
-      availableDrones: Number(payload.hub.availableDrones ?? 0),
+      name: hubName,
+      totalDrones: Number(rawHub.totalDrones ?? rawHub.total_drones ?? drones.length),
+      availableDrones: Number(rawHub.availableDrones ?? rawHub.available_drones ?? drones.filter(d => d.isSelectable !== false).length),
     },
-    drones: (payload.drones ?? []).map((drone) => ({
-      id: String(drone.id),
-      name: `DR-${String(drone.id)}`,
-      displayId: String(drone.id),
-      model: drone.model || '—',
-      hubId,
-      technicalStatus: 'Available',
-      maxPayloadKg: Number(drone.maxPayloadKg ?? 0),
-    })),
+    drones,
   };
 }

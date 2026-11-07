@@ -15,6 +15,7 @@ import { DroneDetailPage } from "./pages/DroneDetailPage";
 import { OutboundDeliveriesPage } from "./pages/OutboundDeliveriesPage";
 import { DeliveryConfirmationsPage } from "./pages/DeliveryConfirmationsPage";
 import { MaintenancePage } from "./pages/MaintenancePage";
+import { HubSuppliesPage } from "./pages/HubSuppliesPage";
 import { MaintenanceAlertsPage } from "./pages/MaintenanceAlertsPage";
 import { WorkOrdersPage } from "./pages/WorkOrdersPage";
 import { WorkOrderDetailPage } from "./pages/WorkOrderDetailPage";
@@ -84,6 +85,10 @@ export const technicianRoutes: RouteObject[] = [
       },
 
       /* Maintenance */
+      {
+        path: "maintenance/supplies",
+        element: <HubSuppliesPage />,
+      },
       {
         path: "maintenance",
         element: <MaintenancePage />,

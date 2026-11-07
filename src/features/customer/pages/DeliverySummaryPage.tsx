@@ -10,20 +10,23 @@ import {
 
 import {
   customerDeliveryService,
+  formatDistanceKm,
   formatDateTime,
   formatVnd,
 } from "../services/customerDeliveryService";
 
-export function DeliverySummaryPage() {
-  const { deliveryId } =
-    useParams();
+import type {
+  DeliveryPrice,
+} from "../types/customer";
 
-  const delivery =
-    deliveryId
-      ? customerDeliveryService.getById(
-          deliveryId,
-        )
-      : null;
+export function DeliverySummaryPage() {
+  const { deliveryId } = useParams();
+
+  const delivery = deliveryId
+    ? customerDeliveryService.getById(
+        deliveryId,
+      )
+    : null;
 
   if (!delivery) {
     return (
@@ -35,121 +38,79 @@ export function DeliverySummaryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1180px] px-6 py-14 lg:px-10">
+    <div className="mx-auto w-full max-w-[1050px] px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
       <p className="text-[11px] uppercase tracking-[0.2em] text-orange-500">
         Order created
       </p>
 
-      <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em]">
-        Delivery booked
+      <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.04em] sm:text-4xl">
+        Complete payment
       </h1>
 
       <p className="mt-3 text-sm text-white/40">
-        Order {delivery.id} has
-        been created. Complete
-        payment to continue.
+        Order {delivery.id} has been created in the backend and is waiting for payment.
       </p>
 
-      <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_380px]">
-        <div>
-          <div className="border-y border-white/10 py-8">
-            <RoutePoint
-              label="Origin Hub"
-              name={
-                delivery.originHub.name
-              }
-              address={
-                delivery.originHub
-                  .address
-              }
-            />
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+        <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-6">
+          <RouteRow
+            label="Origin hub"
+            name={delivery.originHub.name}
+            address={delivery.originHub.address}
+          />
 
-            <div className="my-6 ml-[7px] h-12 border-l border-dashed border-white/15" />
+          <div className="my-5 h-px bg-white/[0.07]" />
 
-            <RoutePoint
-              label="Destination Hub"
-              name={
-                delivery
-                  .destinationHub.name
-              }
-              address={
-                delivery
-                  .destinationHub
-                  .address
-              }
-            />
+          <RouteRow
+            label="Destination hub"
+            name={delivery.destinationHub.name}
+            address={delivery.destinationHub.address}
+          />
+
+          <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-orange-500/[0.18] bg-orange-500/[0.05] px-4 py-3">
+            <span className="text-[12px] font-medium text-white/[0.74]">
+              Distance between hubs
+            </span>
+            <span className="shrink-0 text-[14px] font-semibold text-orange-400">
+              {formatDistanceKm(delivery.distanceKm)}
+            </span>
           </div>
 
-          <div className="mt-10 border-l-2 border-orange-500 px-5 py-3">
-            <p className="text-xs text-white/35">
-              Bring package to
-              origin hub by
-            </p>
-
-            <p className="mt-2 text-2xl font-semibold">
-              {formatDateTime(
+          <div className="mt-6 grid gap-4 border-t border-white/[0.07] pt-5 sm:grid-cols-3">
+            <Info
+              label="Departure"
+              value={formatDateTime(
+                delivery.estimatedDepartureAt,
+              )}
+            />
+            <Info
+              label="Arrival"
+              value={formatDateTime(
+                delivery.estimatedArrivalAt,
+              )}
+            />
+            <Info
+              label="Handover deadline"
+              value={formatDateTime(
                 delivery.handoverDeadlineAt,
               )}
-            </p>
-
-            <p className="mt-3 max-w-[650px] text-xs leading-6 text-white/35">
-              To keep your requested
-              delivery time, your
-              package must arrive
-              before this deadline.
-              Late handover may move
-              the delivery to the
-              next available slot.
-            </p>
-          </div>
-
-          <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            <TimeBlock
-              label="Estimated departure"
-              value={formatDateTime(
-                delivery
-                  .estimatedDepartureAt,
-              )}
-            />
-
-            <TimeBlock
-              label="Estimated arrival"
-              value={formatDateTime(
-                delivery
-                  .estimatedArrivalAt,
-              )}
             />
           </div>
-        </div>
+        </section>
 
-        <aside className="h-fit border border-white/10 p-7">
-          <p className="text-[10px] uppercase tracking-[0.17em] text-white/30">
-            Order summary
+        <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-6">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-white/[0.35]">
+            Backend quotation
           </p>
 
-          <div className="mt-7 space-y-5">
-            <AmountRow
-              label="Delivery fee"
-              value={formatVnd(
-                delivery.price
-                  .deliveryFee,
-              )}
-            />
+          <SummaryPriceBreakdown
+            price={delivery.price}
+          />
 
-            <AmountRow
-              label="Service fee"
-              value={formatVnd(
-                delivery.price
-                  .serviceFee,
-              )}
-            />
-          </div>
-
-          <div className="mt-7 flex items-center justify-between border-t border-white/10 pt-5">
-            <span className="text-sm">
+          <div className="mt-5 flex items-center justify-between border-t border-white/[0.08] pt-5">
+            <span className="text-sm text-white/[0.60]">
               Total
             </span>
-
             <strong className="text-xl">
               {formatVnd(
                 delivery.price.total,
@@ -159,13 +120,10 @@ export function DeliverySummaryPage() {
 
           <Link
             to={`/customer/payment/${delivery.id}`}
-            className="mt-8 flex h-12 items-center justify-center gap-3 bg-orange-500 text-sm font-semibold text-black hover:bg-orange-400"
+            className="mt-6 flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-semibold text-black hover:bg-orange-400"
           >
             Continue to payment
-
-            <ArrowRight
-              size={16}
-            />
+            <ArrowRight size={15} />
           </Link>
         </aside>
       </div>
@@ -173,7 +131,7 @@ export function DeliverySummaryPage() {
   );
 }
 
-function RoutePoint({
+function RouteRow({
   label,
   name,
   address,
@@ -183,27 +141,21 @@ function RoutePoint({
   address: string;
 }) {
   return (
-    <div className="flex gap-5">
-      <div className="mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 border-orange-500" />
-
-      <div>
-        <p className="text-[10px] uppercase tracking-[0.16em] text-white/30">
-          {label}
-        </p>
-
-        <p className="mt-2 text-lg font-medium">
-          {name}
-        </p>
-
-        <p className="mt-1 text-xs text-white/35">
-          {address}
-        </p>
-      </div>
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.14em] text-white/[0.35]">
+        {label}
+      </p>
+      <p className="mt-2 text-[16px] font-semibold text-white/[0.90]">
+        {name}
+      </p>
+      <p className="mt-1 text-[12px] text-white/[0.42]">
+        {address}
+      </p>
     </div>
   );
 }
 
-function TimeBlock({
+function Info({
   label,
   value,
 }: {
@@ -211,14 +163,134 @@ function TimeBlock({
   value: string;
 }) {
   return (
-    <div className="border-t border-white/10 pt-4">
-      <p className="text-xs text-white/30">
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-white/[0.30]">
         {label}
       </p>
-
-      <p className="mt-2 text-sm">
+      <p className="mt-2 text-[12px] leading-5 text-white/[0.72]">
         {value}
       </p>
+    </div>
+  );
+}
+
+function SummaryPriceBreakdown({
+  price,
+}: {
+  price: DeliveryPrice;
+}) {
+  const details =
+    price.feeDetails;
+
+  if (!details) {
+    return (
+      <div className="space-y-3">
+        <AmountRow
+          label="Delivery fee"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+        />
+        <AmountRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      </div>
+    );
+  }
+
+  const coreFee =
+    details.baseFee +
+    details.distanceFee +
+    details.payloadFee;
+
+  const hasSeparateServiceFee =
+    price.serviceFee > 0 &&
+    Math.abs(
+      price.serviceFee -
+        details.expressSurcharge,
+    ) > 0.5;
+
+  return (
+    <div className="space-y-3">
+      <AmountRow
+        label="Base fee"
+        value={formatVnd(
+          details.baseFee,
+        )}
+      />
+
+      <AmountRow
+        label="Distance fee"
+        value={formatVnd(
+          details.distanceFee,
+        )}
+      />
+
+      <AmountRow
+        label="Payload fee"
+        value={formatVnd(
+          details.payloadFee,
+        )}
+      />
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <AmountRow
+          label="Core fee"
+          value={formatVnd(
+            coreFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.fragileSurcharge > 0 && (
+        <AmountRow
+          label="Fragile surcharge"
+          value={`+${formatVnd(
+            details.fragileSurcharge,
+          )}`}
+        />
+      )}
+
+      {details.insuranceFee > 0 && (
+        <AmountRow
+          label="Package insurance"
+          value={`+${formatVnd(
+            details.insuranceFee,
+          )}`}
+        />
+      )}
+
+      <div className="border-t border-white/[0.07] pt-3">
+        <AmountRow
+          label="Delivery subtotal"
+          value={formatVnd(
+            price.deliveryFee,
+          )}
+          strong
+        />
+      </div>
+
+      {details.expressSurcharge > 0 && (
+        <AmountRow
+          label="Express surcharge"
+          value={`+${formatVnd(
+            details.expressSurcharge,
+          )}`}
+        />
+      )}
+
+      {hasSeparateServiceFee && (
+        <AmountRow
+          label="Service fee"
+          value={formatVnd(
+            price.serviceFee,
+          )}
+        />
+      )}
     </div>
   );
 }
@@ -226,17 +298,33 @@ function TimeBlock({
 function AmountRow({
   label,
   value,
+  strong = false,
 }: {
   label: string;
   value: string;
+  strong?: boolean;
 }) {
   return (
-    <div className="flex justify-between gap-5 text-sm">
-      <span className="text-white/35">
+    <div className="mt-4 flex justify-between gap-5 text-[12px]">
+      <span
+        className={
+          strong
+            ? "font-semibold text-white/[0.62]"
+            : "text-white/[0.40]"
+        }
+      >
         {label}
       </span>
 
-      <span>{value}</span>
+      <span
+        className={
+          strong
+            ? "font-semibold text-white"
+            : "font-medium text-white/[0.82]"
+        }
+      >
+        {value}
+      </span>
     </div>
   );
 }

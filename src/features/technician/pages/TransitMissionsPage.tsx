@@ -3,17 +3,16 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
 
 import {
   ArrowRight,
-  BatteryCharging,
   Check,
   CircleAlert,
   Clock3,
   Eye,
   History,
-  PlaneTakeoff,
   Search,
   ShieldCheck,
   X,
@@ -36,21 +35,13 @@ import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
 
-import {
-  saveFleet,
-  TECHNICIAN_HUB,
-  type FleetDrone,
-} from "../utils/fleetStorage";
+import { useNavigate } from "react-router-dom";
 
 import {
-  useFleetQuery,
-} from "../hooks/useFleetQueries";
-
-import {
-  formatTransitTime,
-  loadTransitMissionHistory,
-  saveTransitMissionHistory,
-  saveTransitMissions,
+  isContinuationMission,
+  isActiveTechnicianTransitMission,
+  hasFinalHubMismatch,
+  getTransitConfirmKind,
   type TransitMission,
   type TransitMissionHistory,
   type TransitMissionPurpose,
@@ -60,56 +51,23 @@ import {
 import {
   useConfirmTransitArrivalMutation,
   useTransitMissionsQuery,
+  useTransitHistoryQuery,
+  useTransitBatterySwapMutation,
+  useTransitDispatchMutation,
 } from "../hooks/useTransitQueries";
 
-import {
-  createMaintenanceAlert,
-} from "../utils/maintenanceAlertStorage";
-
-import {
-  getBatteryForDrone,
-  installFullBatteryOnDrone,
-} from "../utils/batteryStorage";
-
-import {
-  useFirstReadyBatteryMutation,
-} from "../hooks/useBatteryQueries";
+import { TechnicianApiError } from "../api/httpClient";
 
 type TransitFilter =
   | "All transit"
   | TransitMissionStatus;
 
-function getIdNumber(
-  droneId: string,
-) {
-  const match =
-    droneId.match(/(\d+)$/);
-
-  if (!match) {
-    return droneId;
-  }
-
-  return String(
-    Number(match[1]),
-  ).padStart(2, "0");
-}
-
-function getDroneCode(
-  type: string,
-  droneId: string,
-) {
-  return `${type}-${getIdNumber(
-    droneId,
-  )}`;
-}
-
-function getMissionDroneCode(
-  mission: TransitMission,
-) {
-  return getDroneCode(
-    mission.droneType,
-    mission.currentDroneId,
-  );
+/** Preserve the real drone_id from GET /technician/fleet/incoming.
+ * drone_code is the drone's name, NOT its identifier. */
+function getMissionDroneId(mission: TransitMission): string {
+  return mission.currentDroneId && mission.currentDroneId !== "0"
+    ? mission.currentDroneId
+    : "—";
 }
 
 function getMissionDisplayId(
@@ -154,93 +112,142 @@ function getPurposeLabel(
     return "Return to hub";
   }
 
-  return "Incident return";
+  if (purpose === "INCIDENT_RETURN") return "Incident return";
+  return "En route";
 }
 
 function getMissionStateLabel(
-  purpose: TransitMissionPurpose,
+  mission: TransitMission,
 ) {
-  if (purpose === "BATTERY_STOP") {
+  if (mission.missionState) {
+    return mission.missionState;
+  }
+
+  if (mission.purpose === "BATTERY_STOP") {
     return "Active mission";
   }
 
-  if (
-    purpose === "RETURN_TO_HUB"
-  ) {
-    return "Mission completed";
-  }
-
-  return "Incident return";
+  if (mission.purpose === "RETURN_TO_HUB") return "Mission completed";
+  if (mission.purpose === "INCIDENT_RETURN") return "Incident return";
+  return "Unknown mission state";
 }
 
-function getMissionStateHint(
-  purpose: TransitMissionPurpose,
-) {
-  if (purpose === "BATTERY_STOP") {
-    return "";
-  }
+/** Show the exact mission lifecycle from Backend as the primary label.
+ * Flight destination/relay is a separate, smaller line; it must never
+ * replace the mission state or be confused with handling/landing status.
+ * `purpose` is mapped by transitMissionStorage from Backend routing data.
+ */
+function getMissionFlightTypeHint(mission: TransitMission): string {
+  if (mission.purpose === "BATTERY_STOP") return "Relay flight";
+  if (mission.purpose === "RETURN_TO_HUB") return "Destination flight";
+  if (mission.purpose === "INCIDENT_RETURN") return "Incident return";
+  return "Flight type pending";
+}
 
-  if (
-    purpose === "RETURN_TO_HUB"
-  ) {
-    return "";
+/** A clear, human-oriented arrival label beside the raw BE handling status. */
+function getHandlingHint(mission: TransitMission, arrivalConfirmed: boolean) {
+  if (mission.status === "Incoming") {
+    return "Approaching hub · confirm after landing";
   }
-
+  if (mission.status === "At Hub") {
+    if (arrivalConfirmed && isContinuationMission(mission)) {
+      return "Received at relay · battery change";
+    }
+    if (arrivalConfirmed) return "Arrival confirmed · follow-up pending";
+    return "Landed at hub · awaiting Tech confirmation";
+  }
+  if (mission.status === "Ready") return "Prepared · ready for next leg";
+  if (mission.status === "Cannot Continue") return "Incident · needs inspection";
   return "";
 }
 
-function getPurposeDescription(
-  purpose: TransitMissionPurpose,
-) {
+function getPurposeDescription(purpose: TransitMissionPurpose) {
   if (purpose === "BATTERY_STOP") {
-    return "Active delivery mission. The drone is stopping at this hub for battery service before continuing.";
+    return "Relay: click Confirm after physical landing. Install the battery assigned by Operator, then click Dispatch. FE records swap-battery with that assigned ID before dispatch; no battery selection dropdown.";
   }
-
-  if (
-    purpose === "RETURN_TO_HUB"
-  ) {
-    return "Delivery mission is already complete. After arrival confirmation, the current battery is removed for charging and the drone is stored in Hub Fleet without a battery installed.";
+  if (purpose === "RETURN_TO_HUB") {
+    return "Destination: click Confirm once after physically receiving the drone, including when Backend still reports Flying / Incoming. BE validates the request and finalizes the mission.";
   }
-
-  return "Operator/System reported an in-flight incident. After arrival confirmation, the current battery is removed and the drone enters Hub Fleet with Maintenance status and no battery installed.";
+  if (purpose === "INCIDENT_RETURN") {
+    return "Incident return + Cannot continue: confirm arrival once, then create/review the maintenance work order. Do not dispatch an unsafe drone.";
+  }
+  return "Incoming: Confirm appears for every arriving drone. FE selects relay or final API using drone_current_hub_id and destination_hub_id; click only after the drone actually lands.";
 }
 
-function getHistoryResultLabel(
-  outcome:
-    TransitMissionHistory["outcome"],
-) {
-  return outcome;
+/** History reflects the mission lifecycle, independently of confirmation time. */
+function getHistoryResultLabel(item: TransitMissionHistory): string {
+  const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (state === "COMPLETED") return "Completed";
+  if (state === "MISSION_COMPLETED") return "Mission completed";
+  if (["CANCELLED", "CANCELED"].includes(state)) return "Cancelled";
+  if (state === "FAILED") return "Failed";
+  return item.outcome;
 }
+
+function getHistoryReasonLabel(purpose: TransitMissionPurpose): string {
+  if (purpose === "BATTERY_STOP") return "Relay / battery stop";
+  if (purpose === "RETURN_TO_HUB") return "Destination arrival";
+  if (purpose === "INCIDENT_RETURN") return "Incident return";
+  return "Not specified";
+}
+
+/** Render the actual Backend timestamp (including seconds).
+ * Timestamps without Z/offset are timezone-naive; preserve their clock time.
+ * With Z/offset, format in the Technician's Vietnam timezone. */
+function formatHistoryTimestamp(value?: string): string {
+  if (!value || value === "—") return "—";
+  const raw = value.trim();
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const naive = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (naive && !hasTimezone) {
+    return `${naive[3]}/${naive[2]}/${naive[1]} · ${naive[4]}:${naive[5]}:${naive[6] ?? "00"}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).format(parsed).replace(",", " ·");
+}
+/** One click calls exactly the BE endpoint selected by mission + handling + leg. */
+function canConfirmLandedMission(mission: TransitMission): boolean {
+  return getTransitConfirmKind(mission) !== null;
+}
+
+// One shared grid keeps header and all mission rows aligned. Desktop screens
+// with limited space scroll horizontally instead of clipping IDs/descriptions.
+const transitTableGrid =
+  "lg:grid-cols-[minmax(176px,1.1fr)_minmax(145px,0.9fr)_minmax(185px,1.1fr)_minmax(104px,0.65fr)_minmax(230px,1.35fr)_minmax(222px,1.3fr)] lg:items-center lg:gap-4";
 
 export function TransitMissionsPage() {
+  const navigate = useNavigate();
   const transitQuery =
     useTransitMissionsQuery();
-
-  const fleetQuery =
-    useFleetQuery();
 
   const confirmArrivalMutation =
     useConfirmTransitArrivalMutation();
 
-  const readyBatteryMutation =
-    useFirstReadyBatteryMutation();
+  const batterySwapMutation = useTransitBatterySwapMutation();
+  const dispatchMutation = useTransitDispatchMutation();
+  const [dispatchedRelayMissionIds, setDispatchedRelayMissionIds] = useState<string[]>([]);
+  const historyQuery = useTransitHistoryQuery();
 
   const [
     missions,
     setMissions,
-  ] = useState<TransitMission[]>([]);
+  ] = useState<TransitMission[]>(() => transitQuery.data ?? []);
 
-  const [
-    fleet,
-    setFleet,
-  ] = useState<FleetDrone[]>([]);
+  // A mission may visit more than one relay; confirmations are scoped to leg.
+  const [confirmedArrivalIds, setConfirmedArrivalIds] = useState<string[]>([]);
+  const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
-  const [
-    missionHistory,
-    setMissionHistory,
-  ] = useState<
-    TransitMissionHistory[]
-  >(loadTransitMissionHistory);
+  // Show every completed mission returned by Backend /history.
+  // arrival_confirmed_at is informational and must NEVER hide a completed mission.
+  const missionHistory = (historyQuery.data ?? []).filter((item) => {
+    const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    return state === "COMPLETED" || state === "MISSION_COMPLETED";
+  });
 
   const [
     searchQuery,
@@ -292,6 +299,11 @@ export function TransitMissionsPage() {
     setHistoryOpen,
   ] = useState(false);
 
+  // A swap may succeed while Dispatch fails. On retry, do not perform the
+  // swap a second time, even if /incoming has not caught up yet.
+  const [swappedMissionKeys, setSwappedMissionKeys] = useState<string[]>([]);
+  const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
+
   const selectedMission =
     selectedMissionId
       ? missions.find(
@@ -301,71 +313,17 @@ export function TransitMissionsPage() {
         ) ?? null
       : null;
 
-  const persistMissions = (
-    next: TransitMission[],
-  ) => {
-    setMissions(next);
-    saveTransitMissions(next);
-  };
-
-  const persistFleet = (
-    next: FleetDrone[],
-  ) => {
-    setFleet(next);
-    saveFleet(next);
-  };
-
-  const persistHistory = (
-    next:
-      TransitMissionHistory[],
-  ) => {
-    setMissionHistory(next);
-    saveTransitMissionHistory(
-      next,
-    );
-  };
-
-
   useEffect(() => {
     if (transitQuery.data) {
-      setMissions(
-        transitQuery.data.map(
-          (mission) =>
-            mission.status ===
-            "Replacement Requested"
-              ? {
-                  ...mission,
-                  status:
-                    "Cannot Continue" as const,
-                }
-              : mission,
-        ),
-      );
+      setMissions(transitQuery.data);
     }
   }, [transitQuery.data]);
 
   useEffect(() => {
-    if (fleetQuery.data) {
-      setFleet(
-        fleetQuery.data,
-      );
+    if (transitQuery.error instanceof Error) {
+      pushActionMessage(transitQuery.error.message);
     }
-  }, [fleetQuery.data]);
-
-  useEffect(() => {
-    const error =
-      transitQuery.error ??
-      fleetQuery.error;
-
-    if (error instanceof Error) {
-      pushActionMessage(
-        error.message,
-      );
-    }
-  }, [
-    transitQuery.error,
-    fleetQuery.error,
-  ]);
+  }, [transitQuery.error]);
 
 
   const visibleMissions =
@@ -377,8 +335,11 @@ export function TransitMissionsPage() {
 
       return missions.filter(
         (mission) => {
+          // Incoming API can contain Scheduled/Ready preflight missions.
+          // Active Transit is ONLY Relay Stop, Incident, or completed arrival.
+          if (!isActiveTechnicianTransitMission(mission)) return false;
           const code =
-            getMissionDroneCode(
+            getMissionDroneId(
               mission,
             ).toLowerCase();
 
@@ -420,564 +381,114 @@ export function TransitMissionsPage() {
 
 
 
-  const addHistory = (
-    mission: TransitMission,
-    outcome:
-      TransitMissionHistory["outcome"],
-    handledAt: string,
-    batteryLevelPct:
-      number = mission.batteryLevelPct,
-  ) => {
-    const historyItem:
-      TransitMissionHistory = {
-      id: `HIST-${mission.id}-${Date.now()}`,
-      missionId:
-        mission.missionId,
-      legId:
-        mission.legId,
+  // One click = one confirmation API request. No Arrival type dropdown,
+  // second confirmation button, or synthetic success in the frontend.
+  const confirmingArrivalIds = useRef<Set<string>>(new Set());
 
-      purpose:
-        mission.purpose,
+  const requestConfirm = async (mission: TransitMission) => {
+    const missionKey = mission.backendMissionId;
+    if (!missionKey) {
+      pushActionMessage("Backend mission ID is missing; cannot confirm arrival.");
+      return;
+    }
+    const confirmationKey = arrivalKey(mission);
+    if (mission.arrivalConfirmed || confirmedArrivalIds.includes(confirmationKey)) {
+      pushActionMessage("Arrival was already confirmed by Backend; it cannot be confirmed twice.");
+      return;
+    }
+    const confirmRoute = getTransitConfirmKind(mission);
+    if (!confirmRoute) {
+      pushActionMessage("Cannot select arrival API: Backend must provide drone_current_hub_id and destination_hub_id (or an explicit arrival purpose). Do not confirm until the drone has physically landed.");
+      return;
+    }
+    if (confirmingArrivalIds.current.has(missionKey) || confirmArrivalMutation.isPending) return;
 
-      droneId:
-        mission.currentDroneId,
-      droneType:
-        mission.droneType,
-      droneModel:
-        mission.droneModel,
-
-      origin:
-        mission.origin,
-      hub:
-        mission.hub,
-      destination:
-        mission.destination,
-
-      batteryId:
-        mission.batteryId,
-      batteryLevelPct,
-
-      handledAt,
-      outcome,
-    };
-
-    persistHistory([
-      historyItem,
-      ...missionHistory,
-    ]);
-  };
-
-  const confirmArrival = async (
-    mission: TransitMission,
-  ) => {
+    const relay = confirmRoute === "RELAY";
+    confirmingArrivalIds.current.add(missionKey);
     try {
-      await confirmArrivalMutation.mutateAsync(
-        mission.missionId,
-      );
-
-      if (mission.purpose !== "BATTERY_STOP") {
-        addHistory(
-          mission,
-          mission.purpose === "RETURN_TO_HUB"
-            ? "Returned to hub"
-            : "Sent to maintenance",
-          formatTransitTime(),
-          mission.batteryLevelPct,
-        );
-      }
-
-      setSelectedMissionId(null);
-      pushActionMessage(
-        `${getMissionDisplayId(mission.missionId)} arrival confirmed by backend.`,
-      );
-    } catch (error) {
-      pushActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to confirm mission arrival.",
-      );
-    }
-  };
-
-  const replaceBattery = async (
-    mission: TransitMission,
-  ) => {
-    if (mission.purpose !== "BATTERY_STOP") return;
-
-    try {
-      const readyBattery = await readyBatteryMutation.mutateAsync(
-        mission.missionId,
-      );
-
-      if (!readyBattery) {
-        pushActionMessage(
-          "No fully charged battery is available at this hub.",
-        );
-        return;
-      }
-
-      persistMissions(
-        missions.map((item) =>
-          item.id === mission.id
-            ? {
-                ...item,
-                batteryId: readyBattery.id,
-                batteryLevelPct: 100,
-                batteryServiceRequired: false,
-                status: "Ready" as const,
-              }
-            : item,
-        ),
-      );
-
-
-      pushActionMessage(
-        `${readyBattery.id} at 100% was assigned to ${getMissionDisplayId(
-          mission.missionId,
-        )}. Mission is ready to dispatch.`,
-      );
-    } catch (error) {
-      pushActionMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to replace the mission battery.",
-      );
-    }
-  };
-
-  const markReady = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const fleetDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId,
-      );
-
-    if (
-      !fleetDrone ||
-      fleetDrone.status !==
-        "Available"
-    ) {
-      pushActionMessage(
-        "Drone must be Available before it can continue the mission.",
-      );
-
-      return;
-    }
-
-    const installedBattery =
-      getBatteryForDrone(
-        fleetDrone.id,
-      );
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "A fully charged battery must be installed before the mission can continue.",
-      );
-
-      return;
-    }
-
-    persistMissions(
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                batteryId:
-                  installedBattery.id,
-                batteryLevelPct:
-                  installedBattery.chargeLevelPct,
-                status:
-                  "Ready" as const,
-              }
-            : item,
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} passed the hub readiness check.`,
-    );
-  };
-
-  /* Backend document has no Cannot Continue / replacement endpoint yet. */
-  const markCannotContinue = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const now =
-      formatTransitTime();
-
-    const nextFleet =
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                status:
-                  "Maintenance" as const,
-              }
-            : drone,
-      );
-
-    const nextMissions =
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                status:
-                  "Cannot Continue" as const,
-                cannotContinueReason:
-                  "Drone failed the technician hub readiness check and cannot safely continue this active mission.",
-                replacementRequestedAt:
-                  now,
-                replacementReason:
-                  "TECHNICAL_FAILURE",
-              }
-            : item,
-      );
-
-    persistFleet(
-      nextFleet,
-    );
-
-    persistMissions(
-      nextMissions,
-    );
-
-    const maintenanceAlert =
-      createMaintenanceAlert({
-        drone:
-          getMissionDroneCode(
-            mission,
-          ),
-        droneId:
-          mission.currentDroneId,
-        title:
-          "Failed hub readiness inspection",
-        source:
-          "Hub inspection",
-        missionId:
-          mission.missionId,
-        legId:
-          mission.legId,
-        reason:
-          "Drone failed the technician hub readiness check and requires maintenance before further flight.",
+      await confirmArrivalMutation.mutateAsync({
+        missionId: missionKey,
+        relay,
+        // The mission already identifies an incident. Do not invent an
+        // inspection result or fault description if Backend has none.
+        hasIssue: mission.purpose === "INCIDENT_RETURN",
+        notes: mission.purpose === "INCIDENT_RETURN"
+          ? (mission.cannotContinueReason ?? "")
+          : "",
       });
-
-    window.dispatchEvent(
-      new CustomEvent(
-        "operator-replacement-requested",
-        {
-          detail: {
-            missionId:
-              mission.missionId,
-            legId:
-              mission.legId,
-            hub:
-              mission.hub,
-            failedDroneId:
-              mission.currentDroneId,
-            reason:
-              "TECHNICAL_FAILURE",
-            requestedAt:
-              now,
-          },
-        },
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDroneCode(
-        mission,
-      )} moved to Maintenance. ${maintenanceAlert.id} was created and Operator was automatically notified to assign a replacement drone.`,
-    );
+      setSelectedMissionId(null);
+      setConfirmedArrivalIds((ids) => ids.includes(confirmationKey) ? ids : [...ids, confirmationKey]);
+      pushActionMessage(relay
+        ? "Relay arrival confirmed. Install the battery specified by Operator, then press Dispatch."
+        : "Arrival confirmation accepted by Backend. Transit, Hub Fleet and related information are refreshing.");
+      void transitQuery.refetch();
+      void historyQuery.refetch();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not confirm arrival.";
+      if (error instanceof TechnicianApiError && error.status === 400 &&
+          /arrival\s+already\s+confirmed/i.test(message)) {
+        // Backend, not the frontend, explicitly says it was already accepted.
+        setConfirmedArrivalIds((ids) => ids.includes(confirmationKey) ? ids : [...ids, confirmationKey]);
+        pushActionMessage("Backend reports that arrival was already confirmed. Refreshing missions and history.");
+        void transitQuery.refetch();
+        void historyQuery.refetch();
+      } else {
+        pushActionMessage(message);
+      }
+    } finally {
+      confirmingArrivalIds.current.delete(missionKey);
+    }
   };
 
-  const confirmReplacementReady = (
-    mission: TransitMission,
-  ) => {
-    if (
-      !mission.replacementDroneId
-    ) {
-      pushActionMessage(
-        "Operator has not assigned a replacement drone yet.",
-      );
-
+  /** Technician physically installs the specific battery assigned by Operator.
+   * One Dispatch click records that swap (if needed), then starts the next leg.
+   * The currently installed battery_id is NOT a replacement assignment.
+   */
+  const dispatchMission = async (mission: TransitMission) => {
+    const key = arrivalKey(mission);
+    if (!mission.backendMissionId || !isContinuationMission(mission) ||
+        dispatchedRelayMissionIds.includes(key) || dispatchingKey !== null ||
+        (mission.status !== "At Hub" && mission.status !== "Ready")) {
       return;
     }
-
-    const replacementDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.replacementDroneId,
-      );
-
-    if (!replacementDrone) {
-      pushActionMessage(
-        "Assigned replacement drone was not found in this Hub Fleet.",
-      );
-
+    if (mission.status === "At Hub" &&
+        !(mission.arrivalConfirmed || confirmedArrivalIds.includes(key))) {
+      pushActionMessage("Confirm arrival at this relay hub before Dispatch.");
       return;
     }
-
-    if (
-      replacementDrone.status !==
-      "Available"
-    ) {
-      pushActionMessage(
-        "Assigned replacement drone must be Available.",
-      );
-
+    // The backend may already have recorded the swap (handling Ready).
+    // Otherwise the replacement battery must come explicitly from Operator.
+    const needSwap = mission.status === "At Hub" && !swappedMissionKeys.includes(key);
+    if (needSwap && !mission.assignedReplacementBatteryId) {
+      pushActionMessage("Backend has not supplied the Operator-assigned replacement_battery_id. The installed battery_id is the old battery and cannot be used for swap. Ask BE to expose the assigned replacement battery before Dispatch.");
       return;
     }
-
-    let installedBattery =
-      getBatteryForDrone(
-        replacementDrone.id,
-      );
-
-    if (!installedBattery) {
-      installedBattery =
-        installFullBatteryOnDrone({
-          droneId:
-            replacementDrone.id,
-          hub:
-            TECHNICIAN_HUB,
-          missionId:
-            mission.missionId,
-        }) ?? undefined;
+    setDispatchingKey(key);
+    try {
+      if (needSwap) {
+        const newBatteryId = mission.assignedReplacementBatteryId!;
+        if (!/^BAT[-_]/i.test(newBatteryId)) {
+          throw new Error("Operator-assigned replacement battery must have a BAT-... ID.");
+        }
+        await batterySwapMutation.mutateAsync({
+          missionId: mission.backendMissionId,
+          newBatteryId,
+        });
+        setSwappedMissionKeys((keys) => keys.includes(key) ? keys : [...keys, key]);
+      }
+      await dispatchMutation.mutateAsync(mission.backendMissionId);
+      setDispatchedRelayMissionIds((keys) => keys.includes(key) ? keys : [...keys, key]);
+      pushActionMessage("Relay Dispatch was accepted by Backend. Mission continues to the next hub; fleet and battery data are refreshing.");
+      void transitQuery.refetch();
+      void historyQuery.refetch();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Dispatch failed.";
+      pushActionMessage(`Dispatch not completed: ${detail}. If battery swap was accepted, retry will not swap a second time.`);
+      void transitQuery.refetch();
+    } finally {
+      setDispatchingKey(null);
     }
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "No fully charged battery is available for the replacement drone.",
-      );
-
-      return;
-    }
-
-    const replacementType =
-      replacementDrone.name
-        .match(/[A-Za-z]+/)?.[0]
-        ?.toUpperCase() ??
-      mission.droneType;
-
-    persistFleet(
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          replacementDrone.id
-            ? {
-                ...drone,
-                battery: 100,
-              }
-            : drone,
-      ),
-    );
-
-    persistMissions(
-      missions.map(
-        (item) =>
-          item.id ===
-          mission.id
-            ? {
-                ...item,
-                currentDroneId:
-                  replacementDrone.id,
-                droneType:
-                  replacementType,
-                droneModel:
-                  replacementDrone.model,
-                batteryId:
-                  installedBattery.id,
-                batteryLevelPct:
-                  100,
-                batteryServiceRequired:
-                  false,
-                status:
-                  "Ready" as const,
-              }
-            : item,
-      ),
-    );
-
-    pushActionMessage(
-      `${getDroneCode(
-        replacementType,
-        replacementDrone.id,
-      )} confirmed ready with ${installedBattery.id} at 100%.`,
-    );
   };
-
-  /* Backend document has no Transit Dispatch endpoint yet. */
-  const dispatchMission = (
-    mission: TransitMission,
-  ) => {
-    if (
-      mission.purpose !==
-      "BATTERY_STOP"
-    ) {
-      return;
-    }
-
-    const currentDrone =
-      fleet.find(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId,
-      );
-
-    if (!currentDrone) {
-      pushActionMessage(
-        "Current mission drone was not found in the Hub Fleet.",
-      );
-
-      return;
-    }
-
-    if (
-      currentDrone.status !==
-      "Available"
-    ) {
-      pushActionMessage(
-        "Only an Available drone can continue the mission.",
-      );
-
-      return;
-    }
-
-    const installedBattery =
-      getBatteryForDrone(
-        currentDrone.id,
-      );
-
-    if (
-      !installedBattery ||
-      installedBattery.chargeLevelPct !==
-        100
-    ) {
-      pushActionMessage(
-        "Drone must have a fully charged battery installed before continuing the mission.",
-      );
-
-      return;
-    }
-
-    const now =
-      formatTransitTime();
-
-    const nextFleet =
-      fleet.map(
-        (drone) =>
-          drone.id ===
-          mission.currentDroneId
-            ? {
-                ...drone,
-                location: `In transit to ${mission.destination}`,
-              }
-            : drone,
-      );
-
-    const nextMissions =
-      missions.filter(
-        (item) =>
-          item.id !==
-          mission.id,
-      );
-
-    persistFleet(
-      nextFleet,
-    );
-
-    persistMissions(
-      nextMissions,
-    );
-
-    addHistory(
-      mission,
-      "Continued",
-      now,
-      installedBattery.chargeLevelPct,
-    );
-
-    setSelectedMissionId(null);
-
-    /*
-     * Manual Dispatch by Technician:
-     * - the Ready mission leaves the active Transit list immediately;
-     * - the drone continues the flight without waiting for Operator approval;
-     * - Operator is notified at the same time through MISSION_CONTINUED.
-     */
-    window.dispatchEvent(
-      new CustomEvent(
-        "operator-mission-updated",
-        {
-          detail: {
-            eventType:
-              "MISSION_CONTINUED",
-            missionId:
-              mission.missionId,
-            legId:
-              mission.legId,
-            droneId:
-              mission.currentDroneId,
-            batteryId:
-              installedBattery.id,
-            hub:
-              mission.hub,
-            destination:
-              mission.destination,
-            status:
-              "IN_TRANSIT",
-            departedAt:
-              now,
-            message:
-              `${getMissionDisplayId(
-                mission.missionId,
-              )} dispatched from ${mission.hub} and continued toward ${mission.destination}.`,
-          },
-        },
-      ),
-    );
-
-    pushActionMessage(
-      `${getMissionDisplayId(
-        mission.missionId,
-      )} dispatched from ${TECHNICIAN_HUB}. Operator has been notified.`,
-    );
-  };
-
 
   return (
     <TechnicianPageShell
@@ -1024,8 +535,15 @@ export function TransitMissionsPage() {
         </div>
       )}
 
+      {transitQuery.isError && (
+        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
+          Cannot load transit missions.
+          <button type="button" className="ml-3 font-semibold underline" onClick={() => void transitQuery.refetch()}>Retry</button>
+        </div>
+      )}
+
       {/* SEARCH + FILTER + ACTIVE MISSIONS */}
-      <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
+      <Card className="overflow-visible rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[320px] flex-1">
             <Search
@@ -1066,9 +584,15 @@ export function TransitMissionsPage() {
 
           <button
             type="button"
-            onClick={() =>
-              setHistoryOpen(true)
-            }
+            onClick={() => {
+              // History is already fetched in parallel when Transit mounts.
+              // Open instantly from React Query's cached data; if stale, refresh
+              // in the background without hiding the existing history rows.
+              setHistoryOpen(true);
+              if (historyQuery.isStale && !historyQuery.isFetching) {
+                void historyQuery.refetch();
+              }
+            }}
             className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--tech-border)] px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500"
           >
             <History size={15} />
@@ -1077,21 +601,22 @@ export function TransitMissionsPage() {
         </CardContent>
 
         {/* ACTIVE MISSIONS */}
-        <div className="
+        <div className="lg:overflow-x-auto">
+          <div className="lg:min-w-[1190px]">
+        <div className={`
+          ${transitTableGrid}
           hidden
           border-b border-[var(--tech-border)]
           px-5 py-3
           lg:grid
-          lg:grid-cols-[minmax(115px,0.9fr)_minmax(145px,1.05fr)_minmax(155px,1.15fr)_minmax(90px,0.65fr)_minmax(155px,1.05fr)_minmax(220px,1.45fr)]
-          lg:items-center
-          lg:gap-4
-        ">
+        `}>
+
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
             Mission
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
-            Drone
+            Drone ID
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
@@ -1103,7 +628,7 @@ export function TransitMissionsPage() {
           </span>
 
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
-            Handling status
+            Arrival / handling
           </span>
 
           <span className="text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)]">
@@ -1115,32 +640,32 @@ export function TransitMissionsPage() {
           {visibleMissions.map(
             (mission) => {
               const code =
-                getMissionDroneCode(
+                getMissionDroneId(
                   mission,
                 );
 
               const batteryNeedsService =
-                mission.purpose ===
-                  "BATTERY_STOP" &&
-                mission.status ===
-                  "At Hub" &&
+                isContinuationMission(mission) &&
+                mission.status === "At Hub" &&
                 mission.batteryServiceRequired;
+              const arrivalConfirmed = mission.arrivalConfirmed ||
+                confirmedArrivalIds.includes(arrivalKey(mission));
+              // React Query reports one in-flight mutation; only that mission's
+              // button should say "Confirming..." (others remain "Confirm").
+              const isConfirmingThisMission =
+                confirmArrivalMutation.isPending &&
+                confirmArrivalMutation.variables?.missionId === mission.backendMissionId;
 
               return (
                 <div
                   key={mission.id}
                   className="px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50"
                 >
-                  <div className="
-                    grid
-                    gap-3
-                    lg:grid-cols-[minmax(115px,0.9fr)_minmax(145px,1.05fr)_minmax(155px,1.15fr)_minmax(90px,0.65fr)_minmax(155px,1.05fr)_minmax(220px,1.45fr)]
-                    lg:items-center
-                    lg:gap-4
-                  ">
+                  <div className={`grid gap-3 ${transitTableGrid}`}>
+
                     {/* MISSION */}
                     <div>
-                      <p className="text-[16px] font-semibold text-[var(--tech-text)]">
+                      <p className="whitespace-nowrap text-[14px] font-semibold tracking-tight text-[var(--tech-text)]">
                         {getMissionDisplayId(mission.missionId)}
                       </p>
                     </div>
@@ -1151,7 +676,7 @@ export function TransitMissionsPage() {
                         {code}
                       </p>
 
-                      <p className="mt-1 truncate text-[12px] text-[var(--tech-muted)]">
+                      <p className="mt-1 break-words text-[12px] leading-5 text-[var(--tech-muted)]">
                         {mission.droneModel}
                       </p>
                     </div>
@@ -1160,24 +685,16 @@ export function TransitMissionsPage() {
                     <div className="min-w-0">
                       <p
                         className={
-                          mission.purpose ===
-                          "INCIDENT_RETURN"
+                          mission.purpose === "INCIDENT_RETURN"
                             ? "text-[13px] font-semibold text-red-500"
-                            : mission.purpose ===
-                                "BATTERY_STOP"
-                              ? "text-[13px] font-medium text-orange-500"
-                              : "text-[13px] font-medium text-[var(--tech-text-secondary)]"
+                            : "text-[13px] font-medium text-[var(--tech-text-secondary)]"
                         }
                       >
-                        {getMissionStateLabel(
-                          mission.purpose,
-                        )}
+                        {getMissionStateLabel(mission)}
                       </p>
 
-                      <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]">
-                        {getMissionStateHint(
-                          mission.purpose,
-                        )}
+                      <p className="mt-1 break-words text-[12px] leading-5 text-[var(--tech-muted)]">
+                        {getMissionFlightTypeHint(mission)}
                       </p>
                     </div>
 
@@ -1199,10 +716,9 @@ export function TransitMissionsPage() {
                             : "mt-1 block text-[12px] text-[var(--tech-muted)]"
                         }
                       >
-                        {
-                          mission.batteryLevelPct
-                        }
-                        %
+                        {mission.batteryId || mission.batteryLevelPct > 0
+                          ? `${mission.batteryLevelPct}%`
+                          : "—"}
                       </span>
 
                       {batteryNeedsService &&
@@ -1215,120 +731,105 @@ export function TransitMissionsPage() {
                     </div>
 
                     {/* STATUS */}
-                    <div>
+                    <div className="min-w-0">
                       <TransitStatus
-                        status={
-                          mission.status
-                        }
+                        status={mission.status}
                       />
+                      <p className={`mt-1 break-words text-[12px] leading-5 ${
+                        mission.status === "At Hub" && !arrivalConfirmed
+                          ? "font-medium text-orange-500"
+                          : "text-[var(--tech-muted)]"
+                      }`}>
+                        {getHandlingHint(mission, arrivalConfirmed)}
+                      </p>
                     </div>
 
                     {/* ACTIONS */}
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
-                      {mission.status ===
-                        "Incoming" && (
+                      {(canConfirmLandedMission(mission) || mission.status === "Incoming") && !arrivalConfirmed && (
                         <Button
                           type="button"
                           onClick={() =>
-                            confirmArrival(
-                              mission,
-                            )
+                            void requestConfirm(mission)
                           }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
+                          disabled={
+                            mission.backendMissionId ===
+                              null ||
+                            confirmArrivalMutation.isPending
+                          }
+                          title={
+                            mission.backendMissionId ===
+                            null
+                              ? "Backend response is missing mission_id"
+                              : undefined
+                          }
+                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Check
                             size={14}
                           />
-                          Confirm
+                          {isConfirmingThisMission ? "Confirming..." : "Confirm"}
                         </Button>
                       )}
 
-                      {mission.purpose ===
-                        "BATTERY_STOP" &&
-                        mission.status ===
-                          "At Hub" &&
-                        mission.batteryServiceRequired && (
+                      {hasFinalHubMismatch(mission) && (
+                        <span className="text-[12px] text-orange-500" title="drone_current_hub_id differs from destination_hub_id">
+                          Hub location differs · verify
+                        </span>
+                      )}
+
+                      {isContinuationMission(mission) &&
+                        (mission.status === "At Hub" || mission.status === "Ready") && (
+                        <div className="flex max-w-[178px] flex-col items-end gap-1">
                           <Button
                             type="button"
-                            onClick={() =>
-                              replaceBattery(
-                                mission,
-                              )
-                            }
-                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
+                            onClick={() => void dispatchMission(mission)}
+                            disabled={!mission.backendMissionId ||
+                              dispatchingKey !== null || batterySwapMutation.isPending || dispatchMutation.isPending ||
+                              dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
+                              (mission.status === "At Hub" && !arrivalConfirmed) ||
+                              (mission.status === "At Hub" && !mission.assignedReplacementBatteryId && !swappedMissionKeys.includes(arrivalKey(mission)))}
+                            title={mission.status === "At Hub" && !mission.assignedReplacementBatteryId
+                              ? "Waiting for Operator-assigned replacement battery ID from Backend"
+                              : "After physically installing the assigned battery, Dispatch records the swap if necessary and launches the next leg"}
+                            className="h-9 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <BatteryCharging
-                              size={14}
-                            />
-                            Replace battery
+                            <ArrowRight size={14} />
+                            {dispatchedRelayMissionIds.includes(arrivalKey(mission))
+                              ? "Dispatched · syncing"
+                              : dispatchingKey === arrivalKey(mission)
+                                ? "Dispatching..."
+                                : "Dispatch"}
                           </Button>
-                        )}
+                          {mission.status === "At Hub" && (
+                            <span className="text-right text-[11px] text-[var(--tech-muted)]">
+                              {mission.assignedReplacementBatteryId
+                                ? `Install ${mission.assignedReplacementBatteryId} (Operator assigned)`
+                                : swappedMissionKeys.includes(arrivalKey(mission))
+                                  ? "Battery swap recorded · retry Dispatch"
+                                  : "Awaiting Operator replacement battery ID"}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
-                      {mission.purpose ===
-                        "BATTERY_STOP" &&
-                        mission.status ===
-                          "At Hub" &&
-                        !mission.batteryServiceRequired && (
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              markReady(
-                                mission,
-                              )
-                            }
-                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                          >
-                            <ShieldCheck
-                              size={14}
-                            />
-                            Ready
-                          </Button>
-                        )}
-
-                      {mission.status ===
-                        "Cannot Continue" &&
-                        !mission.replacementDroneId && (
-                          <span className="text-[13px] font-medium text-[var(--tech-muted)]">
-                            Waiting for Operator
-                          </span>
-                        )}
-
-                      {mission.status ===
-                        "Cannot Continue" &&
-                        mission.replacementDroneId && (
-                          <Button
-                            type="button"
-                            onClick={() =>
-                              confirmReplacementReady(
-                                mission,
-                              )
-                            }
-                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                          >
-                            <ShieldCheck
-                              size={14}
-                            />
-                            Confirm ready
-                          </Button>
-                        )}
-
-                      {mission.status ===
-                        "Ready" && (
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            dispatchMission(
-                              mission,
-                            )
-                          }
-                          className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600"
-                        >
-                          <PlaneTakeoff
-                            size={14}
-                          />
-                          Dispatch
+                      {mission.status === "Cannot Continue" && !canConfirmLandedMission(mission) && (
+                        <Button type="button" variant="outline"
+                          onClick={() => navigate("/technician/maintenance/alerts")}
+                          className="h-9 shrink-0 text-[12px] text-orange-500"
+                          title="Review incident and maintenance alerts; do not dispatch an unsafe drone">
+                          <CircleAlert size={14} /> Review incident
                         </Button>
                       )}
+
+                      {mission.purpose === "INCIDENT_RETURN" &&
+                        arrivalConfirmed && !mission.intakeCompleted && (
+                          <Button type="button"
+                            onClick={() => navigate("/technician/maintenance/alerts")}
+                            className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600">
+                            <ShieldCheck size={14} /> Open maintenance alerts
+                          </Button>
+                        )}
 
                       <button
                         type="button"
@@ -1351,54 +852,46 @@ export function TransitMissionsPage() {
             },
           )}
 
-          {visibleMissions.length ===
-            0 && (
+          {visibleMissions.length === 0 && (
             <div className="px-5 py-14 text-center">
               <p className="text-[15px] font-medium text-[var(--tech-text-secondary)]">
-                No incoming missions found
+                {transitQuery.isPending ? "Loading transit missions..." : transitQuery.isError ? "Unable to load transit missions" : "No incoming missions found"}
               </p>
 
               <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                No drones currently require handling at this hub.
+                {transitQuery.isPending ? "Fetching data from Backend." : transitQuery.isError ? "Check the Backend connection and retry." : "No drones currently require handling at this hub."}
               </p>
             </div>
           )}
         </div>
+          </div>
+        </div>
       </Card>
 
-      {/* HISTORY */}
+      {/* HISTORY — GET /technician/fleet/history; no synthetic completion records */}
       {historyOpen && (
         <div
-          className="fixed inset-0 z-[135] flex items-center justify-center bg-black/60 px-4 py-6"
-          onMouseDown={(
-            event,
-          ) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              setHistoryOpen(false);
-            }
+          className="fixed inset-0 z-[135] flex items-center justify-center bg-black/65 px-3 py-5 sm:px-5"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setHistoryOpen(false);
           }}
         >
-          <div className="flex max-h-[82vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-            <div className="flex items-center justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
+          <div className="flex max-h-[88vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
+            <div className="flex shrink-0 flex-wrap items-start justify-between gap-4 border-b border-[var(--tech-border)] px-5 py-4 sm:px-6">
               <div>
                 <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
                   Mission history
                 </h2>
-
-                <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                  Inbound missions already handled at{" "}
-                  {TECHNICIAN_HUB}.
-                </p>
+                
+                {!historyQuery.isPending && !historyQuery.isError && (
+                  <p className="mt-2 text-[12px] text-[var(--tech-text-secondary)]">
+                    {missionHistory.length} completed mission{missionHistory.length === 1 ? "" : "s"}
+                  </p>
+                )}
               </div>
-
               <button
                 type="button"
-                onClick={() =>
-                  setHistoryOpen(false)
-                }
+                onClick={() => setHistoryOpen(false)}
                 className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
                 aria-label="Close mission history"
               >
@@ -1407,113 +900,108 @@ export function TransitMissionsPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[940px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[130px_145px_160px_100px_190px_1fr] items-center gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
-                  <HistoryHeader>
-                    Mission
-                  </HistoryHeader>
-
-                  <HistoryHeader>
-                    Drone
-                  </HistoryHeader>
-
-                  <HistoryHeader>
-                    Reason
-                  </HistoryHeader>
-
-                  <HistoryHeader>
-                    Battery
-                  </HistoryHeader>
-
-                  <HistoryHeader>
-                    Handled at
-                  </HistoryHeader>
-
-                  <HistoryHeader>
-                    Result
-                  </HistoryHeader>
+              <div className="min-w-[1520px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[190px_165px_190px_115px_180px_180px_190px_170px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
+                  <HistoryHeader>Mission / Order</HistoryHeader>
+                  <HistoryHeader>Drone / Model</HistoryHeader>
+                  <HistoryHeader>Route / Arrival type</HistoryHeader>
+                  <HistoryHeader>Battery</HistoryHeader>
+                  <HistoryHeader>Arrived at hub</HistoryHeader>
+                  <HistoryHeader>Flight ended at</HistoryHeader>
+                  <HistoryHeader>Customer pickup at</HistoryHeader>
+                  <HistoryHeader>Mission / Result</HistoryHeader>
                 </div>
 
-                {missionHistory.length >
-                0 ? (
+                {historyQuery.isPending ? (
+                  <p className="p-8 text-center text-sm text-[var(--tech-muted)]">Loading mission history...</p>
+                ) : historyQuery.isError ? (
+                  <div className="p-8 text-center text-sm text-red-500">
+                    Could not load history from Backend.
+                    <button type="button" className="ml-2 underline" onClick={() => void historyQuery.refetch()}>Retry</button>
+                  </div>
+                ) : missionHistory.length > 0 ? (
                   <div className="divide-y divide-[var(--tech-border)]">
-                    {missionHistory.map(
-                      (item) => (
+                    {missionHistory.map((item) => {
+                      const resultLabel = getHistoryResultLabel(item);
+                      return (
                         <div
-                          key={
-                            item.id
-                          }
-                          className="grid grid-cols-[130px_145px_160px_100px_190px_1fr] items-center gap-4 px-6 py-4"
+                          key={item.id}
+                          className="grid grid-cols-[190px_165px_190px_115px_180px_180px_180px_170px] items-center gap-3 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50 sm:px-6"
                         >
-                          <span className="text-[14px] font-semibold text-[var(--tech-text)]">
-                            {getMissionDisplayId(item.missionId)}
-                          </span>
-
-                          <div>
-                            <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                              {getDroneCode(
-                                item.droneType,
-                                item.droneId,
-                              )}
+                          <div className="min-w-0">
+                            <p className="whitespace-nowrap text-[13px] font-semibold text-[var(--tech-text)]">
+                              {getMissionDisplayId(item.missionId)}
                             </p>
-
-                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {
-                                item.droneModel
-                              }
+                            {item.orderId && (
+                              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">{item.orderId}</p>
+                            )}
+                            {item.legId && (
+                              <p className="mt-1 text-[11px] text-[var(--tech-muted)]">Leg: {item.legId}</p>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[var(--tech-text)]">{item.droneId || "—"}</p>
+                            <p className="mt-1 break-words text-[11px] leading-4 text-[var(--tech-muted)]">
+                              {item.droneModel && item.droneModel !== "—" ? item.droneModel : "Model not provided"}
                             </p>
                           </div>
-
-                          <span className="text-[12px] text-[var(--tech-text-secondary)]">
-                            {getPurposeLabel(
-                              item.purpose,
-                            )}
-                          </span>
-
+                          <div className="min-w-0">
+                            <p className="break-words text-[12px] leading-5 text-[var(--tech-text-secondary)]">
+                              {item.origin} <span className="text-[var(--tech-subtle)]">→</span> {item.destination}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                              {getHistoryReasonLabel(item.purpose)}
+                            </p>
+                          </div>
                           <div>
                             <p className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">
-                              {
-                                item.batteryId ??
-                                "—"
-                              }
+                              {item.batteryId ?? "—"}
                             </p>
-
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {
-                                item.batteryLevelPct
-                              }
-                              %
+                              {item.batteryLevelReported ? `${item.batteryLevelPct}%` : "Charge unavailable"}
                             </p>
                           </div>
-
-                          <span className="text-[12px] text-[var(--tech-muted)]">
-                            {
-                              item.handledAt
-                            }
-                          </span>
-
-                          <span className="text-[12px] font-medium text-[var(--tech-text-secondary)]">
-                            {getHistoryResultLabel(
-                              item.outcome,
-                            )}
-                          </span>
+                          <div>
+                            <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
+                              {formatHistoryTimestamp(item.arrivedAt)}
+                            </p>
+                            {!item.arrivedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]">Not provided by BE</p>}
+                          </div>
+                          <div>
+                            <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
+                              {formatHistoryTimestamp(item.flightEndedAt)}
+                            </p>
+                            {!item.flightEndedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]">Not provided by BE</p>}
+                          </div>
+                          <div>
+                            <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
+                              {formatHistoryTimestamp(item.arrivalConfirmedAt)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                              {item.arrivalConfirmedAt ? "Customer pickup confirmed" : "Awaiting customer pickup"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">
+                              {resultLabel}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
+                              Mission: {item.missionState || "—"}
+                            </p>
+                          </div>
                         </div>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="px-6 py-14 text-center">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
-                      No mission history yet
-                    </p>
-
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-                      Confirmed returns and dispatched transit missions will appear here.
-                    </p>
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No completed missions yet</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Completed missions appear here when returned by Backend, even if confirmation time is missing.</p>
                   </div>
                 )}
               </div>
             </div>
+            
           </div>
         </div>
       )}
@@ -1585,16 +1073,28 @@ export function TransitMissionsPage() {
                   />
 
                   <DetailField
-                    label="Mission leg"
+                    label="Backend mission ID"
                     value={
-                      selectedMission.legId
+                      selectedMission.backendMissionId !==
+                      null
+                        ? String(
+                            selectedMission.backendMissionId,
+                          )
+                        : "Not provided"
+                    }
+                    danger={
+                      selectedMission.backendMissionId ===
+                      null
                     }
                   />
+
+                  <DetailField label="Mission leg" value={selectedMission.legId || "—"} />
+                  <DetailField label="Leg status" value={selectedMission.legStatus || "—"} />
 
                   <DetailField
                     label="Mission state"
                     value={getMissionStateLabel(
-                      selectedMission.purpose,
+                      selectedMission,
                     )}
                   />
 
@@ -1641,9 +1141,9 @@ export function TransitMissionsPage() {
                 <div className="mt-4 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <DetailField
-                      label="Drone"
+                      label="Drone ID"
                       value={
-                        getMissionDroneCode(
+                        getMissionDroneId(
                           selectedMission,
                         )
                       }
@@ -1657,7 +1157,7 @@ export function TransitMissionsPage() {
                     />
 
                     <DetailField
-                      label="Status"
+                      label="Arrival handling"
                       value={
                         selectedMission.status
                       }
@@ -1754,8 +1254,8 @@ export function TransitMissionsPage() {
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailField
-                      label="Battery swap policy"
-                      value="Required on every hub arrival"
+                      label="Replacement battery (Operator)"
+                      value={selectedMission.assignedReplacementBatteryId ?? "Not provided by Backend"}
                     />
 
                     <DetailField
@@ -1763,7 +1263,7 @@ export function TransitMissionsPage() {
                       value={
                         selectedMission.batteryServiceRequired
                           ? "Required"
-                          : "Completed"
+                          : "Not required / reported complete"
                       }
                       danger={
                         selectedMission.batteryServiceRequired
@@ -1773,10 +1273,11 @@ export function TransitMissionsPage() {
                     <DetailField
                       label="Can continue"
                       value={
-                        selectedMission.status ===
-                          "Cannot Continue"
-                          ? "No"
-                          : "Yes"
+                        selectedMission.status === "Ready"
+                          ? "Ready for Dispatch"
+                          : selectedMission.status === "Cannot Continue"
+                            ? "No"
+                            : "Pending Backend verification"
                       }
                       danger={
                         selectedMission.status ===
@@ -1811,11 +1312,11 @@ export function TransitMissionsPage() {
 
                   <div className="mt-4 rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
                     <p className="text-[14px] font-semibold text-[var(--tech-text)]">
-                      Maintenance Alert already created by Operator/System
+                      Review maintenance alerts after arrival
                     </p>
 
                     <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                      Confirm Arrival confirms the drone is physically at this hub. The battery ID carried by the mission is verified, the battery is removed and added to Battery Management as Charging. The drone enters Hub Fleet with Maintenance status and no battery installed.
+                      Confirm Arrival records physical arrival with Backend. Carry out initial inspection in Hub Fleet, check maintenance status and verify battery removal/charging in Battery Management. These inventory changes must be confirmed by Backend; the FE does not perform them automatically.
                     </p>
 
                     {selectedMission.incidentAlertId && (
@@ -1839,7 +1340,7 @@ export function TransitMissionsPage() {
                   </h3>
 
                   <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
-                    This delivery mission is already completed. After Confirm Arrival, Technician verifies the mission battery ID, removes that battery into Battery Management as Charging, stores the drone in Hub Fleet without a battery, and moves this row to Mission History.
+                    When the drone has physically landed, click Confirm once to record its arrival. Inspection and hub inventory are handled in the subsequent Backend workflow.
                   </p>
                 </section>
               )}
@@ -1873,7 +1374,7 @@ export function TransitMissionsPage() {
                               </p>
 
                               <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
-                                Operator was notified automatically when Technician marked Cannot Continue. Operator selects the next drone.
+                                The mission requires Operator review. Replacement assignment must be recorded by Backend before the Technician can proceed.
                               </p>
                             </div>
                           </div>
@@ -1915,10 +1416,14 @@ export function TransitMissionsPage() {
                     value={
                       selectedMission.arrivalConfirmedAt
                         ? selectedMission.arrivalConfirmedAt
-                        : "Waiting for arrival confirmation"
+                        : (selectedMission.arrivalConfirmed ||
+                           confirmedArrivalIds.includes(arrivalKey(selectedMission)))
+                          ? "Confirmed (time not provided by Backend)"
+                          : "Waiting for arrival confirmation"
                     }
                     muted={
-                      !selectedMission.arrivalConfirmedAt
+                      !selectedMission.arrivalConfirmed &&
+                      !confirmedArrivalIds.includes(arrivalKey(selectedMission))
                     }
                   />
 
@@ -1940,8 +1445,8 @@ export function TransitMissionsPage() {
                     />
                   )}
 
-                  {selectedMission.status ===
-                    "Ready" && (
+                  {isContinuationMission(selectedMission) &&
+                    selectedMission.status === "Ready" && (
                     <ActivityRow
                       label="Readiness"
                       value="Ready to continue"
@@ -1950,40 +1455,36 @@ export function TransitMissionsPage() {
                 </div>
               </section>
 
-              {/* HUB READINESS EXCEPTION */}
-              {selectedMission.purpose ===
-                "BATTERY_STOP" &&
-                (selectedMission.status ===
-                  "At Hub" ||
-                  selectedMission.status ===
-                    "Ready") &&
-                !selectedMission.replacementDroneId && (
-                  <section className="border-t border-[var(--tech-border)] pt-5">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
-                          Hub readiness check
-                        </h3>
-
-                        <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
-                          Use Cannot continue only if Technician discovers a technical problem while this active mission is stopped at the hub. The system will create a Hub inspection Maintenance Alert.
-                        </p>
-                      </div>
-
-                      <Button
-                        type="button"
-                        onClick={() =>
-                          markCannotContinue(
-                            selectedMission,
-                          )
-                        }
-                        className="h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] hover:!border-red-500/50 hover:!bg-transparent hover:!text-red-500"
-                      >
-                        Cannot continue
-                      </Button>
-                    </div>
-                  </section>
-                )}
+              {/* HUB INSPECTION / EXCEPTION SUPPORT */}
+              <section className="border-t border-[var(--tech-border)] pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-[var(--tech-text)]">
+                      {isContinuationMission(selectedMission)
+                        ? "Hub readiness & inspection"
+                        : "Initial inspection"}
+                    </h3>
+                    <p className="mt-1 max-w-[620px] text-[13px] leading-5 text-[var(--tech-muted)]">
+                      {isContinuationMission(selectedMission)
+                        ? "Install the replacement battery chosen by Operator and click Dispatch. FE records the swap and continues the mission only after Backend accepts it."
+                        : "Inspect the arrived drone in Hub Fleet and verify the removed battery in Battery Management. Arrival confirmation alone does not certify inspection or charging."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => navigate(
+                      isContinuationMission(selectedMission)
+                        ? "/technician/maintenance/alerts"
+                        : "/technician/fleet",
+                    )}
+                    className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
+                  >
+                    {isContinuationMission(selectedMission)
+                      ? "Open maintenance alerts"
+                      : "Open Hub Fleet"}
+                  </Button>
+                </div>
+              </section>
             </div>
           </div>
         </div>

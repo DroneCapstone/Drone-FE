@@ -80,6 +80,10 @@ export const technicianNavigation:
         label: "Work orders",
         path: "/technician/maintenance/work-orders",
       },
+      {
+        label: "Hub supplies",
+        path: "/technician/maintenance/supplies",
+      },
     ],
   },
 

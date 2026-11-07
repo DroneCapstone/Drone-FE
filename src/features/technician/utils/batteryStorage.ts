@@ -1,43 +1,46 @@
 import {
   getBatteriesApi,
-  getBatteryDetailApi,
   markBatteryChargedApi,
   useBatteryApi,
 } from "../api/batteryApi";
-
 import {
   formatApiDateTime,
   isRecord,
   pickNumber,
   pickString,
   unwrapList,
-  unwrapObject,
 } from "../api/httpClient";
-
 export type BatteryStatus =
   | "Ready"
-  | "Charging";
-
+  | "Charging"
+  | "In Use";
 export type HubBattery = {
-  /** Human-readable battery code/serial shown in the UI (for example BAT-001). */
+  /** Backend battery ID shown in UI, e.g. BAT-0022 (never serial_number). */
   id: string;
-
-  /** Real database id used by mutation endpoints such as /batteries/{battery_id}/use. */
+  /** Canonical Backend ID used by battery mutation and detail endpoints. */
   backendId?: string;
-
   serialNumber?: string;
   model?: string;
+  /** The battery record status returned by BE, such as Active. */
+  lifecycleStatus?: string;
+  /** Number of days returned by BE, not a derived expiration date. */
+  daysUntilExpiry?: number;
+  /** Last successful full charge timestamp returned by BE. */
+  lastChargedAt?: string;
+  /** True only when an actual charge percentage was returned by Backend. */
+  chargeReportedByBackend?: boolean;
+  /** Unmodified Backend status, used to exclude installed/in-use batteries. */
+  backendStatus?: string;
+  /** Explicit compatibility provided by Backend, when available. */
+  compatibleDroneModels?: string[];
   capacityWh?: number;
   droneId?: string;
   hubId?: string;
   hub: string;
-
   chargeLevelPct: number;
   status: BatteryStatus;
-
   createdAt?: string;
   updatedAt: string;
-
   /*
    * Mock fields representing values that production backend would return.
    * Frontend should normally receive current charge + estimatedReadyAt
@@ -46,51 +49,40 @@ export type HubBattery = {
   chargingStartedAt?: string;
   chargingStartLevelPct?: number;
   estimatedReadyAt?: string;
+  /** Reported minutes remaining. Zero while Charging is not a usable countdown. */
+  estimatedMinutesRemaining?: number;
 };
-
 export type ActiveFlightBattery = {
   id: string;
   droneId: string;
-
   missionId?: string;
   orderId?: string;
-
   chargeLevelPct: number;
   installedAt: string;
 };
-
 export type BatteryHistoryAction =
   | "Removed at hub"
   | "Charging completed"
   | "Taken for use"
   | "Battery replaced";
-
 export type BatteryHistoryRecord = {
   id: string;
-
   batteryId: string;
   hub: string;
-
   action: BatteryHistoryAction;
-
   chargeLevelPct: number;
-
   missionId?: string;
   orderId?: string;
   droneId?: string;
-
   occurredAt: string;
   note?: string;
 };
-
 export type BatterySwapResult = {
   installedBattery: ActiveFlightBattery;
   removedBattery: HubBattery;
 };
-
 const TECHNICIAN_HUB =
   "Hub HCM-02";
-
 /*
  * DEMO BACKEND CHARGING MODEL
  * ---------------------------------------------------------
@@ -111,7 +103,6 @@ const TECHNICIAN_HUB =
  */
 export const CHARGE_RATE_PCT_PER_MINUTE =
   2;
-
 function calculateChargeMinutes(
   chargeLevelPct: number,
 ) {
@@ -123,13 +114,11 @@ function calculateChargeMinutes(
         chargeLevelPct,
       ),
     );
-
   return Math.ceil(
     (100 - safeLevel) /
       CHARGE_RATE_PCT_PER_MINUTE,
   );
 }
-
 function formatBatteryTime(
   date = new Date(),
 ) {
@@ -147,7 +136,6 @@ function formatBatteryTime(
     .format(date)
     .replace(",", " ·");
 }
-
 function createChargingBattery({
   id,
   chargeLevelPct,
@@ -159,12 +147,10 @@ function createChargingBattery({
 }): HubBattery {
   const now =
     new Date();
-
   const minutes =
     calculateChargeMinutes(
       chargeLevelPct,
     );
-
   return {
     id,
     hub,
@@ -172,13 +158,10 @@ function createChargingBattery({
     status: "Charging",
     updatedAt:
       formatBatteryTime(now),
-
     chargingStartedAt:
       now.toISOString(),
-
     chargingStartLevelPct:
       chargeLevelPct,
-
     estimatedReadyAt:
       new Date(
         now.getTime() +
@@ -187,7 +170,6 @@ function createChargingBattery({
       ).toISOString(),
   };
 }
-
 /*
  * Battery Management only contains batteries physically stored at Hub.
  *
@@ -226,18 +208,15 @@ let demoBatteries:
     updatedAt:
       "24 Sep 2026 · 08:10",
   },
-
   createChargingBattery({
     id: "BAT-004",
     chargeLevelPct: 72,
   }),
-
   createChargingBattery({
     id: "BAT-005",
     chargeLevelPct: 35,
   }),
 ];
-
 /*
  * Temporary runtime association:
  * which Battery ID is currently installed on an active drone.
@@ -249,12 +228,9 @@ const activeFlightBatteries:
     string,
     ActiveFlightBattery
   > = {};
-
 let demoBatteryHistory:
   BatteryHistoryRecord[] = [];
-
 let fallbackBatterySequence = 8;
-
 function notifyBatteryUpdate() {
   window.dispatchEvent(
     new Event(
@@ -262,7 +238,6 @@ function notifyBatteryUpdate() {
     ),
   );
 }
-
 function notifyHistoryUpdate() {
   window.dispatchEvent(
     new Event(
@@ -270,7 +245,6 @@ function notifyHistoryUpdate() {
     ),
   );
 }
-
 function addHistory(
   record: Omit<
     BatteryHistoryRecord,
@@ -280,23 +254,18 @@ function addHistory(
   const item:
     BatteryHistoryRecord = {
     ...record,
-
     id:
       `BH-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 7)}`,
   };
-
   demoBatteryHistory = [
     item,
     ...demoBatteryHistory,
   ];
-
   notifyHistoryUpdate();
-
   return item;
 }
-
 /*
  * Internal mock of backend charging calculation.
  *
@@ -309,12 +278,9 @@ function refreshChargingState(
 ) {
   const now =
     Date.now();
-
   const completed:
     HubBattery[] = [];
-
   let changed = false;
-
   demoBatteries =
     demoBatteries.map(
       (battery) => {
@@ -329,19 +295,16 @@ function refreshChargingState(
         ) {
           return battery;
         }
-
         const startedAt =
           new Date(
             battery.chargingStartedAt,
           ).getTime();
-
         const elapsedMinutes =
           Math.max(
             0,
             (now - startedAt) /
               60_000,
           );
-
         const nextCharge =
           Math.min(
             100,
@@ -352,7 +315,6 @@ function refreshChargingState(
                   CHARGE_RATE_PCT_PER_MINUTE,
             ),
           );
-
         if (
           nextCharge ===
             battery.chargeLevelPct &&
@@ -360,47 +322,35 @@ function refreshChargingState(
         ) {
           return battery;
         }
-
         changed = true;
-
         if (
           nextCharge >= 100
         ) {
           const ready:
             HubBattery = {
             ...battery,
-
             chargeLevelPct: 100,
             status: "Ready",
-
             updatedAt:
               formatBatteryTime(
                 new Date(now),
               ),
-
             chargingStartedAt:
               undefined,
-
             chargingStartLevelPct:
               undefined,
-
             estimatedReadyAt:
               undefined,
           };
-
           completed.push(
             ready,
           );
-
           return ready;
         }
-
         return {
           ...battery,
-
           chargeLevelPct:
             nextCharge,
-
           updatedAt:
             formatBatteryTime(
               new Date(now),
@@ -408,7 +358,6 @@ function refreshChargingState(
         };
       },
     );
-
   for (
     const battery
     of completed
@@ -416,40 +365,31 @@ function refreshChargingState(
     addHistory({
       batteryId:
         battery.id,
-
       hub:
         battery.hub,
-
       action:
         "Charging completed",
-
       chargeLevelPct:
         100,
-
       occurredAt:
         battery.updatedAt,
-
       note:
         "Backend charging timer reached the estimated completion time. Battery automatically moved to Ready.",
     });
   }
-
   if (
     notify &&
     changed
   ) {
     notifyBatteryUpdate();
   }
-
   return changed;
 }
-
 export function syncChargingBatteries() {
   return refreshChargingState(
     true,
   );
 }
-
 export function loadBatteries():
   HubBattery[] {
   /*
@@ -458,14 +398,12 @@ export function loadBatteries():
   refreshChargingState(
     false,
   );
-
   return demoBatteries.map(
     (battery) => ({
       ...battery,
     }),
   );
 }
-
 export function loadBatteryHistory():
   BatteryHistoryRecord[] {
   return demoBatteryHistory.map(
@@ -474,7 +412,6 @@ export function loadBatteryHistory():
     }),
   );
 }
-
 export function getBatteryForDrone(
   droneId: string,
 ) {
@@ -482,14 +419,12 @@ export function getBatteryForDrone(
     activeFlightBatteries[
       droneId
     ];
-
   return battery
     ? {
         ...battery,
       }
     : undefined;
 }
-
 /*
  * Drone arrives at Hub.
  * Exact battery ID is carried by Mission.
@@ -515,17 +450,14 @@ export function detachBatteryFromDrone({
     activeFlightBatteries[
       droneId
     ];
-
   if (activeBattery) {
     delete activeFlightBatteries[
       droneId
     ];
   }
-
   if (!batteryId) {
     fallbackBatterySequence += 1;
   }
-
   const resolvedBatteryId =
     batteryId ??
     activeBattery?.id ??
@@ -535,67 +467,50 @@ export function detachBatteryFromDrone({
       3,
       "0",
     )}`;
-
   const returned =
     createChargingBattery({
       id:
         resolvedBatteryId,
-
       hub,
-
       chargeLevelPct,
     });
-
   /*
    * One physical Battery ID = one inventory row.
    */
   demoBatteries = [
     returned,
-
     ...demoBatteries.filter(
       (battery) =>
         battery.id !==
         resolvedBatteryId,
     ),
   ];
-
   addHistory({
     batteryId:
       resolvedBatteryId,
-
     hub,
-
     action:
       "Removed at hub",
-
     chargeLevelPct,
-
     droneId,
-
     missionId:
       missionId ??
       activeBattery?.missionId,
-
     orderId:
       orderId ??
       activeBattery?.orderId,
-
     occurredAt:
       returned.updatedAt,
-
     note:
       `Battery removed at ${chargeLevelPct}%. Estimated full charge in ${calculateChargeMinutes(
         chargeLevelPct,
       )} minute(s).`,
   });
-
   notifyBatteryUpdate();
-
   return {
     ...returned,
   };
 }
-
 /*
  * Technician selects a Ready battery for an assigned mission.
  */
@@ -615,7 +530,6 @@ export function checkoutBatteryForFlight({
   refreshChargingState(
     false,
   );
-
   const battery =
     demoBatteries.find(
       (item) =>
@@ -627,72 +541,53 @@ export function checkoutBatteryForFlight({
         item.chargeLevelPct ===
           100,
     );
-
   if (!battery) {
     return undefined;
   }
-
   const now =
     formatBatteryTime();
-
   demoBatteries =
     demoBatteries.filter(
       (item) =>
         item.id !==
         batteryId,
     );
-
   const flightBattery:
     ActiveFlightBattery = {
     id:
       battery.id,
-
     droneId,
-
     missionId,
     orderId,
-
     chargeLevelPct:
       100,
-
     installedAt:
       now,
   };
-
   activeFlightBatteries[
     droneId
   ] = flightBattery;
-
   addHistory({
     batteryId:
       battery.id,
-
     hub,
-
     action:
       "Taken for use",
-
     chargeLevelPct:
       100,
-
     missionId,
     orderId,
     droneId,
-
     occurredAt:
       now,
-
     note:
       "Battery removed from Hub inventory and installed on the departing drone.",
   });
-
   notifyBatteryUpdate();
-
   return {
     ...flightBattery,
   };
 }
-
 /*
  * Compatibility helper used by replacement/outbound flow.
  */
@@ -711,11 +606,9 @@ export function installFullBatteryOnDrone({
     getBatteryForDrone(
       droneId,
     );
-
   if (existing) {
     return existing;
   }
-
   const readyBattery =
     loadBatteries().find(
       (battery) =>
@@ -725,16 +618,13 @@ export function installFullBatteryOnDrone({
         battery.chargeLevelPct ===
           100,
     );
-
   if (!readyBattery) {
     return null;
   }
-
   return (
     checkoutBatteryForFlight({
       batteryId:
         readyBattery.id,
-
       droneId,
       hub,
       missionId,
@@ -742,7 +632,6 @@ export function installFullBatteryOnDrone({
     }) ?? null
   );
 }
-
 /*
  * Active long-distance mission battery stop.
  */
@@ -768,153 +657,144 @@ export function replaceBatteryForTransitStop({
         battery.chargeLevelPct ===
           100,
     );
-
   if (!readyBattery) {
     return null;
   }
-
   const removedBattery =
     detachBatteryFromDrone({
       batteryId:
         incomingBatteryId,
-
       droneId,
       hub,
-
       chargeLevelPct:
         incomingChargeLevelPct,
-
       missionId,
     });
-
   const installedBattery =
     checkoutBatteryForFlight({
       batteryId:
         readyBattery.id,
-
       droneId,
       hub,
       missionId,
     });
-
   if (!installedBattery) {
     return null;
   }
-
   addHistory({
     batteryId:
       installedBattery.id,
-
     hub,
-
     action:
       "Battery replaced",
-
     chargeLevelPct:
       100,
-
     missionId,
     droneId,
-
     occurredAt:
       installedBattery.installedAt,
-
     note:
       incomingBatteryId
         ? `${incomingBatteryId} removed; ${installedBattery.id} installed for mission continuation.`
         : `${installedBattery.id} installed for mission continuation.`,
   });
-
   return {
     installedBattery,
     removedBattery,
   };
 }
-
 // ---------------------------------------------------------------------------
 // Backend API integration
 // ---------------------------------------------------------------------------
-
-
 function normalizeApiBatteryStatus(
   value: string,
   chargeLevelPct: number,
 ): BatteryStatus {
-  const key = value.trim().toUpperCase();
-
+  // Explicit operating state from BE always overrides the charge percentage:
+  // a test battery can still be at 100% while it is In Use.
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (
-    key === "READY" ||
-    key === "FULL" ||
-    key === "CHARGED" ||
-    key === "AVAILABLE"
+    key === "IN_USE" || key === "INUSE" || key === "TESTING" ||
+    key === "IN_USE_FOR_TEST" || key === "TEST_IN_USE" ||
+    key === "USED_FOR_TEST"
+  ) {
+    return "In Use";
+  }
+  if (
+    key === "READY" || key === "FULL" ||
+    key === "CHARGED" || key === "AVAILABLE"
   ) {
     return "Ready";
   }
-
   if (
-    key === "CHARGING" ||
-    key === "LOW" ||
-    key === "DEPLETED"
+    key === "CHARGING" || key === "LOW" || key === "DEPLETED"
   ) {
     return "Charging";
   }
-
-  /*
-   * Current Backend/DB screenshots use the generic lifecycle value
-   * `Active`. Battery Management needs an operational state instead.
-   * Until Backend exposes Ready/Charging explicitly, derive it from SOC.
-   */
-  if (key === "ACTIVE" || key === "IN_USE" || key === "INSTALLED") {
-    return chargeLevelPct >= 100 ? "Ready" : "Charging";
-  }
-
+  // Legacy API sometimes returns generic lifecycle status `Active`.
+  // Only this legacy case uses charge percentage for display.
   return chargeLevelPct >= 100 ? "Ready" : "Charging";
 }
-
-function toBatteryDisplayId(value: string) {
-  if (/^BAT-/i.test(value)) return value.toUpperCase();
-  const match = value.match(/(\d+)$/);
-  return match ? `BAT-${match[1].padStart(3, "0")}` : `BAT-${value}`;
+function extractCompatibleDroneModels(record: Record<string, unknown>): string[] {
+  for (const field of [
+    "compatible_drone_models",
+    "supported_drone_models",
+    "compatible_models",
+    "supported_models",
+  ]) {
+    const raw = record[field];
+    if (!Array.isArray(raw)) continue;
+    return raw.flatMap((item): string[] => {
+      if (typeof item === "string" && item.trim()) return [item.trim()];
+      if (isRecord(item)) {
+        const model = pickString(item, ["model", "name", "drone_model", "code"], "");
+        return model ? [model] : [];
+      }
+      return [];
+    });
+  }
+  return [];
 }
-
 function mapApiBattery(value: unknown): HubBattery | null {
   if (!isRecord(value)) return null;
-
-  /*
-   * Swagger currently returns both a numeric database `id` and a
-   * human-readable `serial_number` such as BAT-001. Keep them separate:
-   * - id          -> UI/display code
-   * - backendId   -> path parameter for mutation APIs
-   *
-   * The previous mapper preferred numeric `id`, which could display the
-   * wrong BAT-xxx code whenever database id and serial number diverged.
-   */
+  /* Canonical id and serial_number are distinct. Use id in Battery ID column. */
   const serialNumber = pickString(
     value,
     ["serial_number", "battery_code", "code"],
     "",
   );
-
   const backendId = pickString(
     value,
     ["id", "battery_id", "batteryId"],
     "",
   );
-
-  const displayId =
-    serialNumber ||
-    (backendId ? toBatteryDisplayId(backendId) : "");
-
+  // Preserve exact Backend id (BAT-0022); never substitute serial_number.
+  const displayId = backendId; // Missing ID means this API row is invalid; never show serial in the ID column.
   if (!displayId) return null;
-
   const rawStatus = pickString(
     value,
     ["status", "battery_status", "state"],
     "",
   );
-
-  const statusKey = rawStatus.trim().toUpperCase();
-
+  const statusKey = rawStatus.trim().toUpperCase().replace(/[\s-]+/g, "\_");
+  // BE clears current_hub_id once the installed battery leaves hub with drone.
+  // Only interpret explicit null, not missing fields in older API responses.
+  if ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
+      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null)) {
+    return null;
+  }
+  // Batteries physically carried by a flying drone are NOT hub stock.
+  // The old relay battery must remain visible if BE returns it as stored
+  // (e.g. CHARGING / ACTIVE with current_hub_id and detached drone_id).
+  // Do not hide merely because drone_id is set; it may be installed on a
+  // grounded drone before initial Dispatch or during maintenance testing.
+  if ([
+    "IN_FLIGHT", "FLYING", "ON_MISSION", "IN_TRANSIT",
+    "DISPATCHED", "AIRBORNE",
+  ].includes(statusKey)) return null;
+  // `IN_USE` is now a visible hub inventory state (e.g. battery taken
+  // for a maintenance test). Never hide it just because it is in use.
+  // A battery that BE locates outside the hub is still excluded above.
   const chargeLevelPct = Math.max(
     0,
     Math.min(
@@ -937,12 +817,31 @@ function mapApiBattery(value: unknown): HubBattery | null {
       ),
     ),
   );
-
-  const status = normalizeApiBatteryStatus(
-    rawStatus,
-    chargeLevelPct,
+  // BE now returns two different concepts:
+  // `status: "Active"` is the battery lifecycle state, while
+  // `available_status: "In Use"` means a battery is assigned to a WO test.
+  // Use the operational availability field first; otherwise an Active,
+  // fully charged battery would incorrectly appear as Ready.
+  const availableStatus = pickString(
+    value,
+    [
+      "available_status", "availableStatus", "availability_status",
+      "usage_status", "operational_status", "battery_usage_status",
+    ],
+    "",
   );
-
+  const explicitlyInUse = value.is_in_use === true || value.in_use === true;
+  const availabilityKey = availableStatus.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const knownAvailability = [
+    "IN_USE", "INUSE", "TESTING", "IN_USE_FOR_TEST", "TEST_IN_USE", "USED_FOR_TEST",
+    "READY", "FULL", "CHARGED", "AVAILABLE",
+    "CHARGING", "LOW", "DEPLETED",
+  ].includes(availabilityKey);
+  const status: BatteryStatus = explicitlyInUse
+    ? "In Use"
+    : knownAvailability
+      ? normalizeApiBatteryStatus(availableStatus, chargeLevelPct)
+      : normalizeApiBatteryStatus(rawStatus, chargeLevelPct);
   const remainingMinutes = pickNumber(
     value,
     [
@@ -953,7 +852,6 @@ function mapApiBattery(value: unknown): HubBattery | null {
     ],
     0,
   );
-
   const estimatedReadyAtRaw = pickString(
     value,
     [
@@ -964,9 +862,7 @@ function mapApiBattery(value: unknown): HubBattery | null {
     ],
     "",
   );
-
   let estimatedReadyAt: string | undefined;
-
   if (estimatedReadyAtRaw) {
     const parsed = new Date(estimatedReadyAtRaw);
     if (!Number.isNaN(parsed.getTime())) {
@@ -977,19 +873,16 @@ function mapApiBattery(value: unknown): HubBattery | null {
       Date.now() + remainingMinutes * 60_000,
     ).toISOString();
   }
-
   const hubId = pickString(
     value,
     ["current_hub_id", "hub_id"],
     "",
   );
-
   const hubName = pickString(
     value,
     ["hub_name", "hub", "hub_code"],
     "",
   );
-
   return {
     id: displayId,
     backendId: backendId || undefined,
@@ -1000,6 +893,28 @@ function mapApiBattery(value: unknown): HubBattery | null {
         ["model", "battery_model", "model_code", "battery_model_code"],
         "",
       ) || undefined,
+    chargeReportedByBackend: [
+      "charge_level_pct", "battery_level_pct", "charge_pct", "charge_level",
+      "level", "soc", "state_of_charge", "percentage",
+    ].some((key) => {
+      const reading = value[key];
+      return (typeof reading === "number" && Number.isFinite(reading)) ||
+        (typeof reading === "string" && reading.trim() !== "" &&
+         Number.isFinite(Number(reading)));
+    }),
+    backendStatus: rawStatus || undefined,
+    lifecycleStatus: pickString(value, ["lifecycle_status", "battery_lifecycle_status"], "") || undefined,
+    daysUntilExpiry: (() => {
+      const raw = value.days_until_expiry ?? value.daysUntilExpiry;
+      if (raw === null || raw === undefined || raw === "") return undefined;
+      const parsed = typeof raw === "number" ? raw : Number(raw);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    })(),
+    lastChargedAt: (() => {
+      const raw = pickString(value, ["last_charged_at", "last_charged", "fully_charged_at"], "");
+      return raw ? formatApiDateTime(raw, "—") : undefined;
+    })(),
+    compatibleDroneModels: extractCompatibleDroneModels(value),
     capacityWh: pickNumber(value, ["capacity_wh", "energy_capacity_wh"], 0),
     droneId:
       pickString(value, ["drone_id", "installed_drone_id"], "") ||
@@ -1009,58 +924,38 @@ function mapApiBattery(value: unknown): HubBattery | null {
     chargeLevelPct,
     status,
     createdAt: formatApiDateTime(
-      pickString(value, ["created_at"], ""),
+      pickString(value, ["created_at", "create_at"], ""),
       "—",
     ),
     updatedAt: formatApiDateTime(
-      pickString(value, ["updated_at", "charged_at", "created_at"], ""),
+      pickString(value, ["updated_at", "update_at", "charged_at", "created_at", "create_at"], ""),
       "—",
     ),
     estimatedReadyAt,
+    estimatedMinutesRemaining: status === "Charging" ? remainingMinutes : undefined,
   };
 }
-
 function resolveBackendBatteryId(batteryId: string) {
   const battery = demoBatteries.find(
     (item) => item.id === batteryId,
   );
-
   return battery?.backendId || batteryId;
 }
-
 export async function refreshBatteriesFromApi() {
   const payload = await getBatteriesApi();
   demoBatteries = unwrapList(payload)
     .map(mapApiBattery)
     .filter((item): item is HubBattery => Boolean(item));
-
   window.dispatchEvent(new Event("technician-batteries-updated"));
   return loadBatteries();
 }
-
 export async function getBatteryDetailFromApi(
   batteryId: string,
 ) {
-  /*
-   * Prefer a dedicated detail endpoint when Backend exposes it.
-   * Until then, gracefully fall back to the existing battery-list endpoint.
-   * This lets the detail page work immediately once `model`, `created_at`,
-   * and `updated_at` are included in the list response as well.
-   */
-  try {
-    const payload = await getBatteryDetailApi(batteryId);
-    const candidate = unwrapObject(payload);
-    const mapped = mapApiBattery(candidate);
-
-    if (mapped) {
-      return mapped;
-    }
-  } catch {
-    // Fall through to the list endpoint below.
-  }
-
+  // Swagger exposes only GET /technician/fleet/batteries for Technician.
+  // Resolve detail data from that list instead of calling a non-existent
+  // GET /technician/fleet/batteries/{battery_id} endpoint.
   const batteries = await refreshBatteriesFromApi();
-
   return (
     batteries.find(
       (battery) =>
@@ -1070,19 +965,14 @@ export async function getBatteryDetailFromApi(
     ) ?? null
   );
 }
-
 export async function useBatteryOnServer(
   batteryId: string,
   missionId: string,
 ) {
-  const result = await useBatteryApi(
-    resolveBackendBatteryId(batteryId),
-    missionId,
-  );
-  await refreshBatteriesFromApi();
-  return result;
+  // React Query invalidates the battery list when the mutation succeeds.
+  // Avoid a second blocking GET here, especially on high-latency servers.
+  return useBatteryApi(resolveBackendBatteryId(batteryId), missionId);
 }
-
 export async function markBatteryChargedOnServer(
   batteryId: string,
 ) {
@@ -1092,7 +982,6 @@ export async function markBatteryChargedOnServer(
   await refreshBatteriesFromApi();
   return result;
 }
-
 export async function useFirstReadyBatteryForMissionOnServer(
   missionId: string,
 ) {
@@ -1102,11 +991,9 @@ export async function useFirstReadyBatteryForMissionOnServer(
       battery.status === "Ready" &&
       battery.chargeLevelPct >= 100,
   );
-
   if (!ready) {
     return null;
   }
-
   await useBatteryOnServer(ready.id, missionId);
   return ready;
 }

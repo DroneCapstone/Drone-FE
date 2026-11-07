@@ -209,18 +209,14 @@ export function useCreateWorkOrderMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn:
-      createWorkOrderOnServer,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.maintenanceAlerts(),
-        }),
+    mutationFn: createWorkOrderOnServer,
+    onSuccess: () => {
+      // A successful POST is authoritative, even if subsequent GET fails.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.fleet() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
       ]);
     },
   });
@@ -269,22 +265,18 @@ export function useUpdateWorkOrderInspectionMutation() {
       workOrderId: string;
       payload: Record<string, unknown>;
     }) =>
-      updateWorkOrderInspectionOnServer(
-        workOrderId,
-        payload,
-      ),
-    onSuccess: async (_, variables) => {
-      await Promise.all([
+      updateWorkOrderInspectionOnServer(workOrderId, payload),
+    onSuccess: (_result, variables) => {
+      // Refresh related screens in the background. A refetch failure must
+      // not override a successful inspection PATCH response.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
+          queryKey: technicianQueryKeys.workOrder(variables.workOrderId),
         }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrder(
-              variables.workOrderId,
-            ),
-        }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.fleet() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
       ]);
     },
   });
@@ -296,15 +288,19 @@ export function useCreateMaintenanceRecordMutation() {
   return useMutation({
     mutationFn:
       createMaintenanceRecordOnServer,
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
+          queryKey: technicianQueryKeys.workOrders(),
         }),
         queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.fleet(),
+          queryKey: technicianQueryKeys.fleet(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.maintenanceRecords(variables.droneId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: technicianQueryKeys.droneMaintenance(variables.droneId),
         }),
       ]);
     },

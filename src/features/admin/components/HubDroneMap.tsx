@@ -1,64 +1,322 @@
-import { MapPin, Plane } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { MapPin, Plane, Plus, Minus, LocateFixed, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker } from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "./HubDroneMap.css";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
+import { OperatorPanel } from "../../operator/components/OperatorPanel";
 import type { AdminDrone, AdminHub } from "../types";
-import { AdminStatusBadge } from "./AdminStatusBadge";
+import { droneTone, hubTone } from "../utils/adminDisplay";
 
-function clamp(value: number, min: number, max: number) { return Math.min(max, Math.max(min, value)); }
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
-export function HubDroneMap({ hubs, drones, onSelectHub }: { hubs: AdminHub[]; drones: AdminDrone[]; onSelectHub?: (hub: AdminHub) => void }) {
-  const [selectedHubId, setSelectedHubId] = useState(hubs[0]?.id ?? "");
-  const bounds = useMemo(() => {
-    const lats = hubs.map((hub) => hub.latitude);
-    const lngs = hubs.map((hub) => hub.longitude);
-    return {
-      minLat: Math.min(...lats, 10.70) - 0.03,
-      maxLat: Math.max(...lats, 10.90) + 0.03,
-      minLng: Math.min(...lngs, 106.56) - 0.03,
-      maxLng: Math.max(...lngs, 106.81) + 0.03,
+type MapStyleChoice = "default" | "streets" | "satellite";
+
+const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? "").trim();
+const FALLBACK_CENTER: [number, number] = [106.7009, 10.7769];
+const EXCLUDED_HUB_CODES = new Set(["HCM-04"]);
+
+function mapStyleUrl(choice: MapStyleChoice) {
+  const styleId = choice === "satellite" ? "hybrid-v4" : choice === "streets" ? "streets-v4" : "dataviz-v4-light";
+  return `https://api.maptiler.com/maps/${styleId}/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`;
+}
+
+function makeHubMarker(hub: AdminHub, droneCount: number, selected: boolean) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `admin-hub-network-marker${selected ? " is-selected" : ""}${hub.status !== "ACTIVE" ? " is-inactive" : ""}`;
+  button.setAttribute("aria-label", `${hub.name}, ${droneCount} drones`);
+
+  const pin = document.createElement("span");
+  pin.className = "admin-hub-network-marker__pin";
+  pin.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21s-6-5.4-6-10a6 6 0 1 1 12 0c0 4.6-6 10-6 10Z"></path>
+      <circle cx="12" cy="11" r="2.5"></circle>
+    </svg>
+  `;
+
+  const label = document.createElement("span");
+  label.className = "admin-hub-network-marker__label";
+  label.innerHTML = `${hub.code} <span>· ${droneCount}</span>`;
+
+  button.append(pin, label);
+  return button;
+}
+
+export function HubDroneMap({
+  hubs,
+  drones,
+  onSelectHub,
+}: {
+  hubs: AdminHub[];
+  drones: AdminDrone[];
+  onSelectHub?: (hub: AdminHub) => void;
+}) {
+  const [selectedHubId, setSelectedHubId] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | AdminHub["status"]>("all");
+  const [mapStyle, setMapStyle] = useState<MapStyleChoice>("default");
+  const [mapReady, setMapReady] = useState(false);
+
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Map<string, Marker>>(new Map());
+  const visibleHubsRef = useRef<AdminHub[]>([]);
+
+  const visibleHubs = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return hubs.filter((hub) => {
+      if (EXCLUDED_HUB_CODES.has(hub.code)) return false;
+      if (statusFilter !== "all" && hub.status !== statusFilter) return false;
+      if (!keyword) return true;
+      return `${hub.name} ${hub.code} ${hub.area} ${hub.address}`.toLowerCase().includes(keyword);
+    });
+  }, [hubs, query, statusFilter]);
+
+  useEffect(() => {
+    visibleHubsRef.current = visibleHubs;
+    if (!selectedHubId || !visibleHubs.some((hub) => hub.id === selectedHubId)) {
+      setSelectedHubId(visibleHubs[0]?.id ?? "");
+    }
+  }, [selectedHubId, visibleHubs]);
+
+  const selectedHub = visibleHubs.find((hub) => hub.id === selectedHubId) ?? visibleHubs[0] ?? null;
+  const selectedDrones = useMemo(
+    () => (selectedHub ? drones.filter((drone) => drone.hubId === selectedHub.id) : []),
+    [drones, selectedHub],
+  );
+
+  const fitVisibleHubs = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!visibleHubs.length) {
+      map.flyTo({ center: FALLBACK_CENTER, zoom: 10, duration: 700 });
+      return;
+    }
+    const bounds = new maplibregl.LngLatBounds();
+    visibleHubs.forEach((hub) => bounds.extend([hub.longitude, hub.latitude]));
+    map.fitBounds(bounds, { padding: 64, maxZoom: 13.4, duration: 700 });
+  }, [visibleHubs]);
+
+  const handleSelectHub = useCallback(
+    (hub: AdminHub) => {
+      setSelectedHubId(hub.id);
+      onSelectHub?.(hub);
+      const map = mapRef.current;
+      if (map) {
+        map.easeTo({ center: [hub.longitude, hub.latitude], zoom: Math.max(map.getZoom(), 12.6), duration: 500 });
+      }
+    },
+    [onSelectHub],
+  );
+
+  useEffect(() => {
+    if (!hostRef.current || mapRef.current || !MAPTILER_KEY) return;
+
+    const map = new maplibregl.Map({
+      container: hostRef.current,
+      style: mapStyleUrl(mapStyle),
+      center: FALLBACK_CENTER,
+      zoom: 10,
+      minZoom: 9,
+      maxZoom: 18,
+      attributionControl: false,
+      cooperativeGestures: false,
+    });
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    mapRef.current = map;
+
+    const onLoad = () => {
+      setMapReady(true);
+      const seeded = visibleHubsRef.current;
+      if (seeded.length) {
+        const bounds = new maplibregl.LngLatBounds();
+        seeded.forEach((hub) => bounds.extend([hub.longitude, hub.latitude]));
+        map.fitBounds(bounds, { padding: 64, maxZoom: 13.4, duration: 0 });
+      }
     };
-  }, [hubs]);
-  const selected = hubs.find((hub) => hub.id === selectedHubId) ?? hubs[0];
-  const selectHub = (hub: AdminHub) => { setSelectedHubId(hub.id); onSelectHub?.(hub); };
+    map.on("load", onLoad);
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markersRef.current.clear();
+      setMapReady(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !MAPTILER_KEY) return;
+    setMapReady(false);
+    map.setStyle(mapStyleUrl(mapStyle));
+    map.once("style.load", () => setMapReady(true));
+  }, [mapStyle]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current.clear();
+
+    visibleHubs.forEach((hub) => {
+      const hubDrones = drones.filter((drone) => drone.hubId === hub.id);
+      const element = makeHubMarker(hub, hubDrones.length, selectedHub?.id === hub.id);
+      element.addEventListener("click", () => handleSelectHub(hub));
+      const marker = new maplibregl.Marker({ element, anchor: "bottom" })
+        .setLngLat([hub.longitude, hub.latitude])
+        .addTo(map);
+      markersRef.current.set(hub.id, marker);
+    });
+  }, [drones, handleSelectHub, mapReady, selectedHub?.id, visibleHubs]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    fitVisibleHubs();
+  }, [fitVisibleHubs, mapReady, visibleHubs.length]);
+
+  const resetFilters = () => {
+    setQuery("");
+    setStatusFilter("all");
+    setMapStyle("default");
+    window.requestAnimationFrame(() => fitVisibleHubs());
+  };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] px-4 py-3">
-        <div><h3 className="text-[14px] font-semibold text-[var(--admin-text)]">Hub & drone distribution</h3><p className="mt-0.5 text-[11px] text-[var(--admin-muted)]">Each hub is a main point; small dots represent drones currently assigned to that hub.</p></div>
-        <div className="flex items-center gap-3 text-[11px] text-[var(--admin-muted)]"><span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-orange-500" />Hub</span><span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Serviceable</span><span className="flex items-center gap-1.5"><i className="h-1.5 w-1.5 rounded-full bg-red-500" />Maintenance</span></div>
-      </div>
-      <div className="grid lg:grid-cols-[1fr_260px]">
-        <div className="admin-map-grid relative min-h-[420px] overflow-hidden bg-[var(--admin-bg)]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_40%,rgba(237,116,46,0.10),transparent_38%)]" />
-          {hubs.map((hub) => {
-            const left = clamp(((hub.longitude - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 88 + 6, 6, 94);
-            const top = clamp((1 - (hub.latitude - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 78 + 8, 8, 86);
-            const hubDrones = drones.filter((drone) => drone.hubId === hub.id);
-            const isSelected = selected?.id === hub.id;
-            return (
-              <button key={hub.id} type="button" onClick={() => selectHub(hub)} className="group absolute -translate-x-1/2 -translate-y-1/2 text-left" style={{ left: `${left}%`, top: `${top}%` }}>
-                <span className={`relative grid h-10 w-10 place-items-center rounded-full border-2 shadow-lg transition-transform group-hover:scale-110 ${isSelected ? "border-orange-300 bg-orange-500 text-white" : hub.status === "Active" ? "border-orange-500 bg-[#17191d] text-orange-500" : "border-amber-500 bg-[#17191d] text-amber-500"}`}><MapPin size={17} />
-                  {hubDrones.map((drone, index) => {
-                    const angle = (index / Math.max(hubDrones.length, 1)) * Math.PI * 2;
-                    const radius = 29 + (index % 2) * 7;
-                    const x = Math.cos(angle) * radius;
-                    const y = Math.sin(angle) * radius;
-                    return <i key={drone.id} title={`${drone.id} · ${drone.operationalStatus}`} className={`absolute h-2 w-2 rounded-full border border-[#0b0d10] ${drone.technicalStatus === "Serviceable" ? "bg-emerald-500" : "bg-red-500"}`} style={{ transform: `translate(${x}px, ${y}px)` }} />;
-                  })}
-                </span>
-                <span className="absolute left-1/2 top-[48px] -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)]/95 px-2 py-1 text-[10px] font-semibold text-[var(--admin-text)] shadow">{hub.code} · {hubDrones.length}</span>
-              </button>
-            );
-          })}
+    <OperatorPanel title="Hub network map" eyebrow="NETWORK MAP">
+      <div className="admin-hub-network-map">
+        <div className="admin-hub-network-map__toolbar">
+          <div className="admin-hub-network-map__search">
+            <MapPin size={16} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search hub ID or area..."
+              aria-label="Search hub"
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+            aria-label="Filter hub status"
+          >
+            <option value="all">All hubs</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+
+          <select
+            value={mapStyle}
+            onChange={(event) => setMapStyle(event.target.value as MapStyleChoice)}
+            aria-label="Map type"
+          >
+            <option value="default">Default map</option>
+            <option value="streets">Streets</option>
+            <option value="satellite">Satellite</option>
+          </select>
+
+          <div className="admin-hub-network-map__controls">
+            <button type="button" onClick={() => mapRef.current?.zoomIn({ duration: 250 })} aria-label="Zoom in" title="Zoom in">
+              <Plus size={16} />
+            </button>
+            <button type="button" onClick={() => mapRef.current?.zoomOut({ duration: 250 })} aria-label="Zoom out" title="Zoom out">
+              <Minus size={16} />
+            </button>
+            <button type="button" onClick={fitVisibleHubs} aria-label="Fit all visible hubs" title="Fit all visible hubs">
+              <LocateFixed size={16} />
+            </button>
+            <button type="button" onClick={resetFilters} aria-label="Reset map filters" title="Reset map filters">
+              <RotateCcw size={16} />
+            </button>
+          </div>
         </div>
-        <aside className="border-t border-[var(--admin-border)] p-4 lg:border-l lg:border-t-0">
-          {selected ? <>
-            <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] uppercase tracking-[0.14em] text-[var(--admin-muted)]">Selected hub</p><h4 className="mt-1 text-[17px] font-semibold text-[var(--admin-text)]">{selected.name}</h4></div><AdminStatusBadge tone={selected.status === "Active" ? "success" : selected.status === "Maintenance" ? "warning" : "neutral"}>{selected.status}</AdminStatusBadge></div>
-            <p className="mt-2 text-[12px] leading-5 text-[var(--admin-muted)]">{selected.address}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-lg bg-[var(--admin-surface-2)] p-3"><span className="text-[10px] text-[var(--admin-muted)]">Drones</span><strong className="mt-1 block text-xl text-[var(--admin-text)]">{drones.filter((drone) => drone.hubId === selected.id).length}</strong></div><div className="rounded-lg bg-[var(--admin-surface-2)] p-3"><span className="text-[10px] text-[var(--admin-muted)]">Capacity</span><strong className="mt-1 block text-xl text-[var(--admin-text)]">{selected.capacity}</strong></div></div>
-            <div className="mt-4 space-y-2">{drones.filter((drone) => drone.hubId === selected.id).map((drone) => <div key={drone.id} className="flex items-center gap-2 rounded-lg border border-[var(--admin-border)] px-3 py-2"><Plane size={14} className={drone.technicalStatus === "Serviceable" ? "text-emerald-500" : "text-red-500"} /><div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold text-[var(--admin-text)]">{drone.id} · {drone.model}</p><p className="text-[10px] text-[var(--admin-muted)]">{drone.operationalStatus} · {drone.batteryPct}%</p></div></div>)}</div>
-          </> : <p className="text-[12px] text-[var(--admin-muted)]">No hubs available.</p>}
-        </aside>
+
+        <div className="admin-hub-network-map__body">
+          <div className="admin-hub-network-map__map-panel">
+            {MAPTILER_KEY ? (
+              <div ref={hostRef} className="admin-hub-network-map__canvas" />
+            ) : (
+              <div className="admin-hub-network-map__canvas admin-hub-network-map__canvas--empty">
+                <p>Map is unavailable because VITE_MAPTILER_API_KEY is not configured.</p>
+              </div>
+            )}
+            {!visibleHubs.length ? (
+              <div className="admin-hub-network-map__empty-state">No hubs match the current filters.</div>
+            ) : null}
+          </div>
+
+          <aside className="admin-hub-network-map__detail">
+            {selectedHub ? (
+              <>
+                <div className="admin-hub-network-map__detail-header">
+                  <div>
+                    <span className="admin-hub-network-map__eyebrow">SELECTED HUB</span>
+                    <h3>{selectedHub.name}</h3>
+                  </div>
+                  <StatusBadge tone={hubTone(selectedHub.status)}>{selectedHub.status}</StatusBadge>
+                </div>
+
+                <div className="admin-hub-network-map__address-row">
+                  <MapPin size={15} aria-hidden="true" />
+                  <span>{selectedHub.address}</span>
+                </div>
+
+                <div className="admin-hub-network-map__stats">
+                  <div>
+                    <span>Assigned drones</span>
+                    <strong>{selectedDrones.length}</strong>
+                  </div>
+                  <div>
+                    <span>Hub capacity</span>
+                    <strong>{selectedHub.capacity} <small>slots</small></strong>
+                  </div>
+                </div>
+
+                <div className="admin-hub-network-map__list-header">
+                  <strong>Assigned drones</strong>
+                  <span>{selectedDrones.length} drones</span>
+                </div>
+
+                <div className="admin-hub-network-map__drone-list">
+                  {selectedDrones.length ? (
+                    selectedDrones.map((drone) => (
+                      <div key={drone.id} className="admin-hub-network-map__drone-item">
+                        <span className="admin-hub-network-map__drone-icon" aria-hidden="true">
+                          <Plane size={14} />
+                        </span>
+                        <div className="admin-hub-network-map__drone-copy">
+                          <strong>{drone.id}</strong>
+                          <div>{drone.name}</div>
+                          <small>{drone.model}</small>
+                        </div>
+                        <div className="admin-hub-network-map__drone-meta">
+                          <StatusBadge tone={drone.isActive ? droneTone(drone.status) : "neutral"}>
+                            {drone.isActive ? drone.status.replaceAll("_", " ") : "INACTIVE"}
+                          </StatusBadge>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="admin-hub-network-map__empty-copy">No drones assigned to this hub.</p>
+                  )}
+                </div>
+
+                <Link className="admin-hub-network-map__detail-link" to={`/admin/network/hubs/${selectedHub.id}`}>
+                  View Hub Detail
+                </Link>
+              </>
+            ) : (
+              <p className="admin-hub-network-map__empty-copy">Select a hub to view its details.</p>
+            )}
+          </aside>
+        </div>
       </div>
-    </div>
+    </OperatorPanel>
   );
 }

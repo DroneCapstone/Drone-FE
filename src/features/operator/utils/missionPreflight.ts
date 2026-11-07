@@ -34,32 +34,36 @@ export function getMissionPreflight(
 
   const checks: PreflightCheck[] = [
     {
-      label: 'Package at origin hub',
-      passed: Boolean(order?.originHubReceivedAt),
+      label: 'Package at Drop-off Point',
+      passed: Boolean(order?.originPackageReceived || order?.originHubReceivedAt),
       detail: order?.originHubReceivedAt
         ? `Received ${new Date(order.originHubReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
-        : 'Waiting for Technician to confirm package receipt.',
+        : order?.originPackageReceived ? 'Technician receipt confirmed.' : 'Waiting for Technician to confirm package receipt.',
     },
     {
-      label: 'Drone ready at origin hub',
+      label: 'Drone ready at Drop-off Point',
       passed: droneReady,
       detail: droneReady
         ? 'Assigned drone is ready for departure.'
-        : 'Assigned drone is not ready at the Origin Hub.',
+        : 'Assigned drone is not ready at the Drop-off Point.',
     },
     {
       label: 'Route & weather',
-      passed: mission.risk !== 'High',
-      detail: mission.risk === 'High'
-        ? 'Current route or weather conditions are not safe for departure.'
-        : 'Current route remains safe for departure.',
+      passed: mission.risk === 'Low' || mission.risk === 'Medium',
+      detail: !mission.risk
+        ? 'Route/weather risk is not available from Backend. Do not assume safe.'
+        : mission.risk === 'High'
+          ? 'Current route or weather conditions are not safe for departure.'
+          : 'Route risk from stored plan is not High. A fresh BE preflight is still required.',
     },
     {
       label: 'Energy sufficient',
       passed: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT,
-      detail: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT
-        ? `Predicted battery after the planned route: ${mission.battery}%.`
-        : `Predicted battery after the planned route is below the ${MINIMUM_BATTERY_RESERVE_PCT}% reserve.`,
+      detail: !Number.isFinite(mission.battery)
+        ? 'No verified remaining battery estimate is available. BE must check energy before launch.'
+        : mission.battery >= MINIMUM_BATTERY_RESERVE_PCT
+          ? `Predicted battery after the planned route: ${mission.battery}%.`
+          : `Predicted battery after the planned route is below the ${MINIMUM_BATTERY_RESERVE_PCT}% reserve.`,
     },
   ];
 
@@ -69,7 +73,7 @@ export function getMissionPreflight(
   const withinStartWindow = now.getTime() >= windowOpensMs;
   const minutesToStart = Math.ceil((plannedStartMs - now.getTime()) / 60_000);
   const packageDeadlineExpired = Boolean(
-    !order?.originHubReceivedAt &&
+    !(order?.originPackageReceived || order?.originHubReceivedAt) &&
     mission.packageReceiveDeadlineAt &&
     now.getTime() >= new Date(mission.packageReceiveDeadlineAt).getTime(),
   );
@@ -82,7 +86,9 @@ export function getMissionPreflight(
     checks,
     allPassed,
     withinStartWindow,
-    canStart: withinStartWindow && allPassed && !packageDeadlineExpired,
+    // Advisory UI only. Earliest valid planned start is not 15 minutes early.
+    // Actual automatic launch permission must be issued by Backend/flight control.
+    canStart: now.getTime() >= plannedStartMs && allPassed && !packageDeadlineExpired,
     minutesToStart,
     packageDeadlineExpired,
   };

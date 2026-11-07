@@ -1,10 +1,47 @@
-import { ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { ActionButton } from "../../../../components/ui/ActionButton";
+import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { useAuth } from "../../../auth/hooks/useAuth";
 
 export function AdminProfilePage() {
   const { user } = useAuth();
-  return <AdminPageShell title="Admin profile" description="Current authenticated administrator identity.">
-    <div className="max-w-[720px] rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><div className="flex items-center gap-4"><span className="grid h-14 w-14 place-items-center rounded-xl bg-orange-500 text-lg font-bold text-white">AD</span><div><h2 className="text-lg font-semibold">{user?.name ?? "Administrator"}</h2><p className="mt-1 text-[12px] text-[var(--admin-muted)]">{user?.email ?? "admin@droneopt.ai"}</p><div className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-500"><ShieldCheck size={14} />Administrator access</div></div></div><dl className="mt-6 grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-[var(--admin-surface-2)] p-4"><dt className="text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">User ID</dt><dd className="mt-1 text-[12px]">{user?.id ?? "—"}</dd></div><div className="rounded-lg bg-[var(--admin-surface-2)] p-4"><dt className="text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">Role</dt><dd className="mt-1 text-[12px] capitalize">{user?.role ?? "admin"}</dd></div></dl></div>
-  </AdminPageShell>;
+  const [name, setName] = useState(user?.name ?? "Administrator");
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  };
+
+  return (
+    <AdminPageShell title="Profile" description="Administrator account information and personal settings.">
+      <div className="profile-layout">
+        <aside className="profile-card">
+          <div className="profile-avatar">AD</div>
+          <h2>{user?.name ?? "Administrator"}</h2>
+          <p>{user?.email ?? "admin@droneopt.ai"}</p>
+          <StatusBadge tone="success">Administrator</StatusBadge>
+          <div className="profile-meta">
+            <span><small>User ID</small><strong>{user?.id ?? "—"}</strong></span>
+            <span><small>Role</small><strong>ADMIN</strong></span>
+          </div>
+        </aside>
+        <div className="profile-main">
+          <OperatorPanel title="Personal information">
+            <div className="fields two">
+              <label><span>Full name</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
+              <label><span>Email address</span><input value={user?.email ?? "admin@droneopt.ai"} disabled /></label>
+              <label><span>Role</span><input value="ADMIN" disabled /></label>
+            </div>
+            <div className="form-actions"><span className="text-sm text-[var(--green)]">{saved ? "Profile saved." : ""}</span><ActionButton onClick={save}>Save changes</ActionButton></div>
+          </OperatorPanel>
+          <OperatorPanel title="Security">
+            <p className="text-sm text-[var(--muted)]">Password changes should reuse the existing authentication reset/change-password flow. Admin never sees another user's plain password.</p>
+          </OperatorPanel>
+        </div>
+      </div>
+    </AdminPageShell>
+  );
 }

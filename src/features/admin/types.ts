@@ -1,9 +1,13 @@
-export type AdminHubStatus = "Active" | "Inactive" | "Maintenance";
-export type AdminDroneTechnicalStatus = "Serviceable" | "Maintenance";
-export type AdminDroneOperationalStatus = "Idle" | "Assigned" | "In Flight" | "Charging";
-export type AdminBatteryStatus = "Ready" | "Charging" | "In Use" | "Maintenance" | "Retired";
+export type AdminHubStatus = "ACTIVE" | "INACTIVE";
+export type AdminDroneStatus = "AVAILABLE" | "MAINTENANCE" | "IN_FLIGHT";
+export type AdminBatteryOperationalStatus = "READY" | "CHARGING" | "INSTALLED" | "MAINTENANCE";
+export type AdminBatteryStatus = "ACTIVE" | "RETIRED";
+export type AdminBatteryPhysicalCondition = "NORMAL" | "SWOLLEN" | "LEAKING" | "CRACKED" | "DAMAGED";
 export type AdminUserRole = "admin" | "operator" | "technician" | "customer";
-export type AdminUserStatus = "Active" | "Suspended" | "Pending";
+export type AdminUserStatus = "ACTIVE" | "INACTIVE";
+export type AdminPaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+export type AdminRefundStatus = "PENDING" | "COMPLETED" | "FAILED";
+export type AdminAuditResult = "SUCCESS" | "FAILED";
 
 export interface AdminHub {
   id: string;
@@ -27,15 +31,16 @@ export interface AdminDrone {
   model: string;
   serialNumber: string;
   hubId: string;
-  technicalStatus: AdminDroneTechnicalStatus;
-  operationalStatus: AdminDroneOperationalStatus;
+  status: AdminDroneStatus;
+  isActive: boolean;
   batteryPct: number;
   installedBatteryId?: string;
   maxPayloadKg: number;
-  utilizationPct: number;
   lastFlightAt?: string;
   lastMaintenanceAt?: string;
   nextMaintenanceAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminBattery {
@@ -45,9 +50,23 @@ export interface AdminBattery {
   hubId: string;
   droneId?: string;
   chargeLevelPct: number;
-  status: AdminBatteryStatus;
+  operationalStatus: AdminBatteryOperationalStatus;
+  administrativeStatus: AdminBatteryStatus;
+  designCapacityMah: number;
+  designEnergyWh: number;
+  fullChargeCapacityMah: number;
+  sohPct: number;
   cycleCount: number;
-  healthPct: number;
+  maxCycles: number;
+  cellVoltages?: number[];
+  maxCellVoltageDelta?: number;
+  physicalCondition: AdminBatteryPhysicalCondition;
+  retirementRecommended: boolean;
+  retirementReason?: string;
+  retirementRecommendedBy?: string;
+  retirementRecommendedAt?: string;
+  retiredBy?: string;
+  retiredAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,7 +79,38 @@ export interface AdminUser {
   status: AdminUserStatus;
   hubId?: string;
   createdAt: string;
+  updatedAt: string;
   lastLoginAt?: string;
+  invitationSentAt?: string; // Prototype metadata only, no email delivery.
+  accessResetAt?: string;
+}
+
+export interface AdminPayment {
+  id: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  amountVnd: number;
+  status: AdminPaymentStatus;
+  paymentMethod: string;
+  providerReference?: string;
+  refundable: boolean;
+  refundBlockReason?: string;
+  createdAt: string;
+  paidAt?: string;
+  refundedAt?: string;
+}
+
+export interface AdminRefund {
+  id: string;
+  paymentId: string;
+  orderId: string;
+  customerName: string;
+  amountVnd: number;
+  reason: string;
+  status: AdminRefundStatus;
+  requestedAt: string;
+  processedAt?: string;
 }
 
 export interface AdminAlert {
@@ -77,33 +127,29 @@ export interface AdminAuditLog {
   actor: string;
   role: AdminUserRole;
   action: string;
-  resource: string;
-  detail: string;
-  ipAddress: string;
+  entityType: string;
+  entityId: string;
+  result: AdminAuditResult;
+  beforeValue?: string;
+  afterValue?: string;
   occurredAt: string;
 }
 
-export interface AdminSystemLog {
-  id: string;
-  level: "ERROR" | "WARN" | "INFO";
-  service: string;
-  message: string;
-  occurredAt: string;
-}
-
-export interface AdminActivityLog {
-  id: string;
-  user: string;
-  activity: string;
-  module: string;
-  occurredAt: string;
-}
-
-export interface DataQualityMetric {
-  key: "missing" | "duplicate" | "outlier" | "validity";
-  label: string;
-  count: number;
-  ratePct: number;
-  trend: "up" | "down" | "stable";
-  affectedDataset: string;
+export interface AdminSettings {
+  missionTimeoutMinutes: number;
+  planningLeadTimeMinutes: number;
+  minimumMissionBatteryPct: number;
+  lowBatteryWarningPct: number;
+  minimumBatterySohPct: number;
+  maximumCellVoltageDelta: number;
+  batterySafetyReservePct: number;
+  telemetryTimeoutSeconds: number;
+  paymentNotifications: boolean;
+  orderStatusNotifications: boolean;
+  missionIncidentNotifications: boolean;
+  maintenanceNotifications: boolean;
+  batteryHealthNotifications: boolean;
+  retirementRecommendationNotifications: boolean;
+  systemNotifications: boolean;
+  emailNotifications: boolean;
 }

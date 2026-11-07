@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { useCustomerTheme } from "../customerTheme";
 
 type ParticleConfig = {
   left: string;
@@ -339,26 +340,32 @@ const particles: ParticleConfig[] = [
 ];
 
 export function CustomerAnimatedBackground() {
+  const isLight = useCustomerTheme() === "light";
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
       style={{
-        background:
-          "radial-gradient(circle at top left, rgba(180,72,18,0.22), transparent 30%), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 26%), radial-gradient(circle at bottom center, rgba(234,88,12,0.10), transparent 34%), linear-gradient(180deg, #120c09 0%, #0c0908 42%, #070606 100%)",
+        background: isLight
+          ? "radial-gradient(circle at top left, rgba(249,115,22,0.095), transparent 34%), radial-gradient(circle at top right, rgba(251,146,60,0.065), transparent 29%), radial-gradient(circle at bottom center, rgba(234,88,12,0.055), transparent 36%), linear-gradient(180deg, #fffdfb 0%, #faf7f2 49%, #f6f2ed 100%)"
+          : "radial-gradient(circle at top left, rgba(180,72,18,0.22), transparent 30%), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 26%), radial-gradient(circle at bottom center, rgba(234,88,12,0.10), transparent 34%), linear-gradient(180deg, #120c09 0%, #0c0908 42%, #070606 100%)",
       }}
     >
-      {/* warm glows */}
+      {/* warm glows - softened on bright backgrounds */}
       <div className="absolute -left-[120px] top-[8%] h-[560px] w-[560px] rounded-full bg-orange-500/[0.12] blur-[170px]" />
       <div className="absolute right-[-180px] top-[18%] h-[540px] w-[540px] rounded-full bg-orange-400/[0.1] blur-[180px]" />
       <div className="absolute bottom-[-220px] left-[28%] h-[620px] w-[620px] rounded-full bg-orange-600/[0.08] blur-[220px]" />
       <div className="absolute left-[48%] top-[38%] h-[400px] w-[400px] rounded-full bg-amber-400/[0.05] blur-[160px]" />
 
       {/* subtle grid */}
-      <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:120px_120px]" />
+      <div className={`absolute inset-0 [background-size:120px_120px] ${isLight
+        ? "opacity-[0.13] [background-image:linear-gradient(to_right,rgba(173,112,68,0.10)_1px,transparent_1px),linear-gradient(to_bottom,rgba(173,112,68,0.10)_1px,transparent_1px)]"
+        : "opacity-[0.06] [background-image:linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)]"}`} />
 
       {/* particles */}
       {particles.map((particle, index) => {
+        const lightColor = ["#c2410c", "#ea580c", "#f97316"][index % 3];
+        const dotColor = isLight ? lightColor : particle.color;
         const style: CSSProperties & {
           "--drift"?: string;
         } = {
@@ -366,15 +373,14 @@ export function CustomerAnimatedBackground() {
           bottom: "-14vh",
           width: `${particle.size}px`,
           height: `${particle.size}px`,
-          backgroundColor: particle.color,
-          opacity: particle.opacity,
+          backgroundColor: dotColor,
+          opacity: isLight ? Math.min(0.78, particle.opacity + 0.1) : particle.opacity,
+          mixBlendMode: isLight ? "multiply" : "screen",
           animationDelay: particle.delay,
           animationDuration: particle.duration,
-          boxShadow: `
-            0 0 ${particle.size * 8}px ${particle.color},
-            0 0 ${particle.size * 16}px ${particle.color}cc,
-            0 0 ${particle.size * 24}px ${particle.color}88
-          `,
+          boxShadow: isLight
+            ? `0 0 ${particle.size * 2.5}px ${dotColor}66, 0 0 ${particle.size * 6}px ${dotColor}22`
+            : `0 0 ${particle.size * 8}px ${particle.color}, 0 0 ${particle.size * 16}px ${particle.color}cc, 0 0 ${particle.size * 24}px ${particle.color}88`,
           "--drift": particle.drift,
         };
 
@@ -388,8 +394,12 @@ export function CustomerAnimatedBackground() {
       })}
 
       {/* edge fade nhẹ hơn */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_18%,rgba(0,0,0,0.10)_58%,rgba(0,0,0,0.22)_100%)]" />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] via-transparent to-black/[0.08]" />
+      {!isLight && (
+        <>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_18%,rgba(0,0,0,0.10)_58%,rgba(0,0,0,0.22)_100%)]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/[0.02] via-transparent to-black/[0.08]" />
+        </>
+      )}
 
       <style>
         {`

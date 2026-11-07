@@ -1,6 +1,6 @@
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-export type TechnicalStatus = 'Available' | 'Maintenance';
+export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unknown';
 
 export type MissionStatus =
   | 'Scheduled'
@@ -13,7 +13,9 @@ export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
 
 export type MissionType = 'Delivery';
 
-export type DeliveryMode = 'Express' | 'Scheduled';
+export type DeliveryMode = 'Express' | 'Scheduled' | 'Normal';
+
+export type OrderPriorityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 export type CustomerContactChannel = 'Phone' | 'SMS';
 
@@ -26,10 +28,12 @@ export type CustomerContactOutcome =
 
 /**
  * Operator-facing Order lifecycle.
- * Operator scope ends when the package is received at the Destination Hub.
+ * Operator scope ends when the package is received at the Pick-up Point.
  */
 export type OrderStatus =
   | 'Pending'
+  | 'Awaiting Drop-off'
+  | 'At Hub'
   | 'In Delivery'
   | 'Delivered to Hub'
   | 'Cancelled';
@@ -39,6 +43,7 @@ export type OrderStatus =
  * It only answers whether Operator needs to create/re-create a Mission.
  */
 export type PlanningState =
+  | 'Waiting for package'
   | 'Future'
   | 'Ready for Planning'
   | 'Planned'
@@ -57,7 +62,9 @@ export interface Order {
   packageType: string;
   payloadKg: number;
   originHubId: string;
+  originHubName?: string;
   destinationHubId: string;
+  destinationHubName?: string;
   deliveryMode: DeliveryMode;
   requestedDeliveryAt?: string;
   requestedDate: string;
@@ -66,11 +73,25 @@ export interface Order {
   planningAt: string;
   /** Planning State returned/computed by Backend for API-backed Orders. */
   planningState?: PlanningState;
+  /** BE localization of the planning state, for optional tooltip/detail. */
+  planningStateLabel?: string;
+  /** Official permission returned by BE. Never infer true from a date. */
+  canCreateMission?: boolean;
+  /** BE-calculated Operator coordination priority; these fields may be missing on older responses. */
+  priorityLevel?: OrderPriorityLevel;
+  priorityScore?: number;
+  slackMinutes?: number;
+  coordinationDeadline?: string;
+  customerDeadline?: string;
+  overdueMinutes?: number;
+  isOverdue?: boolean;
   status: OrderStatus;
 
-  /** Technician event at the Origin Hub. Null/undefined means Awaiting package. */
+  /** Authoritative package receipt flag from originPackage.received (independent of received_at). */
+  originPackageReceived?: boolean;
+  /** Technician receipt timestamp; may be absent even when received is true. */
   originHubReceivedAt?: string;
-  /** Technician event at the Destination Hub. Completing this event closes Operator scope. */
+  /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
   /** Set when a Mission is cancelled/failed and a new customer delivery window is required. */
   replanRequiredAt?: string;
@@ -90,6 +111,13 @@ export interface MissionLeg {
   fromHubId: string;
   toHubId: string;
   status: MissionLegStatus;
+  legType?: string;
+  isDispatch?: boolean;
+  payloadKg?: number;
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
 }
 
 export interface Mission {
@@ -98,6 +126,7 @@ export interface Mission {
   type: MissionType;
   name: string;
   droneId: string;
+  batteryId?: string;
   drone: string;
   originHubId: string;
   destinationHubId: string;
@@ -110,7 +139,7 @@ export interface Mission {
   eta: string;
   battery: number;
   plannedStartAt: string;
-  /** Customer has 3 hours after Mission assignment to hand the package to the Origin Hub. */
+  /** Customer has 3 hours after Mission assignment to hand the package to the Drop-off Point. */
   packageReceiveDeadlineAt?: string;
   actualStartedAt?: string;
   actualCompletedAt?: string;
@@ -146,6 +175,39 @@ export interface OperatorDrone {
   hubId: string;
   technicalStatus: TechnicalStatus;
   maxPayloadKg: number;
+  maxSpeed?: number;
+  batteryLevelPct?: number;
+  utilizationPct?: number;
+  hubName?: string;
+  /** Optional compatibility key when Backend exposes it. */
+  batteryModel?: string;
+  /** BE v2: drone is currently stationed at a different Hub than the Order origin. */
+  isCrossHub?: boolean;
+  /** BE v2: authoritative eligibility for the specific Order. */
+  isSelectable?: boolean;
+  unavailableReason?: string;
+}
+
+export interface OperatorBattery {
+  id: string;
+  serialNumber: string;
+  capacityWh: number;
+  /** Technical/health status returned as `status` (e.g. Active). */
+  status: string;
+  /** Inventory availability returned as `available_status` (Ready, Charging, In Use, etc.). */
+  availableStatus?: string;
+  /** `drone_id` indicates installation, not model compatibility. */
+  droneId?: string;
+  currentHubId: string;
+  hubName: string;
+  chargeLevelPct: number;
+  /** Future-proof: mapper reads this if Backend later exposes battery model/type. */
+  model?: string;
+}
+
+export interface RelayBatterySelection {
+  hubId: string;
+  batteryId: string;
 }
 
 export interface WeatherSnapshot {
@@ -166,9 +228,71 @@ export interface ShapFactor {
   note: string;
 }
 
+/** One flight leg. Verified results must come from mission-planning/analyze. */
+export interface PlannedRouteLeg {
+  fromHubId: string;
+  toHubId: string;
+  predictedEnergyWh?: number;
+  endingSocPct?: number;
+  minimumReservePct?: number;
+  feasible?: boolean;
+  batteryId?: string;
+  batteryModel?: string;
+  batteryChargePct?: number;
+  batteryEnergyWh?: number;
+  batteryCapacityWh?: number;
+  batteryConsumptionPct?: number;
+}
+
+/** Technician will swap a compatible spare battery set at this relay hub. */
+export interface PlannedRelayBattery {
+  hubId: string;
+  batteryModel?: string;
+  requiredBatteryCount?: number;
+  availableBatteryCount?: number;
+  batteryIds?: string[];
+  ready?: boolean;
+  swapBatteryId?: string;
+  selectedBatteryModel?: string;
+  selectedBatteryChargePct?: number;
+  selectedBatteryEnergyWh?: number;
+  selectedBatteryCapacityWh?: number;
+}
+
+/** Snapshot of the exact BE leg geometry used for Create Mission and Mission Detail. */
+export interface RouteLegSnapshot {
+  from_hub_code: string;
+  to_hub_code: string;
+  distance_km: number;
+  sequence_no?: number;
+  /** BE v2: ferry flight without a parcel, versus a delivery leg. */
+  leg_type?: 'DISPATCH' | 'DELIVERY' | string;
+  is_dispatch?: boolean;
+  payload_kg?: number;
+  from_latitude?: number;
+  from_longitude?: number;
+  to_latitude?: number;
+  to_longitude?: number;
+  from_hub_id?: number;
+  to_hub_id?: number;
+  from_hub_name?: string;
+  to_hub_name?: string;
+  battery_id?: string;
+  battery_serial?: string;
+  battery_model?: string;
+  battery_capacity_wh?: number;
+  battery_charge_pct?: number;
+  battery_energy_wh?: number;
+  energy_wh?: number;
+  battery_consumption_pct?: number;
+  remaining_battery_pct?: number;
+}
+
 export interface RouteOption {
   id: string;
   name: string;
+  routeString?: string;
+  legDetails?: RouteLegSnapshot[];
   distanceKm: number;
   predictedDurationMin: number;
   predictedEnergyWh: number;
@@ -179,6 +303,14 @@ export interface RouteOption {
   /** Optional intermediate Hub(s) selected by route planning for long-distance Missions. */
   relayHubIds?: string[];
   relayStopMinutes?: number;
+  /** BE-authoritative feasibility flag. Only BE can validate reserve/availability atomically. */
+  feasible?: boolean;
+  infeasibleReason?: string;
+  /** Optional FE display of the new BE relay_battery_status payload (schema not documented). */
+  rawRelayBatteryStatus?: unknown[];
+  legs?: PlannedRouteLeg[];
+  relayBatteryPlan?: PlannedRelayBattery[];
+  batteryPlanId?: string;
   recommended?: boolean;
   recommendationReasons: string[];
   tradeOff: string;
@@ -204,7 +336,9 @@ export interface MissionDraft {
   orderId: string;
   step: number;
   selectedDroneId: string;
+  selectedBatteryId: string;
   selectedRouteId: string;
+  relayBatterySelections?: RelayBatterySelection[];
   updatedAt: string;
 }
 

@@ -1,1261 +1,364 @@
-import {
-  type ReactNode,
-  useMemo,
-  useState,
-} from "react";
-
+import { type ReactNode, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Battery,
   CalendarClock,
   CheckCircle2,
   Clock3,
   MapPin,
   Plane,
 } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/components/shadcn/ui/button";
+import { Card, CardContent } from "@/components/shadcn/ui/card";
 
-import {
-  useNavigate,
-  useParams,
-} from "react-router-dom";
-
-import {
-  Button,
-} from "@/components/shadcn/ui/button";
-
-import {
-  Card,
-  CardContent,
-} from "@/components/shadcn/ui/card";
-
-import {
-  type FleetDrone,
-} from "../utils/fleetStorage";
-
+import { type FleetDrone } from "../utils/fleetStorage";
 import {
   useDroneDetailQuery,
+  useDroneMaintenanceHistoryQuery,
   useFleetQuery,
 } from "../hooks/useFleetQueries";
-
 import {
   useDroneMaintenanceSchedulesQuery,
   useMaintenanceRecordsQuery,
 } from "../hooks/useMaintenanceQueries";
+import { type CompletedMaintenanceRecord } from "../utils/maintenanceStorage";
+import { isRecord, pickString, unwrapList, unwrapObject } from "../api/httpClient";
 
-import {
-  type CompletedMaintenanceRecord,
-} from "../utils/maintenanceStorage";
+type DetailTab = "overview" | "flight" | "maintenance";
 
-import {
-  isRecord,
-  pickString,
-  unwrapList,
-  unwrapObject,
-} from "../api/httpClient";
+const EMPTY = "—";
+const TEXT = "text-[var(--tech-text)]";
+const SECONDARY = "text-[var(--tech-text-secondary)]";
+const MUTED = "text-[var(--tech-muted)]";
+const PANEL = "rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none";
 
-type DetailTab =
-  | "overview"
-  | "flight"
-  | "maintenance";
-
-type MaintenanceScheduleMock = {
-  lastMaintenanceAt: string;
-};
-
-function getDroneDisplayCode(
-  drone: FleetDrone,
-) {
-  const prefix =
-    drone.name
-      .match(/[A-Za-z]+/)?.[0]
-      ?.toUpperCase() ??
-    "DR";
-
-  const idMatch =
-    drone.id.match(/(\d+)$/);
-
-  if (!idMatch) {
-    return drone.name;
-  }
-
-  const number =
-    Number(idMatch[1]);
-
-  if (Number.isNaN(number)) {
-    return drone.name;
-  }
-
-  return `${prefix}-${String(
-    number,
-  ).padStart(2, "0")}`;
+function display(value?: string | number | null): string {
+  if (value === null || value === undefined || String(value).trim() === "") return EMPTY;
+  return String(value);
 }
 
-/*
- * DEMO ONLY
- * ---------------------------------------------------------
- * Mỗi drone được bảo trì định kỳ 1 tháng / lần.
- *
- * Khi backend có maintenance_schedules:
- * - lastMaintenanceAt lấy từ maintenance_records / maintenance_schedules
- * - nextMaintenanceAt do backend tính
- * - không cần giữ mock này nữa.
- */
-const MONTHLY_MAINTENANCE_SCHEDULE:
-  Record<string, MaintenanceScheduleMock> = {
-  "DR-001": {
-    lastMaintenanceAt:
-      "2026-08-23T09:00:00",
-  },
-  "DR-002": {
-    lastMaintenanceAt:
-      "2026-08-28T14:30:00",
-  },
-  "DR-003": {
-    lastMaintenanceAt:
-      "2026-09-05T10:15:00",
-  },
-  "DR-004": {
-    lastMaintenanceAt:
-      "2026-09-12T08:45:00",
-  },
-  "DR-005": {
-    lastMaintenanceAt:
-      "2026-09-18T13:00:00",
-  },
-  "DR-006": {
-    lastMaintenanceAt:
-      "2026-09-20T15:30:00",
-  },
-};
-
-function parseMaintenanceDate(
-  value: string,
-) {
-  const normalized =
-    value
-      .replace("·", "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const timestamp =
-    Date.parse(normalized);
-
-  return Number.isNaN(timestamp)
-    ? null
-    : new Date(timestamp);
+function displayNumber(value: number | undefined, suffix = "", digits = 1): string {
+  return value === undefined || !Number.isFinite(value)
+    ? EMPTY
+    : `${Number.isInteger(value) ? value : value.toFixed(digits)}${suffix}`;
 }
 
-function addOneMonth(
-  date: Date,
-) {
-  const next =
-    new Date(date);
-
-  next.setMonth(
-    next.getMonth() + 1,
-  );
-
-  return next;
+function parseApiDate(value: string | null | undefined): Date | null {
+  if (!value || value === EMPTY) return null;
+  const cleaned = value.replace(/\s*·\s*/g, " ").trim();
+  const parsed = new Date(cleaned);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatDateTime(
-  date: Date,
-) {
-  return new Intl.DateTimeFormat(
-    "en-GB",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    },
-  )
-    .format(date)
-    .replace(",", " ·");
+function formatDate(value: Date | null): string {
+  if (!value) return EMPTY;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value).replace(",", " ·");
 }
 
-function getLatestCompletedMaintenance(
-  records:
-    CompletedMaintenanceRecord[],
-) {
-  return [...records]
-    .map((record) => ({
-      record,
-      date:
-        parseMaintenanceDate(
-          record.completedAt,
-        ),
-    }))
-    .filter(
-      (
-        item,
-      ): item is {
-        record:
-          CompletedMaintenanceRecord;
-        date: Date;
-      } => Boolean(item.date),
-    )
-    .sort(
-      (a, b) =>
-        b.date.getTime() -
-        a.date.getTime(),
-    )[0] ?? null;
+function cleanDroneId(value: string): string {
+  // Older Maintenance Record mapping could prefix DR- before an existing DRN- id.
+  return value.trim().toUpperCase().replace(/^DR-(?=DRN-)/, "");
 }
 
-function getMockLastMaintenance(
-  droneId: string,
-) {
-  const mock =
-    MONTHLY_MAINTENANCE_SCHEDULE[
-      droneId
-    ];
-
-  if (mock) {
-    return new Date(
-      mock.lastMaintenanceAt,
-    );
-  }
-
-  /*
-   * Fallback demo cho drone mới:
-   * coi như lần bảo trì gần nhất là 1 tháng trước.
-   */
-  const fallback =
-    new Date();
-
-  fallback.setMonth(
-    fallback.getMonth() - 1,
-  );
-
-  return fallback;
+function parseSchedule(payload: unknown): {
+  last: Date | null;
+  next: Date | null;
+  interval: string | null;
+} {
+  const rows = unwrapList(payload);
+  const object = rows.find(isRecord) ?? unwrapObject(payload);
+  if (!isRecord(object)) return { last: null, next: null, interval: null };
+  const last = pickString(object, [
+    "last_maintenance_at", "last_maintenance", "completed_at", "performed_at",
+  ], "");
+  const next = pickString(object, [
+    "next_maintenance_at", "next_maintenance", "scheduled_at", "due_at", "next_due_at",
+  ], "");
+  const interval = pickString(object, ["frequency", "interval", "maintenance_interval"], "");
+  const intervalDays = object.interval_days;
+  const intervalMonths = object.interval_months;
+  const intervalLabel = interval ||
+    (typeof intervalDays === "number" ? `${intervalDays} days` : null) ||
+    (typeof intervalMonths === "number" ? `${intervalMonths} months` : null);
+  return { last: parseApiDate(last), next: parseApiDate(next), interval: intervalLabel };
 }
 
-function parseApiMaintenanceDate(value: string) {
-  if (!value) return null;
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? null
-    : date;
+function maintenanceDueInfo(next: Date | null) {
+  if (!next) return { label: "Not provided", danger: false, helper: "No next maintenance date from Backend" };
+  const days = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return { label: "Overdue", danger: true, helper: `${-days} day(s) overdue` };
+  if (days <= 7) return { label: "Due soon", danger: false, helper: days === 0 ? "Due today" : `Due in ${days} day(s)` };
+  return { label: "On schedule", danger: false, helper: `Due in ${days} days` };
 }
 
-function getBackendMaintenanceSchedule(payload: unknown) {
-  const list = unwrapList(payload);
-  const candidate =
-    list.find(isRecord) ??
-    unwrapObject(payload);
-
-  if (!isRecord(candidate)) {
-    return {
-      lastMaintenanceAt: null as Date | null,
-      nextMaintenanceAt: null as Date | null,
-    };
-  }
-
-  const lastRaw = pickString(
-    candidate,
-    [
-      "last_maintenance_at",
-      "last_maintenance",
-      "completed_at",
-      "performed_at",
-    ],
-    "",
-  );
-
-  const nextRaw = pickString(
-    candidate,
-    [
-      "next_maintenance_at",
-      "next_maintenance",
-      "scheduled_at",
-      "due_at",
-      "next_due_at",
-    ],
-    "",
-  );
-
-  return {
-    lastMaintenanceAt: parseApiMaintenanceDate(lastRaw),
-    nextMaintenanceAt: parseApiMaintenanceDate(nextRaw),
-  };
+function latestMaintenance(records: CompletedMaintenanceRecord[]): Date | null {
+  const dates = records.map((record) => parseApiDate(record.completedAt))
+    .filter((value): value is Date => Boolean(value))
+    .sort((a, b) => b.getTime() - a.getTime());
+  return dates[0] ?? null;
 }
 
-function getScheduleState(
-  nextMaintenanceAt: Date,
-) {
-  const now =
-    new Date();
-
-  const diffMs =
-    nextMaintenanceAt.getTime() -
-    now.getTime();
-
-  const diffDays =
-    Math.ceil(
-      diffMs /
-        (1000 * 60 * 60 * 24),
-    );
-
-  if (diffDays < 0) {
-    return {
-      label: "Overdue",
-      danger: true,
-      helper: `${Math.abs(
-        diffDays,
-      )} day${
-        Math.abs(diffDays) === 1
-          ? ""
-          : "s"
-      } overdue`,
-    };
-  }
-
-  if (diffDays <= 7) {
-    return {
-      label: "Due soon",
-      danger: false,
-      helper:
-        diffDays === 0
-          ? "Due today"
-          : `Due in ${diffDays} day${
-              diffDays === 1
-                ? ""
-                : "s"
-            }`,
-    };
-  }
-
-  return {
-    label: "On schedule",
-    danger: false,
-    helper: `Due in ${diffDays} days`,
-  };
+function sameDroneId(a: string, b: string): boolean {
+  return cleanDroneId(a) === cleanDroneId(b);
 }
 
 export function DroneDetailPage() {
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
+  const { droneId } = useParams();
+  const [tab, setTab] = useState<DetailTab>("overview");
 
-  const { droneId } =
-    useParams();
+  const droneQuery = useDroneDetailQuery(droneId);
+  const fleetQuery = useFleetQuery();
+  const historyQuery = useDroneMaintenanceHistoryQuery(droneId);
+  const recordsQuery = useMaintenanceRecordsQuery(droneId);
+  const scheduleQuery = useDroneMaintenanceSchedulesQuery(droneId);
 
-  const droneQuery =
-    useDroneDetailQuery(
-      droneId,
-    );
-
-  /*
-   * GET /technician/fleet/drones/{drone_id} currently returns 500
-   * for some Backend records. Keep the detail call, but fall back to
-   * the already-working fleet list so the detail screen remains usable.
-   */
-  const fleetQuery =
-    useFleetQuery();
-
-  const maintenanceQuery =
-    useMaintenanceRecordsQuery(
-      droneId,
-    );
-
-  const maintenanceScheduleQuery =
-    useDroneMaintenanceSchedulesQuery(
-      droneId,
-    );
-
-  const fleetFallbackDrone =
-    useMemo(
-      () =>
-        (fleetQuery.data ?? []).find(
-          (item) =>
-            item.id === droneId ||
-            getDroneDisplayCode(item) === droneId,
-        ),
-      [fleetQuery.data, droneId],
-    );
-
-  const drone =
-    droneQuery.data ??
-    fleetFallbackDrone;
-
-  const maintenanceRecords:
-    CompletedMaintenanceRecord[] =
-    maintenanceQuery.data ?? [];
-
-  const backendSchedule =
-    getBackendMaintenanceSchedule(
-      maintenanceScheduleQuery.data,
-    );
-
-  const loading =
-    !drone &&
-    (droneQuery.isPending ||
-      fleetQuery.isPending);
-
-  const detailWarning =
-    drone &&
-    droneQuery.error instanceof Error
-      ? `Drone detail API is unavailable; showing data from Hub Fleet. ${droneQuery.error.message}`
-      : "";
-
-  const apiError =
-    !drone &&
-    droneQuery.error instanceof Error
-      ? droneQuery.error.message
-      : !drone &&
-          fleetQuery.error instanceof Error
-        ? fleetQuery.error.message
-        : maintenanceQuery.error instanceof Error
-          ? maintenanceQuery.error.message
-          : "";
-
-  const [
-    activeTab,
-    setActiveTab,
-  ] = useState<DetailTab>(
-    "overview",
+  const fallbackDrone = useMemo(() =>
+    (fleetQuery.data ?? []).find((item) => item.id === droneId),
+    [droneId, fleetQuery.data],
   );
+  const drone: FleetDrone | undefined = droneQuery.data ?? fallbackDrone;
 
+  // Keep maintenance data scoped to this drone, and avoid duplicate rows
+  // when the history and maintenance-records APIs return the same record.
+  const maintenanceRecords = useMemo(() => {
+    const found = new Map<string, CompletedMaintenanceRecord>();
+    for (const item of [...(historyQuery.data ?? []), ...(recordsQuery.data ?? [])]) {
+      if (!droneId || !sameDroneId(item.droneId, droneId)) continue;
+      found.set(item.id, item);
+    }
+    return [...found.values()];
+  }, [historyQuery.data, recordsQuery.data, droneId]);
 
-  const droneMaintenanceRecords =
-    useMemo(
-      () =>
-        drone
-          ? maintenanceRecords.filter(
-              (record) =>
-                record.droneId ===
-                drone.id,
-            )
-          : [],
-      [
-        drone,
-        maintenanceRecords,
-      ],
-    );
+  const backendSchedule = useMemo(() => parseSchedule(scheduleQuery.data), [scheduleQuery.data]);
+  const lastMaintenance = backendSchedule.last ??
+    parseApiDate(drone?.lastMaintenanceAt) ?? latestMaintenance(maintenanceRecords);
+  const nextMaintenance = backendSchedule.next ?? parseApiDate(drone?.nextMaintenanceAt);
+  const due = maintenanceDueInfo(nextMaintenance);
 
-  const latestCompletedMaintenance =
-    useMemo(
-      () =>
-        getLatestCompletedMaintenance(
-          droneMaintenanceRecords,
-        ),
-      [
-        droneMaintenanceRecords,
-      ],
-    );
-
-
-
-
+  const loading = !drone && (droneQuery.isPending || fleetQuery.isPending);
   if (loading) {
-    return (
-      <div className="px-6 py-8 text-[14px] text-[var(--tech-muted)]">
-        Loading drone details...
-      </div>
-    );
+    return <div className={`px-6 py-8 text-[14px] ${MUTED}`}>Loading drone details...</div>;
   }
-
   if (!drone) {
+    const error = droneQuery.error instanceof Error ? droneQuery.error.message :
+      fleetQuery.error instanceof Error ? fleetQuery.error.message : "The requested drone was not found.";
     return (
       <div className="px-6 py-6 md:px-8">
-        <h1 className="text-[28px] font-semibold text-[var(--tech-text)]">
-          Drone not found
-        </h1>
-
-        <p className="mt-2 text-[14px] text-[var(--tech-muted)]">
-          {apiError || "The requested drone does not exist."}
-        </p>
-
-        <Button
-          type="button"
-          onClick={() =>
-            navigate(
-              "/technician/fleet",
-            )
-          }
-          className="mt-5 h-10 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600"
-        >
-          <ArrowLeft
-            size={16}
-          />
-          Back to fleet
+        <h1 className={`text-[26px] font-semibold ${TEXT}`}>Drone not found</h1>
+        <p className={`mt-2 text-[14px] ${MUTED}`}>{error}</p>
+        <Button type="button" onClick={() => navigate("/technician/fleet")}
+          className="mt-5 h-10 rounded-md bg-orange-500 px-4 text-black hover:bg-orange-600">
+          <ArrowLeft size={16} className="mr-2" /> Back to fleet
         </Button>
       </div>
     );
   }
 
-  const installedBattery =
-    drone.installedBatteryId
-      ? {
-          id: drone.installedBatteryId,
-          chargeLevelPct:
-            drone.installedBatteryPct ?? 100,
-        }
-      : undefined;
-
-  const lowBattery =
-    Boolean(
-      installedBattery &&
-        installedBattery.chargeLevelPct < 40,
-    );
-
-  /*
-   * Nếu đã có Maintenance Record thật của drone thì dùng lần hoàn thành
-   * gần nhất. Nếu chưa có record thì dùng lịch mock demo.
-   */
-  const apiLastMaintenanceAt =
-    drone.lastMaintenanceAt
-      ? new Date(drone.lastMaintenanceAt)
-      : null;
-
-  const lastMaintenanceAt =
-    backendSchedule.lastMaintenanceAt ??
-    (apiLastMaintenanceAt &&
-    !Number.isNaN(apiLastMaintenanceAt.getTime())
-      ? apiLastMaintenanceAt
-      : latestCompletedMaintenance?.date ??
-        getMockLastMaintenance(drone.id));
-
-  const apiNextMaintenanceAt =
-    drone.nextMaintenanceAt
-      ? new Date(drone.nextMaintenanceAt)
-      : null;
-
-  const nextMaintenanceAt =
-    backendSchedule.nextMaintenanceAt ??
-    (apiNextMaintenanceAt &&
-    !Number.isNaN(apiNextMaintenanceAt.getTime())
-      ? apiNextMaintenanceAt
-      : addOneMonth(lastMaintenanceAt));
-
-  const scheduleState =
-    getScheduleState(
-      nextMaintenanceAt,
-    );
-
-  const maintenanceLabel =
-    drone.status ===
-    "Maintenance"
-      ? "Maintenance required"
-      : scheduleState.label;
+  const realStatus = drone.operationalStatus || drone.status;
+  const location = drone.currentHubId === null ? "Not assigned to a hub" : display(drone.location);
+  const maintenanceBusy = historyQuery.isPending || recordsQuery.isPending;
+  const maintenanceError = historyQuery.error instanceof Error
+    ? historyQuery.error.message : recordsQuery.error instanceof Error ? recordsQuery.error.message : "";
 
   return (
     <div className="px-6 py-5 md:px-8">
-      {detailWarning && (
+      {droneQuery.error instanceof Error && fallbackDrone && (
         <div className="mb-4 rounded-md border border-amber-500/25 px-4 py-3 text-[13px] text-amber-500">
-          {detailWarning}
+          Drone detail API could not be loaded. Showing partial information from Hub Fleet: {droneQuery.error.message}
         </div>
       )}
-
-      {apiError && (
-        <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
-          {apiError}
-        </div>
-      )}
-      {/* BACK */}
-      <button
-        type="button"
-        onClick={() =>
-          navigate(
-            "/technician/fleet",
-          )
-        }
-        className="mb-4 inline-flex items-center gap-2 text-[13px] font-medium text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-      >
-        <ArrowLeft size={16} />
-        Back to fleet
+      <button type="button" onClick={() => navigate("/technician/fleet")}
+        className={`mb-4 inline-flex items-center gap-2 text-[13px] font-medium ${MUTED} hover:text-orange-500`}>
+        <ArrowLeft size={16} /> Back to fleet
       </button>
 
-      {/* PAGE HEADING */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[32px] font-semibold tracking-tight text-[var(--tech-text)]">
-            {getDroneDisplayCode(
-              drone,
-            )}
-          </h1>
+      <div className="mb-6">
+        <h1 className={`text-[30px] font-semibold tracking-tight ${TEXT}`}>{drone.id}</h1>
+        <p className={`mt-1 text-[14px] ${MUTED}`}>
+          {display(drone.name)}{drone.name && drone.model && drone.name !== drone.model ? ` · ${drone.model}` : ""}
+        </p>
+        <p className={`mt-2 flex items-center gap-2 text-[13px] ${MUTED}`}>
+          <MapPin size={15} /> {location}
+        </p>
+      </div>
 
-          <p className="mt-1 text-[14px] text-[var(--tech-muted)]">
-            {drone.id}
-            {" · "}
-            {drone.model}
-          </p>
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        <SummaryCard icon={<Plane size={20}/>} label="Operational status" value={realStatus}
+          danger={realStatus.toLowerCase().includes("maintenance") || realStatus.toLowerCase() === "incident"} />
+        <SummaryCard icon={<MapPin size={20}/>} label="Current hub" value={location} />
+      </div>
 
-          <div className="mt-2 flex items-center gap-2 text-[13px] text-[var(--tech-muted)]">
-            <MapPin
-              size={15}
-            />
-            {
-              drone.location
-            }
+      <div className="mb-6 flex flex-wrap gap-7 border-b border-[var(--tech-border)]">
+        <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>Overview</TabButton>
+        <TabButton active={tab === "flight"} onClick={() => setTab("flight")}>Flight history</TabButton>
+        <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>Maintenance history</TabButton>
+      </div>
+
+      {tab === "overview" && <div className="space-y-5">
+        <Card className={PANEL}><CardContent className="p-6">
+          <h2 className={`text-[18px] font-semibold ${TEXT}`}>Drone information</h2>
+          <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoItem label="Drone ID" value={drone.id} />
+            <InfoItem label="Name" value={drone.name} />
+            <InfoItem label="Model" value={drone.model} />
+            <InfoItem label="Status" value={realStatus} />
+            <InfoItem label="Current hub" value={location} />
+            <InfoItem label="Hub ID" value={drone.currentHubId === null ? EMPTY : display(drone.currentHubId)} />
+            <InfoItem label="Payload capacity" value={displayNumber(drone.payloadKg, " kg")} />
+            <InfoItem label="Maximum speed" value={displayNumber(drone.maxSpeed)} />
+            <InfoItem label="Utilization" value={displayNumber(drone.utilizationPct, "%")} />
+            <InfoItem label="Last flight" value={drone.lastFlightAt ? formatDate(parseApiDate(drone.lastFlightAt)) : display(drone.lastFlight)} />
           </div>
-        </div>
+        </CardContent></Card>
 
-      </div>
-
-      {/* KEY SUMMARY */}
-      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          icon={
-            <Plane size={20} />
-          }
-          label="Operational status"
-          value={drone.status}
-          danger={
-            drone.status ===
-            "Maintenance"
-          }
-        />
-
-        <SummaryCard
-          icon={
-            <Battery
-              size={20}
-            />
-          }
-          label="Installed battery"
-          value={
-            installedBattery
-              ? `${installedBattery.id} · ${installedBattery.chargeLevelPct}%`
-              : "Not installed"
-          }
-          danger={lowBattery}
-        />
-
-        <SummaryCard
-          icon={
-            <Clock3
-              size={20}
-            />
-          }
-          label="Last maintenance"
-          value={formatDateTime(
-            lastMaintenanceAt,
-          )}
-        />
-
-        <SummaryCard
-          icon={
-            <CalendarClock
-              size={20}
-            />
-          }
-          label="Next maintenance"
-          value={formatDateTime(
-            nextMaintenanceAt,
-          )}
-          danger={
-            scheduleState.danger
-          }
-        />
-      </div>
-
-      {/* TABS */}
-      <div className="mb-6 flex items-center gap-7 border-b border-[var(--tech-border)]">
-        <TabButton
-          active={
-            activeTab ===
-            "overview"
-          }
-          onClick={() =>
-            setActiveTab(
-              "overview",
-            )
-          }
-        >
-          Overview
-        </TabButton>
-
-        <TabButton
-          active={
-            activeTab ===
-            "flight"
-          }
-          onClick={() =>
-            setActiveTab(
-              "flight",
-            )
-          }
-        >
-          Flight history
-        </TabButton>
-
-        <TabButton
-          active={
-            activeTab ===
-            "maintenance"
-          }
-          onClick={() =>
-            setActiveTab(
-              "maintenance",
-            )
-          }
-        >
-          Maintenance history
-        </TabButton>
-      </div>
-
-      {/* OVERVIEW */}
-      {activeTab ===
-        "overview" && (
-        <div className="space-y-5">
-          <div className="grid gap-5 xl:grid-cols-2">
-            {/* DRONE INFORMATION */}
-            <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-              <CardContent className="p-6">
-                <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                  Drone information
-                </h2>
-
-                <div className="mt-6 grid gap-x-10 gap-y-7 sm:grid-cols-2">
-                  <InfoItem
-                    label="Drone ID"
-                    value={
-                      drone.id
-                    }
-                  />
-
-                  <InfoItem
-                    label="Model"
-                    value={
-                      drone.model
-                    }
-                  />
-
-                  <InfoItem
-                    label="Status"
-                    value={
-                      drone.status
-                    }
-                    danger={
-                      drone.status ===
-                      "Maintenance"
-                    }
-                  />
-
-                  <InfoItem
-                    label="Current location"
-                    value={
-                      drone.location
-                    }
-                  />
-
-                  <InfoItem
-                    label="Last flight"
-                    value={
-                      drone.lastFlight
-                    }
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* BATTERY */}
-            <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                    Battery status
-                  </h2>
-
-                  {installedBattery ? (
-                    <span className="rounded-md border border-orange-500/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-orange-500">
-                      Installed
-                    </span>
-                  ) : (
-                    <span className="rounded-md border border-[var(--tech-border)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[var(--tech-muted)]">
-                      Not installed
-                    </span>
-                  )}
-                </div>
-
-                {installedBattery ? (
-                  <>
-                    <div className="mt-7 grid gap-5 sm:grid-cols-2">
-                      <InfoItem
-                        label="Battery ID"
-                        value={
-                          installedBattery.id
-                        }
-                      />
-
-                      <InfoItem
-                        label="Charge level"
-                        value={`${installedBattery.chargeLevelPct}%`}
-                        danger={
-                          lowBattery
-                        }
-                      />
-                    </div>
-
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--tech-border)]">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          lowBattery
-                            ? "bg-red-500"
-                            : "bg-orange-500"
-                        }`}
-                        style={{
-                          width: `${installedBattery.chargeLevelPct}%`,
-                        }}
-                      />
-                    </div>
-
-                    <p className="mt-5 text-[12px] leading-5 text-[var(--tech-muted)]">
-                      This battery is temporarily assigned to the current prepared or active mission. Batteries do not permanently belong to a drone.
-                    </p>
-                  </>
-                ) : (
-                  <div className="mt-7 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-5">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">
-                      No battery installed
-                    </p>
-
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">
-                      Hub-stored drones normally have no battery installed. Use Battery Management when an Operator-assigned mission needs a ready battery.
-                    </p>
-
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        navigate(
-                          "/technician/fleet/batteries",
-                        )
-                      }
-                      className="mt-4 h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:!border-orange-500/50 hover:!bg-transparent hover:!text-orange-500"
-                    >
-                      Open Battery Management
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* MONTHLY MAINTENANCE SCHEDULE */}
-          <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-            <CardContent className="p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                    Maintenance schedule
-                  </h2>
-
-                  <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                    Every drone is
-                    scheduled for
-                    periodic maintenance
-                    once every month.
-                  </p>
-                </div>
-
-                <span
-                  className={`rounded-md border px-3 py-1.5 text-[12px] font-semibold ${
-                    scheduleState.danger
-                      ? "border-red-500/25 text-red-500"
-                      : scheduleState.label ===
-                          "Due soon"
-                        ? "border-orange-500/30 text-orange-500"
-                        : "border-[var(--tech-border)] text-[var(--tech-text-secondary)]"
-                  }`}
-                >
-                  {
-                    maintenanceLabel
-                  }
-                </span>
-              </div>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-3">
-                <ScheduleItem
-                  label="Maintenance interval"
-                  value="Every 1 month"
-                  helper="Periodic inspection cycle"
-                />
-
-                <ScheduleItem
-                  label="Last maintenance"
-                  value={formatDateTime(
-                    lastMaintenanceAt,
-                  )}
-                  helper={
-                    latestCompletedMaintenance
-                      ? `Completed via ${latestCompletedMaintenance.record.workOrderId}`
-                      : backendSchedule.lastMaintenanceAt || backendSchedule.nextMaintenanceAt
-                        ? "Backend maintenance schedule"
-                        : "Fallback schedule record"
-                  }
-                />
-
-                <ScheduleItem
-                  label="Next maintenance"
-                  value={formatDateTime(
-                    nextMaintenanceAt,
-                  )}
-                  helper={
-                    scheduleState.helper
-                  }
-                  danger={
-                    scheduleState.danger
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* FLIGHT HISTORY */}
-      {activeTab ===
-        "flight" && (
-        <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-          <CardContent className="p-6">
-            <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-              Flight history
-            </h2>
-
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--tech-border)] pb-4">
-              <div>
-                <p className="text-[12px] uppercase tracking-[0.06em] text-[var(--tech-subtle)]">
-                  Latest flight
-                </p>
-
-                <p className="mt-1 text-[15px] font-medium text-[var(--tech-text-secondary)]">
-                  {
-                    drone.lastFlight
-                  }
-                </p>
-              </div>
-
-              <span className="text-[12px] text-[var(--tech-muted)]">
-                Historical flight data
-                will be connected from
-                the backend.
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* MAINTENANCE HISTORY */}
-      {activeTab ===
-        "maintenance" && (
-        <div className="space-y-5">
-          <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-            <CardContent className="p-6">
-              <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                Maintenance overview
-              </h2>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-3">
-                <InfoItem
-                  label="Current maintenance status"
-                  value={
-                    maintenanceLabel
-                  }
-                  danger={
-                    drone.status ===
-                      "Maintenance" ||
-                    scheduleState.danger
-                  }
-                />
-
-                <InfoItem
-                  label="Last maintenance"
-                  value={formatDateTime(
-                    lastMaintenanceAt,
-                  )}
-                />
-
-                <InfoItem
-                  label="Next maintenance"
-                  value={formatDateTime(
-                    nextMaintenanceAt,
-                  )}
-                  danger={
-                    scheduleState.danger
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2">
-                <CheckCircle2
-                  size={19}
-                  className="text-emerald-500"
-                />
-
-                <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">
-                  Work complete
-                </h2>
-              </div>
-
-              <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
-                Completed maintenance
-                work and diagnosis
-                records for this drone.
+        <Card className={PANEL}><CardContent className="p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance schedule</h2>
+              <p className={`mt-1 text-[13px] ${MUTED}`}>
+                Schedule dates are displayed only when returned by Backend.
               </p>
+            </div>
+            <span className={`rounded-md border border-[var(--tech-border)] px-3 py-1.5 text-[12px] font-medium ${due.danger ? "text-red-500" : SECONDARY}`}>
+              {scheduleQuery.isPending ? "Loading..." : due.label}
+            </span>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <ScheduleItem label="Maintenance interval" value={display(backendSchedule.interval)}
+              helper={backendSchedule.interval ? "Backend schedule" : "Not provided by Backend"} />
+            <ScheduleItem label="Last maintenance" value={formatDate(lastMaintenance)}
+              helper={lastMaintenance ? "Recorded maintenance date" : "No recorded date"} />
+            <ScheduleItem label="Next maintenance" value={formatDate(nextMaintenance)}
+              helper={due.helper} danger={due.danger} />
+          </div>
+          {scheduleQuery.error instanceof Error && <p className="mt-4 text-[12px] text-amber-500">
+            Maintenance schedule could not be loaded: {scheduleQuery.error.message}
+          </p>}
+        </CardContent></Card>
+      </div>}
 
-              <div className="mt-5 space-y-3">
-                {droneMaintenanceRecords.length >
-                0 ? (
-                  droneMaintenanceRecords.map(
-                    (record) => (
-                      <details
-                        key={
-                          record.id
-                        }
-                        className="group overflow-hidden rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)]"
-                      >
-                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[15px] font-semibold text-[var(--tech-text)]">
-                                {
-                                  record.workOrderId
-                                }
-                              </span>
+      {tab === "flight" && <Card className={PANEL}><CardContent className="p-6">
+        <h2 className={`text-[18px] font-semibold ${TEXT}`}>Flight history</h2>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          <InfoItem label="Last flight time" value={formatDate(parseApiDate(drone.lastFlightAt))} />
+          <InfoItem label="Last flight / mission reference" value={display(drone.lastFlight)} />
+        </div>
+        <div className={`mt-5 rounded-md border border-dashed border-[var(--tech-border)] px-4 py-5 text-[13px] ${MUTED}`}>
+          A per-drone flight history endpoint is not available in the supplied Technician API contract.
+          This tab only displays last-flight fields actually returned by the drone API; it does not invent flight records.
+        </div>
+      </CardContent></Card>}
 
-                              <span className="text-[12px] font-medium text-emerald-500">
-                                Completed
-                              </span>
-                            </div>
+      {tab === "maintenance" && <div className="space-y-5">
+        <Card className={PANEL}><CardContent className="p-6">
+          <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance overview</h2>
+          <div className="mt-6 grid gap-5 md:grid-cols-3">
+            <InfoItem label="Maintenance schedule" value={due.label} danger={due.danger} />
+            <InfoItem label="Last maintenance" value={formatDate(lastMaintenance)} />
+            <InfoItem label="Next maintenance" value={formatDate(nextMaintenance)} danger={due.danger} />
+          </div>
+        </CardContent></Card>
 
-                            <p className="mt-1 text-[14px] text-[var(--tech-text-secondary)]">
-                              {
-                                record.title
-                              }
-                            </p>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <p className="text-[12px] text-[var(--tech-muted)]">
-                              {
-                                record.completedAt
-                              }
-                            </p>
-
-                            <p className="mt-1 text-[12px] text-[var(--tech-subtle)]">
-                              {
-                                record.assignedTo
-                              }
-                            </p>
-                          </div>
-                        </summary>
-
-                        <div className="border-t border-[var(--tech-border)] px-4 py-4">
-                          <div className="grid gap-5 md:grid-cols-2">
-                            <MaintenanceText
-                              label="Diagnosis"
-                              value={
-                                record.diagnosis
-                              }
-                            />
-
-                            <MaintenanceText
-                              label="Corrective action"
-                              value={
-                                record.correctiveAction
-                              }
-                            />
-                          </div>
-
-                          <div className="mt-5 grid gap-5 border-t border-[var(--tech-border)] pt-4 md:grid-cols-3">
-                            <InfoItem
-                              label="Resulting status"
-                              value={
-                                record.resultingStatus
-                              }
-                            />
-
-                            <InfoItem
-                              label="Priority"
-                              value={
-                                record.priority
-                              }
-                            />
-
-                            <InfoItem
-                              label="Inspection"
-                              value={`${record.inspectionItems.length} items completed`}
-                            />
-                          </div>
-                        </div>
-                      </details>
-                    ),
-                  )
-                ) : (
-                  <div className="rounded-md border border-dashed border-[var(--tech-border)] px-4 py-9 text-center">
-                    <p className="text-[14px] text-[var(--tech-muted)]">
-                      No completed maintenance work for this drone yet.
-                    </p>
+        <Card className={PANEL}><CardContent className="p-6">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={19} className="text-emerald-500" />
+            <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance records</h2>
+          </div>
+          <p className={`mt-1 text-[13px] ${MUTED}`}>
+            Records for this drone from Maintenance History / Maintenance Records APIs.
+          </p>
+          {maintenanceError && <p className="mt-3 text-[12px] text-amber-500">
+            Some maintenance data could not be loaded: {maintenanceError}
+          </p>}
+          <div className="mt-5 space-y-3">
+            {maintenanceBusy && maintenanceRecords.length === 0 ? (
+              <p className={`py-7 text-center text-[13px] ${MUTED}`}>Loading maintenance records...</p>
+            ) : maintenanceRecords.length > 0 ? maintenanceRecords.map((record) => (
+              <details key={record.id} className="group overflow-hidden rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[15px] font-semibold ${TEXT}`}>{record.workOrderId}</span>
+                      <span className="text-[12px] font-medium text-emerald-500">Recorded</span>
+                    </div>
+                    <p className={`mt-1 text-[14px] ${SECONDARY}`}>{record.title}</p>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
+                  <span className={`shrink-0 text-right text-[12px] ${MUTED}`}>{display(record.completedAt)}</span>
+                </summary>
+                <div className="border-t border-[var(--tech-border)] px-4 py-4">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <InfoItem label="Diagnosis" value={record.diagnosis} />
+                    <InfoItem label="Corrective action" value={record.correctiveAction} />
+                    <InfoItem label="Resulting status" value={record.resultingStatus} />
+                    <InfoItem label="Performed / assigned to" value={record.assignedTo} />
+                  </div>
+                  <div className="mt-5 border-t border-[var(--tech-border)] pt-4">
+                    <p className={`text-[12px] font-medium ${MUTED}`}>
+                      Inspection checklist ({record.inspectionItems.length} item(s))
+                    </p>
+                    {record.inspectionItems.length > 0 ?
+                      <ul className={`mt-2 space-y-1.5 text-[13px] ${SECONDARY}`}>
+                        {record.inspectionItems.map((item, index) => <li key={`${record.id}-${index}`}>• {item}</li>)}
+                      </ul> :
+                      <p className={`mt-2 text-[13px] ${MUTED}`}>No inspection items returned</p>}
+                  </div>
+                </div>
+              </details>
+            )) : <div className={`rounded-md border border-dashed border-[var(--tech-border)] px-4 py-9 text-center text-[14px] ${MUTED}`}>
+              No maintenance records returned for this drone.
+            </div>}
+          </div>
+        </CardContent></Card>
+      </div>}
     </div>
   );
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  danger = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  danger?: boolean;
+function SummaryCard({ icon, label, value, helper, danger = false }: {
+  icon: ReactNode; label: string; value: string; helper?: string; danger?: boolean;
 }) {
-  return (
-    <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-      <CardContent className="flex min-h-[118px] items-center gap-4 p-5">
-        <div
-          className={
-            danger
-              ? "text-red-500"
-              : "text-orange-500"
-          }
-        >
-          {icon}
-        </div>
-
-        <div className="min-w-0">
-          <p className="text-[12px] font-medium text-[var(--tech-muted)]">
-            {label}
-          </p>
-
-          <p
-            className={`mt-1.5 truncate text-[17px] font-semibold ${
-              danger
-                ? "text-red-500"
-                : "text-[var(--tech-text)]"
-            }`}
-            title={value}
-          >
-            {value}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function InfoItem({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-}) {
-  return (
-    <div>
-      <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-        {label}
-      </p>
-
-      <p
-        className={`mt-2 text-[15px] font-medium ${
-          danger
-            ? "text-red-500"
-            : "text-[var(--tech-text-secondary)]"
-        }`}
-      >
-        {value}
-      </p>
+  return <Card className={PANEL}><CardContent className="flex min-h-[118px] items-center gap-4 p-5">
+    <span className={danger ? "text-red-500" : "text-orange-500"}>{icon}</span>
+    <div className="min-w-0">
+      <p className={`text-[12px] font-medium ${MUTED}`}>{label}</p>
+      <p title={value} className={`mt-1.5 truncate text-[17px] font-semibold ${danger ? "text-red-500" : TEXT}`}>{value}</p>
+      {helper && <p className={`mt-1 truncate text-[11px] ${MUTED}`}>{helper}</p>}
     </div>
-  );
+  </CardContent></Card>;
 }
 
-function ScheduleItem({
-  label,
-  value,
-  helper,
-  danger = false,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  danger?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-4">
-      <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-        {label}
-      </p>
-
-      <p
-        className={`mt-2 text-[16px] font-semibold ${
-          danger
-            ? "text-red-500"
-            : "text-[var(--tech-text)]"
-        }`}
-      >
-        {value}
-      </p>
-
-      <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
-        {helper}
-      </p>
-    </div>
-  );
+function InfoItem({ label, value, danger = false }: { label: string; value?: string; danger?: boolean }) {
+  return <div className="min-w-0">
+    <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-subtle)]">{label}</p>
+    <p className={`mt-2 break-words text-[15px] font-medium ${danger ? "text-red-500" : SECONDARY}`}>{display(value)}</p>
+  </div>;
 }
 
-function MaintenanceText({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
+function ScheduleItem({ label, value, helper, danger = false }: {
+  label: string; value: string; helper: string; danger?: boolean;
 }) {
-  return (
-    <div>
-      <span className="text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-subtle)]">
-        {label}
-      </span>
-
-      <p className="mt-2 whitespace-pre-wrap text-[14px] leading-6 text-[var(--tech-text-secondary)]">
-        {value}
-      </p>
-    </div>
-  );
+  return <div className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-4">
+    <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[var(--tech-subtle)]">{label}</p>
+    <p className={`mt-2 text-[16px] font-semibold ${danger ? "text-red-500" : TEXT}`}>{value}</p>
+    <p className={`mt-1 text-[12px] ${MUTED}`}>{helper}</p>
+  </div>;
 }
 
-function TabButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
+function TabButton({ active, children, onClick }: {
+  active: boolean; children: ReactNode; onClick: () => void;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative pb-3 text-[14px] font-medium transition-colors ${
-        active
-          ? "text-[var(--tech-text)]"
-          : "text-[var(--tech-muted)] hover:text-[var(--tech-text-secondary)]"
-      }`}
-    >
-      {children}
-
-      {active && (
-        <span className="absolute bottom-0 left-0 h-[2px] w-full bg-orange-500" />
-      )}
-    </button>
-  );
+  return <button type="button" onClick={onClick}
+    className={`relative pb-3 text-[14px] font-medium transition-colors ${active ? TEXT : `${MUTED} hover:${SECONDARY}`}`}>
+    {children}
+    {active && <span className="absolute bottom-0 left-0 h-[2px] w-full bg-orange-500" />}
+  </button>;
 }

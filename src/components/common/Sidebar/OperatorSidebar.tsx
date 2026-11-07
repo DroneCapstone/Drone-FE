@@ -213,6 +213,19 @@ export function OperatorSidebar({
                               onClick={
                                 onCloseMobile
                               }
+                              className={({ isActive }) => {
+                                const inMissionSection =
+                                  child.path === "/operator/missions/all" &&
+                                  pathname.startsWith("/operator/missions/");
+
+                                const inOrdersSection =
+                                  child.path === "/operator/orders/all" &&
+                                  pathname.startsWith("/operator/orders/");
+
+                                return isActive || inMissionSection || inOrdersSection
+                                  ? "active"
+                                  : undefined;
+                              }}
                             >
                               {
                                 child.label

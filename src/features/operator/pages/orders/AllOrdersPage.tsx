@@ -7,34 +7,40 @@ import { OPERATOR_PAGE_SIZE, OperatorPagination } from '../../components/Operato
 import { OrderTable } from '../../components/OrderTable';
 import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../../hooks/useOrderQueries';
-import type { OrderStatus } from '../../types/operator';
 import {
   getOrderPlanningBadge,
-  isActionablePlanningState,
   sortOrdersByPlanningPriority,
 } from '../../utils/deliveryPlanning';
 import { OrderPageShell } from './OrderPageShell';
 
-const STATUS_TO_API: Record<
-  string,
-  'PENDING' | 'IN_DELIVERY' | 'DELIVERED_TO_HUB' | 'CANCELLED' | undefined
-> = {
-  'All statuses': undefined,
-  Pending: 'PENDING',
-  'In Delivery': 'IN_DELIVERY',
-  'Delivered to Hub': 'DELIVERED_TO_HUB',
-  Cancelled: 'CANCELLED',
-};
+const ALL_PLANNING_STATES = 'All planning states';
+const ALL_DELIVERY_MODES = 'All delivery modes';
+
+// Show only the four requested planning states in the filter.
+// FUTURE may still exist in API data, but is not a selectable filter option.
+// Do not mix Order status (PENDING/AT_HUB/...) into this dropdown.
+const PLANNING_STATES = [
+  'Waiting for package',     // WAITING_PACKAGE
+  'Ready for Planning',      // READY_FOR_PLANNING
+  'Planned',                 // PLANNED
+  'Needs Replanning',        // NEEDS_REPLANNING
+] as const;
 
 export function AllOrdersPage() {
   const location = useLocation();
-  const readyOnly = location.pathname.endsWith('/ready');
+  // Legacy /orders/ready links still open the same page, with its filter applied.
+  const readyLink = location.pathname.endsWith('/ready');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [status, setStatus] = useState('All statuses');
-  const [deliveryMode, setDeliveryMode] = useState('All delivery modes');
+  const [status, setStatus] = useState(() => readyLink ? 'Ready for Planning' : ALL_PLANNING_STATES);
+  const [deliveryMode, setDeliveryMode] = useState(ALL_DELIVERY_MODES);
   const [page, setPage] = useState(1);
   const { data: missions = [] } = useMissionListQuery();
+
+  useEffect(() => {
+    setStatus(readyLink ? 'Ready for Planning' : ALL_PLANNING_STATES);
+    setPage(1);
+  }, [readyLink]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
@@ -49,18 +55,19 @@ export function AllOrdersPage() {
     refetch,
   } = useOperatorOrdersQuery({
     search: debouncedQuery || undefined,
-    status: STATUS_TO_API[status],
   });
 
-  const filtered = sortOrdersByPlanningPriority(orders, missions).filter((order) => {
-    const matchesMode =
-      deliveryMode === 'All delivery modes' || order.deliveryMode === deliveryMode;
-    const matchesReady =
-      !readyOnly ||
-      isActionablePlanningState(getOrderPlanningBadge(order, missions));
-
-    return matchesMode && matchesReady;
-  });
+  // Keep all Orders in the unfiltered view; actionable Orders come first.
+  // Planning filters remain available now that the top tabs are removed.
+  const filtered = sortOrdersByPlanningPriority(
+    orders.filter((order) => {
+      const matchesMode = deliveryMode === ALL_DELIVERY_MODES || order.deliveryMode === deliveryMode;
+      const matchesState = status === ALL_PLANNING_STATES
+        || getOrderPlanningBadge(order, missions) === status;
+      return matchesMode && matchesState;
+    }),
+    missions,
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / OPERATOR_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -70,7 +77,7 @@ export function AllOrdersPage() {
   );
 
   return (
-    <OrderPageShell active={readyOnly ? '/operator/orders/ready' : '/operator/orders/all'}>
+    <OrderPageShell>
       <OperatorPanel className="flush-panel">
         <div className="toolbar">
           <div className="filter-search">
@@ -86,22 +93,16 @@ export function AllOrdersPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={[
-              'All statuses',
-              'Pending',
-              'In Delivery',
-              'Delivered to Hub',
-              'Cancelled',
-            ]}
+            options={[ALL_PLANNING_STATES, ...PLANNING_STATES]}
             onChange={(value) => {
-              setStatus(value as OrderStatus | 'All statuses');
+              setStatus(value);
               setPage(1);
             }}
-            ariaLabel="Order status"
+            ariaLabel="Filter planning state"
           />
           <DropdownSelect
             value={deliveryMode}
-            options={['All delivery modes', 'Express', 'Scheduled']}
+            options={[ALL_DELIVERY_MODES, 'Express', 'Scheduled', 'Normal']}
             onChange={(value) => {
               setDeliveryMode(value);
               setPage(1);
