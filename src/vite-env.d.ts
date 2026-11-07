@@ -3,7 +3,6 @@
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_API_WITH_CREDENTIALS?: string;
-  readonly VITE_ENABLE_DEMO_AUTH?: string;
 }
 
 interface ImportMeta {
