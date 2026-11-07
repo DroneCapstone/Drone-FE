@@ -16,7 +16,7 @@ import {
   useMissionListQuery,
 } from '../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../hooks/useOrderQueries';
-import { getOrderPlanningBadge, isActionablePlanningState } from '../utils/deliveryPlanning';
+import { getOrderPlanningBadge, canCreateMissionForOrder } from '../utils/deliveryPlanning';
 import { getMissionPreflight } from '../utils/missionPreflight';
 
 export function DashboardPage() {
@@ -31,7 +31,7 @@ export function DashboardPage() {
   const { data: activeFlights } = useMissionActiveFlightsQuery();
 
   const readyOrders = orders.filter((order) =>
-    isActionablePlanningState(getOrderPlanningBadge(order, missions)),
+    canCreateMissionForOrder(order, missions),
   );
   const needsReplanning = orders.filter(
     (order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning',
@@ -47,7 +47,7 @@ export function DashboardPage() {
   const activeCount =
     missionKpi?.activeMissions ??
     missionStatus?.inProgress ??
-    activeFlights?.length ??
+    activeFlights?.activeCount ??
     activeMissions.length;
   const scheduledCount =
     missionKpi?.scheduledMissions ?? missionStatus?.scheduled ?? scheduledMissions.length;
@@ -59,7 +59,7 @@ export function DashboardPage() {
     failedMissions.length;
   const totalMissions =
     missionKpi?.totalMissions ?? missionStatus?.total ?? missions.length;
-  const readyPlanningCount = missionKpi?.readyForPlanning ?? readyOrders.length;
+  const readyPlanningCount = readyOrders.length; // Receipt is required for actionable planning.
 
   const departureItems = scheduledMissions.map((mission) => ({
     mission,
@@ -199,7 +199,7 @@ export function DashboardPage() {
           label="Completed missions"
           value={String(completedCount)}
           delta="Current"
-          note="Delivered to Destination Hub"
+          note="Delivered to Pick-up Point"
         />
       </div>
 

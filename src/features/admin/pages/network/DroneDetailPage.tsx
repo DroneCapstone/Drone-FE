@@ -1,18 +1,122 @@
-import { ArrowLeft, Battery, CalendarClock, MapPin, Plane, Wrench } from "lucide-react";
-import { Link, Navigate, useParams } from "react-router-dom";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminStatusBadge } from "../../components/AdminStatusBadge";
-import { defaultAdminBatteries } from "../../data/adminData";
-import { getAdminDrones, getAdminHubs } from "../../services/adminStore";
+import { useEffect, useState } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
+import { ActionButton } from '../../../../components/ui/ActionButton';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { getAdminBatteries, getAdminDrones, getAdminHubs, upsertAdminDrone } from '../../services/adminStore';
+import type { AdminDrone } from '../../types';
+import { DroneOverviewTab } from '../../components/drone-detail/DroneOverviewTab';
+import { DroneMaintenanceTab } from '../../components/drone-detail/DroneMaintenanceTab';
+import { DroneWorkOrdersTab } from '../../components/drone-detail/DroneWorkOrdersTab';
+import { DroneFlightHistoryTab } from '../../components/drone-detail/DroneFlightHistoryTab';
+import { DroneEditDialog } from '../../components/drone-detail/DroneEditDialog';
+import { DroneDetailDialogs } from '../../components/drone-detail/DroneDetailDialogs';
+import { detailTabs } from '../../components/drone-detail/DroneDetailUI';
+import { getDemoOrders, getDemoFlights, type DetailTab, type DroneWorkOrder, type DroneFlightRecord } from '../../components/drone-detail/droneDetailData';
+import '../../components/drone-detail/DroneDetail.css';
 
+/** Admin-only drone overview. Technician owns maintenance; Operator owns missions. */
 export function DroneDetailPage() {
   const { droneId } = useParams();
-  const drone = getAdminDrones().find((item) => item.id === droneId);
-  if (!drone) return <Navigate to="/admin/network/drones" replace />;
-  const hub = getAdminHubs().find((item) => item.id === drone.hubId);
-  const battery = defaultAdminBatteries.find((item) => item.id === drone.installedBatteryId);
-  const fmt = (value?: string) => value ? new Date(value).toLocaleString("en-GB") : "—";
-  return <AdminPageShell title={`${drone.id} · ${drone.model}`} description="Read-through view combining Operator availability fields and Technician maintenance/battery context." actions={<Link to="/admin/network/drones" className="inline-flex items-center gap-2 rounded-lg border border-[var(--admin-border)] px-3 py-2 text-[12px]"><ArrowLeft size={14} />Back to drones</Link>}>
-    <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-xl bg-orange-500/10 text-orange-500"><Plane size={22} /></span><div><h2 className="text-xl font-semibold">{drone.name}-{drone.displayId}</h2><p className="mt-1 text-[12px] text-[var(--admin-muted)]">{drone.serialNumber}</p><div className="mt-3 flex flex-wrap gap-2"><AdminStatusBadge tone={drone.technicalStatus === "Serviceable" ? "success" : "danger"}>{drone.technicalStatus}</AdminStatusBadge><AdminStatusBadge tone={drone.operationalStatus === "In Flight" ? "info" : "neutral"}>{drone.operationalStatus}</AdminStatusBadge></div></div></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{[[MapPin, "Current hub", hub?.name ?? drone.hubId], [Battery, "Battery", `${drone.installedBatteryId ?? "—"} · ${drone.batteryPct}%`], [Wrench, "Last maintenance", fmt(drone.lastMaintenanceAt)], [CalendarClock, "Next maintenance", fmt(drone.nextMaintenanceAt)]].map(([Icon, label, value], i) => { const I = Icon as typeof MapPin; return <div key={i} className="rounded-lg bg-[var(--admin-surface-2)] p-4"><I size={16} className="text-orange-500" /><span className="mt-3 block text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">{String(label)}</span><strong className="mt-1 block text-[13px]">{String(value)}</strong></div>; })}</div></div><div className="space-y-5"><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Capability</h3><dl className="mt-4 space-y-3 text-[12px]"><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Max payload</dt><dd>{drone.maxPayloadKg} kg</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Utilization</dt><dd>{drone.utilizationPct}%</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Last flight</dt><dd>{fmt(drone.lastFlightAt)}</dd></div></dl></div><div className="rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"><h3 className="text-[14px] font-semibold">Installed battery</h3>{battery ? <dl className="mt-4 space-y-3 text-[12px]"><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Model</dt><dd>{battery.model}</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Health</dt><dd>{battery.healthPct}%</dd></div><div className="flex justify-between"><dt className="text-[var(--admin-muted)]">Cycle count</dt><dd>{battery.cycleCount}</dd></div></dl> : <p className="mt-3 text-[12px] text-[var(--admin-muted)]">No battery record linked.</p>}</div></div></div>
+  const [drone, setDrone] = useState<AdminDrone | undefined>(() => getAdminDrones().find((item) => item.id === droneId));
+  const [tab, setTab] = useState<DetailTab>('overview');
+  const [isEditing, setIsEditing] = useState(false);
+  const [confirmActive, setConfirmActive] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<DroneWorkOrder | null>(null);
+  const [selectedFlight, setSelectedFlight] = useState<DroneFlightRecord | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const refresh = () => setDrone(getAdminDrones().find((item) => item.id === droneId));
+    refresh(); setTab('overview'); setIsEditing(false); setConfirmActive(false);
+    setSelectedOrder(null); setSelectedFlight(null); setNotice(''); setError('');
+    window.addEventListener('admin-data-updated', refresh);
+    return () => window.removeEventListener('admin-data-updated', refresh);
+  }, [droneId]);
+
+  if (!drone) return <Navigate replace to="/admin/network/drones"/>;
+  const hubs = getAdminHubs();
+  const hubName = hubs.find((hub) => hub.id === drone.hubId)?.name ?? '—';
+  const installedBattery = getAdminBatteries().find((battery) => battery.id === drone.installedBatteryId);
+  const batteryLevel = installedBattery ? installedBattery.chargeLevelPct : drone.installedBatteryId ? drone.batteryPct : null;
+  const orders = getDemoOrders(drone.id);
+  const flights = getDemoFlights(drone.id);
+
+  function saveDrone(draft: AdminDrone): string | null {
+    // Read current store state at save time to avoid overwriting Technician-owned
+    // fields that may have been updated since the Edit modal was opened.
+    const stored = getAdminDrones().find((item) => item.id === droneId);
+    if (!stored) return 'This drone no longer exists.';
+    const name = draft.name.trim();
+    const serialNumber = draft.serialNumber.trim();
+    const payload = Number(draft.maxPayloadKg);
+    const targetHub = getAdminHubs().find((hub) => hub.id === draft.hubId);
+    if (!name || !serialNumber || !Number.isFinite(payload) || payload <= 0) return 'Enter a valid name, serial number, and maximum payload.';
+    if (getAdminDrones().some((item) => item.id !== stored.id && item.serialNumber.trim().toLowerCase() === serialNumber.toLowerCase())) return 'Serial number already belongs to another drone.';
+    if (!targetHub || (draft.hubId !== stored.hubId && targetHub.status !== 'ACTIVE')) return 'Choose an active Hub for reassignment.';
+    if (stored.status === 'IN_FLIGHT' && (serialNumber !== stored.serialNumber || payload !== stored.maxPayloadKg || draft.hubId !== stored.hubId)) return 'Cannot change serial, payload or Hub during a flight.';
+    if (draft.hubId !== stored.hubId) {
+      if (stored.status === 'MAINTENANCE') return 'Cannot reassign a drone under maintenance.';
+      if (getAdminDrones().filter((item) => item.id !== stored.id && item.hubId === draft.hubId).length >= targetHub.capacity) return 'Selected Hub is at drone capacity.';
+    }
+    // Backend mission reservations and active Technician work orders are not
+    // available to this mock store. Do not present these as checked.
+    const updated: AdminDrone = { ...stored, name, serialNumber, maxPayloadKg: payload, hubId: draft.hubId, updatedAt: new Date().toISOString() };
+    try {
+      upsertAdminDrone(updated);
+      setDrone(updated);
+      setNotice('Drone information saved.');
+      setError('');
+      return null;
+    } catch (cause) { return cause instanceof Error ? cause.message : 'Could not save Drone.'; }
+  }
+
+  function toggleActive() {
+    const stored = getAdminDrones().find((item) => item.id === droneId);
+    if (!stored) { setError('Drone no longer exists.'); return; }
+    if (stored.isActive && stored.status === 'IN_FLIGHT') { setError('Cannot deactivate a drone in flight.'); setConfirmActive(false); return; }
+    const updated = { ...stored, isActive: !stored.isActive, updatedAt: new Date().toISOString() };
+    try {
+      upsertAdminDrone(updated);
+      setDrone(updated);
+      setError('');
+      setConfirmActive(false);
+      setNotice(`Drone ${updated.isActive ? 'activated' : 'deactivated'} administratively.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Cannot update administrative state.'); }
+  }
+
+  return <AdminPageShell
+    title={drone.id}
+    description={`${drone.model} · ${hubName}`}
+    actions={<ActionButton variant={drone.isActive ? 'danger' : 'secondary'} disabled={drone.isActive && drone.status === 'IN_FLIGHT'} onClick={() => { setNotice(''); setError(''); setConfirmActive(true); }}>{drone.isActive ? 'Deactivate' : 'Activate'}</ActionButton>}
+  >
+    <div className="admin-drone-detail">
+      <div className="dd-tabs" role="tablist" aria-label="Drone Detail tabs">
+        {detailTabs.map(({ id, label }) => <button key={id} type="button" role="tab" id={`dd-tab-${id}`}
+          aria-selected={tab === id} aria-controls="dd-panel" tabIndex={tab === id ? 0 : -1}
+          className={tab === id ? 'dd-tab is-active' : 'dd-tab'}
+          onClick={() => { setTab(id); setError(''); }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            const index = detailTabs.findIndex((item) => item.id === tab);
+            const next = detailTabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + detailTabs.length) % detailTabs.length].id;
+            setTab(next); document.getElementById(`dd-tab-${next}`)?.focus();
+          }}>
+          {label}
+        </button>)}
+      </div>
+      {notice && <p className="dd-notice" role="status">{notice}</p>}
+      {error && <p className="dd-error" role="alert">{error}</p>}
+      <div id="dd-panel" role="tabpanel" aria-labelledby={`dd-tab-${tab}`}>
+        {tab === 'overview' && <DroneOverviewTab drone={drone} hubName={hubName} batteryLevel={batteryLevel} orders={orders} flights={flights} onEdit={() => { setIsEditing(true); setError(''); setNotice(''); }} onTabChange={setTab} onOpenOrder={setSelectedOrder}/>}
+        {tab === 'maintenance' && <DroneMaintenanceTab drone={drone} orders={orders} onOpenOrder={setSelectedOrder}/>}
+        {tab === 'orders' && <DroneWorkOrdersTab orders={orders} onOpen={setSelectedOrder}/>}
+        {tab === 'flights' && <DroneFlightHistoryTab droneId={drone.id} flights={flights} lastRecordedFlight={drone.lastFlightAt} onOpen={setSelectedFlight}/>}
+      </div>
+    </div>
+    {isEditing && <DroneEditDialog drone={drone} hubs={hubs} onSave={saveDrone} onClose={() => setIsEditing(false)}/>}
+    <DroneDetailDialogs drone={drone} confirmActive={confirmActive} onConfirmClose={() => setConfirmActive(false)} onConfirmActive={toggleActive}
+      order={selectedOrder} onOrderClose={() => setSelectedOrder(null)} flight={selectedFlight} onFlightClose={() => setSelectedFlight(null)}/>
   </AdminPageShell>;
 }

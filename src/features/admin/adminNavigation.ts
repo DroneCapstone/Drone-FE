@@ -1,10 +1,12 @@
+import { PackageCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Database,
+  ClipboardCheck,
+  CreditCard,
   Gauge,
   MapPinned,
+  ScrollText,
   Settings,
-  ShieldCheck,
   UserRound,
   Users,
 } from "lucide-react";
@@ -19,45 +21,57 @@ export type AdminNavigationItem = {
 export const adminNavigation: AdminNavigationItem[] = [
   { label: "Dashboard", path: "/admin/dashboard", icon: Gauge },
   {
-    label: "Hub & Fleet",
+    label: "Network & Assets",
     path: "/admin/network/hubs",
     icon: MapPinned,
     children: [
       { label: "Hubs", path: "/admin/network/hubs" },
       { label: "Drones", path: "/admin/network/drones" },
+
       { label: "Batteries", path: "/admin/network/batteries" },
     ],
   },
+
   {
-    label: "Users",
-    path: "/admin/users",
-    icon: Users,
+    label: "Replacement Supplies",
+    path: "/admin/replacement/requests",
+    icon: PackageCheck,
     children: [
-      { label: "User list", path: "/admin/users" },
-      { label: "Roles & permissions", path: "/admin/users/roles" },
+      { label: "Requests & Approvals", path: "/admin/replacement/requests" },
+      { label: "Spare Parts", path: "/admin/replacement/spare-parts" },
+      { label: "New Batteries", path: "/admin/replacement/new-batteries" },
     ],
   },
-  { label: "Audit", path: "/admin/audit/logs", icon: ShieldCheck },
+  { label: "Users", path: "/admin/users", icon: Users },
   {
-    label: "Data Governance",
-    path: "/admin/data/overview",
-    icon: Database,
+    label: "Payments",
+    path: "/admin/payments/transactions",
+    icon: CreditCard,
     children: [
-      { label: "Overview", path: "/admin/data/overview" },
-      { label: "Data quality", path: "/admin/data/quality" },
+      { label: "Transactions", path: "/admin/payments/transactions" },
+      { label: "Refunds", path: "/admin/payments/refunds" },
+      { label: "Financial Overview", path: "/admin/payments/financial" },
     ],
   },
-  {
-    label: "System",
-    path: "/admin/system/logs",
-    icon: Settings,
-    children: [
-      { label: "System logs", path: "/admin/system/logs" },
-      { label: "Activity log", path: "/admin/system/activity" },
-      { label: "Settings", path: "/admin/system/settings" },
-      { label: "Notifications", path: "/admin/system/notifications" },
-      { label: "Backup", path: "/admin/system/backup" },
-    ],
-  },
+  { label: "Audit & Logs", path: "/admin/audit", icon: ScrollText, children: [
+    { label: "Audit Logs", path: "/admin/audit" },
+    { label: "Activity Logs", path: "/admin/audit/activity" },
+    { label: "System Logs", path: "/admin/audit/system" },
+  ] },
+  { label: "System Settings", path: "/admin/settings", icon: Settings },
   { label: "Profile", path: "/admin/profile", icon: UserRound },
 ];
+
+/**
+ * Resolve one active navigation child even when child paths are nested.
+ * Example: /network/drones/spare-parts must select Spare Parts, not Drones.
+ * Drone detail URLs still select the Drones child.
+ */
+export function getActiveAdminChildPath(
+  pathname: string,
+  children: NonNullable<AdminNavigationItem["children"]>,
+): string | undefined {
+  return children
+    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0]?.path;
+}

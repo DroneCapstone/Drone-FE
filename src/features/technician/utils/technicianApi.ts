@@ -107,7 +107,7 @@ export async function technicianApiRequest<T = unknown>(
     response = await execute(accessToken);
   } catch (error) {
     throw new TechnicianApiError(
-      "Unable to reach Backend. Check the API URL, Backend availability, or CORS configuration for this endpoint.",
+      `Unable to reach Backend for ${String(init.method ?? "GET").toUpperCase()} ${path}. If other Technician requests work but this one is shown as a CORS error, Backend must allow this method/preflight and return CORS headers even on error responses.`,
       0,
       error,
     );
@@ -251,6 +251,8 @@ export function unwrapList<T = unknown>(
     "rows",
     "drones",
     "missions",
+    "history",
+    "transit_history",
     "batteries",
     "hub_batteries",
     "battery_inventory",
@@ -506,12 +508,13 @@ export const getTechnicianUsersApi = () =>
 export const getFleetDronesApi = () =>
   technicianApiRequest("/technician/fleet/drones");
 
+// Drone detail expects its exact API identifier (for example DRN-0001).
+// Do not guess a numeric suffix: /drones/1 is not the same resource.
 export const getDroneDetailApi = (
   droneId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/drones/${id}`,
-    droneId,
+  technicianApiRequest(
+    `/technician/fleet/drones/${encodeURIComponent(String(droneId).trim())}`,
   );
 
 export const updateDroneStatusApi = (
@@ -539,8 +542,13 @@ export const getDroneMaintenanceHistoryApi = (
 // Technician missions
 // ---------------------------------------------------------------------------
 
+/**
+ * Swagger exposes the shared mission list at GET /api/v1/missions/.
+ * Keep this compatibility helper name because Outbound/Confirmation mapping
+ * still imports it, but do not call the removed /technician/missions/ route.
+ */
 export const getTechnicianMissionsApi = () =>
-  technicianApiRequest("/technician/missions/");
+  technicianApiRequest("/missions/");
 
 // ---------------------------------------------------------------------------
 // Technician AI predictions
@@ -558,14 +566,39 @@ export const getTechnicianAiPredictionsApi = () =>
 export const getIncomingMissionsApi = () =>
   technicianApiRequest("/technician/fleet/incoming");
 
+/** Final destination: one physical receipt + preliminary inspection. */
 export const confirmMissionArrivalApi = (
   missionId: string | number,
-) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/missions/${id}/confirm-arrival`,
-    missionId,
+  inspection: { has_issue: boolean; notes: string } = { has_issue: false, notes: "" },
+) => technicianApiRequest(
+  `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-arrival`,
+  { method: "POST", body: JSON.stringify(inspection) },
+);
+
+/** Relay handling is a DIFFERENT flow from final-destination arrival. */
+export const confirmRelayArrivalApi = (missionId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/confirm-relay-arrival`,
     { method: "POST" },
   );
+
+export const swapRelayBatteryApi = (
+  missionId: string | number,
+  payload: { new_battery_id: number; old_battery_has_issue: boolean; issue_notes: string },
+) => technicianApiRequest(
+  `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/swap-battery`,
+  { method: "POST", body: JSON.stringify(payload) },
+);
+
+export const dispatchRelayMissionApi = (missionId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/missions/${encodeURIComponent(String(missionId))}/dispatch`,
+    { method: "POST" },
+  );
+
+/** Real server history replaces browser-only arrival history. */
+export const getTransitHistoryApi = () =>
+  technicianApiRequest("/technician/fleet/history");
 
 // ---------------------------------------------------------------------------
 // Battery management
@@ -574,25 +607,19 @@ export const confirmMissionArrivalApi = (
 export const getBatteriesApi = () =>
   technicianApiRequest("/technician/fleet/batteries");
 
-export const getBatteryDetailApi = (
-  batteryId: string | number,
-) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/batteries/${id}`,
-    batteryId,
-  );
-
 export const useBatteryApi = (
   batteryId: string | number,
   missionId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/batteries/${id}/use`,
-    batteryId,
+  // The selected battery uses its *actual Backend id* from GET /batteries.
+  // Do not retry POST with a guessed numeric suffix or display serial: that
+  // could accidentally assign another physical battery.
+  technicianApiRequest(
+    `/technician/fleet/batteries/${encodeURIComponent(String(batteryId))}/use`,
     {
       method: "POST",
       body: JSON.stringify({
-        mission_id: toBackendNumericId(missionId),
+        mission_id: String(missionId),
       }),
     },
   );
@@ -656,6 +683,17 @@ export const confirmDeliveryPickupApi = (
 export const getMaintenanceAlertsApi = () =>
   technicianApiRequest("/technician/fleet/maintenance-alerts");
 
+/** History is a separate server-side resource; do not substitute localStorage. */
+export const getMaintenanceAlertsHistoryApi = () =>
+  technicianApiRequest("/technician/fleet/maintenance-alerts/history");
+
+/** Acknowledge only with the alert's real Backend id. */
+export const acknowledgeMaintenanceAlertApi = (alertId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/maintenance-alerts/${encodeURIComponent(String(alertId))}/acknowledge`,
+    { method: "PATCH" },
+  );
+
 export const getMaintenanceAlertApi = (
   alertId: string | number,
 ) =>
@@ -682,9 +720,12 @@ export const getWorkOrdersApi = () =>
   technicianApiRequest("/technician/fleet/work-orders");
 
 export const createWorkOrderApi = (payload: {
-  drone_id: number;
-  battery_id: number;
+  // Canonical backend IDs, e.g. "DRN-0013", never numeric suffix 13.
+  drone_id: string;
+  // Optional in WORK_ORDER_INSPECTION_GUIDE.md; null for non-battery repairs.
+  battery_id?: string | null;
   issue_description: string;
+  alert_id?: number | null;
 }) =>
   technicianApiRequest("/technician/fleet/work-orders", {
     method: "POST",

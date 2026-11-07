@@ -1,0 +1,492 @@
+/* Create Mission / Select drone: compact drone cards, 3 per row on desktop. */
+.page-content .mission-builder .eligible-drone-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.page-content .mission-builder .eligible-drone-card {
+  padding: 12px 14px;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.page-content .mission-builder .eligible-drone-meta {
+  margin-top: 9px;
+}
+
+@media (max-width: 1050px) {
+  .page-content .mission-builder .eligible-drone-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 670px) {
+  .page-content .mission-builder .eligible-drone-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Step 3 only — compact, expandable route options (no duplicate summary panel). */
+.mission-builder .mission-route-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.mission-builder .mission-route-card {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border, #e2e5ea);
+  border-radius: 11px;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.mission-builder .mission-route-card.is-selected {
+  border-color: #f97316;
+}
+.mission-builder .mission-route-card:hover {
+  border-color: #f8ac78;
+}
+.mission-builder .mission-route-overview {
+  position: relative;
+  min-width: 0;
+}
+.mission-builder .mission-route-select {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 18px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  appearance: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.mission-builder .mission-route-select:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: -3px;
+  border-radius: 10px;
+}
+.mission-builder .mission-route-head,
+.mission-builder .mission-route-heading,
+.mission-builder .mission-route-tags,
+.mission-builder .mission-route-section-head,
+.mission-builder .mission-route-battery-hub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.mission-builder .mission-route-heading { justify-content: flex-start; align-items: flex-start; }
+.mission-builder .mission-route-heading-text,
+.mission-builder .mission-route-key-metrics > span,
+.mission-builder .mission-route-detail-grid > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mission-builder .mission-route-heading-text > strong { font-size: 14px; line-height: 1.4; color: #17212f; }
+.mission-builder .mission-route-heading-text > small { font-size: 11px; color: #8a95a7; overflow-wrap: anywhere; }
+.mission-builder .mission-route-radio {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  margin-top: 1px;
+  border: 1px solid #b8bfca;
+  border-radius: 50%;
+  color: #fff;
+}
+.mission-builder .mission-route-radio.is-checked { background: #f97316; border-color: #f97316; }
+.mission-builder .mission-route-chevron { display: inline-flex; transform: rotate(90deg); color: #929bab; }
+.mission-builder .mission-route-chevron.is-open { transform: rotate(-90deg); }
+.mission-builder .mission-route-tags { justify-content: flex-end; flex-wrap: wrap; }
+.mission-builder .mission-route-path { font-size: 13px; color: #687486; line-height: 1.5; overflow-wrap: anywhere; }
+.mission-builder .mission-route-key-metrics,
+.mission-builder .mission-route-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 20px; width: 100%; }
+/* Leave the right edge of the metrics row free for the link; do not create a separate footer row. */
+.mission-builder .mission-route-overview .mission-route-key-metrics {
+  width: calc(100% - 160px);
+}
+.mission-builder .mission-route-overview .mission-route-ai-details {
+  position: absolute;
+  right: 18px;
+  bottom: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #ff6b00;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mission-builder .mission-route-overview .mission-route-ai-details:hover { text-decoration: underline; }
+.mission-builder .mission-route-overview .mission-route-ai-details:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.mission-builder .mission-route-key-metrics small,
+.mission-builder .mission-route-detail-grid small,
+.mission-builder .mission-route-battery-metrics small { color: #909aaa; font-size: 12px; }
+.mission-builder .mission-route-key-metrics strong,
+.mission-builder .mission-route-detail-grid strong,
+.mission-builder .mission-route-battery-metrics strong { color: #1d2531; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.mission-builder .mission-route-detail { padding: 18px; border-top: 1px solid #eceef2; display: flex; flex-direction: column; gap: 18px; }
+.mission-builder .mission-route-section-head { align-items: baseline; }
+.mission-builder .mission-route-section-head > strong { font-size: 14px; color: #1e2835; }
+.mission-builder .mission-route-section-head > small { font-size: 12px; color: #919aa9; }
+.mission-builder .mission-route-legs { border: 1px solid #e6e8ed; border-radius: 9px; overflow: hidden; background: #fafbfd; }
+.mission-builder .mission-route-leg { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.mission-builder .mission-route-leg + .mission-route-leg { border-top: 1px solid #e6e8ed; }
+.mission-builder .mission-route-leg-number { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; background: #fff; border: 1px solid #e7e9ee; border-radius: 7px; font-size: 12px; color: #293344; font-weight: 600; }
+.mission-builder .mission-route-leg-places { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.mission-builder .mission-route-leg-places strong { font-size: 13px; overflow-wrap: anywhere; }
+.mission-builder .mission-route-leg-places span { display: flex; gap: 7px; align-items: center; font-size: 13px; color: #697486; overflow-wrap: anywhere; }
+.mission-builder .mission-route-leg-places span svg { flex-shrink: 0; }
+.mission-builder .mission-route-leg-places small { font-size: 12px; color: #808a9b; }
+.mission-builder .mission-route-leg-distance { white-space: nowrap; color: #3a4656; font-size: 12px; font-weight: 600; }
+.mission-builder .mission-route-battery-section,
+.mission-builder .mission-route-energy-section { display: flex; flex-direction: column; gap: 12px; }
+.mission-builder .mission-route-battery-hub { border: 1px solid #e6e8ed; border-radius: 9px; padding: 14px; min-width: 0; }
+.mission-builder .mission-route-battery-hub-head { align-items: flex-start; flex-wrap: wrap; }
+.mission-builder .mission-route-battery-hub-head strong { font-size: 13px; }
+.mission-builder .mission-route-battery-hub-head .text-button { color: #ff6b00; font-size: 12px; text-decoration: none; }
+.mission-builder .mission-route-battery-hub-head .text-button:hover { text-decoration: underline; }
+.mission-builder .mission-route-battery-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.mission-builder .mission-route-battery-metrics > div { min-width: 0; background: #fafbfd; border: 1px solid #e7e9ee; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.mission-builder .mission-route-muted { margin: 6px 0 0; color: #7f8a9a; font-size: 12px; line-height: 1.5; }
+.mission-builder .mission-route-unavailable { color: #bc584a; font-size: 12px; margin: 12px 0 0; }
+@media (max-width: 700px) {
+  .mission-builder .mission-route-select,
+  .mission-builder .mission-route-detail { padding: 13px; }
+  .mission-builder .mission-route-key-metrics,
+  .mission-builder .mission-route-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mission-builder .mission-route-battery-metrics { grid-template-columns: 1fr; }
+  .mission-builder .mission-route-head { align-items: flex-start; }
+  .mission-builder .mission-route-overview .mission-route-key-metrics { width: 100%; }
+  .mission-builder .mission-route-overview .mission-route-ai-details {
+    position: static;
+    display: flex;
+    margin: -2px 13px 13px auto;
+  }
+}
+@media (max-width: 410px) {
+  .mission-builder .mission-route-head { flex-wrap: wrap; }
+  .mission-builder .mission-route-key-metrics { grid-template-columns: 1fr; }
+}
+
+/* Operator Create Mission / Step 3: selected origin battery */
+.page-content .mission-builder .mission-origin-battery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.page-content .mission-builder .mission-origin-battery-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.page-content .mission-builder .mission-origin-battery-card:hover,
+.page-content .mission-builder .mission-origin-battery-card:focus-visible,
+.page-content .mission-builder .mission-origin-battery-card.is-selected {
+  border-color: #fb741b;
+}
+.page-content .mission-builder .mission-origin-battery-card:focus-visible {
+  outline: 2px solid #fb741b;
+  outline-offset: 2px;
+}
+.page-content .mission-builder .mission-origin-battery-head,
+.page-content .mission-builder .mission-origin-battery-id {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.page-content .mission-builder .mission-origin-battery-id {
+  justify-content: flex-start;
+  min-width: 0;
+}
+.page-content .mission-builder .mission-origin-battery-id > strong {
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-origin-battery-id > svg { color: #fb741b; flex: none; }
+.page-content .mission-builder .mission-origin-battery-state,
+.page-content .mission-builder .mission-origin-battery-card > small {
+  color: var(--muted, #8893a7);
+  font-size: 12px;
+}
+.page-content .mission-builder .mission-origin-battery-model { font-size: 13px; font-weight: 600; }
+.page-content .mission-builder .mission-origin-battery-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-origin-battery-metrics > span { display: flex; flex-direction: column; gap: 5px; }
+.page-content .mission-builder .mission-origin-battery-metrics small { color: var(--muted, #8893a7); font-size: 11px; }
+.page-content .mission-builder .mission-origin-battery-metrics strong { font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .page-content .mission-builder .mission-origin-battery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 670px) {
+  .page-content .mission-builder .mission-origin-battery-grid { grid-template-columns: 1fr; }
+}
+
+/* Step 3 battery context — compact single line, consistent with Select Drone. */
+.page-content .mission-builder .mission-origin-battery-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: var(--muted, #8893a7);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-content .mission-builder .mission-origin-battery-context > svg {
+  color: #fb741b;
+  flex: none;
+}
+.page-content .mission-builder .mission-origin-battery-context strong {
+  color: var(--text, #1f2937);
+  font-weight: 650;
+}
+
+/* Combined Drone + Battery step: keep both existing card designs. */
+.page-content .mission-builder .mission-combined-battery-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-combined-battery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page-content .mission-builder .mission-combined-battery-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text, #202a38);
+}
+
+/* Step 4 — unified mission review; only this screen's design is changed. */
+.page-content .mission-builder .mission-review-unified {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(290px, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+.page-content .mission-builder .mission-review-info { min-width: 0; }
+.page-content .mission-builder .mission-review-info-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+.page-content .mission-builder .mission-review-info-row--full { grid-template-columns: 1fr; }
+.page-content .mission-builder .mission-review-info-row--last { border-bottom: 0; }
+.page-content .mission-builder .mission-review-field {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 5px;
+  margin: 0;
+  padding: 17px 19px;
+}
+.page-content .mission-builder .mission-review-field + .mission-review-field {
+  border-left: 1px solid var(--border);
+}
+.page-content .mission-builder .mission-review-field dt,
+.page-content .mission-builder .mission-review-energy-label,
+.page-content .mission-builder .mission-review-energy-metrics dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.page-content .mission-builder .mission-review-field dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-review-field .mission-review-order-code {
+  color: #f97316;
+  font-weight: 700;
+}
+.page-content .mission-builder .mission-review-delivery-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.page-content .mission-builder .mission-review-delivery-mode > svg {
+  flex: 0 0 auto;
+  color: #f97316;
+}
+.page-content .mission-builder .mission-review-relay-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-content .mission-builder .mission-review-relay-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.page-content .mission-builder .mission-review-relay-entry strong {
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+}
+.page-content .mission-builder .mission-review-relay-entry small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.page-content .mission-builder .mission-review-energy {
+  min-width: 0;
+  padding: 21px 24px;
+  border-left: 1px solid var(--border);
+  background: #FFFCF9;
+}
+.page-content .mission-builder .mission-review-energy-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.page-content .mission-builder .mission-review-energy-heading > svg {
+  flex: 0 0 auto;
+  color: #f97316;
+}
+.page-content .mission-builder .mission-review-energy-top {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.page-content .mission-builder .mission-review-energy-highlight { margin-top: 8px; }
+.page-content .mission-builder .mission-review-energy-highlight > strong {
+  color: var(--text);
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 720;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.page-content .mission-builder .mission-review-energy-metrics { margin: 0; }
+.page-content .mission-builder .mission-review-energy-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--border);
+}
+.page-content .mission-builder .mission-review-energy-metrics > div:last-child { border-bottom: 0; }
+.page-content .mission-builder .mission-review-energy-metrics dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.page-content .mission-builder .mission-review-leg-uses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 0;
+}
+.page-content .mission-builder .mission-review-leg-use {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 13px;
+}
+.page-content .mission-builder .mission-review-leg-use:first-child { padding-left: 0; }
+.page-content .mission-builder .mission-review-leg-use + .mission-review-leg-use {
+  border-left: 1px solid var(--border);
+}
+.page-content .mission-builder .mission-review-leg-use small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.page-content .mission-builder .mission-review-leg-use strong {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+@media (max-width: 1100px) {
+  .page-content .mission-builder .mission-review-unified { grid-template-columns: 1fr; }
+  .page-content .mission-builder .mission-review-energy {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .page-content .mission-builder .mission-review-energy-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .page-content .mission-builder .mission-review-energy-metrics > div { border-bottom: 0; }
+}
+@media (max-width: 620px) {
+  .page-content .mission-builder .mission-review-info-row { grid-template-columns: 1fr; }
+  .page-content .mission-builder .mission-review-field { padding: 13px 15px; }
+  .page-content .mission-builder .mission-review-field + .mission-review-field {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .page-content .mission-builder .mission-review-energy { padding: 18px 15px; }
+  .page-content .mission-builder .mission-review-energy-metrics { grid-template-columns: 1fr; gap: 0; }
+  .page-content .mission-builder .mission-review-energy-metrics > div {
+    border-bottom: 1px solid var(--border);
+    padding: 13px 0;
+  }
+  .page-content .mission-builder .mission-review-energy-metrics > div:last-child { border-bottom: 0; }
+}

@@ -1,0 +1,16 @@
+/* Compact operational priority: plain text, no icons, colored cards or extra columns. */
+.order-table td .operator-order-priority {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--muted-foreground, #778092);
+}
+.order-table td .operator-order-priority--critical {
+  color: var(--danger, #c94239);
+  font-weight: 600;
+}
+.order-table td .operator-order-priority--high {
+  color: #d27422;
+}

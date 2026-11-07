@@ -794,7 +794,7 @@ export function TechnicianProfilePage() {
                   text-[var(--tech-muted)]
                 "
               >
-                Basic technician and workspace information.
+               
               </p>
             </div>
 

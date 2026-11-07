@@ -6,6 +6,8 @@ export {
   getDroneMaintenanceSchedulesApi,
   getMaintenanceAlertApi,
   getMaintenanceAlertsApi,
+  getMaintenanceAlertsHistoryApi,
+  acknowledgeMaintenanceAlertApi,
   getMaintenanceRecordsApi,
   getMaintenanceSchedulesApi,
   getWorkOrderApi,

@@ -10315,6 +10315,7 @@ button.alert-row:last-child {
 .page-content .mission-builder .eligible-drone-grid,
 .page-content .mission-builder .route-option-list {
   gap: 14px;
+
 }
 
 
@@ -10473,3 +10474,5 @@ button.alert-row:last-child {
   justify-content: center;
   text-align: center;
 }
+
+

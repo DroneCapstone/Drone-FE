@@ -47,6 +47,9 @@ type AlertLog = {
 const ALERT_LOG_STORAGE_KEY =
   "droneoptai.technician.maintenance-alert-log.v1";
 
+// Stable empty list while the first API request is pending.
+const EMPTY_MAINTENANCE_ALERTS: MaintenanceAlert[] = [];
+
 /*
  * Active alerts come from the shared maintenance alert store.
  *
@@ -87,7 +90,11 @@ export function MaintenanceAlertsPage() {
     useMaintenanceAlertsQuery();
 
   const maintenanceAlerts: MaintenanceAlert[] =
-    alertsQuery.data ?? [];
+    alertsQuery.data ?? EMPTY_MAINTENANCE_ALERTS;
+
+  // Never display a 'no alerts' state before the first API result is known.
+  const alertsLoading = alertsQuery.isPending;
+  const alertsFailed = alertsQuery.isError && !alertsQuery.data;
 
   const [query, setQuery] =
     useState("");
@@ -115,19 +122,11 @@ export function MaintenanceAlertsPage() {
     .trim()
     .toLowerCase();
 
+  // BE filters by Technician hub and is authoritative for alert status.
+  // Never suppress a pending Backend alert because localStorage says a WO was created.
   const activeAlerts = useMemo(
-    () =>
-      maintenanceAlerts.filter(
-        (alert) =>
-          !alertLogs.some(
-            (log) =>
-              log.alertId ===
-                alert.id &&
-              log.status ===
-                "Handled",
-          ),
-      ),
-    [alertLogs],
+    () => maintenanceAlerts.filter((alert) => alert.status !== "Handled"),
+    [maintenanceAlerts],
   );
 
   const filteredAlerts = useMemo(
@@ -209,7 +208,7 @@ export function MaintenanceAlertsPage() {
   return (
     <TechnicianPageShell
       title="Maintenance alerts"
-      description="Technical alerts from schedules, incidents reported by Operator, and hub inspections."
+      description=""
     >
       {/* ACTIVE ALERTS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
@@ -269,7 +268,11 @@ export function MaintenanceAlertsPage() {
 
           <div className="flex items-center gap-4">
             <span className="text-[13px] text-[var(--tech-subtle)]">
-              {filteredAlerts.length} alerts
+              {alertsLoading
+                ? "Loading..."
+                : alertsFailed
+                  ? "—"
+                  : `${filteredAlerts.length} alerts`}
             </span>
 
             <button
@@ -399,12 +402,28 @@ export function MaintenanceAlertsPage() {
                 ),
               )}
 
-              {filteredAlerts.length ===
-                0 && (
-                <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
-                  No active maintenance alerts match the current filters.
+              {alertsLoading ? (
+                <div role="status" aria-live="polite" className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
+                  Loading maintenance alerts...
                 </div>
-              )}
+              ) : alertsFailed ? (
+                <div role="alert" className="px-5 py-10 text-center text-[14px] text-red-400">
+                  <p>Unable to load maintenance alerts. Please try again.</p>
+                  <button
+                    type="button"
+                    onClick={() => void alertsQuery.refetch()}
+                    className="mt-3 font-semibold text-orange-500 underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : filteredAlerts.length === 0 ? (
+                <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
+                  {maintenanceAlerts.length === 0
+                    ? "No active maintenance alerts."
+                    : "No active maintenance alerts match the current filters."}
+                </div>
+              ) : null}
             </div>
           </div>
         </CardContent>

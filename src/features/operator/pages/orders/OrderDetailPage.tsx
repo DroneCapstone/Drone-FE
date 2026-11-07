@@ -2,7 +2,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
-import { operatorHubs } from '../../data/hubMockData';
 import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
 import type { Tone } from '../../types/operator';
@@ -10,13 +9,13 @@ import {
   formatDeliveryWindow,
   getDeliveryMission,
   getOrderPlanningBadge,
-  isActionablePlanningState,
+  canCreateMissionForOrder,
 } from '../../utils/deliveryPlanning';
 import { formatMissionTime } from '../../utils/missionTiming';
 import { OrderPageShell } from './OrderPageShell';
 
-function hubName(hubId: string) {
-  return operatorHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+function hubName(hubId: string, apiName?: string) {
+  return apiName || hubId || 'Hub data unavailable';
 }
 
 function orderTone(status: string): Tone {
@@ -75,11 +74,11 @@ export function OrderDetailPage() {
 
   const deliveryMission = getDeliveryMission(order.id, missions);
   const planning = getOrderPlanningBadge(order, missions);
-  const actionable = isActionablePlanningState(planning);
+  const actionable = canCreateMissionForOrder(order, missions);
 
   return (
     <OrderPageShell active="/operator/orders/all">
-      <div className="detail-layout">
+      <div className="detail-layout" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <div className="detail-main">
           <OperatorPanel>
             <div className="mission-hero">
@@ -90,49 +89,51 @@ export function OrderDetailPage() {
               </div>
               <div className="mission-hero-actions">
                 {deliveryMission && <ActionButton onClick={() => navigate(`/operator/missions/${deliveryMission.id}`)}>View delivery mission</ActionButton>}
-                {!deliveryMission && order.status === 'Pending' && (
-                  <ActionButton disabled={!actionable} onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>
-                    Create mission
+                {!deliveryMission && actionable && (
+                  <ActionButton onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>
+                    {planning === 'Needs Replanning' ? 'Replan mission' : 'Create mission'}
                   </ActionButton>
                 )}
               </div>
             </div>
           </OperatorPanel>
 
-          <OperatorPanel title="Delivery request" eyebrow="CUSTOMER ORDER">
+          <OperatorPanel title="Delivery request" eyebrow="">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-              <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId)}</dd></div>
-              <div><dt>Destination Hub</dt><dd>{hubName(order.destinationHubId)}</dd></div>
+              <div><dt>Drop-off Point</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
+              <div><dt>Pick-up Point</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
               <div>
                 <dt>Origin package</dt>
-                <dd>{order.originHubReceivedAt ? <>Received at Hub<br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></> : 'Awaiting package'}</dd>
+                <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
               </div>
               <div><dt>Package</dt><dd>{order.packageLabel}</dd></div>
               <div><dt>Package type</dt><dd>{order.packageType}</dd></div>
               <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div><dt>Estimated delivery</dt><dd>{formatDeliveryWindow(order)}</dd></div>
               <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>
-              <div><dt>Planning state</dt><dd>{planning ?? 'Closed'}</dd></div>
+              <div><dt>Planning state</dt><dd>{planning ?? '—'}</dd></div>
               {order.destinationHubReceivedAt && (
-                <div><dt>Received at Destination Hub</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
+                <div><dt>Received at Pick-up Point</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
               )}
             </dl>
           </OperatorPanel>
 
-          <OperatorPanel title="Flight Mission" eyebrow="ORDER → DELIVERY MISSION">
+          <OperatorPanel title="Flight Mission" eyebrow="">
             {!deliveryMission ? (
               <div className="linked-record">
                 <div>
                   <strong>{planning ?? 'No active Mission'}</strong>
                   <small>
                     {planning === 'Ready for Planning'
-                      ? 'Planning is open. Operator can create the Mission now.'
-                      : planning === 'Needs Replanning'
-                        ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
-                        : planning === 'Future'
-                          ? `The system will surface this Order when planning opens ${formatMissionTime(order.planningAt)}.`
-                          : 'No further Operator planning is required.'}
+                      ? actionable ? 'The package has been received. Operator can create the Mission now.' : 'Mission planning is not available for this Order yet.'
+                      : planning === 'Waiting for package'
+                        ? 'Waiting for the package to be received at the Drop-off Point.'
+                        : planning === 'Needs Replanning'
+                          ? 'The previous Mission ended before delivery. The system/customer must provide a new delivery window before another Mission is created.'
+                          : planning === 'Future'
+                            ? 'Mission planning will open when the Order becomes eligible.'
+                            : 'No further Operator planning is required.'}
                   </small>
                 </div>
                 {planning && (
@@ -140,7 +141,7 @@ export function OrderDetailPage() {
                     {planning}
                   </StatusBadge>
                 )}
-                {actionable && <button className="row-action" type="button" onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>Create mission</button>}
+                {actionable && <button className="row-action" type="button" onClick={() => navigate(`/operator/missions/create?orderId=${order.id}`)}>{planning === 'Needs Replanning' ? 'Replan mission' : 'Create mission'}</button>}
               </div>
             ) : (
               <div className="linked-mission-list">
@@ -153,15 +154,17 @@ export function OrderDetailPage() {
           </OperatorPanel>
 
           {order.status === 'Delivered to Hub' && (
-            <OperatorPanel title="Operator handoff complete" eyebrow="DESTINATION HUB">
+            <OperatorPanel title="Operator handoff complete" eyebrow="Pick-up Point">
               <div className="notification-policy-note">
-                <strong>Package delivered to {hubName(order.destinationHubId)}</strong>
-                <span>Operator scope ends after the Destination Hub confirms package receipt. Customer pickup, reminders, and post-delivery handling are managed by the Hub/Technician workflow and automated system notifications.</span>
+                <strong>Package delivered to {hubName(order.destinationHubId, order.destinationHubName)}</strong>
+                <span>Operator scope ends after the Pick-up Point confirms package receipt. Customer pickup, reminders, and post-delivery handling are managed by the Hub/Technician workflow and automated system notifications.</span>
               </div>
             </OperatorPanel>
           )}
         </div>
 
+        {/* Customer details are intentionally hidden from Operator Order Detail.
+            Keep the original UI here for potential role-based access in the future.
         <aside className="detail-side">
           <OperatorPanel title="Customer">
             <dl className="key-values">
@@ -172,6 +175,7 @@ export function OrderDetailPage() {
             </dl>
           </OperatorPanel>
         </aside>
+        */}
       </div>
     </OrderPageShell>
   );

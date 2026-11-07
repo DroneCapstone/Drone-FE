@@ -21,18 +21,22 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
       <div className="eligible-drone-head">
         <span className="eligible-drone-icon"><Icon name="drone" size={18} /></span>
         <div>
-          <strong>{drone.name}</strong>
-          <small>ID {drone.displayId} · {drone.model}</small>
+          <strong>{drone.id}</strong>
+          <small>{drone.model}</small>
         </div>
-        <StatusBadge tone={eligibility.eligible ? 'success' : 'neutral'}>
-          {eligibility.eligible ? 'Available' : 'Unavailable'}
+        <StatusBadge tone={!eligibility.eligible ? 'neutral' : selected ? 'warning' : 'success'}>
+          {!eligibility.eligible ? 'Unavailable' : selected ? 'Selected' : 'Available'}
         </StatusBadge>
       </div>
 
-      <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr' }}>
+      <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <span><small>Max payload</small><strong>{drone.maxPayloadKg} kg</strong></span>
+        <span><small>Required battery</small><strong>{drone.batteryModel || '—'}</strong></span>
       </div>
 
+      {drone.isCrossHub && (
+        <p className="eligible-drone-reason">Cross-hub dispatch · {drone.hubName || `Hub ${drone.hubId}`}</p>
+      )}
       {!eligibility.eligible && eligibility.reasons.length > 0 && (
         <p className="eligible-drone-reason">{eligibility.reasons[0]}</p>
       )}

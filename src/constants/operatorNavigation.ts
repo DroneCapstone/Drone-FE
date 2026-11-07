@@ -18,6 +18,7 @@ export const operatorNavigation: OperatorNavItem[] = [
     children: [
       { label: 'Drone availability', path: '/operator/fleet-hubs/drones' },
       { label: 'Hub network', path: '/operator/fleet-hubs/hubs' },
+      { label: 'Battery inventory', path: '/operator/fleet-hubs/batteries' },
     ],
   },
   {
@@ -26,6 +27,7 @@ export const operatorNavigation: OperatorNavItem[] = [
     icon: 'radar',
     children: [
       { label: 'Live tracking', path: '/operator/operations/live' },
+      { label: 'Flight history', path: '/operator/operations/history' },
       { label: 'Telemetry', path: '/operator/operations/telemetry' },
       { label: 'Incidents', path: '/operator/operations/incidents' },
     ],
@@ -36,11 +38,13 @@ export const operatorNavigation: OperatorNavItem[] = [
     icon: 'spark',
     children: [
       { label: 'Mission analysis', path: '/operator/ai/mission-analysis' },
-      { label: 'Scenario simulation', path: '/operator/ai/simulation' },
+      // Scenario simulation disabled — keep for future re-enable.
+      // { label: 'Scenario simulation', path: '/operator/ai/simulation' },
       { label: 'Model insights', path: '/operator/ai/model-insights' },
     ],
   },
-  { label: 'Analytics', path: '/operator/analytics', icon: 'chart' },
+  // ANALYTICS TEMPORARILY DISABLED — restore when real analytics API is integrated.
+  // { label: 'Analytics', path: '/operator/analytics', icon: 'chart' },
 
   // REPORT FEATURE DISABLED — keep this code for future re-enable.
   // { label: 'Reports', path: '/operator/reports', icon: 'file' },

@@ -16,10 +16,12 @@ import {
   getMissionDashboardStatusApi,
   getMissionApi,
   getMissionHubCheckpointsApi,
+  getEligibleMissionBatteriesApi,
   getMissionTelemetryApi,
   listIncidentsApi,
   listMissionsApi,
   listMissionHubsApi,
+  listMissionMiniHubsApi,
   updateIncidentStatusApi,
   type AnalyzeMissionPlanningInput,
   type CreateIncidentInput,
@@ -68,11 +70,18 @@ export function useMissionHubsQuery() {
   });
 }
 
+export function useMissionMiniHubsQuery() {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionMiniHubs(),
+    queryFn: listMissionMiniHubsApi,
+  });
+}
+
 export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 5_000,
+    refetchInterval: 3_000, // BE GPS cadence: one new fix approximately every 3 s.
     refetchIntervalInBackground: true,
   });
 }
@@ -117,6 +126,15 @@ export function useIncidentQuery(incidentId: string) {
   });
 }
 
+export function useEligibleMissionBatteriesQuery(orderId: string, droneId: string, crossHubCurrentHubId?: string) {
+  return useQuery({
+    queryKey: operatorQueryKeys.eligibleMissionBatteries(orderId, droneId, crossHubCurrentHubId),
+    queryFn: () => getEligibleMissionBatteriesApi(droneId, orderId, crossHubCurrentHubId),
+    enabled: Boolean(orderId.trim() && droneId.trim()),
+    staleTime: 0,
+  });
+}
+
 export function useMissionPlanningAnalysisQuery(
   input: AnalyzeMissionPlanningInput | null,
 ) {
@@ -124,9 +142,10 @@ export function useMissionPlanningAnalysisQuery(
     queryKey: operatorQueryKeys.missionPlanning(
       input?.orderId ?? '',
       input?.droneId ?? '',
+      input?.batteryId ?? '',
     ),
     queryFn: () => analyzeMissionPlanningApi(input as AnalyzeMissionPlanningInput),
-    enabled: Boolean(input?.orderId.trim() && input?.droneId.trim()),
+    enabled: Boolean(input?.orderId.trim() && input?.droneId.trim() && input?.batteryId.trim()),
     staleTime: 15_000,
   });
 }

@@ -3,6 +3,12 @@ import type { ListOperatorOrdersParams } from '../api/orderApi';
 export const operatorQueryKeys = {
   all: ['operator'] as const,
 
+  operatorDashboard: () => [...operatorQueryKeys.all, 'dashboard'] as const,
+
+  operatorAiPredictions: () => [...operatorQueryKeys.all, 'ai-predictions'] as const,
+
+  aiExplanation: (predictionId: string) => [...operatorQueryKeys.operatorAiPredictions(), 'explain', predictionId] as const,
+
   orders: () => [...operatorQueryKeys.all, 'orders'] as const,
 
   orderList: (params: ListOperatorOrdersParams = {}) =>
@@ -33,6 +39,8 @@ export const operatorQueryKeys = {
 
   missionHubs: () => [...operatorQueryKeys.missions(), 'hubs'] as const,
 
+  missionMiniHubs: () => [...operatorQueryKeys.missionHubs(), 'mini'] as const,
+
   liveTracking: () => [...operatorQueryKeys.missions(), 'live-tracking'] as const,
 
   missionDetail: (missionId: string) =>
@@ -49,10 +57,18 @@ export const operatorQueryKeys = {
   incidentDetail: (incidentId: string) =>
     [...operatorQueryKeys.incidents(), 'detail', incidentId] as const,
 
-  missionPlanning: (orderId: string, droneId: string) =>
-    [...operatorQueryKeys.missions(), 'planning', orderId, droneId] as const,
+  eligibleMissionBatteries: (orderId: string, droneId: string, hubId?: string) =>
+    [...operatorQueryKeys.missions(), 'eligible-batteries', orderId, droneId, hubId ?? null] as const,
+
+  missionPlanning: (orderId: string, droneId: string, batteryId: string) =>
+    [...operatorQueryKeys.missions(), 'planning', orderId, droneId, batteryId] as const,
 
   fleet: () => [...operatorQueryKeys.all, 'fleet'] as const,
 
   fleetDrones: () => [...operatorQueryKeys.fleet(), 'drones'] as const,
+
+  fleetDroneDetail: (droneId: string) =>
+    [...operatorQueryKeys.fleet(), 'drones', 'detail', droneId] as const,
+
+  fleetBatteries: () => [...operatorQueryKeys.fleet(), 'batteries'] as const,
 };

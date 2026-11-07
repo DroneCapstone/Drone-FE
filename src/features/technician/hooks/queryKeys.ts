@@ -59,6 +59,9 @@ export const technicianQueryKeys = {
   confirmations: () =>
     [...technicianQueryKeys.all, "confirmations"] as const,
 
+  hubSupplies: () =>
+    [...technicianQueryKeys.all, "hub-supplies"] as const,
+
   maintenanceAlerts: () =>
     [
       ...technicianQueryKeys.all,

@@ -18,10 +18,11 @@ const lazyPage = <
    GENERAL
 ========================================================= */
 
-const AnalyticsPage = lazyPage(
-  () => import("../features/operator/pages/AnalyticsPage"),
-  "AnalyticsPage",
-);
+// ANALYTICS TEMPORARILY DISABLED — preserve original lazy import.
+// const AnalyticsPage = lazyPage(
+//   () => import("../features/operator/pages/AnalyticsPage"),
+//   "AnalyticsPage",
+// );
 
 const DashboardPage = lazyPage(
   () => import("../features/operator/pages/DashboardPage"),
@@ -112,6 +113,11 @@ const HubNetworkPage = lazyPage(
   "HubNetworkPage",
 );
 
+const BatteryInventoryPage = lazyPage(
+  () => import("../features/operator/pages/fleet/BatteryInventoryPage"),
+  "BatteryInventoryPage",
+);
+
 /* =========================================================
    OPERATIONS
 ========================================================= */
@@ -140,6 +146,16 @@ const TelemetryPage = lazyPage(
   "TelemetryPage",
 );
 
+const FlightHistoryPage = lazyPage(
+  () => import("../features/operator/pages/operations/FlightHistoryPage"),
+  "FlightHistoryPage",
+);
+
+const FlightReplayPage = lazyPage(
+  () => import("../features/operator/pages/operations/FlightReplayPage"),
+  "FlightReplayPage",
+);
+
 /* =========================================================
    AI DECISION CENTER
 ========================================================= */
@@ -152,13 +168,14 @@ const MissionAnalysisPage = lazyPage(
   "MissionAnalysisPage",
 );
 
-const SimulationPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ai/SimulationPage"
-    ),
-  "SimulationPage",
-);
+// Scenario simulation disabled — leave lazy import commented for future re-enable.
+// const SimulationPage = lazyPage(
+//   () =>
+//     import(
+//       "../features/operator/pages/ai/SimulationPage"
+//     ),
+//   "SimulationPage",
+// );
 
 const ModelInsightsPage = lazyPage(
   () =>
@@ -280,6 +297,11 @@ export const operatorRoutes: RouteObject[] = [
     element: <HubNetworkPage />,
   },
 
+  {
+    path: "fleet-hubs/batteries",
+    element: <BatteryInventoryPage />,
+  },
+
   /* =========================
      OPERATIONS
   ========================= */
@@ -287,6 +309,16 @@ export const operatorRoutes: RouteObject[] = [
   {
     path: "operations/live",
     element: <LiveTrackingPage />,
+  },
+
+  {
+    path: "operations/history",
+    element: <FlightHistoryPage />,
+  },
+
+  {
+    path: "operations/history/:missionId",
+    element: <FlightReplayPage />,
   },
 
   {
@@ -308,10 +340,11 @@ export const operatorRoutes: RouteObject[] = [
     element: <MissionAnalysisPage />,
   },
 
-  {
-    path: "ai/simulation",
-    element: <SimulationPage />,
-  },
+  // Scenario simulation disabled — leave route commented for future re-enable.
+  // {
+  //   path: "ai/simulation",
+  //   element: <SimulationPage />,
+  // },
 
   {
     path: "ai/model-insights",
@@ -353,10 +386,11 @@ export const operatorRoutes: RouteObject[] = [
      OTHER
   ========================= */
 
-  {
-    path: "analytics",
-    element: <AnalyticsPage />,
-  },
+  // ANALYTICS TEMPORARILY DISABLED — preserve original route.
+  // {
+  //   path: "analytics",
+  //   element: <AnalyticsPage />,
+  // },
 
   // REPORT FEATURE DISABLED — keep route code for future re-enable.
   // {
