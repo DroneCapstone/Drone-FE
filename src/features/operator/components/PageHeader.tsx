@@ -5,12 +5,14 @@ export function PageHeader({
   section,
   action,
   title,
+  breadcrumbLabel,
   subtitle,
   workspace = "Operator",
 }: {
   section?: string;
   action?: ReactNode;
   title?: string;
+  breadcrumbLabel?: string;
   subtitle?: string;
   workspace?: string;
 }) {
@@ -22,7 +24,7 @@ export function PageHeader({
     <div className="page-heading">
       <div className="page-heading-copy">
         <div className="breadcrumb">
-          {workspace} <span>/</span> {resolvedTitle}
+          {workspace} <span>/</span> {breadcrumbLabel ?? resolvedTitle}
         </div>
         <h1>{resolvedTitle}</h1>
         {resolvedSubtitle ? <p>{resolvedSubtitle}</p> : null}

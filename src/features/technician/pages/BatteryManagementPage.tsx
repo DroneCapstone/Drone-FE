@@ -252,6 +252,8 @@ export function BatteryManagementPage() {
 
     ).length;
 
+  const inUseCount = hubBatteries.filter((battery) => battery.status === "In Use").length;
+
 
 
   return (
@@ -276,7 +278,7 @@ export function BatteryManagementPage() {
 
 
 
-      <div className="mb-5 grid gap-4 md:grid-cols-3">
+      <div className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
         <StatCard
 
@@ -299,6 +301,8 @@ export function BatteryManagementPage() {
           helper=""
 
         />
+
+        <StatCard label="In Use" value={inUseCount} helper="" />
 
 
 
@@ -355,6 +359,7 @@ export function BatteryManagementPage() {
               "Ready",
 
               "Charging",
+              "In Use",
 
             ]}
 
@@ -459,28 +464,10 @@ export function BatteryManagementPage() {
 
                     <div className="flex items-center gap-2">
 
-                      {battery.status ===
-
-                      "Ready" ? (
-
-                        <BatteryFull
-
-                          size={16}
-
-                          className="text-orange-500"
-
-                        />
-
+                      {battery.status === "Charging" ? (
+                        <BatteryCharging size={16} className="text-[var(--tech-muted)]" />
                       ) : (
-
-                        <BatteryCharging
-
-                          size={16}
-
-                          className="text-[var(--tech-muted)]"
-
-                        />
-
+                        <BatteryFull size={16} className={battery.status === "In Use" ? "text-[var(--tech-muted)]" : "text-orange-500"} />
                       )}
 
 
@@ -496,21 +483,12 @@ export function BatteryManagementPage() {
 
 
                     <span
-
                       className={
-
-                        battery.status ===
-
-                        "Ready"
-
+                        battery.status === "Ready"
                           ? "text-[13px] font-medium text-orange-500"
-
                           : "text-[13px] text-[var(--tech-text-secondary)]"
-
                       }
-
                     >
-
                       {battery.status}
 
                     </span>

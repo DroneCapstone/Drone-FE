@@ -12,7 +12,8 @@ import {
 } from "../api/httpClient";
 export type BatteryStatus =
   | "Ready"
-  | "Charging";
+  | "Charging"
+  | "In Use";
 export type HubBattery = {
   /** Backend battery ID shown in UI, e.g. BAT-0022 (never serial_number). */
   id: string;
@@ -709,30 +710,29 @@ function normalizeApiBatteryStatus(
   value: string,
   chargeLevelPct: number,
 ): BatteryStatus {
-  const key = value.trim().toUpperCase();
+  // Explicit operating state from BE always overrides the charge percentage:
+  // a test battery can still be at 100% while it is In Use.
+  const key = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (
-    key === "READY" ||
-    key === "FULL" ||
-    key === "CHARGED" ||
-    key === "AVAILABLE"
+    key === "IN_USE" || key === "INUSE" || key === "TESTING" ||
+    key === "IN_USE_FOR_TEST" || key === "TEST_IN_USE" ||
+    key === "USED_FOR_TEST"
+  ) {
+    return "In Use";
+  }
+  if (
+    key === "READY" || key === "FULL" ||
+    key === "CHARGED" || key === "AVAILABLE"
   ) {
     return "Ready";
   }
   if (
-    key === "CHARGING" ||
-    key === "LOW" ||
-    key === "DEPLETED"
+    key === "CHARGING" || key === "LOW" || key === "DEPLETED"
   ) {
     return "Charging";
   }
-  /*
-   * Current Backend/DB screenshots use the generic lifecycle value
-   * `Active`. Battery Management needs an operational state instead.
-   * Until Backend exposes Ready/Charging explicitly, derive it from SOC.
-   */
-  if (key === "ACTIVE" || key === "IN_USE" || key === "INSTALLED") {
-    return chargeLevelPct >= 100 ? "Ready" : "Charging";
-  }
+  // Legacy API sometimes returns generic lifecycle status `Active`.
+  // Only this legacy case uses charge percentage for display.
   return chargeLevelPct >= 100 ? "Ready" : "Charging";
 }
 function extractCompatibleDroneModels(record: Record<string, unknown>): string[] {
@@ -789,9 +789,12 @@ function mapApiBattery(value: unknown): HubBattery | null {
   // Do not hide merely because drone_id is set; it may be installed on a
   // grounded drone before initial Dispatch or during maintenance testing.
   if ([
-    "IN_USE", "IN_FLIGHT", "FLYING", "ON_MISSION", "IN_TRANSIT",
+    "IN_FLIGHT", "FLYING", "ON_MISSION", "IN_TRANSIT",
     "DISPATCHED", "AIRBORNE",
   ].includes(statusKey)) return null;
+  // `IN_USE` is now a visible hub inventory state (e.g. battery taken
+  // for a maintenance test). Never hide it just because it is in use.
+  // A battery that BE locates outside the hub is still excluded above.
   const chargeLevelPct = Math.max(
     0,
     Math.min(
@@ -814,10 +817,31 @@ function mapApiBattery(value: unknown): HubBattery | null {
       ),
     ),
   );
-  const status = normalizeApiBatteryStatus(
-    rawStatus,
-    chargeLevelPct,
+  // BE now returns two different concepts:
+  // `status: "Active"` is the battery lifecycle state, while
+  // `available_status: "In Use"` means a battery is assigned to a WO test.
+  // Use the operational availability field first; otherwise an Active,
+  // fully charged battery would incorrectly appear as Ready.
+  const availableStatus = pickString(
+    value,
+    [
+      "available_status", "availableStatus", "availability_status",
+      "usage_status", "operational_status", "battery_usage_status",
+    ],
+    "",
   );
+  const explicitlyInUse = value.is_in_use === true || value.in_use === true;
+  const availabilityKey = availableStatus.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const knownAvailability = [
+    "IN_USE", "INUSE", "TESTING", "IN_USE_FOR_TEST", "TEST_IN_USE", "USED_FOR_TEST",
+    "READY", "FULL", "CHARGED", "AVAILABLE",
+    "CHARGING", "LOW", "DEPLETED",
+  ].includes(availabilityKey);
+  const status: BatteryStatus = explicitlyInUse
+    ? "In Use"
+    : knownAvailability
+      ? normalizeApiBatteryStatus(availableStatus, chargeLevelPct)
+      : normalizeApiBatteryStatus(rawStatus, chargeLevelPct);
   const remainingMinutes = pickNumber(
     value,
     [

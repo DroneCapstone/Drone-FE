@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Users, UserCog, UserRound, UserX } from "lucide-react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
+import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { MetricCard } from "../../../operator/components/MetricCard";
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
@@ -91,11 +93,11 @@ export function AdminUsersPage() {
       description="Manage user access, role assignment and technician hub ownership."
       actions={<ActionButton icon="plus" onClick={() => { setFormError(""); setCreating(newInternalUser()); }}>Create internal user</ActionButton>}
     >
-      <div className="metric-grid">
-        <MetricCard label="Total users" value={String(users.length)} delta="Accounts" tone="info" note="All system users" />
-        <MetricCard label="Internal staff" value={String(internalCount)} delta="Staff" tone="info" note="Admins, operators and technicians" />
-        <MetricCard label="Customers" value={String(customerCount)} delta="Customer" tone="success" note="Registered delivery customers" />
-        <MetricCard label="Inactive" value={String(inactiveCount)} delta="Blocked" tone="warning" note="Cannot sign in" />
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminSummaryCard label="Total users" value={users.length} note="All system users" icon={Users} />
+        <AdminSummaryCard label="Internal staff" value={internalCount} note="Admins, operators and technicians" icon={UserCog} />
+        <AdminSummaryCard label="Customers" value={customerCount} note="Registered delivery customers" icon={UserRound} />
+        <AdminSummaryCard label="Inactive" value={inactiveCount} note="Cannot sign in" icon={UserX} />
       </div>
 
       <OperatorPanel className="flush-panel">

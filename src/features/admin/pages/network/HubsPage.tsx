@@ -1,11 +1,12 @@
-import { Plus } from "lucide-react";
+import { Plus, MapPin, CircleCheck, Plane, BatteryCharging } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/Dialog";
+import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
+import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { MetricCard } from "../../../operator/components/MetricCard";
+import { AdminSummaryCard } from "../../components/AdminSummaryCard";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
@@ -69,14 +70,14 @@ export function HubsPage() {
   return (
     <AdminPageShell
       title="Hubs"
-      description="Manage hub master data and administrative availability. Operational hub handoff remains Technician-owned."
+      description=""
       actions={<ActionButton icon="plus" onClick={() => setEditing({ ...emptyHub })}>Create hub</ActionButton>}
     >
-      <div className="metric-grid">
-        <MetricCard label="Total hubs" value={String(hubs.length)} delta="Network" tone="info" note="Registered hubs" />
-        <MetricCard label="Active" value={String(hubs.filter((hub) => hub.status === "ACTIVE").length)} delta="Usable" tone="success" note="Eligible for new planning" />
-        <MetricCard label="Drones" value={String(drones.length)} delta="Assigned" tone="info" note="Across hub network" />
-        <MetricCard label="Batteries" value={String(batteries.length)} delta="Inventory" tone="info" note="Across hub network" />
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminSummaryCard label="Total hubs" value={hubs.length} note="Registered hubs" icon={MapPin} />
+        <AdminSummaryCard label="Active" value={hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
+        <AdminSummaryCard label="Drones" value={drones.length} note="Registered drones" icon={Plane} />
+        <AdminSummaryCard label="Batteries" value={batteries.length} note="Registered batteries" icon={BatteryCharging} />
       </div>
 
       <HubDroneMap hubs={hubs} drones={drones} />
@@ -126,7 +127,7 @@ export function HubsPage() {
             <form onSubmit={save}>
               <div className="border-b border-border p-5">
                 <DialogTitle className="text-lg font-semibold">{editing.id ? "Edit hub" : "Create hub"}</DialogTitle>
-                <p className="mt-1 text-sm text-muted-foreground">Hub master data and administrative availability.</p>
+                {/* <p className="mt-1 text-sm text-muted-foreground">Hub master data and administrative availability.</p> */}
               </div>
               <div className="fields two p-5">
                 <label><span>Hub name</span><input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>

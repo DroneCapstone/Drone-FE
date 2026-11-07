@@ -1,3 +1,4 @@
+import { PackageCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
@@ -26,11 +27,21 @@ export const adminNavigation: AdminNavigationItem[] = [
     children: [
       { label: "Hubs", path: "/admin/network/hubs" },
       { label: "Drones", path: "/admin/network/drones" },
-      { label: "Spare Parts", path: "/admin/network/drones/spare-parts" },
+
       { label: "Batteries", path: "/admin/network/batteries" },
     ],
   },
-  { label: "Approvals", path: "/admin/approvals", icon: ClipboardCheck },
+
+  {
+    label: "Replacement Supplies",
+    path: "/admin/replacement/requests",
+    icon: PackageCheck,
+    children: [
+      { label: "Requests & Approvals", path: "/admin/replacement/requests" },
+      { label: "Spare Parts", path: "/admin/replacement/spare-parts" },
+      { label: "New Batteries", path: "/admin/replacement/new-batteries" },
+    ],
+  },
   { label: "Users", path: "/admin/users", icon: Users },
   {
     label: "Payments",

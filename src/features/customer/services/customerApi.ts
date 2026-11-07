@@ -529,6 +529,13 @@ export const customerApi = {
     });
   },
 
+  /** Soft-delete the signed-in account. Backend verifies active orders/work. */
+  deleteMyAccount() {
+    return apiRequest<unknown>("/api/v1/users/me", {
+      method: "DELETE",
+    });
+  },
+
   getHubs() {
     return apiRequest<CustomerHubApi[]>(
       "/api/v1/customer/hubs",

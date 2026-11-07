@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Outlet, useLocation } from "react-router-dom";
 import { AdminHeader } from "../features/admin/components/AdminHeader";
 import { AdminSidebar } from "../features/admin/components/AdminSidebar";
+import "../features/admin/admin-typography.css";
 
 const THEME_KEY = "droneoptai.admin.theme";
 
@@ -38,7 +39,7 @@ export function AdminLayout() {
           onOpenSearch={openSearch}
           onCloseSearch={closeSearch}
         />
-        <main className="page-content min-w-0 overflow-x-hidden">
+        <main className="page-content admin-typography min-w-0 overflow-x-hidden">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={pathname}

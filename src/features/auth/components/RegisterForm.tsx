@@ -186,7 +186,7 @@ export function RegisterForm({
 
           <button
             type="submit"
-            className="auth-submit"
+            className="auth-submit auth-submit-centered"
             disabled={submitting}
           >
             <span>
@@ -194,7 +194,6 @@ export function RegisterForm({
                 ? "Creating…"
                 : "Create account"}
             </span>
-            <b>→</b>
           </button>
         </form>
 

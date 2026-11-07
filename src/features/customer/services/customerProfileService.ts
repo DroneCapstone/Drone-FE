@@ -47,6 +47,14 @@ export const customerProfileService = {
     );
   },
 
+  remove(userId: string) {
+    try {
+      localStorage.removeItem(getKey(userId));
+    } catch {
+      // Storage restrictions must not prevent an already-deleted user from logging out.
+    }
+  },
+
   async loadRemote(
     userId: string,
   ) {
