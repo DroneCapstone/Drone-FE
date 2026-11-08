@@ -293,6 +293,8 @@ function normalizeIso(value: string | undefined) {
 function normalizeMissionStatus(value: unknown): MissionStatus {
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
+    case 'INCIDENT_RETURN':
+      return 'Incident return';
     case 'IN_PROGRESS':
     case 'FLYING':
     case 'ACTIVE':
@@ -318,7 +320,7 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
 function missionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
   if (status === 'In Progress') return 'warning';
-  if (status === 'Cancelled' || status === 'Failed') return 'danger';
+  if (status === 'Cancelled' || status === 'Failed' || status === 'Incident return') return 'danger';
   return 'info';
 }
 

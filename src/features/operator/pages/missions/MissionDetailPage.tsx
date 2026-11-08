@@ -57,7 +57,9 @@ export function MissionDetailPage() {
     .map((hubId) => hubs.find((hub) => hub.id === hubId))
     .filter((hub): hub is NonNullable<typeof hub> => Boolean(hub));
   const hubName = (hubId: string) => hubs.find((hub) => hub.id === hubId)?.name ?? hubId;
-  const currentIndex = progressOrder.indexOf(mission.status);
+  // Incident return is a failsafe state after takeoff, not Scheduled or Completed.
+  const isIncidentReturn = mission.status === 'Incident return';
+  const currentIndex = isIncidentReturn ? 1 : progressOrder.indexOf(mission.status);
   const isTerminalException = mission.status === 'Cancelled' || mission.status === 'Failed';
   const originName = originHub?.name || mission.originHubId || '—';
   const destinationName = destinationHub?.name || mission.destinationHubId || '—';
@@ -102,7 +104,7 @@ export function MissionDetailPage() {
                 <p>{mission.id}</p>
               </div>
               <div className="mission-hero-actions">
-                {mission.status === 'In Progress' && (
+                {(mission.status === 'In Progress' || (isIncidentReturn && !mission.actualCompletedAt)) && (
                   <ActionButton variant="secondary" onClick={() => navigate('/operator/operations/live')}>
                     Track live
                   </ActionButton>
@@ -129,9 +131,11 @@ export function MissionDetailPage() {
                   <Fragment key={status}>
                     <span className={index < currentIndex ? 'done' : index === currentIndex ? 'current' : ''}>
                       <i>{index < currentIndex ? <Icon name="check" size={13} /> : index + 1}</i>
-                      {status}
+                      {isIncidentReturn && status === 'In Progress' ? 'Incident return' : status}
                       <small>
-                        {status === 'Scheduled'
+                        {isIncidentReturn && status === 'In Progress'
+                          ? 'Failsafe / RTH'
+                          : status === 'Scheduled'
                           ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                           : status === 'In Progress'
                             ? mission.actualStartedAt

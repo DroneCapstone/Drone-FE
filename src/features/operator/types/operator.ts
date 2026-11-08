@@ -5,6 +5,7 @@ export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unkno
 export type MissionStatus =
   | 'Scheduled'
   | 'In Progress'
+  | 'Incident return'
   | 'Completed'
   | 'Cancelled'
   | 'Failed';
