@@ -179,6 +179,7 @@ function getHistoryResultLabel(item: TransitMissionHistory): string {
   const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (state === "COMPLETED") return "Completed";
   if (state === "MISSION_COMPLETED") return "Mission completed";
+  if (state === "ARRIVAL_COMPLETED") return "Arrival completed";
   if (["CANCELLED", "CANCELED"].includes(state)) return "Cancelled";
   if (state === "FAILED") return "Failed";
   return item.outcome;
@@ -242,11 +243,11 @@ export function TransitMissionsPage() {
   const [confirmedArrivalIds, setConfirmedArrivalIds] = useState<string[]>([]);
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
-  // Show every completed mission returned by Backend /history.
-  // arrival_confirmed_at is informational and must NEVER hide a completed mission.
+  // BE /fleet/history returns both arrival-completed and mission-completed records.
+  // Customer pickup (arrival_confirmed_at) is informational, not a filter.
   const missionHistory = (historyQuery.data ?? []).filter((item) => {
     const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
-    return state === "COMPLETED" || state === "MISSION_COMPLETED";
+    return ["COMPLETED", "MISSION_COMPLETED", "ARRIVAL_COMPLETED"].includes(state);
   });
 
   const [
@@ -885,7 +886,7 @@ export function TransitMissionsPage() {
                 
                 {!historyQuery.isPending && !historyQuery.isError && (
                   <p className="mt-2 text-[12px] text-[var(--tech-text-secondary)]">
-                    {missionHistory.length} completed mission{missionHistory.length === 1 ? "" : "s"}
+                    {missionHistory.length} mission history record{missionHistory.length === 1 ? "" : "s"}
                   </p>
                 )}
               </div>
@@ -995,8 +996,8 @@ export function TransitMissionsPage() {
                   </div>
                 ) : (
                   <div className="px-6 py-14 text-center">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No completed missions yet</p>
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Completed missions appear here when returned by Backend, even if confirmation time is missing.</p>
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No recorded arrivals or completed missions yet</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Arrival-completed and mission-completed records appear here when returned by Backend, even if customer pickup is pending.</p>
                   </div>
                 )}
               </div>

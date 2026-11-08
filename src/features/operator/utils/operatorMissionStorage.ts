@@ -6,7 +6,7 @@ const STORAGE_KEY = 'droneoptai.operator.missions.v6';
 
 export function getMissionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
-  if (status === 'Failed' || status === 'Cancelled') return 'danger';
+  if (status === 'Failed' || status === 'Cancelled' || status === 'Incident return') return 'danger';
   if (status === 'In Progress') return 'success';
   return 'info';
 }
@@ -25,7 +25,7 @@ function buildMissionLegs(
     status:
       status === 'Completed'
         ? 'Completed'
-        : status === 'In Progress' && index === 0
+        : (status === 'In Progress' || status === 'Incident return') && index === 0
           ? 'In Progress'
           : 'Pending',
   }));
@@ -41,6 +41,7 @@ function normalizeMission(item: Partial<Mission>): Mission {
   else if (rawStatus === 'Completed') status = 'Completed';
   else if (rawStatus === 'Cancelled') status = 'Cancelled';
   else if (rawStatus === 'Failed') status = 'Failed';
+  else if (rawStatus.trim().replace(/[\s-]+/g, '_').toUpperCase() === 'INCIDENT_RETURN') status = 'Incident return';
   else if (rawStatus === 'Delayed') {
     status = 'In Progress';
     scheduleState = 'Delayed';
@@ -95,7 +96,7 @@ function normalizeMission(item: Partial<Mission>): Mission {
 }
 
 function isActive(mission: Mission) {
-  return mission.status === 'Scheduled' || mission.status === 'In Progress';
+  return mission.status === 'Scheduled' || mission.status === 'In Progress' || mission.status === 'Incident return';
 }
 
 function cancelExpiredPackageWaits(items: Mission[]) {

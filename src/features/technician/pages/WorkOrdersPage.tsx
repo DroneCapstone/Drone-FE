@@ -69,21 +69,14 @@ import {
 
 
 import {
-
   loadWorkOrders,
-
-  loadWorkOrderLogs,
-
-  fetchWorkOrderLogsFromApi,
-  fetchWorkOrderFromApi,
-
   type WorkOrder,
-
-  type WorkOrderLog,
-
   type WorkOrderStatus,
-
 } from "../utils/maintenanceStorage";
+
+// GET /technician/fleet/work-orders is the source of truth for completed history.
+import { getWorkOrdersApi } from "../api/maintenanceApi";
+import { isRecord, unwrapList } from "../api/httpClient";
 
 
 
@@ -337,6 +330,61 @@ function formatNow() {
 
 
 
+/** The list mapper used by the main table does not expose action_taken or
+ * resolved_at. History therefore reads the original Work Orders response. */
+type CompletedWorkOrderHistory = {
+  id: string;
+  droneId: string;
+  batteryId: string;
+  issue: string;
+  actionTaken: string;
+  createdAt: string;
+  resolvedAt: string;
+};
+
+function workOrderApiString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" || typeof value === "number"
+    ? String(value).trim()
+    : "";
+}
+
+function formatWorkOrderTimestamp(timestamp: string): string {
+  if (!timestamp) return "—";
+  const value = timestamp.trim();
+  // Backend may return timezone-naive timestamps. Preserve those clock values
+  // instead of guessing a timezone.
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+    return parts
+      ? `${parts[3]}/${parts[2]}/${parts[1]} · ${parts[4]}:${parts[5]}:${parts[6] ?? "00"}`
+      : value;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).format(date).replace(",", " ·");
+}
+
+function mapCompletedWorkOrderHistory(input: unknown): CompletedWorkOrderHistory | null {
+  if (!isRecord(input)) return null;
+  if (workOrderApiString(input, "status").toLowerCase() !== "completed") return null;
+  const rawId = workOrderApiString(input, "id") || workOrderApiString(input, "work_order_id");
+  if (!rawId) return null;
+  return {
+    id: /^WO-/i.test(rawId) ? rawId.toUpperCase() : `WO-${rawId.padStart(4, "0")}`,
+    droneId: workOrderApiString(input, "drone_id") || "—",
+    batteryId: workOrderApiString(input, "battery_id") || "—",
+    issue: workOrderApiString(input, "issue_description") || workOrderApiString(input, "title") || "—",
+    actionTaken: workOrderApiString(input, "action_taken") || "—",
+    createdAt: workOrderApiString(input, "created_at"),
+    resolvedAt: workOrderApiString(input, "resolved_at") || workOrderApiString(input, "completed_at"),
+  };
+}
+
 export function WorkOrdersPage() {
 
   const navigate = useNavigate();
@@ -385,17 +433,8 @@ export function WorkOrdersPage() {
 
 
 
-  const [
-
-    workOrderLogs,
-
-    setWorkOrderLogs,
-
-  ] = useState<WorkOrderLog[]>(
-
-    loadWorkOrderLogs,
-
-  );
+  // A single completed Work Order is a single history row, not multiple audit logs.
+  const [completedHistory, setCompletedHistory] = useState<CompletedWorkOrderHistory[]>([]);
 
 
 
@@ -413,14 +452,11 @@ export function WorkOrdersPage() {
 
   ] = useState(false);
 
-  // History log status is an event snapshot (or may be omitted by BE).
-  // Display the current status ONLY when confirmed by a Work Order API GET.
-  const [historyCurrentStatuses, setHistoryCurrentStatuses] =
-    useState<Record<string, WorkOrderStatus>>({});
+
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyWarning, setHistoryWarning] = useState("");
   // Keep the already loaded history while the Work Orders page is mounted.
-  // Closing and reopening its modal must not reissue all GET /logs requests.
+  // Closing and reopening the modal must not refetch GET /work-orders.
   const historyLoadedRef = useRef(false);
   const historyFetchingRef = useRef(false);
 
@@ -830,67 +866,30 @@ export function WorkOrdersPage() {
 
   const openHistory = async () => {
     setHistoryOpen(true);
-    // Reuse loaded logs + verified statuses if user closes/reopens the popup.
-    // Also prevent a second concurrent fetch if opened while still loading.
+    // Fetch only on the first open during this page visit; reuse the snapshot
+    // on subsequent opens, including when the Backend returns an empty list.
     if (historyLoadedRef.current || historyFetchingRef.current) return;
     historyFetchingRef.current = true;
     setHistoryLoading(true);
     setHistoryWarning("");
-
     try {
-      // Active rows deliberately hide Completed, but the history must
-      // resolve statuses from the FULL Work Orders response, including Completed.
-      const refreshed = await workOrdersQuery.refetch();
-      const latestOrders = refreshed.isSuccess ? (refreshed.data ?? []) : [];
-      const cachedLogs = loadWorkOrderLogs();
-      const allIds = Array.from(new Set([
-        ...latestOrders.map((order) => order.id),
-        ...cachedLogs.map((log) => log.workOrderId),
-      ]));
-
-      const logResults = await Promise.allSettled(
-        allIds.map((id) => fetchWorkOrderLogsFromApi(id)),
-      );
-      // fetchWorkOrderLogsFromApi maintains the local merged history cache;
-      // don't replace it with only logs returned from active orders.
-      const mergedLogs = loadWorkOrderLogs();
-      setWorkOrderLogs(mergedLogs);
-
-      const statuses: Record<string, WorkOrderStatus> = {};
-      latestOrders.forEach((order) => {
-        statuses[order.id] = order.status;
-      });
-
-      // Older history entries may refer to work orders not included in the
-      // current listing. Verify each such status with the detail endpoint.
-      const missingIds = Array.from(new Set(
-        mergedLogs.map((log) => log.workOrderId)
-          .filter((id) => !statuses[id]),
+      const response = await getWorkOrdersApi();
+      const rows = unwrapList(response)
+        .map(mapCompletedWorkOrderHistory)
+        .filter((item): item is CompletedWorkOrderHistory => item !== null);
+      // One Work Order per row. The audit log endpoint is not used here.
+      const byId = new Map(rows.map((item) => [item.id, item]));
+      setCompletedHistory([...byId.values()].sort((a, b) =>
+        (Date.parse(b.resolvedAt || b.createdAt) || 0) -
+        (Date.parse(a.resolvedAt || a.createdAt) || 0),
       ));
-      if (missingIds.length > 0) {
-        const details = await Promise.allSettled(
-          missingIds.map((id) => fetchWorkOrderFromApi(id)),
-        );
-        details.forEach((result, index) => {
-          if (result.status === "fulfilled" && result.value) {
-            statuses[missingIds[index]] = result.value.status;
-          }
-        });
-      }
-      setHistoryCurrentStatuses(statuses);
-
-      // Store one fetched snapshot for this page session. On a later page
-      // visit (remount), history can refresh normally again.
       historyLoadedRef.current = true;
-      if (refreshed.isError || logResults.some((r) => r.status === "rejected")) {
-        setHistoryWarning(
-          "Some history requests could not be refreshed. Unverified statuses are shown as —.",
-        );
-      }
-    } catch {
-      // A failed initial load is retryable when the history is opened again.
+    } catch (error) {
+      // Leave historyLoadedRef false so Retry can request the list again.
       setHistoryWarning(
-        "Unable to verify all Work Order statuses from Backend. Please retry.",
+        error instanceof Error
+          ? `Could not load completed Work Orders: ${error.message}`
+          : "Could not load completed Work Orders from Backend.",
       );
     } finally {
       historyFetchingRef.current = false;
@@ -1233,17 +1232,17 @@ export function WorkOrdersPage() {
 
             <div className="min-w-[1000px]">
 
-              <div className="grid grid-cols-[120px_150px_minmax(240px,1fr)_155px_180px_70px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+              <div className="grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_70px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
 
                 <span>Order</span>
 
-                <span>Drone</span>
+                <span>Drone ID</span>
 
                 <span>Task</span>
 
                 <span>Status</span>
 
-                <span>Assigned to</span>
+                <span>Created at</span>
 
                 <span />
 
@@ -1259,7 +1258,7 @@ export function WorkOrdersPage() {
 
                     key={order.id}
 
-                    className="group grid grid-cols-[120px_150px_minmax(240px,1fr)_155px_180px_70px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0 hover:bg-[var(--tech-surface-2)]"
+                    className="group grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_70px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0 hover:bg-[var(--tech-surface-2)]"
 
                   >
 
@@ -1273,7 +1272,7 @@ export function WorkOrdersPage() {
 
                     <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
 
-                      {order.drone}
+                      {order.droneId}
 
                     </span>
 
@@ -1295,14 +1294,8 @@ export function WorkOrdersPage() {
 
 
 
-                    <span className="text-center text-[13px] text-[var(--tech-muted)]">
-
-                      {
-
-                        order.assignedTo
-
-                      }
-
+                    <span className="text-center text-[13px] tabular-nums text-[var(--tech-muted)]">
+                      {order.createdAt || "—"}
                     </span>
 
 
@@ -1366,173 +1359,78 @@ export function WorkOrdersPage() {
 
 
       {historyOpen && (
-
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4">
-
-          <div className="flex max-h-[80vh] w-full max-w-[920px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-
+          <div className="flex max-h-[80vh] w-full max-w-[1260px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-4">
-
               <div>
-
-                <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
-
-                  Work order history
-
-                </h2>
-                
-
-
-
-
-
-              </div>
-
-
-
-              <button
-
-                type="button"
-
-                onClick={() =>
-
-                  setHistoryOpen(false)
-
-                }
-
-                className="text-[var(--tech-muted)] transition-colors hover:text-orange-500"
-
-              >
-
-                <X size={18} />
-
-              </button>
-
-            </div>
-
-
-
-            <div className="min-h-0 flex-1 overflow-auto">
-
-              <div className="min-w-[850px]">
-
-                <div className="sticky top-0 z-10 grid grid-cols-[130px_minmax(170px,1fr)_145px_200px_180px] items-center border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
-
-                  <span>Work order</span>
-
-                  <span>Activity</span>
-
-                  <span>Current status</span>
-
-                  <span>Changed by</span>
-
-                  <span>Changed at</span>
-
-                </div>
-
-
-
-                {historyWarning && (
-                  <div role="status" className="px-5 py-2 text-[12px] text-orange-500">
-                    {historyWarning}
-                  </div>
+                <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">Work order history</h2>
+                {!historyLoading && !historyWarning && (
+                  <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
+                    {completedHistory.length} completed work order{completedHistory.length === 1 ? "" : "s"}
+                  </p>
                 )}
-
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="text-[var(--tech-muted)] transition-colors hover:text-orange-500"
+                aria-label="Close work order history"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {historyWarning && (
+              <div role="alert" className="px-5 py-3 text-[13px] text-red-500">
+                {historyWarning}
+                <button type="button" className="ml-3 font-semibold underline" onClick={() => void openHistory()}>
+                  Retry
+                </button>
+              </div>
+            )}
+            <div className="min-h-0 flex-1 overflow-auto">
+              <div className="min-w-[1370px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[115px_120px_minmax(200px,1fr)_110px_165px_165px_minmax(210px,1fr)_110px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--tech-muted)]">
+                  <span>Work order</span>
+                  <span>Drone ID</span>
+                  <span>Task / issue</span>
+                  <span>Battery ID</span>
+                  <span>Created at</span>
+                  <span>Completed at</span>
+                  <span>Action taken</span>
+                  <span>Status</span>
+                </div>
                 {historyLoading ? (
                   <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
-                    Loading work order history and verifying statuses...
+                    Loading completed work orders...
                   </div>
-                ) : workOrderLogs.map(
-
-                  (log) => {
-
-                    const currentStatus = historyCurrentStatuses[log.workOrderId];
-                    return (
-
+                ) : completedHistory.length > 0 ? (
+                  <div className="divide-y divide-[var(--tech-border)]">
+                    {completedHistory.map((item) => (
                       <div
-
-                        key={log.id}
-
-                        className="grid grid-cols-[130px_minmax(170px,1fr)_145px_200px_180px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
-
+                        key={item.id}
+                        className="grid grid-cols-[115px_120px_minmax(200px,1fr)_110px_165px_165px_minmax(210px,1fr)_110px] items-center gap-3 px-5 py-4 hover:bg-[var(--tech-surface-2)]"
                       >
-
-                        <span className="text-center text-[14px] font-medium text-orange-500">
-
-                          {log.workOrderId}
-
-                        </span>
-
-
-
-                        <span className="px-4 text-[14px] text-[var(--tech-text-secondary)]">
-
-                          {log.action}
-
-                        </span>
-
-
-
-                        <div className="flex justify-center">
-
-                          {currentStatus ? (
-                            <WorkOrderStatusText status={currentStatus} />
-                          ) : (
-                            <span className="text-[13px] text-[var(--tech-subtle)]" title="Current status has not been verified by Backend">
-                              —
-                            </span>
-                          )}
-
-                        </div>
-
-
-
-                        <span className="text-center text-[13px] text-[var(--tech-muted)]">
-
-                          {log.changedBy}
-
-                        </span>
-
-
-
-                        <span className="text-center text-[13px] text-[var(--tech-muted)]">
-
-                          {log.changedAt}
-
-                        </span>
-
-
-
+                        <span className="text-[13px] font-medium text-orange-500">{item.id}</span>
+                        <span className="text-[13px] font-medium text-[var(--tech-text)]">{item.droneId}</span>
+                        <span className="break-words text-[13px] text-[var(--tech-text-secondary)]">{item.issue}</span>
+                        <span className="text-[13px] text-[var(--tech-text-secondary)]">{item.batteryId}</span>
+                        <span className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-muted)]">{formatWorkOrderTimestamp(item.createdAt)}</span>
+                        <span className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-muted)]">{formatWorkOrderTimestamp(item.resolvedAt)}</span>
+                        <span className="break-words text-[13px] text-[var(--tech-text-secondary)]">{item.actionTaken}</span>
+                        <WorkOrderStatusText status="Completed" />
                       </div>
-
-                    );
-
-                  },
-
-                )}
-
-
-
-                {!historyLoading && workOrderLogs.length === 0 && (
-
-                  <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
-
-                    No work order history yet.
-
+                    ))}
                   </div>
-
-                )}
-
+                ) : !historyWarning ? (
+                  <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
+                    No completed work orders yet.
+                  </div>
+                ) : null}
               </div>
-
             </div>
-
           </div>
-
         </div>
-
       )}
-
 
 
       {/* CREATE WORK ORDER */}
