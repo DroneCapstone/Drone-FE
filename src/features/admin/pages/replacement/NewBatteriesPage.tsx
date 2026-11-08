@@ -17,6 +17,7 @@ import {
   seedNewBatteriesDemo,
 } from '../../services/adminNewBatterySupply';
 import type { AdminBattery } from '../../types';
+import '../../components/AdminInventoryDialog.css';
 
 const adminDialogFont = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
@@ -180,12 +181,12 @@ export function NewBatteriesPage() {
     </OperatorPanel>
 
     <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>
-      {creating && <DialogContent className="max-h-[85vh] overflow-y-auto" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
-        <div className="border-b border-border p-5">
+      {creating && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
+        <div className="admin-inventory-dialog__header border-b border-border p-5">
           <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Create new battery</div></DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">Enter one serial number per battery.</p>
         </div>
-        <div className="space-y-4 p-5">
+        <div className="admin-inventory-dialog__body space-y-4 p-5">
           <label className="block text-sm"><span>Battery model</span>
             <select required className={`${field} mt-2`} value={model} onChange={(event) => setModel(event.target.value)}>
               {models.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -203,7 +204,7 @@ export function NewBatteriesPage() {
           </div>
           {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
         </div>
-        <div className="form-actions border-t border-border p-5">
+        <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5">
           <ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton>
           <ActionButton type="submit" disabled={!model || serialCount < 1 || referencePrice <= 0}>Register batteries</ActionButton>
         </div>
@@ -211,9 +212,9 @@ export function NewBatteriesPage() {
     </Dialog>
 
     <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-      {editing && <DialogContent style={{ fontFamily: adminDialogFont }}><form onSubmit={saveEdit}>
-        <div className="border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Edit {editing.id}</div></DialogTitle></div>
-        <div className="space-y-4 p-5">
+      {editing && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><form onSubmit={saveEdit}>
+        <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Edit {editing.id}</div></DialogTitle></div>
+        <div className="admin-inventory-dialog__body space-y-4 p-5">
           <label className="block text-sm"><span>Battery model</span>
             <select className={`${field} mt-2`} value={editModel} onChange={(event) => setEditModel(event.target.value)}>
               {models.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -223,13 +224,14 @@ export function NewBatteriesPage() {
           </label>
           {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         </div>
-        <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save changes</ActionButton></div>
+        <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save changes</ActionButton></div>
       </form></DialogContent>}
     </Dialog>
 
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open) { setRemoving(null); setRemovalReason(''); setError(''); } }}>
-      {removing && <DialogContent style={{ fontFamily: adminDialogFont }}><div className="p-5">
-        <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Remove {removing.id}?</div></DialogTitle>
+      {removing && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><div className="admin-inventory-dialog__form">
+        <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Remove {removing.id}?</div></DialogTitle></div>
+        <div className="admin-inventory-dialog__body px-5 py-4">
         <label className="mt-4 block text-sm font-medium text-[var(--admin-text)]" htmlFor="new-battery-removal-reason" style={{ fontFamily: adminDialogFont }}>Reason for removal <span className="text-red-500">*</span></label>
         <textarea
           id="new-battery-removal-reason"
@@ -243,7 +245,8 @@ export function NewBatteriesPage() {
           onChange={(event) => setRemovalReason(event.target.value)}
         />
         {error && <p role="alert" className="mt-3 text-sm text-red-500">{error}</p>}
-        <div className="mt-5 flex justify-end gap-2">
+        </div>
+        <div className="admin-inventory-dialog__footer border-t border-border px-5 py-4">
           <ActionButton variant="secondary" style={{ fontFamily: adminDialogFont }} onClick={() => { setRemoving(null); setRemovalReason(''); setError(''); }}>Cancel</ActionButton>
           <ActionButton variant="danger" style={{ fontFamily: adminDialogFont }} disabled={!removalReason.trim()} onClick={remove}>Remove battery</ActionButton>
         </div>
