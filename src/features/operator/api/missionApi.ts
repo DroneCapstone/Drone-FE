@@ -71,6 +71,9 @@ export interface HubCheckpoint {
   id: string;
   hubId: string;
   hubName: string;
+  /** Hub coordinates from the recorded checkpoint event (hub_latitude, hub_longitude). */
+  latitude?: number;
+  longitude?: number;
   reachedAt?: string;
   sequence: number;
   raw: Record<string, unknown>;
