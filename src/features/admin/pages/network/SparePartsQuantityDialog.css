@@ -1,14 +1,223 @@
-/* Matching readonly/editable quantity controls. Compatible with light/dark admin themes. */
-.spare-quantity-fields label { min-width: 0; }
+/* Admin -> Spare Parts -> Add Quantity.
+   Self-contained styles: the Radix Dialog is portalled outside .admin-app,
+   so inherited AdminLayout form/layout styles are not always available. */
+
+/* Centering, height and middle-only scrolling come from AdminInventoryDialog.css. */
+
+.spare-quantity-header {
+  flex: 0 0 auto;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border, #e2e5e9);
+}
+
+.spare-quantity-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text, #202124);
+}
+
+.spare-quantity-header p {
+  margin: 6px 0 0;
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.spare-quantity-model {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+  line-height: 1.4;
+}
+
+.spare-quantity-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 22px;
+}
+
+.spare-quantity-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.spare-quantity-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spare-quantity-fields label > span {
+  display: block;
+  color: var(--text, #374151);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.spare-quantity-required { color: #f26a21; }
+
 .spare-quantity-fields .spare-quantity-input {
-  display: block; width: 100%; height: 44px; box-sizing: border-box;
-  padding: 0 12px; border: 1px solid var(--admin-border, #d4d4d8);
-  border-radius: 8px; background: var(--admin-surface, #fff);
-  color: var(--admin-text, #18181b); font: inherit; font-size: 14px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--border, #d9dde3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text, #202124);
+  font: inherit;
+  font-size: 14px;
+  line-height: normal;
 }
+
 .spare-quantity-fields .spare-quantity-input--readonly {
-  background: var(--admin-surface-2, #f5f5f5); cursor: default;
+  background: var(--surface-2, #f3f5f7);
+  color: var(--muted, #6b7280);
+  cursor: default;
 }
-.spare-quantity-fields .spare-quantity-input:focus:not(:read-only) {
-  outline: 2px solid #ff6b00; outline-offset: 1px;
+
+.spare-quantity-fields .spare-quantity-input:focus-visible:not(:read-only) {
+  outline: 2px solid #ff6b00;
+  outline-offset: 1px;
+}
+
+.spare-quantity-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 20px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface-2, #f6f7f9);
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.spare-quantity-result strong {
+  flex-shrink: 0;
+  color: var(--text, #202124);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.spare-quantity-cost {
+  padding: 16px 18px;
+  border: 1px solid var(--border, #d9dde3);
+  border-radius: 10px;
+}
+
+.spare-quantity-cost-title,
+.spare-quantity-cost-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.spare-quantity-cost-title {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.spare-quantity-cost-title > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text, #202124);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.spare-quantity-cost-title svg {
+  flex-shrink: 0;
+  color: #ff6b00;
+}
+
+.spare-quantity-cost-title small {
+  color: var(--muted, #6b7280);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.spare-quantity-cost-row {
+  padding: 7px 0;
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.spare-quantity-cost-row strong {
+  color: var(--text, #202124);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.spare-quantity-cost-total {
+  margin-top: 9px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border, #d9dde3);
+  color: var(--text, #202124);
+  font-weight: 650;
+}
+
+.spare-quantity-cost-total strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e96500;
+}
+
+.spare-quantity-hint {
+  margin: 12px 0 0;
+  color: var(--muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.spare-quantity-error {
+  margin: 12px 0 0;
+  color: #bd3030;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.spare-quantity-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 15px 24px;
+  border-top: 1px solid var(--border, #e2e5e9);
+  background: var(--surface, #fff);
+}
+
+.spare-quantity-footer button {
+  min-height: 38px;
+}
+
+@media (max-width: 480px) {
+  .spare-quantity-header { padding: 18px 18px 14px; }
+  .spare-quantity-body { padding: 16px 18px 18px; }
+  .spare-quantity-footer { padding: 12px 18px; }
+  .spare-quantity-fields { grid-template-columns: 1fr; }
+  .spare-quantity-cost { padding: 14px; }
+  .spare-quantity-cost-title { flex-wrap: wrap; gap: 5px 12px; }
+  .spare-quantity-cost-row strong { white-space: normal; }
 }

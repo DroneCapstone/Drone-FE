@@ -13,6 +13,7 @@ import {
    type SparePart,
 } from '../../services/prototypeWorkflow';
 import { formatVnd } from '../../utils/adminDisplay';
+import '../../components/AdminInventoryDialog.css';
 import './SparePartsQuantityDialog.css';
 
 const LOW_QUANTITY = 1;
@@ -44,7 +45,9 @@ export function SparePartsPage() {
    const restocking = parts.find((part) => part.id === restockingId);
    const restockUnitPrice = restocking ? getSparePartReferenceUnitCostVnd(restocking) : 0;
    const restockValid = Number.isSafeInteger(added) && added > 0
-      && restockUnitPrice > 0 && Number.isSafeInteger(added * restockUnitPrice);
+      && restockUnitPrice > 0
+      && Number.isSafeInteger(added * restockUnitPrice)
+      && Boolean(restocking && Number.isSafeInteger(restocking.quantity + added));
    const isNew = editingMode === 'CREATE';
    const visible = parts.filter((part) => {
       if (!`${part.id} ${part.name} ${part.compatibleModels}`.toLowerCase().includes(query.toLowerCase())) return false;
@@ -91,8 +94,9 @@ export function SparePartsPage() {
       event.preventDefault();
       if (!restockingId) return;
       try {
+         const recordedCost = added * restockUnitPrice;
          addSparePartQuantity(restockingId, added);
-         setSuccess(`${added} unit(s) added to ${restockingId}.`);
+         setSuccess(`${added} unit(s) added to ${restockingId}. Internal acquisition cost recorded: ${formatVnd(recordedCost)} (demo; no bank payment).`);
          setRestockingId(null); setError('');
       } catch (cause) {
          setError(cause instanceof Error ? cause.message : 'Unable to add quantity.');
@@ -195,67 +199,84 @@ export function SparePartsPage() {
          </Dialog>
 
          <Dialog open={Boolean(restockingId)} onOpenChange={(open) => !open && setRestockingId(null)}>
-            {restocking && <DialogContent className="spare-quantity-dialog"><form onSubmit={restock}>
-               <div className="spare-quantity-header">
-                  <DialogTitle className="text-lg font-semibold">Add Quantity</DialogTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">{restocking.id} · {restocking.name} · {restocking.compatibleModels}</p>
-               </div>
-               <div className="spare-quantity-body">
-                  <div className="fields two spare-quantity-fields">
-                     <label>
-                        <span>Current Quantity</span>
-                        <input
-                           className="spare-quantity-input spare-quantity-input--readonly"
-                           type="text"
-                           readOnly
-                           tabIndex={-1}
-                           aria-label="Current quantity (read only)"
-                           value={restocking.quantity}
-                        />
-                     </label>
-                     <label>
-                        <span>Quantity to Add <span className="spare-quantity-required" aria-hidden="true">*</span></span>
-                        <input
-                           className="spare-quantity-input"
-                           type="number"
-                           min={1}
-                           step={1}
-                           required
-                           aria-label="Quantity to add"
-                           value={added}
-                           onChange={(event) => setAdded(Number(event.target.value))}
-                        />
-                     </label>
+            {restocking && <DialogContent className="spare-quantity-dialog admin-inventory-dialog">
+               <form onSubmit={restock}>
+                  <div className="spare-quantity-header admin-inventory-dialog__header">
+                     <DialogTitle>Add Quantity</DialogTitle>
+                     <p>{restocking.id} · {restocking.name}</p>
+                     <span className="spare-quantity-model">{restocking.compatibleModels}</span>
                   </div>
-                  <div className="spare-quantity-result">
-                     <span>Quantity after addition</span>
-                     <strong>{Number.isSafeInteger(added) && added > 0 ? `${restocking.quantity + added} units` : '—'}</strong>
+
+                  <div className="spare-quantity-body admin-inventory-dialog__body">
+                     <div className="spare-quantity-fields">
+                        <label htmlFor="spare-current-quantity">
+                           <span>Current Quantity</span>
+                           <input
+                              id="spare-current-quantity"
+                              className="spare-quantity-input spare-quantity-input--readonly"
+                              type="text"
+                              readOnly
+                              tabIndex={-1}
+                              value={restocking.quantity}
+                           />
+                        </label>
+                        <label htmlFor="spare-add-quantity">
+                           <span>Quantity to Add <span className="spare-quantity-required" aria-hidden="true">*</span></span>
+                           <input
+                              id="spare-add-quantity"
+                              className="spare-quantity-input"
+                              type="number"
+                              min={1}
+                              step={1}
+                              required
+                              value={added}
+                              onChange={(event) => setAdded(Number(event.target.value))}
+                           />
+                        </label>
+                     </div>
+
+                     <div className="spare-quantity-result">
+                        <span>Quantity after addition</span>
+                        <strong>{Number.isSafeInteger(added) && added > 0
+                           && Number.isSafeInteger(restocking.quantity + added)
+                           ? `${restocking.quantity + added} unit${restocking.quantity + added === 1 ? '' : 's'}` : '—'}</strong>
+                     </div>
+
+                     <div className="spare-quantity-cost">
+                        <div className="spare-quantity-cost-title">
+                           <span><ReceiptText size={17} aria-hidden="true" /> Acquisition Cost</span>
+                           <small>Internal record · Demo</small>
+                        </div>
+                        <div className="spare-quantity-cost-row">
+                           <span>Reference Unit Price</span>
+                           <strong>{restockUnitPrice > 0 ? formatVnd(restockUnitPrice) : 'Not configured'}</strong>
+                        </div>
+                        <div className="spare-quantity-cost-row">
+                           <span>Quantity</span>
+                           <strong>{Number.isSafeInteger(added) && added > 0 ? added : '—'}</strong>
+                        </div>
+                        <div className="spare-quantity-cost-row spare-quantity-cost-total">
+                           <span>Total Recorded Cost</span>
+                           <strong>{restockValid ? formatVnd(added * restockUnitPrice) : '—'}</strong>
+                        </div>
+                        <p className="spare-quantity-hint">
+                           Confirming updates inventory and records this cost once in Financial Overview.
+                           No bank transfer or supplier payment is made.
+                        </p>
+                     </div>
+
+                     {!restockUnitPrice && <p className="spare-quantity-error" role="alert">
+                        Configure a positive reference unit price for this spare part before adding quantity.
+                     </p>}
+                     {error && <p role="alert" className="spare-quantity-error">{error}</p>}
                   </div>
-                  <div className="spare-quantity-cost">
-                     <div className="spare-quantity-cost-title">
-                        <span><ReceiptText size={17} aria-hidden="true" /> Acquisition Cost</span>
-                        <small>Auto calculated</small>
-                     </div>
-                     <div className="spare-quantity-cost-row">
-                        <span>Reference Unit Price</span>
-                        <strong>{restockUnitPrice > 0 ? formatVnd(restockUnitPrice) : 'Not configured'}</strong>
-                     </div>
-                     <div className="spare-quantity-cost-row spare-quantity-cost-total">
-                        <span>Reference Total Cost</span>
-                        <strong>{restockValid ? formatVnd(added * restockUnitPrice) : '—'}</strong>
-                     </div>
+
+                  <div className="spare-quantity-footer admin-inventory-dialog__footer">
+                     <ActionButton variant="secondary" onClick={() => setRestockingId(null)}>Cancel</ActionButton>
+                     <ActionButton type="submit" disabled={!restockValid}>Confirm Addition</ActionButton>
                   </div>
-                  <p className="spare-quantity-hint">The reference cost is an estimate, not proof of payment. This operation updates inventory through the existing stock service.</p>
-                  {error && <p role="alert" className="spare-quantity-error">{error}</p>}
-               </div>
-               <p className="px-5 py-3 text-xs text-muted-foreground">
-                  Only confirm quantity that has physically arrived. Paid-purchase expense entry requires an updated stock service; it is not recorded by this form.
-               </p>
-               <div className="spare-quantity-footer">
-                  <ActionButton variant="secondary" onClick={() => setRestockingId(null)}>Cancel</ActionButton>
-                  <ActionButton type="submit" disabled={!restockValid}>Confirm Addition</ActionButton>
-               </div>
-            </form></DialogContent>}
+               </form>
+            </DialogContent>}
          </Dialog>
       </AdminPageShell>
    );
