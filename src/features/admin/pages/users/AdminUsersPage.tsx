@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Users, UserCog, UserRound, UserX } from 'lucide-react';
+import { Users, UserCog, UserRound, UserX, Eye, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
@@ -52,7 +52,7 @@ export function AdminUsersPage() {
   }, [status, reload]);
 
   const visible = useMemo(() => statusUsers.filter((user) =>
-    `${user.full_name} ${user.email} ${user.id}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    `${user.full_name} ${user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
     (role === 'all' || user.role.toLowerCase() === role),
   ), [statusUsers, query, role]);
 
@@ -104,7 +104,7 @@ export function AdminUsersPage() {
       <AdminToolbar
         searchValue={query}
         onSearchChange={setQuery}
-        placeholder="Search name, email or user ID…"
+        placeholder="Search name or email…"
         filters={<>
           <select value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="all">All roles</option>
@@ -126,23 +126,35 @@ export function AdminUsersPage() {
         <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
       </div>}
       <div className="table-wrap">
-        <table>
+        <table className="admin-users-list-table">
           <thead><tr>
-            <th>User</th><th>Role & scope</th><th>Status</th><th>User ID</th><th>Action</th>
+            <th scope="col">Name</th>
+            <th scope="col">Email</th>
+            <th scope="col">Role</th>
+            <th scope="col">Status</th>
+            <th scope="col" className="admin-users-actions-heading">Actions</th>
           </tr></thead>
           <tbody>
-            {loading && <tr><td colSpan={5} className="admin-users-empty">Loading users…</td></tr>}
+            {loading && <tr><td colSpan={5} className="admin-users-empty">Loading users from Backend…</td></tr>}
             {!loading && !listError && visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
             {!loading && !listError && visible.map((user) => <tr key={user.id}>
-              <td><strong>{user.full_name}</strong><small>{user.email}</small></td>
-              <td><strong className="admin-user-role-label">{user.role}</strong>
-                <small>{user.role === 'Technician' ? 'Hub assignment pending' : user.role === 'Customer' ? 'Customer account' : 'System-wide access'}</small>
-              </td>
+              <td><strong className="admin-users-name">{user.full_name}</strong></td>
+              <td><span className="admin-users-email" title={user.email}>{user.email}</span></td>
+              <td><strong className="admin-user-role-label">{user.role}</strong></td>
               <td><StatusBadge tone={userTone(user)}>{isArchivedUser(user) ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></td>
-              <td><span className="admin-ud-id">{user.id}</span></td>
-              <td><div className="admin-row-actions">
-                <Link className="row-action" to={`/admin/users/${encodeURIComponent(user.id)}`}>View</Link>
-                <Link className="row-action" to={`/admin/users/${encodeURIComponent(user.id)}?edit=1`}>Edit</Link>
+              <td><div className="admin-users-icon-actions">
+                <Link
+                  className="admin-users-icon-action"
+                  to={`/admin/users/${encodeURIComponent(user.id)}`}
+                  title={`View ${user.full_name}`}
+                  aria-label={`View details for ${user.full_name}`}
+                ><Eye size={17} strokeWidth={1.9} aria-hidden="true" /></Link>
+                <Link
+                  className="admin-users-icon-action admin-users-icon-action--edit"
+                  to={`/admin/users/${encodeURIComponent(user.id)}?edit=1`}
+                  title={`Edit ${user.full_name}`}
+                  aria-label={`Edit ${user.full_name}`}
+                ><Pencil size={16} strokeWidth={1.9} aria-hidden="true" /></Link>
               </div></td>
             </tr>)}
           </tbody>
@@ -159,18 +171,18 @@ export function AdminUsersPage() {
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
               <label><span>Full name <b aria-hidden="true">*</b></span>
-                <input required autoComplete="name" value={creating.full_name} onChange={(event) => setCreating({ ...creating, full_name: event.target.value })} /></label>
+                <input required autoComplete="name" value={creating.full_name} onChange={(event) => setCreating({ ...creating, full_name: event.target.value })}/></label>
               <label><span>Email <b aria-hidden="true">*</b></span>
-                <input required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })} /></label>
+                <input required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })}/></label>
               <label><span>Role <b aria-hidden="true">*</b></span>
                 <select value={creating.role} onChange={(event) => setCreating({ ...creating, role: event.target.value as InternalRole })}>
                   <option value="Operator">Operator</option><option value="Technician">Technician</option><option value="Admin">Admin</option>
                 </select></label>
               <label><span>Initial password <b aria-hidden="true">*</b></span>
-                <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })} /></label>
+                <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
             </div>
             {creating.role === 'Technician' && <p className="admin-ud-helper">Assigned Hub is not part of the current UserCreate API; creating this account does not assign a Hub.</p>}
-            {/* <p className="admin-ud-helper">Share the initial password securely. Backend does not provide an invitation email in this API.</p> */}
+            <p className="admin-ud-helper">Share the initial password securely. Backend does not provide an invitation email in this API.</p>
             {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
           </div>
           <div className="admin-ud-modal-foot">
