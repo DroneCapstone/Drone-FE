@@ -381,17 +381,11 @@ export function WorkOrderDetailPage() {
       </button>
 
       {/* Overview */}
-      <div className="mb-5 grid gap-4 md:grid-cols-3">
+      <div className="mb-5 grid gap-4 md:grid-cols-2">
         <OverviewCard
           icon={ClipboardCheck}
           label="Status"
           value={workOrderStatus}
-        />
-
-        <OverviewCard
-          icon={TriangleAlert}
-          label="Priority"
-          value={order.priority}
         />
 
         <OverviewCard
@@ -597,13 +591,6 @@ export function WorkOrderDetailPage() {
                 />
 
                 <Meta
-                  label="Priority"
-                  value={
-                    order.priority
-                  }
-                />
-
-                <Meta
                   label="Assigned technician"
                   value={
                     order.assignedTo
@@ -614,14 +601,6 @@ export function WorkOrderDetailPage() {
                   label="Created"
                   value={
                     order.createdAt
-                  }
-                />
-
-                <Meta
-                  label="Scheduled"
-                  value={
-                    order.scheduledAt ??
-                    "Not scheduled"
                   }
                 />
               </div>
