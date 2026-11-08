@@ -414,6 +414,10 @@ function mapMission(raw: unknown): Mission {
   const estimatedArrivalAt = explicitEstimatedArrival ?? calculatedArrival ?? '';
   const actualStartedAt = normalizeIso(pickString(record, ['actual_started_at', 'actualStartedAt', 'start_time', 'startTime', 'departed_at', 'departedAt']));
   const actualCompletedAt = normalizeIso(pickString(record, ['actual_completed_at', 'actualCompletedAt', 'end_time', 'endTime', 'arrived_at', 'arrivedAt']));
+  // Preserve true physical-flight timestamps separately. Mission `start_time`
+  // can be set before take-off, so it must not impersonate `departed_at`.
+  const flightDepartedAt = normalizeIso(pickString(record, ['departed_at', 'departedAt']));
+  const flightArrivedAt = normalizeIso(pickString(record, ['arrived_at', 'arrivedAt']));
   const createdAt = normalizeIso(pickString(record, ['created_at', 'createdAt'])) ?? plannedStartAt;
 
   const rawLegs = pickArray(record, ['legs_detail', 'legs', 'mission_legs']);
@@ -459,7 +463,7 @@ function mapMission(raw: unknown): Mission {
     battery: batteryRemaining ?? Number.NaN,
     plannedStartAt,
     packageReceiveDeadlineAt: normalizeIso(pickString(record, ['package_receive_deadline_at', 'packageReceiveDeadlineAt'])),
-    actualStartedAt, actualCompletedAt, estimatedArrivalAt,
+    actualStartedAt, actualCompletedAt, flightDepartedAt, flightArrivedAt, estimatedArrivalAt,
     predictedDurationMin: predictedDuration ?? Number.NaN,
     estimatedEnergyWh: predictedEnergy ?? Number.NaN,
     batteryConsumptionPct: batteryUse ?? Number.NaN,
@@ -530,8 +534,13 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
   const latitude = pickNumber(record, ['latitude', 'lat'], Number.NaN);
   const longitude = pickNumber(record, ['longitude', 'lng', 'lon'], Number.NaN);
   const altitude = pickNumber(record, ['altitude_m', 'altitude', 'altitudeM'], Number.NaN);
-  const speed = pickNumber(record, ['speed_kmh', 'speed', 'speedKmh'], Number.NaN);
-  const battery = pickNumber(record, ['battery_pct', 'battery', 'battery_level'], Number.NaN);
+  const explicitKmh = pickOptionalNumber(record, ['speed_kmh', 'speedKmh']);
+  const explicitMps = pickOptionalNumber(record, ['speed_mps', 'speedMps']);
+  const genericSpeed = pickOptionalNumber(record, ['speed']);
+  const speed = explicitKmh ?? (explicitMps !== undefined ? explicitMps * 3.6 :
+    genericSpeed === undefined ? undefined :
+    import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
+  const battery = pickNumber(record, ['battery_pct', 'batteryPct', 'battery', 'battery_level'], Number.NaN);
   const batteryVoltage = pickNumber(record, ['battery_voltage', 'batteryVoltage'], Number.NaN);
   const signal = pickNumber(record, ['signal_pct', 'signal', 'signal_strength'], Number.NaN);
   const energyConsumedWh = pickNumber(record, ['energy_consumed_wh', 'energyConsumedWh'], Number.NaN);
@@ -543,8 +552,8 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
     altitudeM: Number.isFinite(altitude) ? altitude : undefined,
-    speedKmh: Number.isFinite(speed) ? speed : undefined,
-    batteryPct: Number.isFinite(battery) ? battery : undefined,
+    speedKmh: speed !== undefined && Number.isFinite(speed) ? speed : undefined,
+    batteryPct: Number.isFinite(battery) && battery >= 0 && battery <= 100 ? battery : undefined,
     batteryVoltage: Number.isFinite(batteryVoltage) ? batteryVoltage : undefined,
     signalPct: Number.isFinite(signal) ? signal : undefined,
     energyConsumedWh: Number.isFinite(energyConsumedWh) ? energyConsumedWh : undefined,
@@ -559,6 +568,8 @@ function mapCheckpoint(raw: unknown, index: number): HubCheckpoint {
     id: pickString(record, ['id', 'checkpoint_id', 'checkpointId'], `CHK-${index + 1}`),
     hubId: pickString(record, ['hub_id', 'hubId']),
     hubName: pickString(record, ['hub_name', 'hubName', 'name'], 'Hub'),
+    latitude: pickOptionalNumber(record, ['hub_latitude', 'hubLatitude']),
+    longitude: pickOptionalNumber(record, ['hub_longitude', 'hubLongitude']),
     reachedAt: normalizeIso(pickString(record, ['reached_at', 'arrived_at', 'created_at', 'timestamp', 'passed_at', 'passedAt'])),
     sequence: pickNumber(record, ['sequence', 'sequence_no', 'order', 'checkpoint_order', 'checkpointOrder'], index + 1),
     raw: record,

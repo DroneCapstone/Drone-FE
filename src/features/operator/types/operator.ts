@@ -147,6 +147,9 @@ export interface Mission {
   packageReceiveDeadlineAt?: string;
   actualStartedAt?: string;
   actualCompletedAt?: string;
+  /** Physical departure and landing, used in Operator Flight History. */
+  flightDepartedAt?: string;
+  flightArrivedAt?: string;
   estimatedArrivalAt: string;
   predictedDurationMin: number;
   estimatedEnergyWh: number;
