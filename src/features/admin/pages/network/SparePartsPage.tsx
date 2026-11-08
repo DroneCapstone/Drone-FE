@@ -54,7 +54,7 @@ export function SparePartsPage() {
     return true;
   });
 
-  // The Approvals page can deep-link to the correct part to replenish.
+  // The Replacement Records page can deep-link to the correct part to replenish.
   const restockQuery = params.get('restock');
   useEffect(() => {
     if (restockQuery && getSpareParts().some((part) => part.id === restockQuery)) {
@@ -105,7 +105,7 @@ export function SparePartsPage() {
       title="Spare Parts"
       description=""
       actions={<>
-        <Link className="button button-secondary" to="/admin/approvals?type=PART">Review requests</Link>
+        <Link className="button button-secondary" to="/admin/replacement/requests?type=PART">Replacement records</Link>
         <ActionButton icon="plus" onClick={openAdd}>Add spare part</ActionButton>
       </>}
     >
@@ -113,7 +113,7 @@ export function SparePartsPage() {
         <MetricCard label="Part models" value={String(parts.length)} delta="Catalog" tone="info" note="Registered component models" />
         <MetricCard label="Available units" value={String(active.reduce((count, item) => count + item.quantity, 0))} delta="Quantity" tone="success" note="Admin-managed replacement parts" />
         <MetricCard label="Low quantity" value={String(active.filter((item) => item.quantity <= LOW_QUANTITY).length)} delta={`≤ ${LOW_QUANTITY} units`} tone="warning" note="Add quantity when needed" />
-        <MetricCard label="Out of parts" value={String(active.filter((item) => item.quantity === 0).length)} delta="0 units" tone="neutral" note="Approval blocked until replenished" />
+        <MetricCard label="Out of parts" value={String(active.filter((item) => item.quantity === 0).length)} delta="0 units" tone="neutral" note="Supply blocked until replenished" />
       </div> */}
       {success && <p role="status" className="mb-4 text-sm text-[var(--admin-green)]">{success}</p>}
       <OperatorPanel className="flush-panel">
@@ -195,7 +195,7 @@ export function SparePartsPage() {
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid — record expense</label>
             {paid && <label className="mt-3 block text-sm"><span>Actual unit purchase price (VND)</span><input type="number" min={1} step={1} required value={purchasePrice || ''} onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>}
           </div>}
-          {!isNew && <p className="px-5 text-xs text-muted-foreground">To increase quantity, use <strong>Add quantity</strong> from the table. Approving a replacement decreases quantity automatically.</p>}
+          {!isNew && <p className="px-5 text-xs text-muted-foreground">To increase quantity, use <strong>Add quantity</strong> from the table. Confirming supply decreases quantity automatically.</p>}
           {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
           <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">{isNew ? 'Create spare part' : 'Save changes'}</ActionButton></div>
         </form></DialogContent>}
@@ -218,7 +218,7 @@ export function SparePartsPage() {
               <label><span>Actual unit purchase price (VND)</span><input type="number" min={1} step={1} required value={purchasePrice || ''} onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>
               <label><span>Cash outflow (VND)</span><input readOnly value={Number.isSafeInteger(added) && added > 0 ? formatVnd(added * purchasePrice) : '—'} /></label>
             </div>}
-            <p className="mt-2 text-xs text-muted-foreground">Quantity is increased only after replacement parts are received. Only paid purchases create a cash expense; approving a request does not.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Quantity is increased only after replacement parts are received. Only paid purchases create a cash expense; confirming supply does not.</p>
           </div>
           {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
           <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setRestockingId(null)}>Cancel</ActionButton><ActionButton type="submit">Confirm addition</ActionButton></div>

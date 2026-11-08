@@ -3,16 +3,16 @@
  * Compatible with the existing `droneoptai.prototype.v1.requests` and `.parts`
  * keys. No changes to the Technician app, backend, or Hub quantities.
  *
- * IMPORTANT: Approve is a business decision, NOT the act of supplying a part.
- * The shared Technician request remains PENDING until Admin confirms supply,
- * at which point it becomes APPROVED so Technician can Confirm Receipt.
+ * Admin confirms supply directly or rejects an invalid replacement with a reason.
+ * Internally the shared Technician prototype still uses PENDING before supply,
+ * APPROVED after supply, and FULFILLED after Technician receipt.
  */
 import { getAdminBatteries, getAdminDrones, getAdminHubs } from './adminStore';
 import {
   getCompatiblePartsForRequest,
   getReplacementRequests,
   getSpareParts,
-  reviewReplacement,
+  recordPrototypeActivity,
   type ReplacementRequest,
   type SparePart,
 } from './prototypeWorkflow';
@@ -27,7 +27,7 @@ const PART_KEY = `${PREFIX}parts`;
 const BATTERY_KEY = 'droneoptai.admin.batteries.v2';
 const EXPENSE_KEY = `${PREFIX}expenses`; 
 
-export type AdminSupplyStage = 'AWAITING_SUPPLY' | 'SUPPLIED';
+export type AdminSupplyStage = 'AWAITING_SUPPLY' | 'SUPPLIED' | 'REJECTED';
 export interface AdminSupplyEvent {
   action: string;
   detail: string;
@@ -88,16 +88,15 @@ function findRequest(id: string): ReplacementRequest {
   return request;
 }
 
-export type AdminEffectiveStatus = 'PENDING' | 'AWAITING_SUPPLY' | 'SUPPLIED' | 'RECEIVED' | 'REJECTED';
+export type AdminEffectiveStatus = 'AWAITING_SUPPLY' | 'SUPPLIED' | 'RECEIVED' | 'REJECTED';
 export function getAdminEffectiveStatus(request: ReplacementRequest): AdminEffectiveStatus {
   if (request.status === 'REJECTED') return 'REJECTED';
   if (request.status === 'FULFILLED') return 'RECEIVED';
-  if (request.status === 'APPROVED') return 'SUPPLIED'; // Legacy approvals already deducted stock; never deduct again.
-  const record = getAdminSupplyRecord(request.id);
-  return record?.stage === 'AWAITING_SUPPLY' ? 'AWAITING_SUPPLY' : 'PENDING';
+  if (request.status === 'APPROVED') return 'SUPPLIED'; // Shared Technician receipt stage; stock was deducted at Confirm Supply.
+  return 'AWAITING_SUPPLY'; // PENDING is the legacy Technician-internal status, not an Admin approval step.
 }
 
-/** First step: record Admin's approval, without touching stock or Technician visibility. */
+/** @deprecated Backward compatibility for historical two-step approval records; not used by Admin UI. */
 export function approveReplacementRequest(requestId: string, adminNote: string) {
   const request = findRequest(requestId);
   if (request.status !== 'PENDING') throw new Error('Only new requests can be approved.');
@@ -142,11 +141,38 @@ export function approveReplacementRequest(requestId: string, adminNote: string) 
   return record;
 }
 
-/** Reject is still handled by the existing Technician-visible workflow. */
+/** Reject only before supply. Preserve the reason, request history and an audit trail.
+ * Existing legacy Awaiting Supply records can also be rejected as long as no
+ * replacement battery has already been registered specifically for them.
+ */
 export function rejectReplacementRequest(requestId: string, reason: string) {
-  if (!reason.trim()) throw new Error('Enter a reason for rejection.');
-  if (getAdminSupplyRecord(requestId)) throw new Error('This request was already approved.');
-  reviewReplacement(requestId, 'REJECTED', reason, 'System Administrator');
+  const note = reason.trim();
+  if (!note) throw new Error('Enter a reason for rejection.');
+  if (note.length > 500) throw new Error('The rejection reason must be 500 characters or less.');
+  const request = findRequest(requestId);
+  if (request.status !== 'PENDING') throw new Error('Only replacement records awaiting supply can be rejected.');
+  const records = readRecords();
+  const existing = records.find((item) => item.requestId === requestId);
+  if (existing && existing.stage !== 'AWAITING_SUPPLY')
+    throw new Error('A supplied or closed replacement cannot be rejected.');
+  if (existing?.registeredBatteryId)
+    throw new Error(`Battery ${existing.registeredBatteryId} was already registered for this request. Resolve the battery allocation before rejecting.`);
+  const stamp = now();
+  const updatedRequests = getReplacementRequests().map((item) => item.id === requestId
+    ? { ...item, status: 'REJECTED' as const, adminNote: note, reviewedAt: stamp, reviewedBy: 'System Administrator' }
+    : item);
+  const rejection = existing ?? {
+    requestId, stage: 'REJECTED' as const, reviewedBy: 'System Administrator', reviewedAt: stamp,
+    adminNote: note, events: [] as AdminSupplyEvent[],
+  };
+  rejection.stage = 'REJECTED';
+  rejection.reviewedAt = stamp;
+  rejection.reviewedBy = 'System Administrator';
+  rejection.adminNote = note;
+  rejection.events.push({ action: 'REJECTED', detail: note, by: 'System Administrator', at: stamp });
+  if (!existing) records.unshift(rejection);
+  commit([[REQUEST_KEY, updatedRequests], [SUPPLY_KEY, records]]);
+  recordPrototypeActivity('admin', 'System Administrator', 'REJECT_REPLACEMENT', requestId, note);
 }
 
 export function getMatchingPartOptions(request: ReplacementRequest): SparePart[] {
@@ -291,55 +317,86 @@ export function recordBatteryInspectionResult(batteryId: string, passed: boolean
   return battery;
 }
 
-/** Second step: confirm the selected part/battery; only here is it actually supplied. */
+/** One Admin action: choose the item, validate compatibility/quantity, and supply once.
+ * A previous prototype may have already created an AWAITING_SUPPLY record;
+ * retain it, but do not require a separate Approve action for new requests.
+ */
 export function supplyApprovedReplacement(requestId: string, selectedItemId: string) {
   const request = findRequest(requestId);
-  const records = readRecords();
-  const record = records.find((item) => item.requestId === requestId);
-  if (!record || record.stage !== 'AWAITING_SUPPLY' || request.status !== 'PENDING')
-    throw new Error('This request has not been approved for supply, or it has already been supplied.');
+  if (request.status !== 'PENDING')
+    throw new Error('This replacement has already been supplied or closed.');
+  if (!Number.isSafeInteger(request.quantity) || request.quantity < 1)
+    throw new Error('Replacement quantity must be a positive whole number.');
   if (!selectedItemId) throw new Error('Select a replacement part or battery first.');
-  const time = now();
+
+  const records = readRecords();
+  const existing = records.find((item) => item.requestId === requestId);
+  if (existing && existing.stage !== 'AWAITING_SUPPLY')
+    throw new Error('This replacement has already been supplied.');
+  const stamp = now();
+  const record: AdminSupplyRecord = existing ?? {
+    requestId, stage: 'AWAITING_SUPPLY',
+    reviewedBy: 'System Administrator', reviewedAt: stamp, adminNote: '', events: [],
+  };
+
   const updated: ReplacementRequest = {
-    ...request, status: 'APPROVED', reviewedAt: record.reviewedAt,
-    reviewedBy: record.reviewedBy, adminNote: record.adminNote,
+    ...request, status: 'APPROVED', // Shared prototype flag: Technician may now Confirm Receipt.
+    reviewedAt: stamp, reviewedBy: 'System Administrator',
+    adminNote: record.adminNote,
   };
   const parts = request.type === 'PART' ? getSpareParts() : undefined;
   let batteryUpdates: AdminBattery[] | undefined;
   if (request.type === 'PART') {
+    if (!request.partId || !request.droneId)
+      throw new Error('A spare part replacement needs a valid component and Drone ID.');
     const matched = getMatchingPartOptions(request).find((part) => part.id === selectedItemId);
-    const selected = parts?.find((part) => part.id === selectedItemId);
-    if (!matched || !selected?.active)
-      throw new Error('The selected part is missing, inactive or incompatible with this drone.');
-    if (selected.quantity < request.quantity)
-      throw new Error(`Insufficient quantity: ${selected.quantity} available, ${request.quantity} needed. Create the compatible SKU or add quantity in Spare Parts.`);
-    selected.quantity -= request.quantity;
-    updated.approvedPartId = selected.id;
-    record.selectedPartId = selected.id;
+    const chosen = parts?.find((part) => part.id === selectedItemId);
+    if (!matched || !chosen?.active)
+      throw new Error('The selected spare part is missing, inactive, or incompatible with the drone.');
+    if (chosen.quantity < request.quantity)
+      throw new Error(`Insufficient quantity: ${chosen.quantity} available, ${request.quantity} required.`);
+    chosen.quantity -= request.quantity;
+    updated.approvedPartId = chosen.id;
+    record.selectedPartId = chosen.id;
   } else {
-    if (request.quantity !== 1)
-      throw new Error('Each battery is tracked by a unique Battery ID; please request one battery per request.');
+    if (!request.batteryId || request.quantity !== 1)
+      throw new Error('Battery replacements require exactly one damaged Battery ID.');
+    const hubs = getAdminHubs();
+    if (!hubs.some((hub) => hub.id === request.hubId && hub.status === 'ACTIVE'))
+      throw new Error('The receiving Hub must be active.');
+    if (getReplacementRequests().some((other) => other.id !== request.id
+        && other.type === 'BATTERY' && other.batteryId === request.batteryId
+        && (other.status === 'APPROVED' || other.status === 'FULFILLED')))
+      throw new Error('This damaged battery already has another supplied replacement.');
     const batteries = getAdminBatteries();
+    const damaged = batteries.find((battery) => battery.id === request.batteryId);
+    if (!damaged) throw new Error('Damaged Battery ID was not found.');
     const chosen = batteries.find((battery) => battery.id === selectedItemId);
     if (!chosen || !getMatchingBatteryOptions(request).some((battery) => battery.id === selectedItemId))
-      throw new Error('Choose an available NEW battery with the correct model from Replacement Supplies.');
-    // A previously unassigned Admin-owned battery is now supplied to the Hub.
-    // This is an UPDATE of the same Battery ID, not creation of another one.
+      throw new Error('Choose a new, unassigned battery with the matching model.');
     if (chosen.replacementSupplyState === 'AVAILABLE') {
       chosen.hubId = request.hubId;
       chosen.replacementRequestId = request.id;
       chosen.replacementSupplyState = 'SUPPLIED';
-      chosen.replacementSuppliedAt = time;
-      chosen.updatedAt = time;
+      chosen.replacementSuppliedAt = stamp;
+      chosen.updatedAt = stamp;
     } else if (!(record.registeredBatteryId === chosen.id && chosen.replacementRequestId === request.id)) {
-      throw new Error('This battery has already been allocated to another Hub or request.');
+      throw new Error('This battery has already been assigned to another Hub/request.');
+    }
+    // Administrative lifecycle is blocked until Technician receives and verifies the new battery.
+    if (damaged.administrativeStatus === 'ACTIVE') {
+      damaged.operationalStatus = 'MAINTENANCE';
+      damaged.retirementRecommended = true;
+      damaged.retirementReason = 'TECHNICIAN_REPORTED_FAILURE';
+      damaged.updatedAt = stamp;
     }
     record.selectedBatteryId = selectedItemId;
     batteryUpdates = batteries;
   }
   record.stage = 'SUPPLIED';
-  record.suppliedAt = time;
+  record.suppliedAt = stamp;
   record.events.push(event('SUPPLIED', `${selectedItemId} × ${request.quantity} assigned for Technician receipt`));
+  if (!existing) records.unshift(record);
   const requests = getReplacementRequests().map((item) => item.id === requestId ? updated : item);
   const entries: Array<[string, unknown]> = [[REQUEST_KEY, requests], [SUPPLY_KEY, records]];
   if (parts) entries.unshift([PART_KEY, parts]);
