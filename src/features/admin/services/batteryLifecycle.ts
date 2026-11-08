@@ -1,4 +1,5 @@
 import type { AdminBattery } from '../types';
+import { getAdminDrones } from './adminStore';
 
 /**
  * Admin tracks battery identity, ownership, and lifecycle only.
@@ -25,5 +26,7 @@ export function isBatteryReady(battery: AdminBattery): boolean {
 export function canRetireBattery(battery: AdminBattery): boolean {
   return battery.administrativeStatus === 'ACTIVE'
     && battery.operationalStatus !== 'INSTALLED'
+    && !battery.droneId
+    && !getAdminDrones().some((drone) => drone.installedBatteryId === battery.id)
     && !battery.inspectionPending;
 }

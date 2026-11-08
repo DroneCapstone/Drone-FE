@@ -36,7 +36,7 @@ export function BatteriesPage() {
     description="Manage Battery IDs already assigned to Hubs, operational status and lifecycle."
     actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries</Link>}>
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <AdminSummaryCard label="Total batteries" value={batteries.length} note="Across the system" icon={BatteryCharging} />
+      <AdminSummaryCard label="Assigned batteries" value={batteries.length} note="Currently assigned to Hubs" icon={BatteryCharging} />
       <AdminSummaryCard label="Ready" value={batteries.filter(isBatteryReady).length} note="Ready for assignment" icon={CircleCheck} />
       <AdminSummaryCard label="Pending verification" value={batteries.filter((battery) => battery.administrativeStatus === 'ACTIVE' && battery.inspectionPending).length} note="Awaiting Technician confirmation" icon={ClipboardCheck} />
       <AdminSummaryCard label="Retired" value={batteries.filter((battery) => battery.administrativeStatus === 'RETIRED').length} note="Kept in asset history" icon={Archive} />

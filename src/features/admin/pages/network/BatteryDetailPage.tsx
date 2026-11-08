@@ -6,7 +6,7 @@ import { AdminDialogContent as DialogContent } from "../../components/AdminDialo
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';
-import { getAdminBatteries, getAdminHubs, upsertAdminBattery } from '../../services/adminStore';
+import { getAdminBatteries, getAdminDrones, getAdminHubs, upsertAdminBattery } from '../../services/adminStore';
 import { canRetireBattery } from '../../services/batteryLifecycle';
 import { recordBatteryInspectionResult } from '../../services/adminReplacementSupply';
 import { getReplacementRequests } from '../../services/prototypeWorkflow';
@@ -32,12 +32,13 @@ export function BatteryDetailPage() {
   const battery = getAdminBatteries().find((item) => item.id === batteryId);
   if (!battery) return <Navigate to="/admin/network/batteries" replace />;
   const hub = getAdminHubs().find((item) => item.id === battery.hubId);
+  const installedDrone = getAdminDrones().find((drone) => drone.installedBatteryId === battery.id || drone.id === battery.droneId);
   const request = battery.replacementRequestId
     ? getReplacementRequests().find((item) => item.id === battery.replacementRequestId)
     : undefined;
   const canRetire = canRetireBattery(battery);
   const canRecordInspection = Boolean(
-    battery.inspectionPending && (!battery.replacementRequestId || request?.status === 'FULFILLED'),
+    battery.inspectionPending && (!battery.replacementRequestId || request?.status === 'APPROVED' || request?.status === 'FULFILLED'),
   );
   const retire = () => {
     if (!canRetire || !retireReason.trim()) return;
@@ -80,6 +81,8 @@ export function BatteryDetailPage() {
         <span><small>Battery model</small><strong>{battery.model}</strong></span>
         <span><small>Serial number</small><strong>{battery.serialNumber}</strong></span>
         <span><small>Assigned Hub</small><strong>{hub?.name ?? battery.hubId}</strong></span>
+        {installedDrone && <span><small>Installed on Drone</small><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(installedDrone.id)}`}>{installedDrone.id}</Link></span>}
+        {battery.firstAssignedAt && <span><small>First assigned to Hub</small><strong>{new Date(battery.firstAssignedAt).toLocaleString('en-GB')}</strong></span>}
         <span><small>Operational status</small><StatusBadge tone={batteryOperationalTone(battery.operationalStatus)}>{battery.inspectionPending ? 'PENDING VERIFICATION' : battery.operationalStatus}</StatusBadge></span>
         <span><small>Lifecycle</small><StatusBadge tone={battery.administrativeStatus === 'RETIRED' ? 'neutral' : 'success'}>{battery.administrativeStatus}</StatusBadge></span>
         {battery.replacementRequestId && <span><small>Replacement request</small><Link className="text-button" to={`/admin/approvals?request=${encodeURIComponent(battery.replacementRequestId)}`}>{battery.replacementRequestId}</Link></span>}
@@ -87,7 +90,7 @@ export function BatteryDetailPage() {
         {battery.retiredAt && <span><small>Retired at</small><strong>{new Date(battery.retiredAt).toLocaleString('en-GB')}</strong></span>}
         {battery.inspectionNote && <span><small>Latest Technician verification</small><strong>{battery.inspectionNote}</strong></span>}
       </div>
-      {battery.inspectionPending && <p className="mt-4 text-sm text-[var(--admin-muted)]">This new battery is not available for missions until Technician receipt and verification are confirmed.</p>}
+      {battery.inspectionPending && <p className="mt-4 text-sm text-[var(--admin-muted)]">This new battery is not available for missions until technical verification is completed. Admin supply confirmation alone does not make it flight-ready.</p>}
       {battery.operationalStatus === 'INSTALLED' && <p className="mt-4 text-sm text-[var(--admin-muted)]">Retirement is disabled while this battery is installed. Technician must safely remove it first.</p>}
     </OperatorPanel>
 

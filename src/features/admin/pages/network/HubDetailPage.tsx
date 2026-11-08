@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { Boxes, MapPin, UsersRound } from "lucide-react";
+import { Boxes, MapPin, UsersRound, PackageCheck } from "lucide-react";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { getAdminBatteries, getAdminDrones, getAdminHubs, getAdminUsers } from "../../services/adminStore";
+import { getHubSupplyHistory } from "../../services/adminReplacementSupply";
 import { hubTone } from "../../utils/adminDisplay";
 import "./HubDetailPage.css";
 
@@ -28,6 +29,7 @@ export function HubDetailPage() {
   const updatedAt = new Date(hub.updatedAt);
   const updatedText = Number.isNaN(updatedAt.getTime()) ? "—" : updatedAt.toLocaleString("en-GB");
   const items = selectedAsset === "drones" ? drones : batteries;
+  const supplied = getHubSupplyHistory(hub.id);
 
   return (
     <AdminPageShell
@@ -176,6 +178,35 @@ export function HubDetailPage() {
           <div className="admin-hub-assets-footer">
             Showing {items.length} of {items.length} {selectedAsset}
           </div>
+        </section>
+
+        <section className="admin-hub-section" aria-labelledby="admin-hub-supply-heading">
+          <div className="admin-hub-assets-header">
+            <h2 className="admin-hub-section-title" id="admin-hub-supply-heading">
+              <PackageCheck size={17} strokeWidth={1.9} aria-hidden="true" />
+              Replacement supply history
+            </h2>
+            <Link className="admin-hub-supply-all" to="/admin/replacement/requests">View all records</Link>
+          </div>
+          <p className="admin-hub-supply-note">Admin-issued replacements for this Hub. This is a supply history, not a Hub spare-parts inventory or proof of physical delivery.</p>
+          <div className="admin-hub-assets-table-wrap">
+            <table className="admin-hub-assets-table">
+              <thead><tr><th scope="col">Issued at</th><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Drone</th><th scope="col">Record</th></tr></thead>
+              <tbody>
+                {supplied.slice(0, 6).map((entry) => (
+                  <tr key={entry.requestId}>
+                    <td>{new Date(entry.issuedAt).toLocaleDateString('en-GB')}</td>
+                    <td><strong className="admin-hub-supply-item">{entry.itemName}</strong>{entry.itemId && <small className="admin-hub-supply-id">{entry.itemId}</small>}</td>
+                    <td>{entry.quantity}</td>
+                    <td>{entry.droneId ?? '—'}</td>
+                    <td><Link to={`/admin/replacement/requests?request=${encodeURIComponent(entry.requestId)}`}>View</Link></td>
+                  </tr>
+                ))}
+                {supplied.length === 0 && <tr><td colSpan={5} className="admin-hub-assets-empty">No replacements have been issued for this Hub.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {supplied.length > 6 && <div className="admin-hub-assets-footer">Showing 6 of {supplied.length} issued replacement records</div>}
         </section>
       </div>
     </AdminPageShell>

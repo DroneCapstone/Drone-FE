@@ -13,6 +13,7 @@ declare module '../types' {
     replacementSupplyState?: 'AVAILABLE' | 'SUPPLIED';
     replacementSuppliedAt?: string;
     adminReceivedAt?: string;
+    firstAssignedAt?: string;
   }
 }
 
@@ -31,7 +32,7 @@ function nextAdminBatteryId(batteries: AdminBattery[]): string {
 export function getAvailableNewBatteries(model?: string): AdminBattery[] {
   return getAdminBatteries().filter((battery) =>
     battery.replacementSupplyState === 'AVAILABLE'
-    && !battery.hubId && !battery.droneId && !battery.replacementRequestId
+    && !battery.hubId && !battery.droneId && !battery.replacementRequestId && !battery.firstAssignedAt
     && battery.administrativeStatus === 'ACTIVE'
     && battery.inspectionPending === true
     && (!model || battery.model === model),
@@ -87,7 +88,7 @@ export function registerAdminNewBatteries(
   const created: AdminBattery[] = serials.map((serialNumber) => {
     const battery: AdminBattery = {
       id: nextAdminBatteryId(working), model, serialNumber,
-      hubId: '', // NO Hub assignment until Confirm supply for an approved request.
+      hubId: '', // Assigned only after Admin Confirm Supply.
       operationalStatus: 'MAINTENANCE', administrativeStatus: 'ACTIVE',
       inspectionPending: true, replacementSupplyState: 'AVAILABLE',
       adminReceivedAt: date, chargeLevelPct: 0, // actual charge unknown until checked
