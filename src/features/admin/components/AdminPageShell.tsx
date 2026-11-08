@@ -23,12 +23,14 @@ export function AdminPageShell({
   title,
   description,
   actions,
+  hideSectionTabs = false,
   children,
 }: {
   title: string;
   breadcrumbLabel?: string;
   description?: string;
   actions?: ReactNode;
+  hideSectionTabs?: boolean;
   children: ReactNode;
 }) {
   const { pathname } = useLocation();
@@ -74,7 +76,7 @@ export function AdminPageShell({
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </header>
 
-      {section?.children?.length ? (
+      {!hideSectionTabs && section?.children?.length ? (
         <nav className="subtabs" aria-label={`${section.label} navigation`}>
           {section.children.map((child) => (
             <Link

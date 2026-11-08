@@ -129,13 +129,13 @@ export function NewBatteriesPage() {
 
   return <AdminPageShell
     title="New Batteries"
-    actions={<ActionButton icon="plus" onClick={openCreate}>Create new battery</ActionButton>}
+    actions={<ActionButton icon="plus" onClick={openCreate}>Add batteries</ActionButton>}
   >
     {validReturn && <div className="mb-3"><Link className="text-button" to={validReturn}>Back to replacement request</Link></div>}
 
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <CompactMetric label="Total new batteries" value={available.length} note="Available for supply" icon={BatteryCharging} />
-      <CompactMetric label="Battery models" value={new Set(available.map((battery) => battery.model)).size} note="Models currently registered" icon={Box} />
+      <CompactMetric label="Available new batteries" value={available.length} note="Available for supply" icon={BatteryCharging} />
+      <CompactMetric label="Battery models" value={new Set(available.map((battery) => battery.model)).size} note="Supported battery models" icon={Box} />
       <CompactMetric label="Added this week" value={addedThisWeek} note="Registered by Admin" icon={CalendarDays} />
     </div>
 
@@ -153,7 +153,7 @@ export function NewBatteriesPage() {
       />
       <div className="table-wrap"><table>
         <thead><tr>
-          <th>Battery ID</th><th>Battery model</th><th>Serial number</th><th>Created on</th><th>Actions</th>
+          <th>Battery ID</th><th>Battery model</th><th>Serial number</th><th>Added on</th><th>Actions</th>
         </tr></thead>
         <tbody>
           {shown.map((battery) => <tr key={battery.id}>
@@ -182,7 +182,7 @@ export function NewBatteriesPage() {
     <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>
       {creating && <DialogContent className="max-h-[85vh] overflow-y-auto" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
         <div className="border-b border-border p-5">
-          <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Create new battery</div></DialogTitle>
+          <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Add batteries</div></DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">Enter one serial number per battery.</p>
         </div>
         <div className="space-y-4 p-5">
@@ -203,7 +203,7 @@ export function NewBatteriesPage() {
         </div>
         <div className="form-actions border-t border-border p-5">
           <ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton>
-          <ActionButton type="submit" disabled={!model || serialCount < 1}>Register batteries</ActionButton>
+          <ActionButton type="submit" disabled={!model || serialCount < 1}>Add batteries</ActionButton>
         </div>
       </form></DialogContent>}
     </Dialog>

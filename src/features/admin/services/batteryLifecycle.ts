@@ -25,5 +25,6 @@ export function isBatteryReady(battery: AdminBattery): boolean {
 export function canRetireBattery(battery: AdminBattery): boolean {
   return battery.administrativeStatus === 'ACTIVE'
     && battery.operationalStatus !== 'INSTALLED'
+    && !battery.droneId
     && !battery.inspectionPending;
 }
