@@ -14,21 +14,14 @@ import { getAdminDrones, getAdminHubs, upsertAdminDrone } from "../../services/a
 import type { AdminDrone } from "../../types";
 import { droneTone } from "../../utils/adminDisplay";
 
-function newDrone(hubId = ""): AdminDrone {
+function newDrone(hubId: string, template?: AdminDrone): AdminDrone {
   const now = new Date().toISOString();
   return {
-    id: "",
-    name: "",
-    displayId: "",
-    model: "",
-    serialNumber: "",
-    hubId,
-    status: "AVAILABLE",
-    isActive: true,
-    batteryPct: 100,
-    maxPayloadKg: 0,
-    createdAt: now,
-    updatedAt: now,
+    id: '', name: '', displayId: '', model: template?.model ?? '', serialNumber: '', hubId,
+    // A newly received physical drone is not automatically cleared for missions.
+    status: 'MAINTENANCE', isActive: false, batteryPct: 0,
+    maxPayloadKg: template?.maxPayloadKg ?? 0,
+    createdAt: now, updatedAt: now,
   };
 }
 
@@ -39,6 +32,7 @@ export function DronesPage() {
   const [active, setActive] = useState("all");
   const [hub, setHub] = useState("all");
   const [creating, setCreating] = useState<AdminDrone | null>(null);
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     const listener = () => setVersion((value) => value + 1);
@@ -48,6 +42,8 @@ export function DronesPage() {
 
   const drones = useMemo(() => getAdminDrones(), [version]);
   const hubs = getAdminHubs();
+  const activeHubs = hubs.filter((hub) => hub.status === 'ACTIVE');
+  const templates = Array.from(new Map(drones.map((drone) => [drone.model, drone])).values()).sort((a, b) => a.model.localeCompare(b.model));
   const visible = drones.filter((drone) => {
     const matchesQuery = `${drone.id} ${drone.name} ${drone.model} ${drone.serialNumber}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (status === "all" || drone.status === status) && (active === "all" || String(drone.isActive) === active) && (hub === "all" || drone.hubId === hub);
@@ -57,14 +53,41 @@ export function DronesPage() {
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!creating) return;
-    const now = new Date().toISOString();
-    const id = creating.id.trim().toUpperCase();
-    upsertAdminDrone({ ...creating, id, name: creating.name.trim() || id, displayId: id.replace(/\D/g, "").slice(-2), status: "AVAILABLE", createdAt: now, updatedAt: now });
-    setCreating(null);
+    try {
+      const current = getAdminDrones();
+      const template = current.find((drone) => drone.model === creating.model);
+      const serial = creating.serialNumber.trim();
+      const hub = getAdminHubs().find((item) => item.id === creating.hubId && item.status === 'ACTIVE');
+      if (!template) throw new Error('Select an existing supported drone model.');
+      if (!serial) throw new Error('Enter the physical drone serial number.');
+      if (current.some((drone) => drone.serialNumber.trim().toLowerCase() === serial.toLowerCase()))
+        throw new Error('This serial number already exists.');
+      if (!hub) throw new Error('Choose an active Hub.');
+      if (current.filter((drone) => drone.hubId === hub.id).length >= hub.capacity)
+        throw new Error('Selected Hub has reached drone capacity.');
+      const maxId = current.reduce((maximum, drone) => {
+        const match = /^DR-(\d+)$/.exec(drone.id);
+        return match ? Math.max(maximum, Number(match[1])) : maximum;
+      }, 0);
+      const id = `DR-${String(maxId + 1).padStart(3, '0')}`;
+      const now = new Date().toISOString();
+      upsertAdminDrone({ ...creating, id, name: creating.name.trim() || id,
+        model: template.model, serialNumber: serial, hubId: hub.id,
+        displayId: String(maxId + 1).padStart(2, '0'),
+        maxPayloadKg: template.maxPayloadKg,
+        status: 'MAINTENANCE', isActive: false, batteryPct: 0,
+        installedBatteryId: undefined, createdAt: now, updatedAt: now });
+      setCreateError('');
+      setCreating(null);
+    } catch (cause) { setCreateError(cause instanceof Error ? cause.message : 'Could not add drone.'); }
+  };
+  const openAdd = () => {
+    setCreateError('');
+    setCreating(newDrone(activeHubs[0]?.id ?? '', templates[0]));
   };
 
   return (
-    <AdminPageShell title="Drones" description="Register drone master data and control administrative availability. Operational status remains read-only for Admin." actions={<ActionButton icon="plus" onClick={() => setCreating(newDrone(hubs[0]?.id))}>Register drone</ActionButton>}>
+    <AdminPageShell title="Drones" description="Add physical drones from supported models and manage administrative availability." actions={<ActionButton icon="plus" onClick={openAdd}>Add drone</ActionButton>}>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminSummaryCard label="Total drones" value={drones.length} note="Registered assets" icon={Plane} />
         <AdminSummaryCard label="Available" value={drones.filter((d) => d.status === "AVAILABLE" && d.isActive).length} note="Before eligibility checks" icon={CircleCheck} />
@@ -97,16 +120,18 @@ export function DronesPage() {
 
       <Dialog open={Boolean(creating)} onOpenChange={(open) => !open && setCreating(null)}>
         {creating ? <DialogContent><form onSubmit={save}>
-          <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Register drone</DialogTitle><p className="mt-1 text-sm text-muted-foreground">New drones start as AVAILABLE and active.</p></div>
+          <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Add drone</DialogTitle><p className="mt-1 text-sm text-muted-foreground">Add an existing physical drone. Choose a supported model; its ID is generated automatically. Drone stays inactive for technical onboarding.</p></div>
           <div className="fields two p-5">
-            <label><span>Drone code</span><input required placeholder="DR-021" value={creating.id} onChange={(e) => setCreating({ ...creating, id: e.target.value })} /></label>
             <label><span>Drone name</span><input placeholder="CX-21" value={creating.name} onChange={(e) => setCreating({ ...creating, name: e.target.value })} /></label>
-            <label><span>Model</span><input required value={creating.model} onChange={(e) => setCreating({ ...creating, model: e.target.value })} /></label>
+            <label><span>Model</span><select required value={creating.model} onChange={(e) => { const template = templates.find((drone) => drone.model === e.target.value); setCreating({ ...creating, model: e.target.value, maxPayloadKg: template?.maxPayloadKg ?? 0 }); }}>
+              {templates.map((template) => <option key={template.model} value={template.model}>{template.model}</option>)}
+            </select></label>
             <label><span>Serial number</span><input required value={creating.serialNumber} onChange={(e) => setCreating({ ...creating, serialNumber: e.target.value })} /></label>
-            <label><span>Maximum payload (kg)</span><input required min={0} step="0.1" type="number" value={creating.maxPayloadKg || ""} onChange={(e) => setCreating({ ...creating, maxPayloadKg: Number(e.target.value) })} /></label>
-            <label><span>Home hub</span><select required value={creating.hubId} onChange={(e) => setCreating({ ...creating, hubId: e.target.value })}>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+            <label><span>Maximum payload (kg) · from model</span><input readOnly value={creating.maxPayloadKg || ""} /></label>
+            <label><span>Home hub</span><select required value={creating.hubId} onChange={(e) => setCreating({ ...creating, hubId: e.target.value })}>{activeHubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
           </div>
-          <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton><ActionButton type="submit">Register drone</ActionButton></div>
+          {createError && <p role="alert" className="mx-5 mt-2 text-sm text-red-500">{createError}</p>}
+          <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton><ActionButton type="submit">Add drone</ActionButton></div>
         </form></DialogContent> : null}
       </Dialog>
     </AdminPageShell>

@@ -1,0 +1,55 @@
+/* Admin Battery Detail - intentionally compact; only 2 core cards. */
+.admin-battery-detail { display: grid; gap: 14px; min-width: 0; }
+.admin-battery-detail .abd-back { display: flex; align-items: center; margin-top: -3px; margin-bottom: 2px; }
+.admin-battery-detail .abd-back a {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--text); font-size: 13px; font-weight: 600;
+  padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--surface);
+  box-shadow: 0 2px 5px rgba(15,23,42,.04); text-decoration: none;
+}
+.admin-battery-detail .abd-back svg { color: #ff6b00; }
+.admin-battery-detail .abd-back a:hover { border-color: #ff6b00; }
+.admin-battery-detail .abd-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.admin-battery-detail .abd-card {
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 19px 21px; background: var(--surface);
+  box-shadow: 0 3px 9px rgba(15,23,42,.045); min-width: 0;
+}
+.admin-battery-detail .abd-card h2 {
+  font-size: 14px; color: var(--text); font-weight: 650; line-height: 1.4;
+  margin: 0 0 16px; display: flex; gap: 8px; align-items: center;
+}
+.admin-battery-detail .abd-card h2 svg { color: #ff6b00; }
+.admin-battery-detail .abd-data { margin: 0; }
+.admin-battery-detail .abd-data > div, .admin-battery-detail .abd-history-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 12px 0; min-width: 0; border-top: 1px solid var(--border);
+}
+.admin-battery-detail .abd-data > div:first-child { border-top: 0; padding-top: 0; }
+.admin-battery-detail .abd-data > div:last-child { padding-bottom: 0; }
+.admin-battery-detail dt, .admin-battery-detail .abd-history-row > span {
+  color: var(--faint); font-size: 13px; flex-shrink: 0;
+}
+.admin-battery-detail dd { margin: 0; color: var(--text); font-weight: 600; font-size: 13px; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.admin-battery-detail .abd-link {
+  display: inline-flex; align-items: center; gap: 4px; color: #3b82f6;
+  font-weight: 600; text-decoration: underline; text-underline-offset: 2px;
+}
+.admin-battery-detail .abd-link:hover { color: #2563eb; }
+.admin-battery-detail .abd-helper { margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.admin-battery-detail .abd-history h2 { margin-bottom: 13px; }
+.admin-battery-detail .abd-history-list { display: grid; gap: 0; }
+.admin-battery-detail .abd-history-entry { padding: 13px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.admin-battery-detail .abd-history-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.admin-battery-detail .abd-history-meta { display: flex; gap: 16px; margin-top: 7px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+.admin-battery-detail .abd-history-related { margin-top: 7px; color: var(--muted); }
+.admin-battery-detail .abd-history-row strong { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.admin-battery-detail .abd-notice { padding: 10px 13px; background: var(--surface); color: #059669; border: 1px solid var(--border); border-radius: 9px; font-size: 13px; }
+@media (max-width: 860px) { .admin-battery-detail .abd-grid { grid-template-columns: 1fr; } }
+@media (max-width: 530px) {
+  .admin-battery-detail .abd-card { padding: 16px; }
+  .admin-battery-detail .abd-data > div, .admin-battery-detail .abd-history-row { align-items: flex-start; gap: 10px; }
+  .admin-battery-detail dt, .admin-battery-detail .abd-history-row > span { flex: 0 1 45%; }
+  .admin-battery-detail dd { flex: 1; }
+}
