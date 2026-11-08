@@ -33,7 +33,7 @@ export function AllMissionsPage() {
   );
 
   return (
-    <MissionPageShell active="/operator/missions/all">
+    <MissionPageShell active="/operator/missions/all" showFlightHistory>
       <OperatorPanel className="flush-panel">
         <div className="toolbar">
           <div className="filter-search">
