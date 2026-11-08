@@ -101,10 +101,8 @@ export function getSpareParts(): SparePart[] {
   });
 }
 
-/** Demo reference prices (VND) only for the browser-local prototype.
- * Replace this table with Backend supplier prices when an API is connected.
- * Existing per-part configured unitCostVnd always takes priority. */
-const DEMO_PART_REFERENCE_PRICE_VND: Record<string, number> = {
+/** Demo-only reference unit values in VND, NOT supplier quotes or bank payouts. */
+const DEMO_PART_COST_VND: Record<string, number> = {
   'PART-PROP': 200_000,
   'PART-MOTOR': 3_500_000,
   'PART-ESC': 1_800_000,
@@ -114,33 +112,27 @@ const DEMO_PART_REFERENCE_PRICE_VND: Record<string, number> = {
   'PART-PDM': 1_300_000,
   'PART-PAY': 2_500_000,
 };
+
+/** Configured price wins; built-in core parts have a clearly demo-only fallback. */
 export function getSparePartReferenceUnitCostVnd(part: SparePart): number {
   if (Number.isSafeInteger(part.unitCostVnd) && part.unitCostVnd > 0) return part.unitCostVnd;
-  return DEMO_PART_REFERENCE_PRICE_VND[part.id] ?? 0;
+  return DEMO_PART_COST_VND[part.id] ?? 0;
 }
-function makeRecordedAcquisitionCost(part: SparePart, unitCostVnd: number, added: number): PrototypeExpense {
+
+function recordedAcquisitionForParts(part: SparePart, count: number): PrototypeExpense {
+  const unitPrice = getSparePartReferenceUnitCostVnd(part);
+  if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0 || !Number.isSafeInteger(unitPrice * count)) {
+    throw new Error('Configure a positive reference unit price before receiving spare parts.');
+  }
   return {
-    id: `EXP-PART-REF-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    id: `EXP-PART-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
     date: new Date().toISOString(), category: 'SPARE_PART',
-    amountVnd: added * unitCostVnd,
-    description: `Recorded reference acquisition cost (not verified paid): ${added} × ${part.name} (${part.id}), ${unitCostVnd} VND/unit`,
+    amountVnd: count * unitPrice, recordType: 'RECORDED',
+    sourceId: part.id, quantity: count, unitCostVnd: unitPrice,
+    description: `Recorded acquisition: ${count} × ${part.name} (${part.id}) at ${unitPrice} VND/unit; no bank payment`,
   };
 }
 
-export interface PaidPartsPurchase { paid: boolean; actualUnitCostVnd: number }
-function makePaidExpense(part: SparePart, amount: number, count: number): PrototypeExpense {
-  return {
-    id: `EXP-PART-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-    date: new Date().toISOString(), category: 'SPARE_PART',
-    amountVnd: count * amount,
-    description: `Paid purchase: ${count} × ${part.name} (${part.id}, ${part.compatibleModels})`,
-  };
-}
-function verifyPurchase(purchase: PaidPartsPurchase | undefined, count: number) {
-  if (!purchase?.paid) return;
-  if (count < 1 || !Number.isFinite(purchase.actualUnitCostVnd) || purchase.actualUnitCostVnd <= 0)
-    throw new Error('Enter a positive actual purchase price for the paid quantity.');
-}
 function verifyPart(part: SparePart) {
   if (!part.id.trim() || !part.name.trim() || !part.compatibleModels.trim())
     throw new Error('Part ID, component and drone model are required.');
@@ -153,7 +145,7 @@ function verifyPart(part: SparePart) {
 }
 
 /** Create a SKU with initial quantity, or update its metadata without modifying quantity. */
-export function saveSparePart(part: SparePart, purchase?: PaidPartsPurchase) {
+export function saveSparePart(part: SparePart) {
   const normalized: SparePart = {
     ...part, id: part.id.trim().toUpperCase(), name: part.name.trim(),
     compatibleModels: part.compatibleModels.trim(),
@@ -168,34 +160,23 @@ export function saveSparePart(part: SparePart, purchase?: PaidPartsPurchase) {
     && item.name.toLowerCase() === normalized.name.toLowerCase()
     && item.compatibleModels.toLowerCase() === normalized.compatibleModels.toLowerCase()))
     throw new Error('This component and compatible model already exist. Use Add quantity instead.');
-  if (index >= 0 && purchase?.paid) throw new Error('Use Add quantity to record additional purchases.');
-  verifyPurchase(purchase, index < 0 ? normalized.quantity : 0);
+  const acquisition = index < 0 && normalized.quantity > 0 ? recordedAcquisitionForParts(normalized, normalized.quantity) : null;
   if (index >= 0) items[index] = normalized; else items.unshift(normalized);
   const entries: Array<[string, unknown]> = [['parts', items]];
-  if (purchase?.paid) entries.push(['expenses', [makePaidExpense(normalized, purchase.actualUnitCostVnd, normalized.quantity), ...getPrototypeExpenses()]]);
+  if (acquisition) entries.push(['expenses', [acquisition, ...getPrototypeExpenses()]]);
   writeTogether(entries);
   recordPrototypeActivity('admin', 'Admin', index >= 0 ? 'UPDATE_PART' : 'CREATE_PART', normalized.id);
 }
 
 /** Add new available units to an existing SKU; never create a duplicate part. */
-export function addSparePartQuantity(id: string, added: number, purchase?: PaidPartsPurchase) {
+export function addSparePartQuantity(id: string, added: number) {
   if (!Number.isSafeInteger(added) || added <= 0) throw new Error('Enter a positive whole number of units.');
   const parts = getSpareParts(); const part = parts.find((item) => item.id === id);
   if (!part || !part.active) throw new Error('Only an active spare part can receive additional quantity.');
-  verifyPurchase(purchase, added);
-  // Do not treat a reference price as proof of an external bank payment.
-  // The Admin Add Quantity popup records the estimated acquisition value with
-  // the quantity change, while legacy explicit-paid callers remain supported.
-  const referenceUnitPrice = getSparePartReferenceUnitCostVnd(part);
-  const unitCost = purchase?.paid ? purchase.actualUnitCostVnd : referenceUnitPrice;
-  if (!Number.isSafeInteger(unitCost) || unitCost <= 0 || !Number.isSafeInteger(added * unitCost))
-    throw new Error('A positive reference unit price is required before recording a quantity addition.');
+  const acquisition = recordedAcquisitionForParts(part, added);
   part.quantity += added;
   const entries: Array<[string, unknown]> = [['parts', parts]];
-  const expense = purchase?.paid
-    ? makePaidExpense(part, unitCost, added)
-    : makeRecordedAcquisitionCost(part, unitCost, added);
-  entries.push(['expenses', [expense, ...getPrototypeExpenses()]]);
+  entries.push(['expenses', [acquisition, ...getPrototypeExpenses()]]);
   writeTogether(entries);
   recordPrototypeActivity('admin', 'Admin', 'ADD_PART_QUANTITY', id, `+${added}; available ${part.quantity}`);
 }
@@ -365,19 +346,49 @@ export function recordPrototypeActivity(role: 'admin' | 'technician', actor: str
   write('activity', [a, ...getPrototypeActivity()].slice(0, 500));
 }
 export function getPrototypeAudit(): AdminAuditLog[] { return getPrototypeActivity().map(a => ({ id: a.id, actor: a.actor, role: a.role, action: a.action, entityType: a.action.includes('USER') ? 'User' : a.action.includes('REFUND') ? 'Payment' : a.action.includes('PART') ? 'Spare Part' : 'Replacement', entityId: a.target, result: 'SUCCESS', afterValue: a.detail, occurredAt: a.at })); }
-export function getPrototypePayments(): AdminPayment[] { return read('payments', adminPayments); }
+export function getPrototypePayments(): AdminPayment[] {
+  // Fallback fixtures are illustrative only. Do not claim they are real PayOS receipts.
+  const sample = adminPayments.map((payment) => ({
+    ...payment, paymentMethod: 'Demo sample (not PayOS)',
+    providerReference: payment.providerReference ? `DEMO-${payment.providerReference}` : undefined,
+  }));
+  return read('payments', sample);
+}
 export function getPrototypeRefunds(): AdminRefund[] { return read('refunds', adminRefunds); }
 export function executePrototypeRefund(paymentId: string, reason: string) {
   const payments = getPrototypePayments(); const payment = payments.find(p => p.id === paymentId);
   if (!payment || !payment.refundable || payment.status !== 'PAID') throw new Error('Only eligible paid transactions can be refunded.');
   const now = new Date().toISOString(); payment.status = 'REFUNDED'; payment.refundable = false; payment.refundedAt = now;
-  payment.refundBlockReason = 'Already refunded'; write('payments', payments);
-  write('refunds', [{ id: `REF-${Date.now()}`, paymentId: payment.id, orderId: payment.orderId, customerName: payment.customerName, amountVnd: payment.amountVnd, reason: reason.trim() || 'Full refund (prototype)', status: 'COMPLETED', requestedAt: now, processedAt: now }, ...getPrototypeRefunds()]);
+  payment.refundBlockReason = 'Already refunded (demo)';
+  const existing = getPrototypeRefunds();
+  if (existing.some((refund) => refund.paymentId === payment.id && refund.status === 'COMPLETED')) {
+    throw new Error('This payment has already been refunded in the demo ledger.');
+  }
+  const nextRefunds = [{
+    id: `REF-DEMO-${Date.now()}`, paymentId: payment.id, orderId: payment.orderId,
+    customerName: payment.customerName, amountVnd: payment.amountVnd,
+    reason: reason.trim() || 'Simulated full refund', status: 'COMPLETED' as const,
+    requestedAt: now, processedAt: now,
+  }, ...existing];
+  // The two browser-local records advance together; never imply PayOS transferred money.
+  writeTogether([['payments', payments], ['refunds', nextRefunds]]);
   recordPrototypeActivity('admin', 'Admin', 'ISSUE_REFUND', payment.id);
 }
 export function getUserActivity(userId: string) { return getPrototypeActivity().filter(a => a.target === userId); }
 
-export interface PrototypeExpense { id: string; date: string; category: 'DRONE' | 'BATTERY' | 'SPARE_PART' | 'OTHER'; amountVnd: number; description: string; hubId?: string; }
+export interface PrototypeExpense {
+  id: string;
+  date: string;
+  category: 'DRONE' | 'BATTERY' | 'SPARE_PART' | 'OTHER';
+  amountVnd: number;
+  description: string;
+  hubId?: string;
+  /** RECORDED is an internal reference expense, not an actual bank disbursement. */
+  recordType?: 'RECORDED';
+  sourceId?: string;
+  quantity?: number;
+  unitCostVnd?: number;
+}
 export function getPrototypeExpenses(): PrototypeExpense[] { return read('expenses', [] as PrototypeExpense[]); }
 export function addPrototypeExpense(expense: Omit<PrototypeExpense, 'id' | 'date'>) {
   if (!expense.description.trim() || !Number.isFinite(expense.amountVnd) || expense.amountVnd <= 0) throw new Error('Enter an expense description and a positive amount.');

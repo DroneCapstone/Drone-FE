@@ -11,6 +11,7 @@ import { getAdminBatteries } from '../../services/adminStore';
 import {
   editAvailableNewBattery,
   getAvailableNewBatteries,
+  getNewBatteryReferenceUnitCostVnd,
   registerAdminNewBatteries,
   removeAvailableNewBattery,
   seedNewBatteriesDemo,
@@ -61,8 +62,6 @@ export function NewBatteriesPage() {
   const [creating, setCreating] = useState(false);
   const [model, setModel] = useState('');
   const [serials, setSerials] = useState('');
-  const [paid, setPaid] = useState(false);
-  const [unitPrice, setUnitPrice] = useState(0);
   const [editing, setEditing] = useState<AdminBattery | null>(null);
   const [editModel, setEditModel] = useState('');
   const [editSerial, setEditSerial] = useState('');
@@ -94,16 +93,17 @@ export function NewBatteriesPage() {
     return receivedAt >= startOfWeek && receivedAt <= Date.now();
   }).length;
   const serialCount = serials.split(/\r?\n/).filter((serial) => serial.trim()).length;
+  const referencePrice = getNewBatteryReferenceUnitCostVnd(model);
 
   const openCreate = () => {
     setModel(models.includes(modelHint) ? modelHint : (models[0] ?? ''));
-    setSerials(''); setPaid(false); setUnitPrice(0);
+    setSerials('');
     setNotice(''); setError(''); setCreating(true);
   };
   const register = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const entries = registerAdminNewBatteries(model, serials.split(/\r?\n/), paid ? unitPrice : undefined);
+      const entries = registerAdminNewBatteries(model, serials.split(/\r?\n/));
       setCreating(false); setError('');
       setNotice(`${entries.length} new battery${entries.length === 1 ? '' : ' units'} registered (${model}): ${entries.map((battery) => battery.id).join(', ')}.`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not register new batteries.'); }
@@ -129,13 +129,13 @@ export function NewBatteriesPage() {
 
   return <AdminPageShell
     title="New Batteries"
-    actions={<ActionButton icon="plus" onClick={openCreate}>Add batteries</ActionButton>}
+    actions={<ActionButton icon="plus" onClick={openCreate}>Create new battery</ActionButton>}
   >
     {validReturn && <div className="mb-3"><Link className="text-button" to={validReturn}>Back to replacement request</Link></div>}
 
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <CompactMetric label="Available new batteries" value={available.length} note="Available for supply" icon={BatteryCharging} />
-      <CompactMetric label="Battery models" value={new Set(available.map((battery) => battery.model)).size} note="Supported battery models" icon={Box} />
+      <CompactMetric label="Total new batteries" value={available.length} note="Available for supply" icon={BatteryCharging} />
+      <CompactMetric label="Battery models" value={new Set(available.map((battery) => battery.model)).size} note="Models currently registered" icon={Box} />
       <CompactMetric label="Added this week" value={addedThisWeek} note="Registered by Admin" icon={CalendarDays} />
     </div>
 
@@ -153,7 +153,7 @@ export function NewBatteriesPage() {
       />
       <div className="table-wrap"><table>
         <thead><tr>
-          <th>Battery ID</th><th>Battery model</th><th>Serial number</th><th>Added on</th><th>Actions</th>
+          <th>Battery ID</th><th>Battery model</th><th>Serial number</th><th>Created on</th><th>Actions</th>
         </tr></thead>
         <tbody>
           {shown.map((battery) => <tr key={battery.id}>
@@ -182,7 +182,7 @@ export function NewBatteriesPage() {
     <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>
       {creating && <DialogContent className="max-h-[85vh] overflow-y-auto" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
         <div className="border-b border-border p-5">
-          <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Add batteries</div></DialogTitle>
+          <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Create new battery</div></DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">Enter one serial number per battery.</p>
         </div>
         <div className="space-y-4 p-5">
@@ -195,15 +195,17 @@ export function NewBatteriesPage() {
             <textarea required rows={4} className={`${field} mt-2 !h-auto py-2`} placeholder={'SERIAL-001\nSERIAL-002'} value={serials} onChange={(event) => setSerials(event.target.value)} />
           </label>
           <div className="text-xs text-[var(--admin-muted)]">Battery IDs are generated automatically · {serialCount} serial(s)</div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid</label>
-          {paid && <label className="block text-sm"><span>Actual unit purchase price (VND)</span>
-            <input required className={`${field} mt-2`} min={1} step={1} type="number" value={unitPrice || ''} onChange={(event) => setUnitPrice(Number(event.target.value))}/>
-          </label>}
+          <div className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4 text-sm">
+            <strong className="block mb-3">Acquisition Cost <span className="float-right text-xs font-normal text-[var(--admin-muted)]">Auto calculated · demo</span></strong>
+            <div className="flex justify-between gap-2"><span>Reference Unit Price</span><strong>{referencePrice > 0 ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(referencePrice) : 'Not configured'}</strong></div>
+            <div className="mt-3 flex justify-between gap-2 border-t border-[var(--admin-border)] pt-3"><span>Total Recorded Cost</span><strong>{referencePrice > 0 && serialCount > 0 ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(referencePrice * serialCount) : '—'}</strong></div>
+            <p className="mt-2 text-xs text-[var(--admin-muted)]">One internal recorded cost for this registration batch. No real bank transfer or supplier payment.</p>
+          </div>
           {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
         </div>
         <div className="form-actions border-t border-border p-5">
           <ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton>
-          <ActionButton type="submit" disabled={!model || serialCount < 1}>Add batteries</ActionButton>
+          <ActionButton type="submit" disabled={!model || serialCount < 1 || referencePrice <= 0}>Register batteries</ActionButton>
         </div>
       </form></DialogContent>}
     </Dialog>
