@@ -77,7 +77,7 @@ export function AdminDashboardPage() {
   const pendingBatteryVerification = batteries.filter((battery) =>
     battery.administrativeStatus === "ACTIVE" && battery.inspectionPending,
   ).length;
-  const pendingApprovals = getReplacementRequests().filter((request) => request.status === "PENDING").length;
+  const awaitingSupplies = getReplacementRequests().filter((request) => request.status === "PENDING").length;
 
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
   const customerCount = users.filter((user) => user.role === "customer").length;
@@ -121,8 +121,8 @@ export function AdminDashboardPage() {
       description="System-wide overview of revenue, missions, users, hubs, fleet and battery lifecycle."
     >
       <div className="mb-4 flex items-center justify-between rounded-lg border border-[var(--admin-border)] p-3 text-sm">
-        <span><strong>{pendingApprovals}</strong> replacement requests waiting for approval</span>
-        <Link className="text-button" to="/admin/approvals">Review approvals</Link>
+        <span><strong>{awaitingSupplies}</strong> replacement records awaiting supply</span>
+        <Link className="text-button" to="/admin/replacement/requests">View replacement records</Link>
       </div>
       <div className="metric-grid">
         <MetricCard
