@@ -25,18 +25,18 @@ export function getMissionsForOrder(orderId: string, missions: Mission[]) {
 
 export function hasDeliveryMission(orderId: string, missions: Mission[]) {
   return getMissionsForOrder(orderId, missions).some(
-    (mission) => mission.status === 'Scheduled' || mission.status === 'In Progress' || mission.status === 'Incident return',
+    (mission) => mission.status === 'Scheduled' || mission.status === 'In Progress',
   );
 }
 
 /**
  * Returns the Mission that currently represents this Order in Operator UI.
- * Cancelled/Failed attempts do not block a new planning cycle.
+ * Failed attempts do not block a new planning cycle.
  */
 export function getDeliveryMission(orderId: string, missions: Mission[]) {
   const orderMissions = getMissionsForOrder(orderId, missions);
   return (
-    orderMissions.find((mission) => mission.status === 'Scheduled' || mission.status === 'In Progress' || mission.status === 'Incident return') ??
+    orderMissions.find((mission) => mission.status === 'Scheduled' || mission.status === 'In Progress') ??
     orderMissions.find((mission) => mission.status === 'Completed')
   );
 }

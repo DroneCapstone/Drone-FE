@@ -1,12 +1,11 @@
 import type { Mission, MissionLeg, MissionStatus, Tone } from '../types/operator';
 import { calculatePackageReceiveDeadline } from './missionTiming';
-import { loadOperatorOrders, markOrderNeedsReplanning } from './operatorOrderStorage';
 
 const STORAGE_KEY = 'droneoptai.operator.missions.v6';
 
 export function getMissionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
-  if (status === 'Failed' || status === 'Cancelled' || status === 'Incident return') return 'danger';
+  if (status === 'Failed') return 'danger';
   if (status === 'In Progress') return 'success';
   return 'info';
 }
@@ -25,13 +24,13 @@ function buildMissionLegs(
     status:
       status === 'Completed'
         ? 'Completed'
-        : (status === 'In Progress' || status === 'Incident return') && index === 0
+        : status === 'In Progress' && index === 0
           ? 'In Progress'
           : 'Pending',
   }));
 }
 
-function normalizeMission(item: Partial<Mission>): Mission {
+function normalizeMission(item: Partial<Mission>): Mission | null {
   const legacy = item as Partial<Mission> & Record<string, unknown>;
   const rawStatus = String(item.status ?? 'Scheduled');
   let status: MissionStatus = 'Scheduled';
@@ -39,13 +38,12 @@ function normalizeMission(item: Partial<Mission>): Mission {
 
   if (rawStatus === 'In flight' || rawStatus === 'In Flight' || rawStatus === 'In Progress') status = 'In Progress';
   else if (rawStatus === 'Completed') status = 'Completed';
-  else if (rawStatus === 'Cancelled') status = 'Cancelled';
   else if (rawStatus === 'Failed') status = 'Failed';
-  else if (rawStatus.trim().replace(/[\s-]+/g, '_').toUpperCase() === 'INCIDENT_RETURN') status = 'Incident return';
   else if (rawStatus === 'Delayed') {
     status = 'In Progress';
     scheduleState = 'Delayed';
   } else if (rawStatus === 'Review') status = 'Scheduled';
+  else if (rawStatus !== 'Scheduled') return null; // Do not reinterpret unsupported cached statuses.
 
   const now = new Date().toISOString();
   const createdAt = String(item.createdAt ?? now);
@@ -96,30 +94,11 @@ function normalizeMission(item: Partial<Mission>): Mission {
 }
 
 function isActive(mission: Mission) {
-  return mission.status === 'Scheduled' || mission.status === 'In Progress' || mission.status === 'Incident return';
+  return mission.status === 'Scheduled' || mission.status === 'In Progress';
 }
 
-function cancelExpiredPackageWaits(items: Mission[]) {
-  const orders = loadOperatorOrders();
-  const now = Date.now();
-  let changed = false;
-
-  const next = items.map((mission) => {
-    if (mission.status !== 'Scheduled' || !mission.packageReceiveDeadlineAt) return mission;
-    const order = orders.find((item) => item.id === mission.orderId);
-    if (order?.originHubReceivedAt) return mission;
-    if (now < new Date(mission.packageReceiveDeadlineAt).getTime()) return mission;
-
-    changed = true;
-    if (order) markOrderNeedsReplanning(order.id);
-    return { ...mission, status: 'Cancelled' as const, tone: getMissionTone('Cancelled') };
-  });
-
-  if (changed && typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }
-  return next;
-}
+// Mission transitions (including preflight failure/replanning) are BE-owned.
+// The local demo cache must not silently cancel an overdue Scheduled Mission.
 
 export function loadOperatorMissions(): Mission[] {
   if (typeof window === 'undefined') return [];
@@ -128,9 +107,9 @@ export function loadOperatorMissions(): Mission[] {
     if (!stored) return [];
     const parsed = JSON.parse(stored) as Array<Partial<Mission>>;
     const normalized = Array.isArray(parsed)
-      ? parsed.map(normalizeMission)
+      ? parsed.map(normalizeMission).filter((mission): mission is Mission => mission !== null)
       : [];
-    return cancelExpiredPackageWaits(normalized);
+    return normalized;
   } catch {
     return [];
   }
@@ -193,7 +172,7 @@ export function reassignMissionDrone(
 
 export function getMissionForOrder(orderId: string) {
   return loadOperatorMissions().find(
-    (mission) => mission.orderId === orderId && mission.status !== 'Cancelled' && mission.status !== 'Failed',
+    (mission) => mission.orderId === orderId && mission.status !== 'Failed',
   );
 }
 
