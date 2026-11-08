@@ -28,6 +28,10 @@ import {
   type CreateMissionInput,
   type UpdateIncidentStatusInput,
 } from '../api/missionApi';
+import {
+  getPreAnalyzeBundleCandidatesApi,
+  validateMissionBundleApi,
+} from '../api/missionBundleApi';
 import { operatorQueryKeys } from '../query/queryKeys';
 
 export function useMissionListQuery() {
@@ -135,6 +139,24 @@ export function useEligibleMissionBatteriesQuery(orderId: string, droneId: strin
   });
 }
 
+export function usePreAnalyzeBundleCandidatesQuery(orderId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionBundleCandidates(orderId),
+    queryFn: () => getPreAnalyzeBundleCandidatesApi(orderId),
+    enabled: enabled && Boolean(orderId.trim()),
+    staleTime: 0,
+  });
+}
+
+export function useValidateMissionBundleQuery(orderIds: string[], droneId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionBundleValidation(orderIds, droneId),
+    queryFn: () => validateMissionBundleApi({ orderIds, ...(droneId ? { droneId } : {}) }),
+    enabled: enabled && orderIds.length > 1,
+    staleTime: 0,
+  });
+}
+
 export function useMissionPlanningAnalysisQuery(
   input: AnalyzeMissionPlanningInput | null,
 ) {
@@ -143,6 +165,7 @@ export function useMissionPlanningAnalysisQuery(
       input?.orderId ?? '',
       input?.droneId ?? '',
       input?.batteryId ?? '',
+      input?.bundledOrderIds ?? [],
     ),
     queryFn: () => analyzeMissionPlanningApi(input as AnalyzeMissionPlanningInput),
     enabled: Boolean(input?.orderId.trim() && input?.droneId.trim() && input?.batteryId.trim()),
