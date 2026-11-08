@@ -60,3 +60,12 @@
 }
 
 .admin-users-empty { text-align: center; padding: 30px 14px !important; font-size: 13px; color: var(--admin-muted, var(--muted)); }
+/* Server-backed Users: loading/errors and long UUIDs. */
+.admin-ud-list-error {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  padding: 14px 18px; color: var(--red); font-size: 13px;
+}
+.admin-ud-list-error a { color: var(--orange); text-decoration: underline; }
+.admin-ud-id { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.admin-user-detail-v2 .admin-ud-scope-note { margin-top: 13px; }
+.admin-user-detail-v2 .admin-ud-notice { margin: 0; }

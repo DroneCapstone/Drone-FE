@@ -1,219 +1,184 @@
-import { useEffect, useMemo, useState } from "react";
-import { Users, UserCog, UserRound, UserX } from "lucide-react";
-import type { FormEvent } from "react";
-import { Link } from "react-router-dom";
-import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
-import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
-import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { AdminSummaryCard } from "../../components/AdminSummaryCard";
-import { OperatorPanel } from "../../../operator/components/OperatorPanel";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { AdminToolbar } from "../../components/AdminToolbar";
-import { recordPrototypeActivity } from "../../services/prototypeWorkflow";
-import { getAdminHubs, getAdminUsers, upsertAdminUser } from "../../services/adminStore";
-import type { AdminUser } from "../../types";
-import { userTone } from "../../utils/adminDisplay";
-import "./AdminUsers.css";
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Users, UserCog, UserRound, UserX } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ActionButton } from '../../../../components/ui/ActionButton';
+import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { AdminSummaryCard } from '../../components/AdminSummaryCard';
+import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { AdminToolbar } from '../../components/AdminToolbar';
+import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser } from '../../api/adminUsersApi';
+import './AdminUsers.css';
 
-function newInternalUser(): AdminUser {
-  const now = new Date().toISOString();
-  return {
-    id: "",
-    fullName: "",
-    email: "",
-    role: "operator",
-    status: "ACTIVE",
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-function roleLabel(role: AdminUser["role"]) {
-  switch (role) {
-    case "admin": return "Admin";
-    case "operator": return "Operator";
-    case "technician": return "Technician";
-    case "customer": return "Customer";
-  }
-}
+type InternalRole = Exclude<AdminApiRole, 'Customer'>;
+type CreateDraft = { full_name: string; email: string; role: InternalRole; password: string };
+const emptyDraft = (): CreateDraft => ({ full_name: '', email: '', role: 'Operator', password: '' });
+const userTone = (user: AdminApiUser) => user.is_active ? 'success' : 'neutral';
 
 export function AdminUsersPage() {
-  const [version, setVersion] = useState(0);
-  const [query, setQuery] = useState("");
-  const [role, setRole] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [creating, setCreating] = useState<AdminUser | null>(null);
-  const [formError, setFormError] = useState("");
+  const [allUsers, setAllUsers] = useState<AdminApiUser[]>([]);
+  const [statusUsers, setStatusUsers] = useState<AdminApiUser[]>([]);
+  const [query, setQuery] = useState('');
+  const [role, setRole] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [reload, setReload] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [creating, setCreating] = useState<CreateDraft | null>(null);
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
+  // Always load the full list for accurate KPI cards, plus a server-filtered list
+  // when the user selects Active/Inactive (GET ?is_active=true|false).
   useEffect(() => {
-    const listener = () => setVersion((value) => value + 1);
-    window.addEventListener("admin-data-updated", listener);
-    return () => window.removeEventListener("admin-data-updated", listener);
-  }, []);
+    let mounted = true;
+    setLoading(true);
+    setListError('');
+    const active = status === 'all' ? undefined : status === 'ACTIVE';
+    Promise.all([
+      adminUsersApi.listUsers(),
+      active === undefined ? Promise.resolve(null) : adminUsersApi.listUsers(active),
+    ]).then(([all, filtered]) => {
+      if (!mounted) return;
+      setAllUsers(all);
+      setStatusUsers(filtered ?? all);
+    }).catch((error: unknown) => {
+      if (mounted) setListError(apiErrorText(error));
+    }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [status, reload]);
 
-  const users = useMemo(() => getAdminUsers(), [version]);
-  const hubs = getAdminHubs();
-  const visible = users.filter((user) =>
-    `${user.fullName} ${user.email} ${user.id}`.toLowerCase().includes(query.toLowerCase()) &&
-    (role === "all" || user.role === role) &&
-    (status === "all" || user.status === status),
-  );
-  const hubName = (id?: string) => hubs.find((hub) => hub.id === id)?.name ?? "Not assigned";
+  const visible = useMemo(() => statusUsers.filter((user) =>
+    `${user.full_name} ${user.email} ${user.id}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (role === 'all' || user.role.toLowerCase() === role),
+  ), [statusUsers, query, role]);
 
-  const save = (event: FormEvent) => {
+  const internalCount = allUsers.filter((user) => user.role !== 'Customer').length;
+  const customerCount = allUsers.filter((user) => user.role === 'Customer').length;
+  const inactiveCount = allUsers.filter((user) => !user.is_active).length;
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!creating) return;
-    const fullName = creating.fullName.trim();
+    if (!creating || submitting) return;
+    const fullName = creating.full_name.trim();
     const email = creating.email.trim().toLowerCase();
-    if (!fullName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setFormError('Enter a valid name and email.'); return; }
-    if (users.some(u => u.email.toLowerCase() === email)) { setFormError('This email is already registered.'); return; }
-    if (creating.role === 'technician' && !hubs.some(h => h.id === creating.hubId && h.status === 'ACTIVE')) { setFormError('Select an active hub for this technician.'); return; }
-    const now = new Date().toISOString();
-    const newId = `${creating.role}-${Date.now()}`;
-    upsertAdminUser({
-      ...creating,
-      id: newId,
-      fullName, email,
-      hubId: creating.role === "technician" ? creating.hubId : undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
-    recordPrototypeActivity("admin", "Admin", "CREATE_USER", newId, `Role: ${creating.role}`);
-    setFormError("");
-    setCreating(null);
+    if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFormError('Enter a valid full name and email address.'); return;
+    }
+    if (!creating.password) { setFormError('Enter an initial password.'); return; }
+    if (allUsers.some((user) => user.is_active && user.email.toLowerCase() === email)) {
+      setFormError('An active user with this email already exists.'); return;
+    }
+    setSubmitting(true);
+    setFormError('');
+    try {
+      const created = await adminUsersApi.createUser({
+        full_name: fullName, email, role: creating.role, password: creating.password,
+      });
+      setCreating(null); // Clear password from UI memory.
+      setNotice(`Account ${created.email} was created successfully.`);
+      setReload((count) => count + 1);
+    } catch (error) {
+      setFormError(apiErrorText(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const internalCount = users.filter((user) => user.role !== "customer").length;
-  const customerCount = users.filter((user) => user.role === "customer").length;
-  const inactiveCount = users.filter((user) => user.status === "INACTIVE").length;
-
-  return (
-    <AdminPageShell
-      title="Users"
-      description="Manage user access, role assignment and technician hub ownership."
-      actions={<ActionButton icon="plus" onClick={() => { setFormError(""); setCreating(newInternalUser()); }}>Create internal user</ActionButton>}
-    >
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminSummaryCard label="Total users" value={users.length} note="All system users" icon={Users} />
-        <AdminSummaryCard label="Internal staff" value={internalCount} note="Admins, operators and technicians" icon={UserCog} />
-        <AdminSummaryCard label="Customers" value={customerCount} note="Registered delivery customers" icon={UserRound} />
-        <AdminSummaryCard label="Inactive" value={inactiveCount} note="Cannot sign in" icon={UserX} />
+  return <AdminPageShell
+    title="Users"
+    description="Manage accounts, internal roles and access status."
+    actions={<ActionButton icon="plus" onClick={() => { setFormError(''); setCreating(emptyDraft()); }}>Create internal user</ActionButton>}
+  >
+    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminSummaryCard label="Total users" value={loading || listError ? '—' : allUsers.length} note="All system users" icon={Users} />
+      <AdminSummaryCard label="Internal staff" value={loading || listError ? '—' : internalCount} note="Admins, operators and technicians" icon={UserCog} />
+      <AdminSummaryCard label="Customers" value={loading || listError ? '—' : customerCount} note="Registered delivery customers" icon={UserRound} />
+      <AdminSummaryCard label="Inactive" value={loading || listError ? '—' : inactiveCount} note="Cannot sign in" icon={UserX} />
+    </div>
+    {notice && <p className="admin-ud-notice" role="status">{notice}</p>}
+    <OperatorPanel className="flush-panel">
+      <AdminToolbar
+        searchValue={query}
+        onSearchChange={setQuery}
+        placeholder="Search name, email or user ID…"
+        filters={<>
+          <select value={role} onChange={(event) => setRole(event.target.value)}>
+            <option value="all">All roles</option>
+            <option value="admin">Admin</option>
+            <option value="operator">Operator</option>
+            <option value="technician">Technician</option>
+            <option value="customer">Customer</option>
+          </select>
+          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+            <option value="all">All status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+        </>}
+        meta={loading ? 'Loading users…' : `${visible.length} of ${statusUsers.length} users`}
+      />
+      {listError && <div className="admin-ud-list-error" role="alert">
+        <span>{listError}</span>
+        <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
+      </div>}
+      <div className="table-wrap">
+        <table>
+          <thead><tr>
+            <th>User</th><th>Role & scope</th><th>Status</th><th>User ID</th><th>Action</th>
+          </tr></thead>
+          <tbody>
+            {loading && <tr><td colSpan={5} className="admin-users-empty">Loading users…</td></tr>}
+            {!loading && !listError && visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
+            {!loading && !listError && visible.map((user) => <tr key={user.id}>
+              <td><strong>{user.full_name}</strong><small>{user.email}</small></td>
+              <td><strong className="admin-user-role-label">{user.role}</strong>
+                <small>{user.role === 'Technician' ? 'Hub assignment pending' : user.role === 'Customer' ? 'Customer account' : 'System-wide access'}</small>
+              </td>
+              <td><StatusBadge tone={userTone(user)}>{isArchivedUser(user) ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></td>
+              <td><span className="admin-ud-id">{user.id}</span></td>
+              <td><div className="admin-row-actions">
+                <Link className="row-action" to={`/admin/users/${encodeURIComponent(user.id)}`}>View</Link>
+                <Link className="row-action" to={`/admin/users/${encodeURIComponent(user.id)}?edit=1`}>Edit</Link>
+              </div></td>
+            </tr>)}
+          </tbody>
+        </table>
       </div>
-
-      <OperatorPanel className="flush-panel">
-        <AdminToolbar
-          searchValue={query}
-          onSearchChange={setQuery}
-          placeholder="Search name, email or user ID…"
-          filters={(
-            <>
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="all">All roles</option>
-                <option value="admin">Admin</option>
-                <option value="operator">Operator</option>
-                <option value="technician">Technician</option>
-                <option value="customer">Customer</option>
-              </select>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="all">All status</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </>
-          )}
-          meta={`${visible.length} of ${users.length} users`}
-        />
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role & scope</th>
-                <th>Status</th>
-                <th>Last login</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
-              {visible.map((user) => (
-                <tr key={user.id}>
-                  <td>
-                    <strong>{user.fullName}</strong>
-                    <small>{user.email}</small>
-                  </td>
-                  <td>
-                    <strong className="admin-user-role-label">{roleLabel(user.role)}</strong>
-                    <small>{user.role === "technician" ? hubName(user.hubId) : user.role === "customer" ? "Customer account" : "System-wide access"}</small>
-                  </td>
-                  <td><StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge></td>
-                  <td>
-                    <strong>{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString("en-GB") : "Never"}</strong>
-                    {user.lastLoginAt ? <small>{new Date(user.lastLoginAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small> : null}
-                  </td>
-                  <td>
-                    <div className="admin-row-actions">
-                      <Link className="row-action" to={`/admin/users/${user.id}`}>View</Link>
-                      <Link className="row-action" to={`/admin/users/${user.id}?edit=1`}>Edit</Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </OperatorPanel>
-
-      <Dialog open={Boolean(creating)} onOpenChange={(open) => !open && setCreating(null)}>
-        {creating ? (
-          <DialogContent className="admin-ud-modal">
-            <form onSubmit={save}>
-              <div className="admin-ud-modal-head">
-                <DialogTitle>Create internal user</DialogTitle>
-                <p>Customer accounts are created through customer registration.</p>
-              </div>
-              <div className="admin-ud-modal-body"><div className="fields two admin-ud-modal-fields">
-                <label><span>Full name</span><input required value={creating.fullName} onChange={(e) => setCreating({ ...creating, fullName: e.target.value })} /></label>
-                <label><span>Email</span><input required type="email" value={creating.email} onChange={(e) => setCreating({ ...creating, email: e.target.value })} /></label>
-                <label>
-                  <span>Role</span>
-                  <select
-                    value={creating.role}
-                    onChange={(e) => setCreating({
-                      ...creating,
-                      role: e.target.value as AdminUser["role"],
-                      hubId: e.target.value === "technician" ? creating.hubId : undefined,
-                    })}
-                  >
-                    <option value="operator">Operator</option>
-                    <option value="technician">Technician</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
-                {creating.role === "technician" ? (
-                  <label>
-                    <span>Assigned hub</span>
-                    <select required value={creating.hubId ?? ""} onChange={(e) => setCreating({ ...creating, hubId: e.target.value })}>
-                      <option value="">Select hub</option>
-                      {hubs.filter(h => h.status === "ACTIVE").map((hub) => <option value={hub.id} key={hub.id}>{hub.name}</option>)}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-              {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
-              <p className="admin-ud-helper" style={{ marginTop: 12 }}>Prototype record only. Login credentials are not created or emailed.</p>
-              </div>
-              <div className="admin-ud-modal-foot">
-                <ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton>
-                <ActionButton type="submit">Create account</ActionButton>
-              </div>
-            </form>
-          </DialogContent>
-        ) : null}
-      </Dialog>
-    </AdminPageShell>
-  );
+    </OperatorPanel>
+    <Dialog open={Boolean(creating)} onOpenChange={(open) => { if (!open && !submitting) { setCreating(null); setFormError(''); } }}>
+      {creating && <DialogContent className="admin-ud-modal">
+        <form onSubmit={save}>
+          <div className="admin-ud-modal-head">
+            <DialogTitle>Create internal user</DialogTitle>
+            <p>Creates a real account through the Admin API. Customers register themselves.</p>
+          </div>
+          <div className="admin-ud-modal-body">
+            <div className="fields two admin-ud-modal-fields">
+              <label><span>Full name <b aria-hidden="true">*</b></span>
+                <input required autoComplete="name" value={creating.full_name} onChange={(event) => setCreating({ ...creating, full_name: event.target.value })} /></label>
+              <label><span>Email <b aria-hidden="true">*</b></span>
+                <input required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })} /></label>
+              <label><span>Role <b aria-hidden="true">*</b></span>
+                <select value={creating.role} onChange={(event) => setCreating({ ...creating, role: event.target.value as InternalRole })}>
+                  <option value="Operator">Operator</option><option value="Technician">Technician</option><option value="Admin">Admin</option>
+                </select></label>
+              <label><span>Initial password <b aria-hidden="true">*</b></span>
+                <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })} /></label>
+            </div>
+            {creating.role === 'Technician' && <p className="admin-ud-helper">Assigned Hub is not part of the current UserCreate API; creating this account does not assign a Hub.</p>}
+            {/* <p className="admin-ud-helper">Share the initial password securely. Backend does not provide an invitation email in this API.</p> */}
+            {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
+          </div>
+          <div className="admin-ud-modal-foot">
+            <ActionButton variant="secondary" disabled={submitting} onClick={() => setCreating(null)}>Cancel</ActionButton>
+            <ActionButton type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create account'}</ActionButton>
+          </div>
+        </form>
+      </DialogContent>}
+    </Dialog>
+  </AdminPageShell>;
 }
-
