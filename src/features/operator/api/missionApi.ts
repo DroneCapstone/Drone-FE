@@ -295,15 +295,33 @@ function normalizeIso(value: string | undefined) {
 }
 
 function normalizeMissionStatus(value: unknown): MissionStatus {
-  // Do not silently mislabel a deprecated/unknown API status as Scheduled.
-  // Order statuses are a separate domain and are normalized by orderApi.ts.
+  // Four Operator-facing Mission statuses. The BE may still return legacy or
+  // operational aliases; normalize those at the API boundary, not in the UI.
+  // A completed destination arrival is treated as Completed here. The BE
+  // should eventually return the canonical value `Completed` consistently.
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
-    case 'SCHEDULED': return 'Scheduled';
-    case 'IN_PROGRESS': return 'In Progress';
-    case 'COMPLETED': return 'Completed';
-    case 'FAILED': return 'Failed';
-    default: throw new Error(`Unsupported Mission status from API: ${status || '(empty)'}`);
+    case 'SCHEDULED':
+    case 'PENDING_APPROVAL':
+    case 'APPROVED':
+    case 'AWAITING_PAYMENT':
+      return 'Scheduled';
+    case 'IN_PROGRESS':
+    case 'FLYING':
+    case 'ACTIVE':
+    case 'ACTIVE_MISSION':
+      return 'In Progress';
+    case 'COMPLETED':
+    case 'MISSION_COMPLETED':
+    case 'ARRIVAL_COMPLETED':
+      return 'Completed';
+    case 'FAILED':
+    case 'REJECTED':
+      return 'Failed';
+    default:
+      // Do not mislabel legacy `Cancelled` as Failed, or pretend that an
+      // unrecognized future status is Scheduled.
+      throw new Error(`Unsupported Mission status from API: ${status || '(empty)'}`);
   }
 }
 
@@ -761,7 +779,7 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
     const status = statusValue.trim().toUpperCase().replace(/[\s-]+/g, '_');
     if (status === 'SCHEDULED' || status === 'PENDING_APPROVAL' || status === 'APPROVED' || status === 'AWAITING_PAYMENT') result.scheduled = count;
     else if (status === 'IN_PROGRESS' || status === 'ACTIVE' || status === 'FLYING' || status === 'ACTIVE_MISSION') result.inProgress = count;
-    else if (status === 'COMPLETED' || status === 'MISSION_COMPLETED') result.completed = count;
+    else if (status === 'COMPLETED' || status === 'MISSION_COMPLETED' || status === 'ARRIVAL_COMPLETED') result.completed = count;
     else if (status === 'CANCELLED' || status === 'CANCELED') result.cancelled = count;
     else if (status === 'FAILED' || status === 'REJECTED') result.failed = count;
   };
@@ -802,9 +820,42 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   return result;
 }
 
+/**
+ * Preserve the usable Mission list when old BE records contain statuses
+ * outside the four-status UI contract. Never silently recast them as another
+ * official status; skip and log only those incompatible records.
+ */
+function mapMissionCollection(items: unknown[]): Mission[] {
+  const missions: Mission[] = [];
+  const skippedStatuses = new Set<string>();
+  for (const item of items) {
+    try {
+      const mission = mapMission(item);
+      if (mission.id) missions.push(mission);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Unsupported Mission status from API:')) {
+        skippedStatuses.add(error.message.replace('Unsupported Mission status from API: ', ''));
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (skippedStatuses.size > 0) {
+    console.warn(
+      '[Operator] Skipped Mission records with unsupported BE statuses:',
+      Array.from(skippedStatuses).join(', '),
+      '— ask BE to migrate/normalize those statuses.',
+    );
+  }
+  if (items.length > 0 && missions.length === 0 && skippedStatuses.size > 0) {
+    throw new Error(`No Missions with supported statuses. BE returned: ${Array.from(skippedStatuses).join(', ')}`);
+  }
+  return missions;
+}
+
 export async function listMissionsApi(): Promise<Mission[]> {
   const payload = await operatorApiRequest<unknown>('/missions/');
-  return unwrapArray(payload, ['missions']).map(mapMission).filter((mission) => mission.id);
+  return mapMissionCollection(unwrapArray(payload, ['missions']));
 }
 
 export async function getMissionDashboardKpiApi(): Promise<MissionDashboardKpi> {
@@ -825,7 +876,7 @@ export async function getMissionActiveFlightsApi(): Promise<MissionActiveFlights
     .map((item) => typeof item === 'string' ? item : pickString(asRecord(item), ['id', 'mission_id', 'missionId']))
     .filter(Boolean);
   // Swagger declares missions: string[]. Do not parse a string as a full Mission object.
-  const missions = items.filter(isRecord).map(mapMission).filter((mission) => mission.id);
+  const missions = mapMissionCollection(items.filter(isRecord));
   return {
     activeCount: pickOptionalNumber(root, ['active_count', 'activeCount']) ?? missionIds.length,
     missionIds,
