@@ -1,0 +1,77 @@
+/* Shared fixed, centered inventory dialogs for Admin.
+   Scoped to the Add Quantity / New Batteries flows; do not change global Radix styles.
+   DialogContent from src/components/ui/Dialog.tsx includes Tailwind -translate-x-1/2.
+   Reset transform and set one native translate to avoid the double -50% offset. */
+.admin-dialog-typography.admin-inventory-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: none;
+  translate: -50% -50%;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.admin-dialog-typography.admin-inventory-dialog > form,
+.admin-dialog-typography.admin-inventory-dialog > .admin-inventory-dialog__form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  width: 100%;
+  overflow: hidden;
+}
+
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__header,
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__footer {
+  flex: 0 0 auto;
+}
+
+/* Only middle content scrolls, matching Replacement Records' inset thin scrollbar. */
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-right: 7px;
+  scrollbar-width: thin;
+  scrollbar-color: #c4cbd4 transparent;
+}
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body::-webkit-scrollbar-thumb {
+  background: #c4cbd4;
+  border-radius: 999px;
+}
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body::-webkit-scrollbar-thumb:hover {
+  background: #a6b0bd;
+}
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__body::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.admin-dialog-typography.admin-inventory-dialog .admin-inventory-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #fff;
+}
+@media (max-width: 480px) {
+  .admin-dialog-typography.admin-inventory-dialog { width: calc(100vw - 24px); }
+}
