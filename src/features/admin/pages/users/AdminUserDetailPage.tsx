@@ -1,240 +1,261 @@
-import { useMemo, useState } from "react";
-import { Navigate, useParams, useSearchParams } from "react-router-dom";
-import { ActionButton } from "../../../../components/ui/ActionButton";
-import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
-import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
-import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { OperatorPanel } from "../../../operator/components/OperatorPanel";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { getUserActivity, recordPrototypeActivity } from "../../services/prototypeWorkflow";
-import { getAdminHubs, getAdminUsers, upsertAdminUser } from "../../services/adminStore";
-import type { AdminUser } from "../../types";
-import { userTone } from "../../utils/adminDisplay";
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowLeft, Pencil } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ActionButton } from '../../../../components/ui/ActionButton';
+import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { authService } from '../../../auth/services/authService';
+import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser, type AdminUserAuditItem } from '../../api/adminUsersApi';
+import './AdminUsers.css';
 
-function roleLabel(role: AdminUser["role"]) {
-  switch (role) {
-    case "admin": return "Admin";
-    case "operator": return "Operator";
-    case "technician": return "Technician";
-    case "customer": return "Customer";
-  }
-}
-
-function formatDate(value?: string) {
-  return value ? new Date(value).toLocaleString("en-GB") : "Never";
+type EditDraft = { full_name: string; email: string; role: AdminApiRole };
+const toDraft = (user: AdminApiUser): EditDraft => ({ full_name: user.full_name, email: user.email, role: user.role });
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('en-GB');
+};
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="admin-ud-field"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
 export function AdminUserDetailPage() {
   const { userId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const source = useMemo(() => getAdminUsers().find((item) => item.id === userId), [userId]);
-  const [user, setUser] = useState<AdminUser | undefined>(source ? { ...source } : undefined);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
+  const editing = searchParams.get('edit') === '1';
+  const [user, setUser] = useState<AdminApiUser | null>(null);
+  const [adminCount, setAdminCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [draft, setDraft] = useState<EditDraft | null>(null);
+  const [error, setError] = useState('');
   const [confirmStatus, setConfirmStatus] = useState(false);
-  const [reason, setReason] = useState("");
-  const [, setActivityVersion] = useState(0);
-  const isEditing = searchParams.get("edit") === "1";
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [activity, setActivity] = useState<AdminUserAuditItem[]>([]);
 
-  if (!user || !source) return <Navigate to="/admin/users" replace />;
+  useEffect(() => {
+    let mounted = true;
+    if (!userId) { setLoadError('Missing user ID.'); setLoading(false); return; }
+    setLoading(true);
+    setLoadError('');
+    setUser(null);
+    Promise.all([adminUsersApi.getUser(userId), adminUsersApi.listUsers()])
+      .then(([nextUser, users]) => {
+        if (!mounted) return;
+        setUser(nextUser);
+        setAdminCount(users.filter((item) => item.role === 'Admin' && item.is_active).length);
+      }).catch((reason: unknown) => { if (mounted) setLoadError(apiErrorText(reason)); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [userId, reload]);
 
-  const hubs = getAdminHubs();
-  const users = getAdminUsers();
-  const managedHub = user.role === "technician" ? hubs.find((hub) => hub.id === user.hubId) : undefined;
-  const lastActiveAdmin =
-    user.role === "admin" &&
-    user.status === "ACTIVE" &&
-    users.filter((item) => item.role === "admin" && item.status === "ACTIVE").length <= 1;
+  useEffect(() => {
+    setDraft(editing && user ? toDraft(user) : null);
+    setError('');
+  }, [editing, user]);
 
-  const startEdit = () => setSearchParams({ edit: "1" });
+  // GET /system/audit-logs?user_id=... returns actions performed BY this user.
+  // Do not mistake these for changes made by Admin to this user's account.
+  useEffect(() => {
+    if (!userId) return;
+    let mounted = true;
+    adminUsersApi.listActionsByUser(userId)
+      .then((events) => { if (mounted) setActivity(events); })
+      .catch(() => { if (mounted) setActivity([]); });
+    return () => { mounted = false; };
+  }, [userId, reload]);
 
-  const cancelEdit = () => {
-    setUser({ ...source });
-    setSaved(false);
-    setSearchParams({});
+  const closeEdit = () => { setSearchParams({}); setDraft(null); setError(''); };
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || !draft || submitting) return;
+    const fullName = draft.full_name.trim();
+    const email = draft.email.trim().toLowerCase();
+    if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Enter a valid name and email.'); return;
+    }
+    if ((user.role === 'Customer' && draft.role !== 'Customer') ||
+      (user.role !== 'Customer' && draft.role === 'Customer')) {
+      setError('Customer accounts cannot be converted to/from internal staff.'); return;
+    }
+    if (user.role === 'Admin' && user.is_active && adminCount !== null && adminCount <= 1 && draft.role !== 'Admin') {
+      setError('The last active Admin cannot be assigned another role.'); return;
+    }
+    if (user.role === 'Admin' && user.is_active && adminCount === null && draft.role !== 'Admin') {
+      setError('Cannot verify the last Admin protection. Try refreshing.'); return;
+    }
+    if (isArchivedUser(user)) { setError('Archived accounts cannot be edited here.'); return; }
+    setError('');
+    setSubmitting(true);
+    try {
+      const updated = await adminUsersApi.updateUser(user.id, {
+        full_name: fullName, email, role: draft.role,
+      });
+      setUser(updated);
+      closeEdit();
+      setNotice('User information updated successfully.');
+      setReload((n) => n + 1);
+    } catch (reason) {
+      setError(apiErrorText(reason));
+    } finally { setSubmitting(false); }
   };
 
-  const save = () => {
-    if (!user.fullName.trim()) { setError('Full name is required.'); return; }
-    if (user.role === 'technician' && !hubs.some(h => h.id === user.hubId && h.status === 'ACTIVE')) { setError('Select an active hub.'); return; }
-    if (source.role === 'admin' && user.role !== 'admin' && source.status === 'ACTIVE' && users.filter(u=>u.role==='admin' && u.status==='ACTIVE').length <= 1) { setError('Cannot demote the last active Admin.'); return; }
-    if (source.role !== user.role && !window.confirm(`Change role from ${source.role} to ${user.role}?`)) return;
-    const normalized: AdminUser = {
-      ...user,
-      hubId: user.role === "technician" ? user.hubId : undefined,
-      updatedAt: new Date().toISOString(),
-    };
-    setUser(normalized);
-    upsertAdminUser(normalized);
-    recordPrototypeActivity('admin','Admin','UPDATE_USER',normalized.id,`Role ${source.role} → ${normalized.role}; Hub ${source.hubId||'—'} → ${normalized.hubId||'—'}`);
-    setActivityVersion(v=>v+1);setError('');
-    setSaved(true);
-    setSearchParams({});
-    setTimeout(() => setSaved(false), 1800);
+  const confirmAccountAction = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || submitting) return;
+    const deactivating = user.is_active;
+    if (deactivating && user.role === 'Admin' && (adminCount === null || adminCount <= 1)) {
+      setActionError('The last active Admin cannot be deactivated.'); return;
+    }
+    if (deactivating && authService.getCurrentUser()?.id === user.id) {
+      setActionError('You cannot deactivate your own current Admin account here.'); return;
+    }
+    if (!deactivating && isArchivedUser(user)) {
+      setActionError('Archived accounts cannot be restored.'); return;
+    }
+    setSubmitting(true);
+    setActionError('');
+    try {
+      if (deactivating) {
+        await adminUsersApi.deactivateUser(user.id); // DELETE is a Soft Delete (is_active=false).
+        setUser({ ...user, is_active: false });
+      } else {
+        const restored = await adminUsersApi.restoreUser(user.id); // PATCH /restore.
+        setUser(restored);
+      }
+      setConfirmStatus(false);
+      setNotice(deactivating ? 'Account deactivated. The user can no longer sign in.' : 'Account restored. The user can sign in again.');
+      setReload((n) => n + 1);
+    } catch (reason) {
+      setActionError(apiErrorText(reason));
+    } finally { setSubmitting(false); }
   };
 
-  const toggleStatus = () => {
-    if (lastActiveAdmin && user.status === "ACTIVE") return;
-    const next: AdminUser = {
-      ...user,
-      status: user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-      updatedAt: new Date().toISOString(),
-    };
-    setUser(next);
-    upsertAdminUser(next);
-    recordPrototypeActivity('admin','Admin', next.status==='ACTIVE'?'ACTIVATE_USER':'DEACTIVATE_USER',next.id,reason||'Status changed');
-    setActivityVersion(v=>v+1);setConfirmStatus(false);setReason('');
-  };
-  const recordAccessAction = (action:'INVITE_USER'|'RESET_ACCESS') => {
-    const now=new Date().toISOString();
-    const next={...user,...(action==='INVITE_USER'?{invitationSentAt:now}:{accessResetAt:now}),updatedAt:now};
-    upsertAdminUser(next);setUser(next);recordPrototypeActivity('admin','Admin',action,user.id,'Prototype only — no real email/password change');setActivityVersion(v=>v+1);
-  };
+  if (!userId) return <AdminPageShell title="User detail"><Link to="/admin/users">Back to Users</Link></AdminPageShell>;
+  if (loading && !user) return <AdminPageShell title="User detail" description="Loading account…"><p className="admin-ud-helper"></p></AdminPageShell>;
+  if (!user) return <AdminPageShell title="User detail"><div className="admin-ud-list-error" role="alert">
+    <span>{loadError || 'User not found.'}</span>
+    <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
+    <Link to="/admin/users">Back to Users</Link>
+  </div></AdminPageShell>;
 
-  return (
-    <AdminPageShell
-      title={user.fullName}
-      backTo={{ path: "/admin/users", label: "Users" }}
-      description={`${user.email} · ${user.id}`}
-      actions={(
-        <div className="flex flex-wrap gap-2">
-          {!isEditing ? <ActionButton variant="secondary" onClick={startEdit}>Edit user</ActionButton> : null}
-          <ActionButton
-            variant={user.status === "ACTIVE" ? "danger" : "secondary"}
-            onClick={() => setConfirmStatus(true)}
-            disabled={lastActiveAdmin && user.status === "ACTIVE"}
-          >
-            {user.status === "ACTIVE" ? "Deactivate" : "Activate"}
-          </ActionButton>
-        </div>
-      )}
-    >
-      <div className="detail-layout admin-user-detail-layout">
-        <div className="detail-main">
-          <OperatorPanel>
-            <div className="admin-user-hero">
-              <div className="admin-user-avatar" aria-hidden="true">
-                {user.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U"}
-              </div>
-              <div className="admin-user-hero-copy">
-                <div className="admin-user-hero-badges">
-                  <StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge>
-                  <span className="admin-role-chip">{roleLabel(user.role)}</span>
-                </div>
-                <h2>{user.fullName}</h2>
-                <p>{user.email}</p>
-                {user.role === "technician" ? <small>{managedHub ? `Managed hub · ${managedHub.name}` : "No managed hub assigned"}</small> : null}
-              </div>
-            </div>
-          </OperatorPanel>
+  const archived = isArchivedUser(user);
+  const lastActiveAdmin = user.role === 'Admin' && user.is_active && (adminCount === null || adminCount <= 1);
+  const currentAdmin = authService.getCurrentUser()?.id === user.id;
+  const statusText = archived ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE';
+  const canChangeStatus = !archived && !(user.is_active && (lastActiveAdmin || currentAdmin));
+  const scope = user.role === 'Technician' ? 'Hub assignment not supplied by Users API'
+    : user.role === 'Customer' ? 'Customer account' : 'System-wide access';
 
-          <OperatorPanel
-            title={isEditing ? "Edit account" : "Account information"}
-            eyebrow={isEditing ? "EDIT MODE" : "PROFILE"}
-          >
-            {isEditing ? (
-              <>
-                <div className="fields two">
-                  <label>
-                    <span>Full name</span>
-                    <input value={user.fullName} onChange={(e) => setUser({ ...user, fullName: e.target.value })} />
-                  </label>
-                  <label>
-                    <span>Email</span>
-                    <input value={user.email} readOnly />
-                    <small className="admin-field-help">Login email is managed as an account identifier.</small>
-                  </label>
-                  <label>
-                    <span>Role</span>
-                    <select
-                      value={user.role}
-                      disabled={lastActiveAdmin}
-                      onChange={(e) => {
-                        const nextRole = e.target.value as AdminUser["role"];
-                        setUser({
-                          ...user,
-                          role: nextRole,
-                          hubId: nextRole === "technician" ? user.hubId ?? hubs[0]?.id : undefined,
-                        });
-                      }}
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="operator">Operator</option>
-                      <option value="technician">Technician</option>
-                      <option value="customer">Customer</option>
-                    </select>
-                  </label>
-                  {user.role === "technician" ? (
-                    <label>
-                      <span>Managed hub</span>
-                      <select value={user.hubId ?? ""} onChange={(e) => setUser({ ...user, hubId: e.target.value })}>
-                        <option value="">Select hub</option>
-                        {hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}
-                      </select>
-                    </label>
-                  ) : null}
-                </div>
-
-                {/* {lastActiveAdmin ? <p className="admin-inline-note">The last active Admin cannot be deactivated or demoted.</p> : null} */}
-
-                {error && <p className="mb-3 text-sm text-red-500" role="alert">{error}</p>}
-                <div className="form-actions admin-user-form-actions">
-                  <span className="text-sm text-[var(--green)]">{saved ? "Changes saved." : ""}</span>
-                  <div className="flex gap-2">
-                    <ActionButton variant="secondary" onClick={cancelEdit}>Cancel</ActionButton>
-                    <ActionButton onClick={save}>Save changes</ActionButton>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <dl className="key-values admin-user-key-values">
-                <div><dt>User ID</dt><dd>{user.id}</dd></div>
-                <div><dt>Full name</dt><dd>{user.fullName}</dd></div>
-                <div><dt>Email</dt><dd>{user.email}</dd></div>
-                <div><dt>Role</dt><dd>{roleLabel(user.role)}</dd></div>
-                {user.role === "technician" ? <div><dt>Managed hub</dt><dd>{managedHub?.name ?? "Not assigned"}</dd></div> : null}
-              </dl>
-            )}
-          </OperatorPanel>
-        </div>
-
-        <aside className="detail-side">
-          <OperatorPanel title="Access" eyebrow="ACCOUNT STATE">
-            <dl className="key-values">
-              <div><dt>Status</dt><dd><StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge></dd></div>
-              <div><dt>Sign-in access</dt><dd>{user.status === "ACTIVE" ? "Allowed" : "Blocked"}</dd></div>
-              <div><dt>Role</dt><dd>{roleLabel(user.role)}</dd></div>
-              {user.role === "technician" ? <div><dt>Hub scope</dt><dd>{managedHub?.name ?? "Not assigned"}</dd></div> : null}
-            </dl>
-          </OperatorPanel>
-
-          <OperatorPanel title="Account actions" eyebrow="PROTOTYPE ACCESS">
-            <p className="mb-3 text-xs text-[var(--muted)]">Simulated access actions; no real invitation email or password reset is sent.</p>
-            <div className="flex flex-wrap gap-2"><ActionButton variant="secondary" onClick={()=>recordAccessAction('INVITE_USER')}>Record invitation</ActionButton><ActionButton variant="secondary" onClick={()=>recordAccessAction('RESET_ACCESS')}>Reset access (demo)</ActionButton></div>
-            {user.invitationSentAt && <p className="mt-2 text-xs text-[var(--muted)]">Invitation recorded: {formatDate(user.invitationSentAt)}</p>}
-          </OperatorPanel>
-          <OperatorPanel title="Account activity" eyebrow="AUDIT METADATA">
-            <dl className="key-values admin-user-activity">
-              <div><dt>Last login</dt><dd>{formatDate(user.lastLoginAt)}</dd></div>
-              <div><dt>Created</dt><dd>{formatDate(user.createdAt)}</dd></div>
-              <div><dt>Last updated</dt><dd>{formatDate(user.updatedAt)}</dd></div>
-              {getUserActivity(user.id).slice(0,8).map(a=><div key={a.id}><dt>{a.action} · {formatDate(a.at)}</dt><dd>{a.detail||a.actor}</dd></div>)}
-            </dl>
-          </OperatorPanel>
-
-          {/* {lastActiveAdmin ? (
-            <OperatorPanel title="Protection" eyebrow="ADMIN SAFETY">
-              <p className="text-sm text-[var(--muted)]">This is the last active Admin account. It cannot be deactivated or changed to another role.</p>
-            </OperatorPanel>
-          ) : null} */}
-        </aside>
+  return <AdminPageShell
+    title={user.full_name}
+    description={`${user.email} · ${user.id}`}
+    actions={<div className="admin-ud-heading-actions">
+      <StatusBadge tone={user.is_active ? 'success' : 'neutral'}>{statusText}</StatusBadge>
+      <ActionButton variant={user.is_active ? 'danger' : 'secondary'} disabled={!canChangeStatus}
+        title={archived ? 'Archived account cannot be restored.' : lastActiveAdmin ? 'Last active Admin is protected.' : currentAdmin && user.is_active ? 'Cannot deactivate your own account.' : undefined}
+        onClick={() => { setActionError(''); setConfirmStatus(true); }}>
+        {user.is_active ? 'Deactivate' : 'Restore account'}
+      </ActionButton>
+    </div>}
+  >
+    <div className="admin-user-detail-v2">
+      <Link className="admin-ud-back" to="/admin/users"><ArrowLeft size={15} strokeWidth={2} /> Back to Users</Link>
+      {notice && <p className="admin-ud-notice" role="status">{notice}</p>}
+      {loadError && <p className="admin-ud-error" role="alert">{loadError}</p>}
+      <div className="admin-ud-cards">
+        <section className="admin-ud-card admin-ud-account" aria-labelledby="admin-ud-account-title">
+          <div className="admin-ud-card-head">
+            <h2 id="admin-ud-account-title">Account information</h2>
+            <ActionButton variant="secondary" disabled={archived} onClick={() => { setError(''); setSearchParams({ edit: '1' }); }}>
+              <Pencil size={15} aria-hidden="true" /> Edit
+            </ActionButton>
+          </div>
+          <dl className="admin-ud-grid">
+            <Field label="User ID">{user.id}</Field>
+            <Field label="Full name">{user.full_name}</Field>
+            <Field label="Email">{user.email}</Field>
+            <Field label="Role">{user.role}</Field>
+          </dl>
+        </section>
+        <section className="admin-ud-card admin-ud-access" aria-labelledby="admin-ud-access-title">
+          <div className="admin-ud-card-head"><h2 id="admin-ud-access-title">Access & assignment</h2></div>
+          <dl className="admin-ud-kv">
+            <Field label="Account status"><StatusBadge tone={user.is_active ? 'success' : 'neutral'}>{statusText}</StatusBadge></Field>
+            <Field label="Access scope">{scope}</Field>
+            <Field label="Sign-in access">{user.is_active ? 'Allowed' : 'Blocked'}</Field>
+            {archived && <Field label="Restore eligibility">Not restorable</Field>}
+          </dl>
+          {user.role === 'Technician' && <p className="admin-ud-helper admin-ud-scope-note">Assigning a Technician to a Hub is not yet supported by this API.</p>}
+          {!user.is_active && !archived && <p className="admin-ud-helper admin-ud-scope-note">Soft-deleted account. Its history is preserved and it can be restored unless the email is registered again.</p>}
+        </section>
       </div>
-      <Dialog open={confirmStatus} onOpenChange={setConfirmStatus}><DialogContent><div className="p-5">
-        <DialogTitle className="text-lg font-semibold">{user.status==='ACTIVE'?'Deactivate':'Activate'} {user.fullName}?</DialogTitle>
-        <p className="mt-2 text-sm text-muted-foreground">This changes access status in the Admin prototype only. Production authentication is not connected.</p>
-        <label className="mt-4 block text-sm">Reason<textarea className="mt-2 w-full rounded border border-[var(--border)] bg-transparent p-2" rows={2} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-        <div className="form-actions mt-4"><ActionButton variant="secondary" onClick={()=>setConfirmStatus(false)}>Cancel</ActionButton><ActionButton onClick={toggleStatus} disabled={!reason.trim()}>Confirm</ActionButton></div>
-      </div></DialogContent></Dialog>
-    </AdminPageShell>
-  );
+      {activity.length > 0 && <section className="admin-ud-card admin-ud-activity" aria-labelledby="admin-ud-activity-title">
+        <div className="admin-ud-card-head"><h2 id="admin-ud-activity-title">Recent actions by this user</h2><span className="admin-ud-helper">System audit logs</span></div>
+        <div className="admin-ud-events">
+          {activity.map((event) => <div className="admin-ud-event" key={event.id}>
+            <div><strong>{event.action.replaceAll('_', ' ')}</strong><small>{event.resource_table ?? 'System'}</small></div>
+            <time>{formatDate(event.created_at)}</time>
+          </div>)}
+        </div>
+      </section>}
+    </div>
+
+    <Dialog open={editing && !archived} onOpenChange={(open) => { if (!open && !submitting) closeEdit(); }}>
+      <DialogContent className="admin-ud-modal">
+        <div className="admin-ud-modal-head"><DialogTitle>Edit user</DialogTitle><p>Update account information and role through Backend.</p></div>
+        {draft && <form onSubmit={save}>
+          <div className="admin-ud-modal-body">
+            <div className="fields two admin-ud-modal-fields">
+              <label><span>Full name <b aria-hidden="true">*</b></span>
+                <input required value={draft.full_name} onChange={(event) => setDraft({ ...draft, full_name: event.target.value })} /></label>
+              <label><span>Email <b aria-hidden="true">*</b></span>
+                <input required type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
+              <label><span>Role <b aria-hidden="true">*</b></span>
+                {user.role === 'Customer' ? <input readOnly value="Customer" />
+                  : <select value={draft.role} disabled={lastActiveAdmin} onChange={(event) => setDraft({ ...draft, role: event.target.value as AdminApiRole })}>
+                    <option value="Admin">Admin</option><option value="Operator">Operator</option><option value="Technician">Technician</option>
+                  </select>}
+              </label>
+            </div>
+            {draft.role === 'Technician' && <p className="admin-ud-helper">Hub assignment cannot be changed here because the current User API has no hub_id field.</p>}
+            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Ensure the user has no pending operational responsibilities.</p>}
+            {error && <p className="admin-ud-error" role="alert">{error}</p>}
+          </div>
+          <div className="admin-ud-modal-foot">
+            <ActionButton variant="secondary" disabled={submitting} onClick={closeEdit}>Cancel</ActionButton>
+            <ActionButton type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save changes'}</ActionButton>
+          </div>
+        </form>}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={confirmStatus} onOpenChange={(open) => { if (!submitting) { setConfirmStatus(open); setActionError(''); } }}>
+      <DialogContent className="admin-ud-modal">
+        <div className="admin-ud-modal-head">
+          <DialogTitle>{user.is_active ? 'Deactivate account?' : 'Restore account?'}</DialogTitle>
+          <p>{user.is_active
+            ? 'This soft-deletes the account. Sign-in will be blocked immediately and existing orders, missions and work orders remain stored.'
+            : 'Restores sign-in access to this account if it has not been permanently archived due to email re-registration.'}</p>
+        </div>
+        <form onSubmit={confirmAccountAction}>
+          <div className="admin-ud-modal-body">
+            <p className="admin-ud-helper"><strong>{user.full_name}</strong> · {user.email}</p>
+            {user.role === 'Technician' && <p className="admin-ud-helper">The Admin API does not document a check for active Work Orders. Confirm operational responsibilities before deactivation.</p>}
+            {actionError && <p className="admin-ud-error" role="alert">{actionError}</p>}
+          </div>
+          <div className="admin-ud-modal-foot">
+            <ActionButton variant="secondary" disabled={submitting} onClick={() => setConfirmStatus(false)}>Cancel</ActionButton>
+            <ActionButton variant={user.is_active ? 'danger' : 'primary'} disabled={submitting} type="submit">
+              {submitting ? 'Processing…' : user.is_active ? 'Confirm Deactivation' : 'Confirm Restore'}
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  </AdminPageShell>;
 }
