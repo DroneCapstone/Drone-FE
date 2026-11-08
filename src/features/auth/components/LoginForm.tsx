@@ -22,15 +22,6 @@ const ROLE_PATHS: Partial<
   admin: "/admin/dashboard",
 };
 
-const viteEnv = (import.meta as ImportMeta & {
-  env?: Record<string, string | undefined>;
-}).env;
-
-const ENABLE_DEMO_ACCESS =
-  import.meta.env.DEV ||
-  viteEnv?.VITE_ENABLE_DEMO_AUTH ===
-  "true";
-
 export function LoginForm({
   onSwitchMode,
 }: LoginFormProps) {
@@ -38,7 +29,6 @@ export function LoginForm({
 
   const {
     login,
-    loginAsRole,
     loginWithGoogle,
   } = useAuth();
 
@@ -99,27 +89,12 @@ export function LoginForm({
     }
   };
 
-  const handleMockLogin = (
-    role: UserRole,
-  ) => {
-    try {
-      const user = loginAsRole(role);
-      redirectForRole(user.role);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Unable to open demo access.",
-      );
-    }
-  };
-
   return (
     <div className="auth-form-slide">
       <div className="auth-form-content">
-        <span className="auth-eyebrow">
+        {/* <span className="auth-eyebrow">
           SECURE ACCESS
-        </span>
+        </span> */}
 
         <h1>Welcome back.</h1>
 
@@ -224,7 +199,7 @@ export function LoginForm({
           )}
 
           <button
-            className="auth-submit"
+            className="auth-submit auth-submit-centered"
             type="submit"
             disabled={submitting}
           >
@@ -233,61 +208,8 @@ export function LoginForm({
                 ? "Signing in…"
                 : "Sign in"}
             </span>
-            <b>→</b>
           </button>
         </form>
-
-        {ENABLE_DEMO_ACCESS && (
-          <div className="auth-demo">
-            <span className="auth-demo-label">
-              DEMO ACCESS · UI ONLY
-            </span>
-
-            <div className="auth-role-grid">
-              <button
-                type="button"
-                onClick={() =>
-                  handleMockLogin(
-                    "customer",
-                  )
-                }
-              >
-                Customer
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleMockLogin(
-                    "operator",
-                  )
-                }
-              >
-                Operator
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleMockLogin("admin")
-                }
-              >
-                Admin
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleMockLogin(
-                    "technician",
-                  )
-                }
-              >
-                Technician
-              </button>
-            </div>
-          </div>
-        )}
 
         <p className="auth-switch-copy">
           New to DroneOptAI?

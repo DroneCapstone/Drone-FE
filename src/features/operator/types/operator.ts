@@ -123,6 +123,10 @@ export interface MissionLeg {
 export interface Mission {
   id: string;
   orderId: string;
+  /** Other orders assigned to this mission (excludes the primary order). */
+  bundledOrderIds?: string[];
+  totalOrdersCount?: number;
+  payloadWeightKg?: number;
   type: MissionType;
   name: string;
   droneId: string;
@@ -339,6 +343,7 @@ export interface MissionDraft {
   selectedBatteryId: string;
   selectedRouteId: string;
   relayBatterySelections?: RelayBatterySelection[];
+  bundledOrderIds?: string[];
   updatedAt: string;
 }
 

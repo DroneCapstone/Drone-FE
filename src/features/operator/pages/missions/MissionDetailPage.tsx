@@ -115,6 +115,7 @@ export function MissionDetailPage() {
                       droneId: mission.droneId,
                       ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
                       routeId: mission.routeId,
+                      ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
                     }).toString()}`)}
                   >
                     AI analysis
@@ -235,7 +236,17 @@ export function MissionDetailPage() {
             <dl className="key-values mission-detail-facts">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
               <div><dt>{mission.legs?.[0]?.isDispatch ? 'Dispatch battery' : 'Origin battery'}</dt><dd>{originBatteryId}</dd></div>
-              <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
+              <div><dt>Payload</dt><dd>{mission.payloadWeightKg !== undefined
+                ? `${mission.payloadWeightKg.toFixed(2)} kg`
+                : mission.bundledOrderIds?.length ? '—' : order ? `${order.payloadKg} kg` : '—'}</dd></div>
+              {(mission.bundledOrderIds?.length || (mission.totalOrdersCount ?? 1) > 1) ? (
+                <>
+                  <div><dt>Orders</dt><dd>{mission.totalOrdersCount ?? 1 + (mission.bundledOrderIds?.length ?? 0)}</dd></div>
+                  {mission.bundledOrderIds && mission.bundledOrderIds.length > 0 && (
+                    <div><dt>Bundled orders</dt><dd>{mission.bundledOrderIds.join(', ')}</dd></div>
+                  )}
+                </>
+              ) : null}
               <div><dt>Drop-off Point</dt><dd>{originName}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
               {relayHubs.length > 0 && <div><dt>Relay Hub</dt><dd>{relayHubs.map((hub) => hub.name).join(' → ')}</dd></div>}

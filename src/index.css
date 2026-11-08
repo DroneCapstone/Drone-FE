@@ -6803,6 +6803,8 @@
   }
 
   .auth-password-wrap {
+    position: relative;
+
     display: flex;
 
     align-items: center;
@@ -6815,16 +6817,32 @@
 
     flex: 1;
 
+    width: 100%;
+
     height: 44px;
 
-    padding:
-      0 8px 0 13px;
+    /* Keep the Show/Hide button inside the same input area. */
+    padding: 0 62px 0 13px;
 
+    border: 0;
+
+    border-radius: 0;
+
+    outline: 0;
+
+    box-shadow: none;
+
+    background: transparent;
+  }
+
+  /* Prevent the inner input from drawing an extra focus frame. */
+  .auth-password-wrap input:focus,
+  .auth-password-wrap input:focus-visible {
     border: 0;
 
     outline: 0;
 
-    background: transparent;
+    box-shadow: none;
   }
 
   .auth-field>input::placeholder,
@@ -6853,9 +6871,17 @@
   /* Password toggle */
 
   .auth-password-toggle {
+    position: absolute;
+
+    top: 50%;
+
+    right: 7px;
+
+    transform: translateY(-50%);
+
     height: 30px;
 
-    margin-right: 7px;
+    margin-right: 0;
 
     padding:
       0 7px;
@@ -7638,78 +7664,6 @@
   }
 
 
-  /* =========================================================
-     DEMO ROLES
-     ========================================================= */
-
-  .auth-demo {
-    margin-top: 14px;
-  }
-
-  .auth-demo-label {
-    display: block;
-
-    margin-bottom: 7px;
-
-    color: #5f6570;
-
-    font-size: 8px;
-    font-weight: 600;
-
-    letter-spacing: 0.13em;
-  }
-
-  .auth-role-grid {
-    display: grid;
-
-    grid-template-columns:
-      repeat(4, 1fr);
-
-    gap: 6px;
-  }
-
-  .auth-role-grid button {
-    min-height: 31px;
-
-    padding: 0 7px;
-
-    border: 1px solid #292c33;
-    border-radius: 5px;
-
-    background: transparent;
-
-    color: #777e89;
-
-    font-family: inherit;
-
-    font-size: 9px;
-    font-weight: 500;
-
-    cursor: pointer;
-
-    transition:
-      color 0.15s ease,
-      border-color 0.15s ease,
-      background 0.15s ease;
-  }
-
-  .auth-role-grid button:hover {
-    color: #ff8a25;
-
-    border-color:
-      rgba(255,
-        122,
-        24,
-        0.45);
-
-    background:
-      rgba(255,
-        107,
-        0,
-        0.045);
-  }
-
-
   /* Bottom switch */
 
   .auth-switch-copy {
@@ -7799,10 +7753,6 @@
       min-height: 560px;
     }
 
-    .auth-role-grid {
-      grid-template-columns:
-        repeat(2, 1fr);
-    }
   }
 
 
@@ -10365,4 +10315,164 @@ button.alert-row:last-child {
 .page-content .mission-builder .eligible-drone-grid,
 .page-content .mission-builder .route-option-list {
   gap: 14px;
+
 }
+
+
+/* =========================================================
+   DRONEOPTAI AUTH - LIGHT MODE (FOLLOWS DEVICE / BROWSER)
+   Scoped to auth-page: no changes to Operator/Admin/Tech UI.
+   Dark Mode keeps the original styles above intact.
+   ========================================================= */
+@media (prefers-color-scheme: light) {
+  .auth-page {
+    color-scheme: light;
+    color: #1f2937;
+    background:
+      radial-gradient(circle at 9% 13%, rgba(255, 154, 66, 0.12), transparent 30%),
+      radial-gradient(circle at 89% 91%, rgba(255, 181, 120, 0.12), transparent 32%),
+      #f7f8fa;
+  }
+
+  .auth-page::after {
+    background: linear-gradient(120deg, transparent 28%, rgba(255, 112, 16, 0.04) 48%, transparent 68%);
+  }
+
+  .auth-page .auth-grid {
+    opacity: 0.34;
+    background-image:
+      linear-gradient(rgba(126, 133, 145, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(126, 133, 145, 0.08) 1px, transparent 1px);
+  }
+
+  .auth-page .auth-ambient { opacity: 0.11; }
+
+  .auth-page .auth-card {
+    border-color: #e6e8ec;
+    background: #ffffff;
+    box-shadow: 0 28px 75px rgba(52, 58, 70, 0.12);
+  }
+
+  .auth-page .auth-visual {
+    background:
+      radial-gradient(circle at 71% 43%, rgba(255, 146, 68, 0.11), transparent 40%),
+      linear-gradient(145deg, #fffaf6 0%, #fff3e8 54%, #fffaf7 100%);
+    border-right-color: rgba(223, 159, 112, 0.24);
+    border-bottom-color: rgba(223, 159, 112, 0.24);
+  }
+
+  /* Keep the original orbit animation and positions, only lighten the palette. */
+  .auth-page .auth-orbit {
+    border-color: rgba(255, 107, 0, 0.29);
+  }
+
+  .auth-page .auth-orbit::before {
+    background: #ff790c;
+    box-shadow: 0 0 14px rgba(255, 123, 18, 0.35);
+  }
+
+  .auth-page .auth-route-line {
+    background: linear-gradient(90deg, transparent, rgba(255, 107, 0, 0.5), transparent);
+    opacity: 0.58;
+  }
+
+  .auth-page .auth-route-dot {
+    background: #ff7f17;
+    box-shadow: 0 0 12px rgba(255, 133, 26, 0.4);
+  }
+
+  .auth-page .auth-visual-mark { color: rgba(255, 107, 0, 0.032); }
+  .auth-page .auth-visual-copy h2 { color: #17202d; }
+  .auth-page .auth-visual-copy p,
+  .auth-page .auth-signal-row { color: #6b7280; }
+
+  .auth-page .auth-form-stage {
+    background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  }
+
+  .auth-page .auth-mode-tabs {
+    border-color: #e1e4e9;
+    background: #f5f6f8;
+  }
+
+  .auth-page .auth-mode-tabs button { color: #6b7280; }
+  .auth-page .auth-mode-tabs button:hover { color: #1f2937; }
+  .auth-page .auth-mode-tabs button.active {
+    color: #17130f;
+    background: #ff6b00;
+  }
+
+  .auth-page .auth-form-content h1 { color: #1f2937; }
+  .auth-page .auth-form-copy { color: #6b7280; }
+  .auth-page .auth-kicker,
+  .auth-page .auth-eyebrow { color: #ef6600; }
+  .auth-page .auth-field { color: #374151; }
+
+  .auth-page .auth-field > input,
+  .auth-page .auth-password-wrap {
+    border-color: #d9dde4;
+    background: #ffffff;
+  }
+
+  .auth-page .auth-field > input,
+  .auth-page .auth-password-wrap input { color: #1f2937; }
+
+  .auth-page .auth-field > input::placeholder,
+  .auth-page .auth-password-wrap input::placeholder { color: #9299a6; }
+
+  .auth-page .auth-field > input:focus,
+  .auth-page .auth-password-wrap:focus-within {
+    border-color: rgba(255, 107, 0, 0.75);
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.09);
+  }
+
+  /* Keep autofilled input text readable in Chrome's light mode. */
+  .auth-page .auth-field > input:-webkit-autofill,
+  .auth-page .auth-field > input:-webkit-autofill:focus,
+  .auth-page .auth-password-wrap input:-webkit-autofill,
+  .auth-page .auth-password-wrap input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #1f2937;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+    transition: background-color 9999s ease-out;
+  }
+
+  .auth-page .auth-password-toggle { color: #6b7280; }
+  .auth-page .auth-password-toggle:hover {
+    color: #eb6500;
+    background: #fff1e6;
+  }
+
+  .auth-page .auth-google {
+    border-color: #d9dde4;
+    background: #ffffff;
+    color: #1f2937;
+  }
+
+  .auth-page .auth-google:hover {
+    border-color: #c6cbd4;
+    background: #f8f9fb;
+  }
+
+  .auth-page .auth-divider { color: #7d8490; }
+  .auth-page .auth-divider::before,
+  .auth-page .auth-divider::after { background: #e0e3e8; }
+
+  .auth-page .auth-switch-copy { color: #6b7280; }
+  .auth-page .auth-switch-copy button { color: #e76000; }
+  .auth-page .auth-switch-copy button:hover { color: #bd4c00; }
+  .auth-page .auth-security-note { color: #7b8491; }
+  .auth-page .auth-error {
+    border-color: rgba(210, 49, 55, 0.26);
+    background: #fff3f3;
+    color: #ad2630;
+  }
+}
+
+/* Login button only: centered label, no trailing arrow. */
+.auth-page .auth-submit-centered {
+  justify-content: center;
+  text-align: center;
+}
+
+
