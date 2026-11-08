@@ -87,6 +87,7 @@ export function DroneDetailPage() {
 
   return <AdminPageShell
     title={drone.id}
+    backTo={{ path: "/admin/network/drones", label: "Drones" }}
     description={`${drone.model} · ${hubName}`}
     actions={<ActionButton variant={drone.isActive ? 'danger' : 'secondary'} disabled={drone.isActive && drone.status === 'IN_FLIGHT'} onClick={() => { setNotice(''); setError(''); setConfirmActive(true); }}>{drone.isActive ? 'Deactivate' : 'Activate'}</ActionButton>}
   >

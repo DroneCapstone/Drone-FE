@@ -1,12 +1,13 @@
 /**
- * Admin-only supply follow-up for the Technician replacement-request prototype.
- * Compatible with the existing `droneoptai.prototype.v1.requests` and `.parts`
- * keys. No changes to the Technician app, backend, or Hub quantities.
- *
- * IMPORTANT: Approve is a business decision, NOT the act of supplying a part.
- * The shared Technician request remains PENDING until Admin confirms supply,
- * at which point it becomes APPROVED so Technician can Confirm Receipt.
- */
+  * Admin-only supply follow-up for the Technician replacement-request prototype.
+  * Compatible with the existing `droneoptai.prototype.v1.requests` and `.parts`
+  * keys. No changes to the Technician app, backend, or Hub quantities.
+  *
+  * IMPORTANT: Approve is a business decision, NOT the act of supplying a part.
+  * The shared Technician request remains PENDING until Admin confirms supply,
+  * at which point it becomes APPROVED so Technician can Confirm Receipt.
+ * Historic FULFILLED records remain supported.
+  */
 import { getAdminBatteries, getAdminDrones, getAdminHubs } from './adminStore';
 import {
   getCompatiblePartsForRequest,
@@ -25,7 +26,7 @@ const SUPPLY_KEY = `${PREFIX}admin-supply-v2`;
 const REQUEST_KEY = `${PREFIX}requests`;
 const PART_KEY = `${PREFIX}parts`;
 const BATTERY_KEY = 'droneoptai.admin.batteries.v2';
-const EXPENSE_KEY = `${PREFIX}expenses`; 
+const EXPENSE_KEY = `${PREFIX}expenses`;
 
 export type AdminSupplyStage = 'AWAITING_SUPPLY' | 'SUPPLIED';
 export interface AdminSupplyEvent {
@@ -115,9 +116,9 @@ export function approveReplacementRequest(requestId: string, adminNote: string) 
   if (request.type === 'BATTERY' && !getAdminHubs().some((hub) => hub.id === request.hubId && hub.status === 'ACTIVE'))
     throw new Error('The receiving Hub must be active before a replacement can be approved.');
   if (request.type === 'BATTERY' && getReplacementRequests().some((other) => other.id !== request.id
-      && other.type === 'BATTERY' && other.batteryId === request.batteryId
-      && (other.status === 'APPROVED' || other.status === 'FULFILLED' ||
-        getAdminSupplyRecord(other.id)?.stage === 'AWAITING_SUPPLY')))
+    && other.type === 'BATTERY' && other.batteryId === request.batteryId
+    && (other.status === 'APPROVED' || other.status === 'FULFILLED' ||
+      getAdminSupplyRecord(other.id)?.stage === 'AWAITING_SUPPLY')))
     throw new Error('Another approved replacement already exists for this damaged Battery ID.');
   const time = now();
   const record: AdminSupplyRecord = {
@@ -165,9 +166,9 @@ export function nextAdminBatteryId(batteries = getAdminBatteries()): string {
 }
 
 /** Register a brand-new, uninspected battery for one already-approved replacement.
- * The model and receiving Hub always come from the reported damaged battery/request.
- * No existing Battery ID is eligible for reuse in this flow.
- */
+  * The model and receiving Hub always come from the reported damaged battery/request.
+  * No existing Battery ID is eligible for reuse in this flow.
+  */
 export function registerNewReplacementBattery(requestId: string, serialNumber: string, paidUnitCostVnd?: number): AdminBattery {
   const request = findRequest(requestId);
   const records = readRecords();
@@ -216,9 +217,9 @@ export function registerNewReplacementBattery(requestId: string, serialNumber: s
 }
 
 /** Replacement can use only an unused NEW battery controlled by Admin.
- * It must NOT be a battery already assigned to a Hub or installed on a drone.
- * Legacy requests with an already-registered Battery ID are still supported.
- */
+  * It must NOT be a battery already assigned to a Hub or installed on a drone.
+  * Legacy requests with an already-registered Battery ID are still supported.
+  */
 export function getMatchingBatteryOptions(request: ReplacementRequest): AdminBattery[] {
   if (request.type !== 'BATTERY' || request.quantity !== 1) return [];
   const damaged = getAdminBatteries().find((battery) => battery.id === request.batteryId);
@@ -227,9 +228,9 @@ export function getMatchingBatteryOptions(request: ReplacementRequest): AdminBat
   const linkedId = getAdminSupplyRecord(request.id)?.registeredBatteryId;
   const legacy = linkedId ? getAdminBatteries().find((battery) => battery.id === linkedId) : undefined;
   if (legacy && legacy.model === damaged.model && legacy.hubId === request.hubId
-      && legacy.replacementRequestId === request.id && legacy.inspectionPending
-      && legacy.administrativeStatus === 'ACTIVE' && legacy.operationalStatus === 'MAINTENANCE'
-      && !legacy.droneId && !options.some((battery) => battery.id === legacy.id)) {
+    && legacy.replacementRequestId === request.id && legacy.inspectionPending
+    && legacy.administrativeStatus === 'ACTIVE' && legacy.operationalStatus === 'MAINTENANCE'
+    && !legacy.droneId && !options.some((battery) => battery.id === legacy.id)) {
     options.push(legacy);
   }
   // A request-specific battery registered by an earlier prototype must be
@@ -261,22 +262,22 @@ export function registerStandaloneBattery(model: string, hubId: string, serialNu
   return battery;
 }
 
-/** Admin records the result supplied by Technician after physical receipt/check.
- * This is a demo action: it does not assert the Administrator performed inspection.
- */
+/** Admin mirrors a Technician technical report; no separate receipt stage is required.
+  * This is a demo action: it does not assert the Administrator performed inspection.
+  */
 export function recordBatteryInspectionResult(batteryId: string, passed: boolean, technicianReport: string) {
   const batteries = getAdminBatteries();
   const battery = batteries.find((item) => item.id === batteryId);
   if (!battery || !battery.inspectionPending)
     throw new Error('Only a new battery pending inspection can receive this result.');
   const request = battery.replacementRequestId ? findRequest(battery.replacementRequestId) : undefined;
-  if (request && request.status !== 'FULFILLED')
-    throw new Error('Technician must confirm receipt before inspection result can be recorded.');
+  if (request && request.status !== 'APPROVED' && request.status !== 'FULFILLED')
+    throw new Error('Replacement must be supplied before the Technician verification result can be recorded.');
   const record = request ? getAdminSupplyRecord(request.id) : undefined;
   if (request && (record?.selectedBatteryId !== batteryId || record.stage !== 'SUPPLIED'))
     throw new Error('This new battery was not supplied for the linked request.');
   if (!technicianReport.trim()) throw new Error('Enter the Technician inspection report/reference.');
-  // Admin records the Technician's basic receipt/check outcome, not a BMS assessment.
+  // Admin mirrors a Technician technical check outcome, not a BMS assessment.
   if (battery.administrativeStatus === 'RETIRED')
     throw new Error('A retired battery cannot be marked Ready.');
   battery.operationalStatus = passed ? 'READY' : 'MAINTENANCE';
@@ -330,6 +331,7 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
       chosen.replacementRequestId = request.id;
       chosen.replacementSupplyState = 'SUPPLIED';
       chosen.replacementSuppliedAt = time;
+      chosen.firstAssignedAt = chosen.firstAssignedAt ?? time;
       chosen.updatedAt = time;
     } else if (!(record.registeredBatteryId === chosen.id && chosen.replacementRequestId === request.id)) {
       throw new Error('This battery has already been allocated to another Hub or request.');
@@ -351,11 +353,15 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
 /** Informational activity trail, read-only from the Technician report. */
 export function getAdminSupplyTimeline(request: ReplacementRequest): AdminSupplyEvent[] {
   const record = getAdminSupplyRecord(request.id);
-  const events: AdminSupplyEvent[] = [{ action: 'REQUESTED', detail: request.reason,
-    by: request.technician, at: request.createdAt }];
+  const events: AdminSupplyEvent[] = [{
+    action: 'REQUESTED', detail: request.reason,
+    by: request.technician, at: request.createdAt
+  }];
   if (record) events.push(...record.events);
-  else if (request.reviewedAt) events.push({ action: request.status === 'REJECTED' ? 'REJECTED' : 'REVIEWED (LEGACY)',
-    detail: request.adminNote ?? '', by: request.reviewedBy ?? 'Admin', at: request.reviewedAt });
+  else if (request.reviewedAt) events.push({
+    action: request.status === 'REJECTED' ? 'REJECTED' : 'REVIEWED (LEGACY)',
+    detail: request.adminNote ?? '', by: request.reviewedBy ?? 'Admin', at: request.reviewedAt
+  });
   if (request.status === 'FULFILLED' && request.fulfilledAt)
     events.push({ action: 'RECEIVED', detail: 'Technician confirmed receipt', by: request.technician, at: request.fulfilledAt });
   return events.sort((a, b) => a.at.localeCompare(b.at));
@@ -363,4 +369,42 @@ export function getAdminSupplyTimeline(request: ReplacementRequest): AdminSupply
 
 export function getRequestDroneModel(request: ReplacementRequest) {
   return getAdminDrones().find((drone) => drone.id === request.droneId)?.model;
+}
+
+/** Admin-issued replacement events shown on Hub Detail (NOT a Hub stock ledger).
+  * The same Battery ID is visible in Assigned Batteries after supply.
+  * Older demo records may lack an exact issued Battery ID: make that explicit.
+  */
+export interface HubSupplyHistoryEntry {
+  requestId: string;
+  type: 'PART' | 'BATTERY';
+  itemId: string;
+  itemName: string;
+  droneId?: string;
+  quantity: number;
+  issuedAt: string;
+  historicReceipt: boolean;
+}
+export function getHubSupplyHistory(hubId: string): HubSupplyHistoryEntry[] {
+  const supplyRecords = readRecords();
+  const batteries = getAdminBatteries();
+  const parts = getSpareParts();
+  return getReplacementRequests()
+    .filter((request) => request.hubId === hubId && (request.status === 'APPROVED' || request.status === 'FULFILLED'))
+    .map((request): HubSupplyHistoryEntry => {
+      const supply = supplyRecords.find((record) => record.requestId === request.id);
+      const id = request.type === 'PART'
+        ? (supply?.selectedPartId ?? request.approvedPartId ?? request.partId ?? '')
+        : (supply?.selectedBatteryId ?? batteries.find((battery) => battery.replacementRequestId === request.id)?.id ?? '');
+      const item = request.type === 'PART'
+        ? parts.find((part) => part.id === id)?.name ?? 'Spare part'
+        : id ? batteries.find((battery) => battery.id === id)?.model ?? 'Battery' : 'Battery replacement (legacy)';
+      return {
+        requestId: request.id, type: request.type, itemId: id,
+        itemName: item, droneId: request.droneId,
+        quantity: request.quantity, issuedAt: supply?.suppliedAt ?? request.reviewedAt ?? request.createdAt,
+        historicReceipt: request.status === 'FULFILLED',
+      };
+    })
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
 }

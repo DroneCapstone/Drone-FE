@@ -101,6 +101,32 @@ export function getSpareParts(): SparePart[] {
   });
 }
 
+/** Demo reference prices (VND) only for the browser-local prototype.
+ * Replace this table with Backend supplier prices when an API is connected.
+ * Existing per-part configured unitCostVnd always takes priority. */
+const DEMO_PART_REFERENCE_PRICE_VND: Record<string, number> = {
+  'PART-PROP': 200_000,
+  'PART-MOTOR': 3_500_000,
+  'PART-ESC': 1_800_000,
+  'PART-FC': 4_500_000,
+  'PART-GPS': 1_600_000,
+  'PART-COM': 1_200_000,
+  'PART-PDM': 1_300_000,
+  'PART-PAY': 2_500_000,
+};
+export function getSparePartReferenceUnitCostVnd(part: SparePart): number {
+  if (Number.isSafeInteger(part.unitCostVnd) && part.unitCostVnd > 0) return part.unitCostVnd;
+  return DEMO_PART_REFERENCE_PRICE_VND[part.id] ?? 0;
+}
+function makeRecordedAcquisitionCost(part: SparePart, unitCostVnd: number, added: number): PrototypeExpense {
+  return {
+    id: `EXP-PART-REF-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    date: new Date().toISOString(), category: 'SPARE_PART',
+    amountVnd: added * unitCostVnd,
+    description: `Recorded reference acquisition cost (not verified paid): ${added} × ${part.name} (${part.id}), ${unitCostVnd} VND/unit`,
+  };
+}
+
 export interface PaidPartsPurchase { paid: boolean; actualUnitCostVnd: number }
 function makePaidExpense(part: SparePart, amount: number, count: number): PrototypeExpense {
   return {
@@ -157,9 +183,19 @@ export function addSparePartQuantity(id: string, added: number, purchase?: PaidP
   const parts = getSpareParts(); const part = parts.find((item) => item.id === id);
   if (!part || !part.active) throw new Error('Only an active spare part can receive additional quantity.');
   verifyPurchase(purchase, added);
+  // Do not treat a reference price as proof of an external bank payment.
+  // The Admin Add Quantity popup records the estimated acquisition value with
+  // the quantity change, while legacy explicit-paid callers remain supported.
+  const referenceUnitPrice = getSparePartReferenceUnitCostVnd(part);
+  const unitCost = purchase?.paid ? purchase.actualUnitCostVnd : referenceUnitPrice;
+  if (!Number.isSafeInteger(unitCost) || unitCost <= 0 || !Number.isSafeInteger(added * unitCost))
+    throw new Error('A positive reference unit price is required before recording a quantity addition.');
   part.quantity += added;
   const entries: Array<[string, unknown]> = [['parts', parts]];
-  if (purchase?.paid) entries.push(['expenses', [makePaidExpense(part, purchase.actualUnitCostVnd, added), ...getPrototypeExpenses()]]);
+  const expense = purchase?.paid
+    ? makePaidExpense(part, unitCost, added)
+    : makeRecordedAcquisitionCost(part, unitCost, added);
+  entries.push(['expenses', [expense, ...getPrototypeExpenses()]]);
   writeTogether(entries);
   recordPrototypeActivity('admin', 'Admin', 'ADD_PART_QUANTITY', id, `+${added}; available ${part.quantity}`);
 }
