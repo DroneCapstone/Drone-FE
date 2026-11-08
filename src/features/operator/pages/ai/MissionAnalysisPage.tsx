@@ -47,7 +47,11 @@ export function MissionAnalysisPage() {
   const selectedMission = missions.find((mission) => mission.id === selectedMissionId);
   const contextOrderId = hasQueryContext ? queryOrderId : selectedMission?.orderId ?? '';
   const contextDroneId = hasQueryContext ? queryDroneId : selectedMission?.droneId ?? '';
-  const contextBatteryId = queryBatteryId || (returnToMission ? loadMissionDraft(queryOrderId)?.selectedBatteryId : '') || selectedMission?.batteryId || queryMission?.batteryId || '';
+  const missionDraft = returnToMission ? loadMissionDraft(queryOrderId) : undefined;
+  const draftBundleIds = missionDraft?.bundledOrderIds ?? [];
+  const queryBundleIds = (searchParams.get('bundledOrderIds') ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+  const analysisBundleIds = returnToMission ? draftBundleIds : queryBundleIds;
+  const contextBatteryId = queryBatteryId || missionDraft?.selectedBatteryId || selectedMission?.batteryId || queryMission?.batteryId || '';
   const { data: order } = useOperatorOrderQuery(contextOrderId);
   const drone = fleet.find((item) => item.id === contextDroneId);
   const {
@@ -56,7 +60,7 @@ export function MissionAnalysisPage() {
     isFetching: isPlanningAnalysisFetching,
   } = useMissionPlanningAnalysisQuery(
     contextOrderId && contextDroneId && contextBatteryId
-      ? { orderId: contextOrderId, droneId: contextDroneId, batteryId: contextBatteryId }
+      ? { orderId: contextOrderId, droneId: contextDroneId, batteryId: contextBatteryId, ...(analysisBundleIds.length ? { bundledOrderIds: analysisBundleIds } : {}) }
       : null,
   );
   const routeOptions = planningAnalysis?.routes ?? [];

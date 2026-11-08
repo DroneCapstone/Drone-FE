@@ -60,8 +60,14 @@ export const operatorQueryKeys = {
   eligibleMissionBatteries: (orderId: string, droneId: string, hubId?: string) =>
     [...operatorQueryKeys.missions(), 'eligible-batteries', orderId, droneId, hubId ?? null] as const,
 
-  missionPlanning: (orderId: string, droneId: string, batteryId: string) =>
-    [...operatorQueryKeys.missions(), 'planning', orderId, droneId, batteryId] as const,
+  missionBundleCandidates: (orderId: string) =>
+    [...operatorQueryKeys.missions(), 'bundle', 'candidates-pre-analyze', orderId] as const,
+
+  missionBundleValidation: (orderIds: string[], droneId?: string) =>
+    [...operatorQueryKeys.missions(), 'bundle', 'validate-pre-analyze', ...orderIds, droneId || null] as const,
+
+  missionPlanning: (orderId: string, droneId: string, batteryId: string, bundledOrderIds: string[] = []) =>
+    [...operatorQueryKeys.missions(), 'planning', orderId, droneId, batteryId, ...bundledOrderIds] as const,
 
   fleet: () => [...operatorQueryKeys.all, 'fleet'] as const,
 

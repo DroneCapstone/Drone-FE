@@ -57,9 +57,7 @@ export function MissionDetailPage() {
     .map((hubId) => hubs.find((hub) => hub.id === hubId))
     .filter((hub): hub is NonNullable<typeof hub> => Boolean(hub));
   const hubName = (hubId: string) => hubs.find((hub) => hub.id === hubId)?.name ?? hubId;
-  // Incident return is a failsafe state after takeoff, not Scheduled or Completed.
-  const isIncidentReturn = mission.status === 'Incident return';
-  const currentIndex = isIncidentReturn ? 1 : progressOrder.indexOf(mission.status);
+  const currentIndex = progressOrder.indexOf(mission.status);
   const isTerminalException = mission.status === 'Cancelled' || mission.status === 'Failed';
   const originName = originHub?.name || mission.originHubId || '—';
   const destinationName = destinationHub?.name || mission.destinationHubId || '—';
@@ -104,7 +102,7 @@ export function MissionDetailPage() {
                 <p>{mission.id}</p>
               </div>
               <div className="mission-hero-actions">
-                {(mission.status === 'In Progress' || (isIncidentReturn && !mission.actualCompletedAt)) && (
+                {mission.status === 'In Progress' && (
                   <ActionButton variant="secondary" onClick={() => navigate('/operator/operations/live')}>
                     Track live
                   </ActionButton>
@@ -117,6 +115,7 @@ export function MissionDetailPage() {
                       droneId: mission.droneId,
                       ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
                       routeId: mission.routeId,
+                      ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
                     }).toString()}`)}
                   >
                     AI analysis
@@ -131,11 +130,9 @@ export function MissionDetailPage() {
                   <Fragment key={status}>
                     <span className={index < currentIndex ? 'done' : index === currentIndex ? 'current' : ''}>
                       <i>{index < currentIndex ? <Icon name="check" size={13} /> : index + 1}</i>
-                      {isIncidentReturn && status === 'In Progress' ? 'Incident return' : status}
+                      {status}
                       <small>
-                        {isIncidentReturn && status === 'In Progress'
-                          ? 'Failsafe / RTH'
-                          : status === 'Scheduled'
+                        {status === 'Scheduled'
                           ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                           : status === 'In Progress'
                             ? mission.actualStartedAt
@@ -239,7 +236,17 @@ export function MissionDetailPage() {
             <dl className="key-values mission-detail-facts">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
               <div><dt>{mission.legs?.[0]?.isDispatch ? 'Dispatch battery' : 'Origin battery'}</dt><dd>{originBatteryId}</dd></div>
-              <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
+              <div><dt>Payload</dt><dd>{mission.payloadWeightKg !== undefined
+                ? `${mission.payloadWeightKg.toFixed(2)} kg`
+                : mission.bundledOrderIds?.length ? '—' : order ? `${order.payloadKg} kg` : '—'}</dd></div>
+              {(mission.bundledOrderIds?.length || (mission.totalOrdersCount ?? 1) > 1) ? (
+                <>
+                  <div><dt>Orders</dt><dd>{mission.totalOrdersCount ?? 1 + (mission.bundledOrderIds?.length ?? 0)}</dd></div>
+                  {mission.bundledOrderIds && mission.bundledOrderIds.length > 0 && (
+                    <div><dt>Bundled orders</dt><dd>{mission.bundledOrderIds.join(', ')}</dd></div>
+                  )}
+                </>
+              ) : null}
               <div><dt>Drop-off Point</dt><dd>{originName}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
               {relayHubs.length > 0 && <div><dt>Relay Hub</dt><dd>{relayHubs.map((hub) => hub.name).join(' → ')}</dd></div>}

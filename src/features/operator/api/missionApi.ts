@@ -94,6 +94,8 @@ export interface OperatorIncident {
 
 export interface MissionPlanningAnalysis {
   routes: RouteOption[];
+  totalPayloadKg?: number;
+  bundledOrderIds?: string[];
   raw: unknown;
 }
 
@@ -136,12 +138,14 @@ export interface CreateMissionInput {
   distanceKm: number;
   predictedEnergyWh: number;
   predictedDurationMin: number;
+  bundledOrderIds?: string[];
 }
 
 export interface AnalyzeMissionPlanningInput {
   orderId: string;
   droneId: string;
   batteryId: string;
+  bundledOrderIds?: string[];
 }
 
 /** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
@@ -293,8 +297,6 @@ function normalizeIso(value: string | undefined) {
 function normalizeMissionStatus(value: unknown): MissionStatus {
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
-    case 'INCIDENT_RETURN':
-      return 'Incident return';
     case 'IN_PROGRESS':
     case 'FLYING':
     case 'ACTIVE':
@@ -320,7 +322,7 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
 function missionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
   if (status === 'In Progress') return 'warning';
-  if (status === 'Cancelled' || status === 'Failed' || status === 'Incident return') return 'danger';
+  if (status === 'Cancelled' || status === 'Failed') return 'danger';
   return 'info';
 }
 
@@ -441,7 +443,12 @@ function mapMission(raw: unknown): Mission {
   const riskRaw = pickString(routeRecord, ['risk', 'risk_level']) || pickString(record, ['risk', 'risk_level']);
 
   return {
-    id, orderId, type: 'Delivery',
+    id, orderId,
+    bundledOrderIds: pickArray(record, ['bundled_order_ids', 'bundledOrderIds'])
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0 && item !== orderId),
+    totalOrdersCount: pickOptionalNumber(record, ['total_orders_count', 'totalOrdersCount']),
+    payloadWeightKg: pickOptionalNumber(record, ['payload_weight', 'payloadWeight', 'total_payload_kg', 'totalPayloadKg']),
+    type: 'Delivery',
     name: pickString(record, ['name', 'mission_name', 'missionName'], `Delivery ${orderId || id}`),
     droneId, batteryId: pickString(record, ['battery_id', 'batteryId', 'assignedBatteryId']) || undefined, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
@@ -1020,6 +1027,7 @@ export async function analyzeMissionPlanningApi(
       orderId: input.orderId,
       droneId: input.droneId,
       batteryId: input.batteryId,
+      ...(input.bundledOrderIds?.length ? { bundledOrderIds: input.bundledOrderIds } : {}),
     }),
   });
   const root = unwrapObject(payload);
@@ -1046,7 +1054,13 @@ export async function analyzeMissionPlanningApi(
     recommended: route.recommended || Boolean(recommendedRouteId && route.id === recommendedRouteId),
   }));
 
-  return { routes, raw: payload };
+  const rawBundleIds = root.bundledOrderIds ?? root.bundled_order_ids;
+  return {
+    routes,
+    totalPayloadKg: pickOptionalNumber(root, ['totalPayloadKg', 'total_payload_kg']),
+    bundledOrderIds: Array.isArray(rawBundleIds) ? rawBundleIds.filter((id): id is string => typeof id === 'string') : undefined,
+    raw: payload,
+  };
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
@@ -1061,6 +1075,7 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
       droneId: input.droneId,
       batteryId: input.batteryId,
       routeId: input.routeId,
+      ...(input.bundledOrderIds?.length ? { bundledOrderIds: input.bundledOrderIds } : {}),
       route_string: input.routeString,
       // Send the exact per-leg battery snapshot selected by BE Analyze.
       // BE remains authoritative and validates/re-reserves relay batteries on Assign.

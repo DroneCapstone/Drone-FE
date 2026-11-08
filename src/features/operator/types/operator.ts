@@ -5,7 +5,6 @@ export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unkno
 export type MissionStatus =
   | 'Scheduled'
   | 'In Progress'
-  | 'Incident return'
   | 'Completed'
   | 'Cancelled'
   | 'Failed';
@@ -124,6 +123,10 @@ export interface MissionLeg {
 export interface Mission {
   id: string;
   orderId: string;
+  /** Other orders assigned to this mission (excludes the primary order). */
+  bundledOrderIds?: string[];
+  totalOrdersCount?: number;
+  payloadWeightKg?: number;
   type: MissionType;
   name: string;
   droneId: string;
@@ -340,6 +343,7 @@ export interface MissionDraft {
   selectedBatteryId: string;
   selectedRouteId: string;
   relayBatterySelections?: RelayBatterySelection[];
+  bundledOrderIds?: string[];
   updatedAt: string;
 }
 
