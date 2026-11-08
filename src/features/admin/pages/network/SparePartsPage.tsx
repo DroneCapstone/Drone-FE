@@ -30,8 +30,6 @@ export function SparePartsPage() {
    const [editingMode, setEditingMode] = useState<'CREATE' | 'EDIT'>('CREATE');
    const [restockingId, setRestockingId] = useState<string | null>(null);
    const [added, setAdded] = useState(1);
-   const [paid, setPaid] = useState(false);
-   const [purchasePrice, setPurchasePrice] = useState(0);
    const [error, setError] = useState('');
    const [success, setSuccess] = useState('');
 
@@ -46,8 +44,7 @@ export function SparePartsPage() {
    const restocking = parts.find((part) => part.id === restockingId);
    const restockUnitPrice = restocking ? getSparePartReferenceUnitCostVnd(restocking) : 0;
    const restockValid = Number.isSafeInteger(added) && added > 0
-      && restockUnitPrice > 0 && Number.isSafeInteger(added * restockUnitPrice)
-      && (!paid || (Number.isSafeInteger(purchasePrice) && purchasePrice > 0 && Number.isSafeInteger(added * purchasePrice)));
+      && restockUnitPrice > 0 && Number.isSafeInteger(added * restockUnitPrice);
    const isNew = editingMode === 'CREATE';
    const visible = parts.filter((part) => {
       if (!`${part.id} ${part.name} ${part.compatibleModels}`.toLowerCase().includes(query.toLowerCase())) return false;
@@ -64,20 +61,18 @@ export function SparePartsPage() {
       if (restockQuery && getSpareParts().some((part) => part.id === restockQuery)) {
          setRestockingId(restockQuery);
          setAdded(1);
-         setPaid(false);
-         setPurchasePrice(0);
          setError('');
       }
    }, [restockQuery]);
 
    const openAdd = () => {
-      setEditingMode('CREATE'); setEditing(newPart()); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+      setEditingMode('CREATE'); setEditing(newPart()); setError(''); setSuccess('');
    };
    const openEdit = (part: SparePart) => {
-      setEditingMode('EDIT'); setEditing({ ...part }); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+      setEditingMode('EDIT'); setEditing({ ...part }); setError(''); setSuccess('');
    };
    const openRestock = (id: string) => {
-      setRestockingId(id); setAdded(1); setPaid(false); setPurchasePrice(0); setError(''); setSuccess('');
+      setRestockingId(id); setAdded(1); setError(''); setSuccess('');
    };
 
    const save = (event: FormEvent) => {
@@ -85,7 +80,7 @@ export function SparePartsPage() {
       if (!editing) return;
       try {
          if (isNew && parts.some((part) => part.id === editing.id.trim().toUpperCase())) throw new Error('Part ID already exists. Edit that part or use Add quantity.');
-         saveSparePart(editing, paid ? { paid: true, actualUnitCostVnd: purchasePrice } : undefined);
+         saveSparePart(editing);
          setSuccess(isNew ? 'Spare part created.' : 'Spare part updated.');
          setEditing(null); setError('');
       } catch (cause) {
@@ -96,7 +91,7 @@ export function SparePartsPage() {
       event.preventDefault();
       if (!restockingId) return;
       try {
-         addSparePartQuantity(restockingId, added, paid ? { paid: true, actualUnitCostVnd: purchasePrice } : undefined);
+         addSparePartQuantity(restockingId, added);
          setSuccess(`${added} unit(s) added to ${restockingId}.`);
          setRestockingId(null); setError('');
       } catch (cause) {
@@ -189,9 +184,9 @@ export function SparePartsPage() {
                   <label><span>Status</span><select value={editing.active ? 'ACTIVE' : 'INACTIVE'} onChange={(event) => setEditing({ ...editing, active: event.target.value === 'ACTIVE' })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
                   <label><span>{isNew ? 'Initial quantity' : 'Current quantity (read only)'}</span><input type="number" min={0} step={1} disabled={!isNew} required value={editing.quantity} onChange={(event) => setEditing({ ...editing, quantity: Number(event.target.value) })} /></label>
                </div>
-               {isNew && editing.quantity > 0 && <div className="mx-5 border-t border-border pt-4">
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid — record expense</label>
-                  {paid && <label className="mt-3 block text-sm"><span>Actual unit purchase price (VND)</span><input type="number" min={1} step={1} required value={purchasePrice || ''} onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>}
+               {isNew && editing.quantity > 0 && <div className="mx-5 border-t border-border pt-4 text-sm">
+                  <p>Reference total cost: <strong>{formatVnd(getSparePartReferenceUnitCostVnd(editing) * editing.quantity)}</strong></p>
+                  <p className="mt-2 text-xs text-muted-foreground">Estimated acquisition cost only. Payment status is not captured by the current stock service.</p>
                </div>}
                {!isNew && <p className="px-5 text-xs text-muted-foreground">To increase quantity, use <strong>Add quantity</strong> from the table. Confirming supply decreases quantity automatically.</p>}
                {error && <p role="alert" className="mx-5 mt-3 text-sm text-red-500">{error}</p>}
@@ -250,25 +245,12 @@ export function SparePartsPage() {
                         <strong>{restockValid ? formatVnd(added * restockUnitPrice) : '—'}</strong>
                      </div>
                   </div>
-                  <p className="spare-quantity-hint">The reference cost is an estimate. Select “Purchase already paid” below only if an actual purchase was paid; no bank payment is performed here.</p>
+                  <p className="spare-quantity-hint">The reference cost is an estimate, not proof of payment. This operation updates inventory through the existing stock service.</p>
                   {error && <p role="alert" className="spare-quantity-error">{error}</p>}
                </div>
-               <div className="mx-5 border-t border-border pt-3 pb-3">
-                  <label className="flex items-center gap-2 text-sm">
-                     <input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} />
-                     Purchase already paid — record expense
-                  </label>
-                  {paid && <div className="mt-3 fields two">
-                     <label><span>Actual unit purchase price (VND)</span>
-                        <input type="number" min={1} step={1} required value={purchasePrice || ''}
-                           onChange={(event) => setPurchasePrice(Number(event.target.value))} /></label>
-                     <label><span>Cash outflow (VND)</span>
-                        <input readOnly value={Number.isSafeInteger(added) && added > 0 ? formatVnd(added * purchasePrice) : '—'} /></label>
-                  </div>}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                     Quantity is increased when parts are received. Only paid purchases record a cash expense; confirming replacement supply does not.
-                  </p>
-               </div>
+               <p className="px-5 py-3 text-xs text-muted-foreground">
+                  Only confirm quantity that has physically arrived. Paid-purchase expense entry requires an updated stock service; it is not recorded by this form.
+               </p>
                <div className="spare-quantity-footer">
                   <ActionButton variant="secondary" onClick={() => setRestockingId(null)}>Cancel</ActionButton>
                   <ActionButton type="submit" disabled={!restockValid}>Confirm Addition</ActionButton>

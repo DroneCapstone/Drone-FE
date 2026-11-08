@@ -377,7 +377,9 @@ export function supplyApprovedReplacement(requestId: string, selectedItemId: str
       chosen.replacementRequestId = request.id;
       chosen.replacementSupplyState = 'SUPPLIED';
       chosen.replacementSuppliedAt = stamp;
-      chosen.firstAssignedAt = chosen.firstAssignedAt ?? stamp;
+      // Keep the first-assignment timestamp without requiring a shared type change.
+      const chosenWithAssignment = chosen as AdminBattery & { firstAssignedAt?: string };
+      chosenWithAssignment.firstAssignedAt = chosenWithAssignment.firstAssignedAt ?? stamp;
       chosen.updatedAt = stamp;
     } else if (!(record.registeredBatteryId === chosen.id && chosen.replacementRequestId === request.id)) {
       throw new Error('This battery has already been assigned to another Hub/request.');
