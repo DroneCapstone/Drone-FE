@@ -11,7 +11,7 @@ const mission = (
     values.tone ??
     (values.status === 'Completed'
       ? 'success'
-      : values.status === 'Failed' || values.status === 'Cancelled'
+      : values.status === 'Failed'
         ? 'danger'
         : values.status === 'In Progress'
           ? 'success'
@@ -81,7 +81,7 @@ export const missions: Mission[] = [
   mission({
     id: 'MSN-3112', orderId: 'ORD-1112', type: 'Delivery', name: 'Delivery ORD-1112',
     droneId: 'DR-003', drone: 'AX-04', originHubId: 'HUB-HCM-02', destinationHubId: 'HUB-HCM-01', routeId: 'R-04', route: 'R-04 Coastal',
-    status: 'Cancelled', plannedStartAt: isoFromNow(-450), estimatedArrivalAt: isoFromNow(-422),
+    status: 'Failed', plannedStartAt: isoFromNow(-450), estimatedArrivalAt: isoFromNow(-422),
     predictedDurationMin: 28, estimatedEnergyWh: 24.6, batteryConsumptionPct: 24, confidencePct: 91, risk: 'Low', battery: 92,
   }),
   mission({

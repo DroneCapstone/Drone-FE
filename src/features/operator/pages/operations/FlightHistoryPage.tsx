@@ -121,7 +121,7 @@ export function FlightHistoryPage() {
         <label className="fh-filter fh-search"><span>Search</span><input aria-label="Search history" value={search} onChange={e => setFilter('q', e.target.value)} placeholder="Mission ID, drone or route..." /></label>
         <label className="fh-filter"><span>Date</span><input type="date" aria-label="Filter flights by date" value={from} onChange={e => setFilter('date', e.target.value)} /></label>
         
-        <label className="fh-filter"><span>Status</span><select value={status} onChange={e => setFilter('status', e.target.value)}><option value="">All statuses</option><option>Completed</option><option>Failed</option><option>Cancelled</option><option>In Progress</option></select></label>
+        <label className="fh-filter"><span>Status</span><select value={status} onChange={e => setFilter('status', e.target.value)}><option value="">All statuses</option><option>Completed</option><option>Failed</option></select></label>
         <label className="fh-filter"><span>Hub</span><select value={hub} onChange={e => setFilter('hub', e.target.value)}><option value="">All hubs</option>{Array.from(hubs, ([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         <button type="button" className="fh-button fh-reset" onClick={clearFilters}>Reset filters</button>
       </section>
@@ -130,7 +130,7 @@ export function FlightHistoryPage() {
           <div className="fh-card-head"><h2>Flight history</h2><span>{isFetching ? 'Refreshing…' : `${filtered.length} records`}</span></div>
           {error ? <div className="fh-empty" role="alert"><strong>Unable to load mission history.</strong><p>{error instanceof Error ? error.message : 'Please try again.'}</p><button type="button" className="fh-button" onClick={() => void refetch()}>Retry</button></div>
             : isLoading ? <div className="fh-empty">Loading flight history…</div>
-              : filtered.length === 0 ? <div className="fh-empty"><strong>No recorded flights found</strong><p>Try different filters. Only completed or ended missions with a recorded take-off appear here. Scheduled and live missions are excluded.</p></div>
+              : filtered.length === 0 ? <div className="fh-empty"><strong>No recorded flights found</strong><p>Try different filters. Only completed missions and failed missions with a recorded take-off appear here. Scheduled and In Progress missions are excluded.</p></div>
                 : <>
                   <div className="fh-table-scroll"><table className="fh-table"><thead><tr><th>Date</th><th>Mission</th><th>Drone</th><th>Route</th><th>Start</th><th>End</th><th>Duration</th><th>Status</th><th>Action</th></tr></thead><tbody>
                     {paged.map((m, index) => <tr
