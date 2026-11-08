@@ -5,6 +5,7 @@ import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
+import { isFlightHistoryRecord } from '../../api/flightHistoryEligibility';
 import {
   useMissionDetailQuery,
   useMissionHubCheckpointsQuery,
@@ -59,6 +60,7 @@ export function MissionDetailPage() {
   const hubName = (hubId: string) => hubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const currentIndex = progressOrder.indexOf(mission.status);
   const isTerminalException = mission.status === 'Failed';
+  const hasFlightHistory = isFlightHistoryRecord(mission);
   const originName = originHub?.name || mission.originHubId || '—';
   const destinationName = destinationHub?.name || mission.destinationHubId || '—';
   const originBatteryId = mission.legs?.[0]?.batteryId || mission.batteryId || '—';
@@ -105,6 +107,14 @@ export function MissionDetailPage() {
                 {mission.status === 'In Progress' && (
                   <ActionButton variant="secondary" onClick={() => navigate('/operator/operations/live')}>
                     Track live
+                  </ActionButton>
+                )}
+                {hasFlightHistory && (
+                  <ActionButton
+                    variant="secondary"
+                    onClick={() => navigate(`/operator/operations/history?q=${encodeURIComponent(mission.id)}`)}
+                  >
+                    Flight history
                   </ActionButton>
                 )}
                 <ActionButton
