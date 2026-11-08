@@ -295,34 +295,22 @@ function normalizeIso(value: string | undefined) {
 }
 
 function normalizeMissionStatus(value: unknown): MissionStatus {
+  // Do not silently mislabel a deprecated/unknown API status as Scheduled.
+  // Order statuses are a separate domain and are normalized by orderApi.ts.
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
-    case 'IN_PROGRESS':
-    case 'FLYING':
-    case 'ACTIVE':
-    case 'ACTIVE_MISSION':
-      return 'In Progress';
-    case 'COMPLETED':
-    case 'MISSION_COMPLETED':
-      return 'Completed';
-    case 'CANCELLED':
-      return 'Cancelled';
-    case 'FAILED':
-    case 'REJECTED':
-      return 'Failed';
-    case 'PENDING_APPROVAL':
-    case 'APPROVED':
-    case 'AWAITING_PAYMENT':
-    case 'SCHEDULED':
-    default:
-      return 'Scheduled';
+    case 'SCHEDULED': return 'Scheduled';
+    case 'IN_PROGRESS': return 'In Progress';
+    case 'COMPLETED': return 'Completed';
+    case 'FAILED': return 'Failed';
+    default: throw new Error(`Unsupported Mission status from API: ${status || '(empty)'}`);
   }
 }
 
 function missionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
   if (status === 'In Progress') return 'warning';
-  if (status === 'Cancelled' || status === 'Failed') return 'danger';
+  if (status === 'Failed') return 'danger';
   return 'info';
 }
 

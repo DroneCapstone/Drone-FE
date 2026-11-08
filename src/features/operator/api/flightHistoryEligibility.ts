@@ -1,39 +1,39 @@
 import type { Mission } from '../types/operator';
 
 /**
- * Flight History is based on physical take-off/landing, not scheduled dates.
- * BE may populate start_time/end_time for scheduled missions in older data;
- * status takes priority over those timestamps for playback eligibility.
+ * Operator flight-history rules:
+ * - Scheduled / In Progress: not historical flights (use Live Tracking for flying).
+ * - Completed: retain the mission in history, even if its telemetry is missing.
+ * - Failed: retain only if the drone physically departed.
+ * - Only four Mission statuses exist: Scheduled, In Progress, Completed, Failed.
+ *
+ * start_time/end_time belong to the mission lifecycle and must not be treated
+ * as physical departure/arrival events. Otherwise Scheduled/pre-flight
+ * records can show invented durations and misleading playback availability.
  */
-const hasDate = (value?: string) => Boolean(value && Number.isFinite(Date.parse(value)));
+const validTimestamp = (value?: string): value is string =>
+  Boolean(value && Number.isFinite(Date.parse(value)));
 
-/** Take-off timestamp usable as a historical flight event. */
+/** Timestamp of confirmed physical departure, NOT planned/mission start. */
 export function recordedFlightStart(mission: Mission): string | undefined {
-  if (mission.status === 'Scheduled') return undefined;
-  // For cancelled/failed missions, a generic mission start is insufficient:
-  // only an explicit physical departure can prove the drone actually flew.
-  const value = mission.flightDepartedAt || (mission.status === 'Completed' ? mission.actualStartedAt : undefined);
-  return hasDate(value) ? value : undefined;
+  if (mission.status !== 'Completed' && mission.status !== 'Failed') return undefined;
+  return validTimestamp(mission.flightDepartedAt) ? mission.flightDepartedAt : undefined;
 }
 
-/** Landing timestamp usable as a historical flight event. */
+/** Timestamp of confirmed physical arrival, NOT generic mission end. */
 export function recordedFlightEnd(mission: Mission): string | undefined {
-  if (mission.status === 'Scheduled' || mission.status === 'In Progress') return undefined;
-  const value = mission.flightArrivedAt || (mission.status === 'Completed' ? mission.actualCompletedAt : undefined);
-  return hasDate(value) ? value : undefined;
+  if (mission.status !== 'Completed' && mission.status !== 'Failed') return undefined;
+  return validTimestamp(mission.flightArrivedAt) ? mission.flightArrivedAt : undefined;
 }
 
-/** A completed mission is a history record even if BE omitted event timestamps. */
+/** Completed remains visible even if the BE has no GPS recording yet. */
 export function isFlightHistoryRecord(mission: Mission): boolean {
-  if (mission.status === 'Scheduled') return false;
   if (mission.status === 'Completed') return true;
-  // In Progress is handled by Live Tracking, not historical playback.
-  if (mission.status === 'In Progress') return false;
-  return Boolean(recordedFlightStart(mission));
+  return mission.status === 'Failed' && Boolean(recordedFlightStart(mission));
 }
 
-/** Prevent a direct /history/:missionId URL from replaying scheduled/live missions. */
+/** A Replay button also requires >=2 timestamped GPS points, checked separately. */
 export function canReplayFlight(mission: Mission): boolean {
   if (mission.status === 'Completed') return true;
-  return (mission.status === 'Failed' || mission.status === 'Cancelled') && Boolean(recordedFlightStart(mission));
+  return mission.status === 'Failed' && Boolean(recordedFlightStart(mission));
 }

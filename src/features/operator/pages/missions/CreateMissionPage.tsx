@@ -594,7 +594,7 @@ export function CreateMissionPage() {
                 {planningState === 'Ready for Planning'
                   ? canCreateMissionForOrder(order) ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
                   : planningState === 'Needs Replanning'
-                    ? 'The previous Mission was cancelled. Wait for the customer/system to provide a new delivery window before creating another Mission.'
+                    ? 'This Order requires replanning. Create a new Mission only when Backend confirms that it is eligible.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
             </div>
