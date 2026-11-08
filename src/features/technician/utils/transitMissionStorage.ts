@@ -141,6 +141,8 @@ export type TransitMissionHistory = {
     | "Returned to hub"
     | "Sent to maintenance"
     | "Arrival confirmed"
+    | "Arrival completed"
+    | "Completed"
     | "Cancelled"
     | "Failed";
 };
@@ -433,7 +435,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   const batteryCode = pickString(
     value,
-    ["battery_code", "battery_id", "installed_battery_id"],
+    ["battery_id", "installed_battery_id", "battery_code"],
     "",
   );
 
@@ -565,13 +567,13 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const id = pickString(value, ["mission_id", "mission_code", "id"], "");
   if (!id) return null;
   const state = pickString(value, ["mission_status", "mission_state", "status"], "");
-  const purpose = normalizedKey(state) === "MISSION_COMPLETED"
+  const purpose = ["MISSION_COMPLETED", "ARRIVAL_COMPLETED"].includes(normalizedKey(state))
     ? "RETURN_TO_HUB"
     : normalizeTransitPurpose(
       pickString(value, ["purpose", "mission_purpose", "arrival_reason"], ""), state,
     );
   const droneId = pickString(value, ["drone_id", "current_drone_id", "droneId"], "");
-  const batteryId = pickString(value, ["battery_code", "battery_id", "battery"], "");
+  const batteryId = pickString(value, ["battery_id", "battery_code", "battery"], "");
   // These are different events: arriving/flight ending is NOT technician receipt.
   const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
   const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
@@ -594,6 +596,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const outcome = ["CANCELLED", "CANCELED"].includes(normalizedKey(state)) ? "Cancelled" :
     normalizedKey(state) === "FAILED" ? "Failed" :
     isIncidentMissionState(state) ? "Sent to maintenance" :
+    normalizedKey(state) === "ARRIVAL_COMPLETED" ? "Arrival completed" :
     (isCompletedMissionState(state) || normalizedKey(state) === "MISSION_COMPLETED")
       ? "Completed" : "Continued";
   return {
