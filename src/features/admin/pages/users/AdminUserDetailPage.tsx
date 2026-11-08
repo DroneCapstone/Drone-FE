@@ -1,240 +1,249 @@
-import { useMemo, useState } from "react";
-import { Navigate, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Pencil } from "lucide-react";
+import type { ReactNode } from "react";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
 import { Dialog, DialogTitle } from "../../../../components/ui/Dialog";
 import { AdminDialogContent as DialogContent } from "../../components/AdminDialogContent";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { getUserActivity, recordPrototypeActivity } from "../../services/prototypeWorkflow";
 import { getAdminHubs, getAdminUsers, upsertAdminUser } from "../../services/adminStore";
 import type { AdminUser } from "../../types";
 import { userTone } from "../../utils/adminDisplay";
+import "./AdminUsers.css";
 
-function roleLabel(role: AdminUser["role"]) {
-  switch (role) {
-    case "admin": return "Admin";
-    case "operator": return "Operator";
-    case "technician": return "Technician";
-    case "customer": return "Customer";
-  }
-}
+const roleLabel = (role: AdminUser["role"]) => ({
+  admin: "Admin",
+  operator: "Operator",
+  technician: "Technician",
+  customer: "Customer",
+})[role];
 
-function formatDate(value?: string) {
-  return value ? new Date(value).toLocaleString("en-GB") : "Never";
+const formatDate = (value?: string) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("en-GB");
+};
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="admin-ud-field"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
 export function AdminUserDetailPage() {
   const { userId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const source = useMemo(() => getAdminUsers().find((item) => item.id === userId), [userId]);
-  const [user, setUser] = useState<AdminUser | undefined>(source ? { ...source } : undefined);
-  const [saved, setSaved] = useState(false);
+  const editing = searchParams.get("edit") === "1";
+  const [version, setVersion] = useState(0);
+  const [draft, setDraft] = useState<AdminUser | null>(null);
   const [error, setError] = useState("");
   const [confirmStatus, setConfirmStatus] = useState(false);
   const [reason, setReason] = useState("");
-  const [, setActivityVersion] = useState(0);
-  const isEditing = searchParams.get("edit") === "1";
+  const [notice, setNotice] = useState("");
 
-  if (!user || !source) return <Navigate to="/admin/users" replace />;
+  // Read current prototype data after an Admin action or when navigating to another user.
+  useEffect(() => {
+    const refresh = () => setVersion((current) => current + 1);
+    window.addEventListener("admin-data-updated", refresh);
+    return () => window.removeEventListener("admin-data-updated", refresh);
+  }, []);
+  useEffect(() => {
+    setError("");
+    setNotice("");
+    setConfirmStatus(false);
+    setReason("");
+    const current = getAdminUsers().find((item) => item.id === userId);
+    setDraft(editing && current ? { ...current } : null);
+  }, [userId, editing]);
 
-  const hubs = getAdminHubs();
-  const users = getAdminUsers();
-  const managedHub = user.role === "technician" ? hubs.find((hub) => hub.id === user.hubId) : undefined;
-  const lastActiveAdmin =
-    user.role === "admin" &&
-    user.status === "ACTIVE" &&
+  const users = useMemo(() => getAdminUsers(), [version]);
+  const user = users.find((item) => item.id === userId);
+  const hubs = useMemo(() => getAdminHubs(), [version]);
+  const activity = useMemo(() => userId ? getUserActivity(userId).slice(0, 5) : [], [userId, version]);
+
+  if (!user) return <Navigate to="/admin/users" replace />;
+
+  const assignedHub = hubs.find((hub) => hub.id === user.hubId);
+  const lastActiveAdmin = user.role === "admin" && user.status === "ACTIVE" &&
     users.filter((item) => item.role === "admin" && item.status === "ACTIVE").length <= 1;
+  const protectedCustomer = user.role === "customer";
+  const accessScope = user.role === "technician" ? (assignedHub?.name ?? "Not assigned")
+    : user.role === "customer" ? "Customer account" : "System-wide access";
 
-  const startEdit = () => setSearchParams({ edit: "1" });
-
-  const cancelEdit = () => {
-    setUser({ ...source });
-    setSaved(false);
+  const closeEdit = () => {
+    setDraft(null);
+    setError("");
     setSearchParams({});
+  };
+  const startEdit = () => {
+    setDraft({ ...user });
+    setError("");
+    setNotice("");
+    setSearchParams({ edit: "1" });
   };
 
   const save = () => {
-    if (!user.fullName.trim()) { setError('Full name is required.'); return; }
-    if (user.role === 'technician' && !hubs.some(h => h.id === user.hubId && h.status === 'ACTIVE')) { setError('Select an active hub.'); return; }
-    if (source.role === 'admin' && user.role !== 'admin' && source.status === 'ACTIVE' && users.filter(u=>u.role==='admin' && u.status==='ACTIVE').length <= 1) { setError('Cannot demote the last active Admin.'); return; }
-    if (source.role !== user.role && !window.confirm(`Change role from ${source.role} to ${user.role}?`)) return;
-    const normalized: AdminUser = {
-      ...user,
-      hubId: user.role === "technician" ? user.hubId : undefined,
+    if (!draft) return;
+    const current = getAdminUsers().find((item) => item.id === user.id);
+    if (!current) { setError("This user no longer exists."); return; }
+    const fullName = draft.fullName.trim();
+    if (!fullName) { setError("Enter a full name."); return; }
+    if ((current.role === "customer" && draft.role !== "customer") ||
+        (current.role !== "customer" && draft.role === "customer")) {
+      setError("Customer and internal staff roles cannot be converted directly."); return;
+    }
+    if (lastActiveAdmin && draft.role !== "admin") {
+      setError("The last active Admin cannot be changed to another role."); return;
+    }
+    if (draft.role === "technician" &&
+        !hubs.some((hub) => hub.id === draft.hubId && hub.status === "ACTIVE")) {
+      setError("Select an active Hub for the Technician."); return;
+    }
+    const updated: AdminUser = {
+      ...current, // Preserve status and activity changes that might have arrived during editing.
+      fullName,
+      role: draft.role,
+      hubId: draft.role === "technician" ? draft.hubId : undefined,
       updatedAt: new Date().toISOString(),
     };
-    setUser(normalized);
-    upsertAdminUser(normalized);
-    recordPrototypeActivity('admin','Admin','UPDATE_USER',normalized.id,`Role ${source.role} → ${normalized.role}; Hub ${source.hubId||'—'} → ${normalized.hubId||'—'}`);
-    setActivityVersion(v=>v+1);setError('');
-    setSaved(true);
-    setSearchParams({});
-    setTimeout(() => setSaved(false), 1800);
+    upsertAdminUser(updated);
+    recordPrototypeActivity("admin", "Admin", "UPDATE_USER", updated.id,
+      `Role ${current.role} → ${updated.role}; Hub ${current.hubId || "—"} → ${updated.hubId || "—"}`);
+    closeEdit();
+    setNotice("User information saved in the Admin prototype.");
   };
 
   const toggleStatus = () => {
-    if (lastActiveAdmin && user.status === "ACTIVE") return;
-    const next: AdminUser = {
-      ...user,
-      status: user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-      updatedAt: new Date().toISOString(),
-    };
-    setUser(next);
-    upsertAdminUser(next);
-    recordPrototypeActivity('admin','Admin', next.status==='ACTIVE'?'ACTIVATE_USER':'DEACTIVATE_USER',next.id,reason||'Status changed');
-    setActivityVersion(v=>v+1);setConfirmStatus(false);setReason('');
+    const current = getAdminUsers().find((item) => item.id === user.id);
+    if (!current) { setError("This user no longer exists."); return; }
+    const activeAdminCount = getAdminUsers().filter((item) => item.role === "admin" && item.status === "ACTIVE").length;
+    if (current.role === "admin" && current.status === "ACTIVE" && activeAdminCount <= 1) {
+      setConfirmStatus(false);
+      return;
+    }
+    if (!reason.trim()) return;
+    const updated: AdminUser = { ...current, status: current.status === "ACTIVE" ? "INACTIVE" : "ACTIVE", updatedAt: new Date().toISOString() };
+    upsertAdminUser(updated);
+    recordPrototypeActivity("admin", "Admin", updated.status === "ACTIVE" ? "ACTIVATE_USER" : "DEACTIVATE_USER", updated.id, reason.trim());
+    setReason("");
+    setConfirmStatus(false);
+    setNotice(`Account marked ${updated.status.toLowerCase()} in the Admin prototype.`);
   };
-  const recordAccessAction = (action:'INVITE_USER'|'RESET_ACCESS') => {
-    const now=new Date().toISOString();
-    const next={...user,...(action==='INVITE_USER'?{invitationSentAt:now}:{accessResetAt:now}),updatedAt:now};
-    upsertAdminUser(next);setUser(next);recordPrototypeActivity('admin','Admin',action,user.id,'Prototype only — no real email/password change');setActivityVersion(v=>v+1);
-  };
 
-  return (
-    <AdminPageShell
-      title={user.fullName}
-      backTo={{ path: "/admin/users", label: "Users" }}
-      description={`${user.email} · ${user.id}`}
-      actions={(
-        <div className="flex flex-wrap gap-2">
-          {!isEditing ? <ActionButton variant="secondary" onClick={startEdit}>Edit user</ActionButton> : null}
-          <ActionButton
-            variant={user.status === "ACTIVE" ? "danger" : "secondary"}
-            onClick={() => setConfirmStatus(true)}
-            disabled={lastActiveAdmin && user.status === "ACTIVE"}
-          >
-            {user.status === "ACTIVE" ? "Deactivate" : "Activate"}
-          </ActionButton>
-        </div>
-      )}
-    >
-      <div className="detail-layout admin-user-detail-layout">
-        <div className="detail-main">
-          <OperatorPanel>
-            <div className="admin-user-hero">
-              <div className="admin-user-avatar" aria-hidden="true">
-                {user.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U"}
-              </div>
-              <div className="admin-user-hero-copy">
-                <div className="admin-user-hero-badges">
-                  <StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge>
-                  <span className="admin-role-chip">{roleLabel(user.role)}</span>
-                </div>
-                <h2>{user.fullName}</h2>
-                <p>{user.email}</p>
-                {user.role === "technician" ? <small>{managedHub ? `Managed hub · ${managedHub.name}` : "No managed hub assigned"}</small> : null}
-              </div>
-            </div>
-          </OperatorPanel>
-
-          <OperatorPanel
-            title={isEditing ? "Edit account" : "Account information"}
-            eyebrow={isEditing ? "EDIT MODE" : "PROFILE"}
-          >
-            {isEditing ? (
-              <>
-                <div className="fields two">
-                  <label>
-                    <span>Full name</span>
-                    <input value={user.fullName} onChange={(e) => setUser({ ...user, fullName: e.target.value })} />
-                  </label>
-                  <label>
-                    <span>Email</span>
-                    <input value={user.email} readOnly />
-                    <small className="admin-field-help">Login email is managed as an account identifier.</small>
-                  </label>
-                  <label>
-                    <span>Role</span>
-                    <select
-                      value={user.role}
-                      disabled={lastActiveAdmin}
-                      onChange={(e) => {
-                        const nextRole = e.target.value as AdminUser["role"];
-                        setUser({
-                          ...user,
-                          role: nextRole,
-                          hubId: nextRole === "technician" ? user.hubId ?? hubs[0]?.id : undefined,
-                        });
-                      }}
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="operator">Operator</option>
-                      <option value="technician">Technician</option>
-                      <option value="customer">Customer</option>
-                    </select>
-                  </label>
-                  {user.role === "technician" ? (
-                    <label>
-                      <span>Managed hub</span>
-                      <select value={user.hubId ?? ""} onChange={(e) => setUser({ ...user, hubId: e.target.value })}>
-                        <option value="">Select hub</option>
-                        {hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}
-                      </select>
-                    </label>
-                  ) : null}
-                </div>
-
-                {/* {lastActiveAdmin ? <p className="admin-inline-note">The last active Admin cannot be deactivated or demoted.</p> : null} */}
-
-                {error && <p className="mb-3 text-sm text-red-500" role="alert">{error}</p>}
-                <div className="form-actions admin-user-form-actions">
-                  <span className="text-sm text-[var(--green)]">{saved ? "Changes saved." : ""}</span>
-                  <div className="flex gap-2">
-                    <ActionButton variant="secondary" onClick={cancelEdit}>Cancel</ActionButton>
-                    <ActionButton onClick={save}>Save changes</ActionButton>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <dl className="key-values admin-user-key-values">
-                <div><dt>User ID</dt><dd>{user.id}</dd></div>
-                <div><dt>Full name</dt><dd>{user.fullName}</dd></div>
-                <div><dt>Email</dt><dd>{user.email}</dd></div>
-                <div><dt>Role</dt><dd>{roleLabel(user.role)}</dd></div>
-                {user.role === "technician" ? <div><dt>Managed hub</dt><dd>{managedHub?.name ?? "Not assigned"}</dd></div> : null}
-              </dl>
-            )}
-          </OperatorPanel>
-        </div>
-
-        <aside className="detail-side">
-          <OperatorPanel title="Access" eyebrow="ACCOUNT STATE">
-            <dl className="key-values">
-              <div><dt>Status</dt><dd><StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge></dd></div>
-              <div><dt>Sign-in access</dt><dd>{user.status === "ACTIVE" ? "Allowed" : "Blocked"}</dd></div>
-              <div><dt>Role</dt><dd>{roleLabel(user.role)}</dd></div>
-              {user.role === "technician" ? <div><dt>Hub scope</dt><dd>{managedHub?.name ?? "Not assigned"}</dd></div> : null}
-            </dl>
-          </OperatorPanel>
-
-          <OperatorPanel title="Account actions" eyebrow="PROTOTYPE ACCESS">
-            <p className="mb-3 text-xs text-[var(--muted)]">Simulated access actions; no real invitation email or password reset is sent.</p>
-            <div className="flex flex-wrap gap-2"><ActionButton variant="secondary" onClick={()=>recordAccessAction('INVITE_USER')}>Record invitation</ActionButton><ActionButton variant="secondary" onClick={()=>recordAccessAction('RESET_ACCESS')}>Reset access (demo)</ActionButton></div>
-            {user.invitationSentAt && <p className="mt-2 text-xs text-[var(--muted)]">Invitation recorded: {formatDate(user.invitationSentAt)}</p>}
-          </OperatorPanel>
-          <OperatorPanel title="Account activity" eyebrow="AUDIT METADATA">
-            <dl className="key-values admin-user-activity">
-              <div><dt>Last login</dt><dd>{formatDate(user.lastLoginAt)}</dd></div>
-              <div><dt>Created</dt><dd>{formatDate(user.createdAt)}</dd></div>
-              <div><dt>Last updated</dt><dd>{formatDate(user.updatedAt)}</dd></div>
-              {getUserActivity(user.id).slice(0,8).map(a=><div key={a.id}><dt>{a.action} · {formatDate(a.at)}</dt><dd>{a.detail||a.actor}</dd></div>)}
-            </dl>
-          </OperatorPanel>
-
-          {/* {lastActiveAdmin ? (
-            <OperatorPanel title="Protection" eyebrow="ADMIN SAFETY">
-              <p className="text-sm text-[var(--muted)]">This is the last active Admin account. It cannot be deactivated or changed to another role.</p>
-            </OperatorPanel>
-          ) : null} */}
-        </aside>
+  return <AdminPageShell
+    title={user.fullName}
+    description={`${user.email} · ${user.id}`}
+    actions={<div className="admin-ud-heading-actions">
+      <StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge>
+      <ActionButton variant={user.status === "ACTIVE" ? "danger" : "secondary"}
+        disabled={lastActiveAdmin}
+        onClick={() => { setReason(""); setError(""); setConfirmStatus(true); }}>
+        {user.status === "ACTIVE" ? "Deactivate" : "Activate"}
+      </ActionButton>
+    </div>}
+  >
+    <div className="admin-user-detail-v2">
+      <Link className="admin-ud-back" to="/admin/users"><ArrowLeft size={15} strokeWidth={2} /> Back to Users</Link>
+      {notice && <p className="admin-ud-notice" role="status">{notice}</p>}
+      <div className="admin-ud-cards">
+        <section className="admin-ud-card admin-ud-account" aria-labelledby="admin-ud-account-title">
+          <div className="admin-ud-card-head">
+            <h2 id="admin-ud-account-title">Account information</h2>
+            <ActionButton variant="secondary" onClick={startEdit}><Pencil size={15} aria-hidden="true"/> Edit</ActionButton>
+          </div>
+          <dl className="admin-ud-grid">
+            <Field label="User ID">{user.id}</Field>
+            <Field label="Full name">{user.fullName}</Field>
+            <Field label="Email">{user.email}</Field>
+            <Field label="Role">{roleLabel(user.role)}</Field>
+          </dl>
+        </section>
+        <section className="admin-ud-card admin-ud-access" aria-labelledby="admin-ud-access-title">
+          <div className="admin-ud-card-head"><h2 id="admin-ud-access-title">Access & assignment</h2></div>
+          <dl className="admin-ud-kv">
+            <Field label="Account status"><StatusBadge tone={userTone(user.status)}>{user.status}</StatusBadge></Field>
+            <Field label="Access scope">{accessScope}</Field>
+            {user.role === "technician" && <Field label="Assigned Hub">{assignedHub
+              ? <Link className="admin-ud-link" to={`/admin/network/hubs/${assignedHub.id}`}>{assignedHub.name}</Link>
+              : "Not assigned"}</Field>}
+            <Field label="Last login">{formatDate(user.lastLoginAt)}</Field>
+            <Field label="Created on">{formatDate(user.createdAt)}</Field>
+          </dl>
+        </section>
       </div>
-      <Dialog open={confirmStatus} onOpenChange={setConfirmStatus}><DialogContent><div className="p-5">
-        <DialogTitle className="text-lg font-semibold">{user.status==='ACTIVE'?'Deactivate':'Activate'} {user.fullName}?</DialogTitle>
-        <p className="mt-2 text-sm text-muted-foreground">This changes access status in the Admin prototype only. Production authentication is not connected.</p>
-        <label className="mt-4 block text-sm">Reason<textarea className="mt-2 w-full rounded border border-[var(--border)] bg-transparent p-2" rows={2} value={reason} onChange={e=>setReason(e.target.value)}/></label>
-        <div className="form-actions mt-4"><ActionButton variant="secondary" onClick={()=>setConfirmStatus(false)}>Cancel</ActionButton><ActionButton onClick={toggleStatus} disabled={!reason.trim()}>Confirm</ActionButton></div>
-      </div></DialogContent></Dialog>
-    </AdminPageShell>
-  );
+
+      {activity.length > 0 && <section className="admin-ud-card admin-ud-activity" aria-labelledby="admin-ud-activity-title">
+        <div className="admin-ud-card-head"><h2 id="admin-ud-activity-title">Recent account activity</h2><span className="admin-ud-helper">Admin prototype records</span></div>
+        <div className="admin-ud-events">
+          {activity.map((item) => <div className="admin-ud-event" key={item.id}>
+            <div><strong>{item.action.replaceAll("_", " ")}</strong><small>{item.detail || item.actor}</small></div>
+            <time>{formatDate(item.at)}</time>
+          </div>)}
+        </div>
+      </section>}
+    </div>
+
+    <Dialog open={editing} onOpenChange={(open) => { if (!open) closeEdit(); else if (!draft) setDraft({ ...user }); }}>
+      <DialogContent className="admin-ud-modal">
+        <div className="admin-ud-modal-head">
+          <DialogTitle>Edit user</DialogTitle>
+          <p>Update account information and internal role assignment.</p>
+        </div>
+        {draft && <form onSubmit={(event) => { event.preventDefault(); save(); }}>
+          <div className="admin-ud-modal-body">
+            <div className="fields two admin-ud-modal-fields">
+              <label><span>Full name <b aria-hidden="true">*</b></span>
+                <input required value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} /></label>
+              <label><span>Email</span><input readOnly value={draft.email} /></label>
+              <label><span>Role</span>
+                {protectedCustomer
+                  ? <input readOnly value="Customer" />
+                  : <select value={draft.role} disabled={lastActiveAdmin} onChange={(event) => {
+                    const role = event.target.value as AdminUser["role"];
+                    setDraft({ ...draft, role, hubId: role === "technician" ? (draft.hubId ?? "") : undefined });
+                  }}>
+                    <option value="admin">Admin</option>
+                    <option value="operator">Operator</option>
+                    <option value="technician">Technician</option>
+                  </select>}
+              </label>
+              {draft.role === "technician" && <label><span>Assigned Hub <b aria-hidden="true">*</b></span>
+                <select required value={draft.hubId ?? ""} onChange={(event) => setDraft({ ...draft, hubId: event.target.value })}>
+                  <option value="">Select Hub</option>
+                  {hubs.filter((hub) => hub.status === "ACTIVE").map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}
+                </select></label>}
+            </div>
+            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {roleLabel(user.role)} → {roleLabel(draft.role)}. Save changes to confirm.</p>}
+            {error && <p className="admin-ud-error" role="alert">{error}</p>}
+          </div>
+          <div className="admin-ud-modal-foot">
+            <ActionButton variant="secondary" onClick={closeEdit}>Cancel</ActionButton>
+            <ActionButton type="submit">Save changes</ActionButton>
+          </div>
+        </form>}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={confirmStatus} onOpenChange={(open) => { setConfirmStatus(open); if (!open) setReason(""); }}>
+      <DialogContent className="admin-ud-modal">
+        <div className="admin-ud-modal-head">
+          <DialogTitle>{user.status === "ACTIVE" ? "Deactivate" : "Activate"} {user.fullName}?</DialogTitle>
+          <p>This updates the Admin prototype account status. Production sign-in access is not connected.</p>
+        </div>
+        <form onSubmit={(event) => { event.preventDefault(); toggleStatus(); }}>
+          <div className="admin-ud-modal-body">
+            <label className="admin-ud-reason"><span>Reason <b aria-hidden="true">*</b></span>
+              <textarea required rows={3} placeholder="Enter a reason for this change..." value={reason} onChange={(event) => setReason(event.target.value)} /></label>
+            {user.role === "technician" && <p className="admin-ud-helper">This prototype does not check or reassign active Technician work orders.</p>}
+          </div>
+          <div className="admin-ud-modal-foot">
+            <ActionButton variant="secondary" onClick={() => setConfirmStatus(false)}>Cancel</ActionButton>
+            <ActionButton variant={user.status === "ACTIVE" ? "danger" : "primary"} disabled={!reason.trim()} type="submit">
+              Confirm {user.status === "ACTIVE" ? "deactivation" : "activation"}
+            </ActionButton>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  </AdminPageShell>;
 }

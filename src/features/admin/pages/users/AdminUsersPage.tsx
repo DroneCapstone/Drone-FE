@@ -14,6 +14,7 @@ import { recordPrototypeActivity } from "../../services/prototypeWorkflow";
 import { getAdminHubs, getAdminUsers, upsertAdminUser } from "../../services/adminStore";
 import type { AdminUser } from "../../types";
 import { userTone } from "../../utils/adminDisplay";
+import "./AdminUsers.css";
 
 function newInternalUser(): AdminUser {
   const now = new Date().toISOString();
@@ -136,6 +137,7 @@ export function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
+              {visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
               {visible.map((user) => (
                 <tr key={user.id}>
                   <td>
@@ -166,13 +168,13 @@ export function AdminUsersPage() {
 
       <Dialog open={Boolean(creating)} onOpenChange={(open) => !open && setCreating(null)}>
         {creating ? (
-          <DialogContent>
+          <DialogContent className="admin-ud-modal">
             <form onSubmit={save}>
-              <div className="border-b border-border p-5">
-                <DialogTitle className="text-lg font-semibold">Create internal user</DialogTitle>
-                <p className="mt-1 text-sm text-muted-foreground">Customer accounts continue to use customer registration.</p>
+              <div className="admin-ud-modal-head">
+                <DialogTitle>Create internal user</DialogTitle>
+                <p>Customer accounts are created through customer registration.</p>
               </div>
-              <div className="fields two p-5">
+              <div className="admin-ud-modal-body"><div className="fields two admin-ud-modal-fields">
                 <label><span>Full name</span><input required value={creating.fullName} onChange={(e) => setCreating({ ...creating, fullName: e.target.value })} /></label>
                 <label><span>Email</span><input required type="email" value={creating.email} onChange={(e) => setCreating({ ...creating, email: e.target.value })} /></label>
                 <label>
@@ -182,7 +184,7 @@ export function AdminUsersPage() {
                     onChange={(e) => setCreating({
                       ...creating,
                       role: e.target.value as AdminUser["role"],
-                      hubId: e.target.value === "technician" ? creating.hubId ?? hubs[0]?.id : undefined,
+                      hubId: e.target.value === "technician" ? creating.hubId : undefined,
                     })}
                   >
                     <option value="operator">Operator</option>
@@ -200,9 +202,10 @@ export function AdminUsersPage() {
                   </label>
                 ) : null}
               </div>
-              {formError && <p className="px-5 pb-2 text-sm text-red-500" role="alert">{formError}</p>}
-              <p className="px-5 pb-3 text-xs text-muted-foreground">Prototype: Creating an account does not send an email or grant production login access.</p>
-              <div className="form-actions border-t border-border p-5">
+              {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
+              <p className="admin-ud-helper" style={{ marginTop: 12 }}>Prototype record only. Login credentials are not created or emailed.</p>
+              </div>
+              <div className="admin-ud-modal-foot">
                 <ActionButton variant="secondary" onClick={() => setCreating(null)}>Cancel</ActionButton>
                 <ActionButton type="submit">Create account</ActionButton>
               </div>
@@ -213,3 +216,4 @@ export function AdminUsersPage() {
     </AdminPageShell>
   );
 }
+
