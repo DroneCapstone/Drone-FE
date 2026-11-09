@@ -3,6 +3,15 @@ import {
   API_WITH_CREDENTIALS,
 } from "../../../config/api";
 
+// import type {
+//   AuthTokens,
+//   AuthUser,
+//   ForgotPasswordPayload,
+//   LoginPayload,
+//   RegisterPayload,
+//   ResetPasswordPayload,
+// } from "../types/auth";
+
 import type {
   AuthTokens,
   AuthUser,
@@ -10,6 +19,7 @@ import type {
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
+  UserRole,
 } from "../types/auth";
 
 const ACCESS_TOKEN_KEY = "access_token";
