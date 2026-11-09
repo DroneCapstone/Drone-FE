@@ -17,6 +17,7 @@ import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 
 import './ReplacementRecordsDialog.css';
+import { BackendPartsRequests } from '../../components/BackendPartsRequests';
 
 import { getAdminHubs, getAdminBatteries } from '../../services/adminStore';
 
@@ -156,7 +157,7 @@ export function ApprovalsPage() {
 
   }, []);
 
-  const requests = useMemo(() => getReplacementRequests(), [version]);
+  const requests = useMemo(() => getReplacementRequests().filter((r) => r.type === 'BATTERY'), [version]);
 
   const parts = useMemo(() => getSpareParts(), [version]);
 
@@ -296,7 +297,9 @@ export function ApprovalsPage() {
 
   const workOrderId = (request as (ReplacementRequest & { workOrderId?: string }) | undefined)?.workOrderId;
 
-  return <AdminPageShell title="Replacement Records" description="Review reported replacement needs and confirm supply in one step.">
+  return <AdminPageShell title="Replacement Records" description="Review Backend Spare Part requests and separately track demo Battery supplies.">
+    <div className="mb-5"><BackendPartsRequests /></div>
+    <p className="mb-3 text-xs text-muted-foreground">Battery replacement records below remain local demo data until BE provides a matching battery supply workflow.</p>
 
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
 
@@ -323,7 +326,7 @@ export function ApprovalsPage() {
 
           <select value={type} onChange={(event) => setType(event.target.value)}>
 
-            <option value="ALL">All types</option><option value="PART">Spare parts</option><option value="BATTERY">Batteries</option>
+            <option value="ALL">All types</option><option value="BATTERY">Batteries (demo)</option>
 
           </select>
 
