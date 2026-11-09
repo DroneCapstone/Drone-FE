@@ -18,6 +18,7 @@ import {
   getMissionHubCheckpointsApi,
   getEligibleMissionBatteriesApi,
   getMissionTelemetryApi,
+  getAllMissionTelemetryApi,
   listIncidentsApi,
   listMissionsApi,
   listMissionHubsApi,
@@ -101,9 +102,10 @@ export function useMissionDetailQuery(missionId: string) {
 export function useMissionTelemetryQuery(missionId: string) {
   return useQuery({
     queryKey: operatorQueryKeys.missionTelemetry(missionId),
-    queryFn: () => getMissionTelemetryApi(missionId),
+    queryFn: () => getAllMissionTelemetryApi(missionId),
     enabled: Boolean(missionId.trim()),
-    refetchInterval: 5_000,
+    refetchInterval: 8_000,
+    refetchOnWindowFocus: false,
   });
 }
 

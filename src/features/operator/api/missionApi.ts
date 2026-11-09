@@ -514,7 +514,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
     speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
-    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
+    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], ''),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
@@ -548,7 +548,7 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
   const genericSpeed = pickOptionalNumber(record, ['speed']);
   const speed = explicitKmh ?? (explicitMps !== undefined ? explicitMps * 3.6 :
     genericSpeed === undefined ? undefined :
-    import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
+      import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
   const battery = pickNumber(record, ['battery_pct', 'batteryPct', 'battery', 'battery_level'], Number.NaN);
   const batteryVoltage = pickNumber(record, ['battery_voltage', 'batteryVoltage'], Number.NaN);
   const signal = pickNumber(record, ['signal_pct', 'signal', 'signal_strength'], Number.NaN);
@@ -945,6 +945,20 @@ export async function getMissionTelemetryApi(
   );
 }
 
+/** Read every recorded telemetry page for the selected mission; never silently truncate logs. */
+export async function getAllMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+  if (!missionId.trim()) return [];
+  const pageSize = 5000; // Maximum documented by GET /telemetry.
+  const points: MissionTelemetryPoint[] = [];
+  // Explicit guard against a broken API returning a full identical page forever.
+  for (let page = 0; page < 1000; page++) {
+    const batch = await getMissionTelemetryApi(missionId, { limit: pageSize, offset: points.length });
+    points.push(...batch);
+    if (batch.length < pageSize) return points;
+  }
+  throw new Error('Telemetry exceeded the supported pagination safety limit; data was not silently truncated.');
+}
+
 export async function getMissionHubCheckpointsApi(missionId: string): Promise<HubCheckpoint[]> {
   if (!missionId.trim()) return [];
   const payload = await operatorApiRequest<unknown>(
@@ -1040,8 +1054,8 @@ export async function getEligibleMissionBatteriesApi(
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
   if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
-       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
-         'items' in payload || 'data' in payload || 'results' in payload))) {
+    !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+      'items' in payload || 'data' in payload || 'results' in payload))) {
     throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
   }
   return records.map((entry) => {
