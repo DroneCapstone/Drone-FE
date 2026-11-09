@@ -1,0 +1,78 @@
+/* Operator Telemetry: active-flight selector and complete BE telemetry log. */
+.telemetry-explorer { display:grid; gap:14px; min-width:0; }
+.telemetry-topbar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+.telemetry-back { min-height:34px; display:inline-flex; gap:8px; align-items:center; padding:6px 11px; font-size:12px; font-weight:650; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:7px; cursor:pointer; }
+.telemetry-back:hover { border-color:var(--orange); color:var(--orange); }
+.telemetry-source { font-size:11px; color:var(--muted); }
+/* The selector occupies one compact row; the mission log owns the full content width. */
+.telemetry-layout { display:grid; grid-template-columns:minmax(0, 1fr); gap:14px; align-items:start; }
+.telemetry-aircraft-panel { display:grid; grid-template-columns:minmax(160px, 1fr) minmax(240px, 320px) auto; align-items:center; column-gap:16px; row-gap:12px; }
+.telemetry-aircraft-panel > .telemetry-hint,
+.telemetry-aircraft-panel > .telemetry-error { grid-column:1 / -1; margin:0; }
+.telemetry-aircraft-panel,.telemetry-log-panel { min-width:0; }
+.telemetry-list-title { display:flex; align-items:baseline; justify-content:flex-start; flex-wrap:wrap; gap:6px 12px; margin-bottom:0; }
+.telemetry-list-title strong { font-size:14px; color:var(--text); }
+.telemetry-list-title small { font-size:11px; color:var(--muted); white-space:nowrap; }
+.telemetry-search { display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); padding:8px 10px; color:var(--muted); }
+.telemetry-search:focus-within { border-color:var(--orange); }
+.telemetry-search input { min-width:0; width:100%; border:0; background:transparent; outline:0; color:var(--text); font-size:12px; }
+.telemetry-search input::placeholder { color:var(--faint); }
+.telemetry-health-tabs { display:flex; gap:5px; margin:0; flex-wrap:wrap; justify-self:end; }
+.telemetry-health-tabs button { display:inline-flex; align-items:center; gap:3px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; font-size:10px; color:var(--muted); background:var(--surface); cursor:pointer; }
+.telemetry-health-tabs button.active { border-color:var(--orange); color:var(--orange); background:color-mix(in srgb,var(--orange) 5%,var(--surface)); }
+.telemetry-health-tabs button span { font-variant-numeric:tabular-nums; }
+/* Four aircraft per page: one bounded row, however large the fleet grows. */
+.telemetry-aircraft-list { grid-column:1 / -1; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:2px 1px; min-width:0; }
+.telemetry-aircraft-item { min-width:0; min-height:140px; text-align:left; display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid var(--border); border-radius:9px; background:var(--surface); cursor:pointer; color:var(--text); transition:border-color .15s, background .15s; }
+.telemetry-aircraft-item:hover,.telemetry-aircraft-item:focus-visible { border-color:var(--orange); }
+.telemetry-aircraft-item.selected { border-color:var(--orange); background:var(--surface); }
+.telemetry-aircraft-top { display:flex; justify-content:space-between; align-items:center; gap:7px; }
+.telemetry-aircraft-top strong { font-size:13px; }
+.telemetry-aircraft-item small { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.telemetry-incident-label { display:flex; align-items:flex-start; gap:5px; font-size:10px; line-height:1.45; color:var(--orange); }
+.telemetry-incident-label svg { flex:0 0 auto; }
+.telemetry-incident-label { max-height:2.9em; overflow:hidden; }
+.telemetry-aircraft-note { max-height:2.9em; overflow:hidden; }
+.telemetry-aircraft-note { font-size:10px; line-height:1.45; color:var(--orange); }
+.telemetry-open-log { margin-top:auto; display:flex; align-items:center; justify-content:flex-end; gap:2px; font-size:11px; font-weight:650; color:var(--orange); }
+.telemetry-aircraft-pagination { grid-column:1 / -1; display:flex; justify-content:flex-end; align-items:center; gap:12px; font-size:11px; color:var(--muted); }
+.telemetry-aircraft-pagination button { min-height:30px; padding:5px 10px; border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:7px; cursor:pointer; font-weight:600; }
+.telemetry-aircraft-pagination button:hover:not(:disabled) { color:var(--orange); border-color:var(--orange); }
+.telemetry-aircraft-pagination button:disabled { opacity:.45; cursor:not-allowed; }
+.telemetry-log-region { width:100%; min-width:0; scroll-margin-top:16px; }
+.telemetry-log-panel { width:100%; min-width:0; min-height:280px; }
+.telemetry-log-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:13px; }
+.telemetry-log-heading small { color:var(--muted); font-size:10px; letter-spacing:.04em; }
+.telemetry-log-heading h2 { font-size:17px; color:var(--text); font-weight:750; margin:4px 0; overflow-wrap:anywhere; }
+.telemetry-log-heading p { font-size:11px; color:var(--muted); margin:0; line-height:1.5; }
+.telemetry-log-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.telemetry-row-count { color:var(--text); white-space:nowrap; font-size:12px; font-weight:750; font-variant-numeric:tabular-nums; }
+.telemetry-log-status { display:flex; align-items:center; gap:9px; margin-bottom:12px; font-size:11px; color:var(--orange); flex-wrap:wrap; }
+.telemetry-log-status small { margin-left:auto; color:var(--muted); }
+/* Let the page scroll vertically; use horizontal scroll only when BE adds extra columns. */
+.telemetry-table-scroll { width:100%; max-width:100%; max-height:none; overflow-x:auto; border:1px solid var(--border); border-radius:8px; }
+.telemetry-table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.telemetry-table th { position:sticky; top:0; z-index:1; background:var(--surface-2); text-align:left; color:var(--muted); font-weight:750; text-transform:capitalize; }
+.telemetry-table th,.telemetry-table td { padding:12px 11px; border-bottom:1px solid var(--border); }
+.telemetry-table tr:last-child td { border-bottom:0; }
+.telemetry-table td { color:var(--text); }
+.telemetry-table tbody tr:hover { background:var(--surface-2); }
+.telemetry-position { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+.telemetry-hint { padding:20px 6px; font-size:12px; line-height:1.55; color:var(--muted); }
+.telemetry-error { border:1px solid var(--red); border-radius:7px; color:var(--red); padding:12px; font-size:12px; overflow-wrap:anywhere; }
+.telemetry-empty { min-height:235px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px; padding:24px; color:var(--muted); }
+.telemetry-empty strong { color:var(--text); font-size:14px; }
+.telemetry-empty p { max-width:370px; margin:0; font-size:12px; line-height:1.6; }
+@media(max-width:1250px) {
+  .telemetry-aircraft-panel { grid-template-columns:minmax(170px,1fr) minmax(240px,340px); }
+  .telemetry-health-tabs { grid-column:1 / -1; justify-self:start; }
+  .telemetry-aircraft-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:760px) {
+  .telemetry-aircraft-panel { grid-template-columns:minmax(0,1fr); }
+  .telemetry-health-tabs { grid-column:1; }
+  .telemetry-aircraft-list { grid-column:1; }
+  .telemetry-aircraft-list { grid-template-columns:minmax(0,1fr); }
+  .telemetry-aircraft-pagination { justify-content:center; }
+  .telemetry-log-heading { flex-wrap:wrap; }
+}
