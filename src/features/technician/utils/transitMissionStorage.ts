@@ -109,7 +109,10 @@ export type TransitMissionHistory = {
   orderId?: string;
   arrivedAt?: string;
   flightEndedAt?: string;
+  /** Timestamp from GET /fleet/history: arrival_confirmed_at. */
   arrivalConfirmedAt?: string;
+  /** Timestamp from GET /fleet/history: destination_received_at. */
+  destinationReceivedAt?: string;
   batteryLevelReported?: boolean;
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
@@ -577,8 +580,9 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   // These are different events: arriving/flight ending is NOT technician receipt.
   const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
   const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
-  // Per BE, arrival_confirmed_at is CUSTOMER PICKUP confirmation, not Tech drone receipt.
-  const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at"], "");
+  // Keep the two distinct Backend timestamps; do not substitute end_time or pickup time.
+  const confirmedAt = pickString(value, ["arrival_confirmed_at"], "");
+  const destinationReceivedAt = pickString(value, ["destination_received_at"], "");
   const originHubId = pickNumber(value, ["origin_hub_id"], -1);
   const destinationHubId = pickNumber(value, ["destination_hub_id"], -1);
   const currentHubId = pickNumber(value, ["drone_current_hub_id", "current_hub_id", "hub_id"], -1);
@@ -607,6 +611,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     arrivedAt: arrivedAt || undefined,
     flightEndedAt: flightEndedAt || undefined,
     arrivalConfirmedAt: confirmedAt || undefined,
+    destinationReceivedAt: destinationReceivedAt || undefined,
     batteryLevelReported,
     missionState: state || undefined,
     handlingStatus: pickString(value, ["handling_status", "handlingStatus"], "") || undefined,
@@ -619,7 +624,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     origin: getHubName(["origin_hub_name", "origin_hub", "origin"], originHubId),
     hub: getHubName(["hub_name", "hub", "target_hub_name"], currentHubId),
     destination: getHubName(["destination_hub_name", "destination_hub", "destination"], destinationHubId),
-    // For UI history only: pickup time is distinct from physical arrival time.
+    // Legacy field retained for other UI consumers; History renders arrival_confirmed_at and destination_received_at separately.
     handledAt: confirmedAt || "—",
     outcome,
   };

@@ -43,7 +43,6 @@ import {
   hasFinalHubMismatch,
   getTransitConfirmKind,
   type TransitMission,
-  type TransitMissionHistory,
   type TransitMissionPurpose,
   type TransitMissionStatus,
 } from "../utils/transitMissionStorage";
@@ -174,17 +173,6 @@ function getPurposeDescription(purpose: TransitMissionPurpose) {
   return "Incoming: Confirm appears for every arriving drone. FE selects relay or final API using drone_current_hub_id and destination_hub_id; click only after the drone actually lands.";
 }
 
-/** History reflects the mission lifecycle, independently of confirmation time. */
-function getHistoryResultLabel(item: TransitMissionHistory): string {
-  const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
-  if (state === "COMPLETED") return "Completed";
-  if (state === "MISSION_COMPLETED") return "Mission completed";
-  if (state === "ARRIVAL_COMPLETED") return "Arrival completed";
-  if (["CANCELLED", "CANCELED"].includes(state)) return "Cancelled";
-  if (state === "FAILED") return "Failed";
-  return item.outcome;
-}
-
 function getHistoryReasonLabel(purpose: TransitMissionPurpose): string {
   if (purpose === "BATTERY_STOP") return "Relay / battery stop";
   if (purpose === "RETURN_TO_HUB") return "Destination arrival";
@@ -244,7 +232,7 @@ export function TransitMissionsPage() {
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
   // BE /fleet/history returns both arrival-completed and mission-completed records.
-  // Customer pickup (arrival_confirmed_at) is informational, not a filter.
+  // Arrival confirmation and destination receipt timestamps are informational, not a filter.
   const missionHistory = (historyQuery.data ?? []).filter((item) => {
     const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
     return ["COMPLETED", "MISSION_COMPLETED", "ARRIVAL_COMPLETED"].includes(state);
@@ -901,16 +889,15 @@ export function TransitMissionsPage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1520px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[190px_165px_190px_115px_180px_180px_190px_170px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
+              <div className="min-w-[1280px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[180px_160px_180px_115px_165px_165px_185px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
                   <HistoryHeader>Mission / Order</HistoryHeader>
                   <HistoryHeader>Drone / Model</HistoryHeader>
                   <HistoryHeader>Route / Arrival type</HistoryHeader>
                   <HistoryHeader>Battery</HistoryHeader>
                   <HistoryHeader>Arrived at hub</HistoryHeader>
-                  <HistoryHeader>Flight ended at</HistoryHeader>
-                  <HistoryHeader>Customer pickup at</HistoryHeader>
-                  <HistoryHeader>Mission / Result</HistoryHeader>
+                  <HistoryHeader>Arrival confirmed at</HistoryHeader>
+                  <HistoryHeader>Destination received at</HistoryHeader>
                 </div>
 
                 {historyQuery.isPending ? (
@@ -923,11 +910,10 @@ export function TransitMissionsPage() {
                 ) : missionHistory.length > 0 ? (
                   <div className="divide-y divide-[var(--tech-border)]">
                     {missionHistory.map((item) => {
-                      const resultLabel = getHistoryResultLabel(item);
                       return (
                         <div
                           key={item.id}
-                          className="grid grid-cols-[190px_165px_190px_115px_180px_180px_180px_170px] items-center gap-3 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50 sm:px-6"
+                          className="grid grid-cols-[180px_160px_180px_115px_165px_165px_185px] items-center gap-3 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50 sm:px-6"
                         >
                           <div className="min-w-0">
                             <p className="whitespace-nowrap text-[13px] font-semibold text-[var(--tech-text)]">
@@ -966,28 +952,20 @@ export function TransitMissionsPage() {
                             <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
                               {formatHistoryTimestamp(item.arrivedAt)}
                             </p>
-                            {!item.arrivedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]">Not provided by BE</p>}
-                          </div>
-                          <div>
-                            <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
-                              {formatHistoryTimestamp(item.flightEndedAt)}
-                            </p>
-                            {!item.flightEndedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]">Not provided by BE</p>}
+                            {!item.arrivedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]"></p>}
                           </div>
                           <div>
                             <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
                               {formatHistoryTimestamp(item.arrivalConfirmedAt)}
                             </p>
-                            <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              {item.arrivalConfirmedAt ? "Customer pickup confirmed" : "Awaiting customer pickup"}
-                            </p>
+                            {!item.arrivalConfirmedAt && <p className="mt-1 text-[11px] text-[var(--tech-muted)]"></p>}
                           </div>
                           <div>
-                            <p className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">
-                              {resultLabel}
+                            <p className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-text-secondary)]">
+                              {formatHistoryTimestamp(item.destinationReceivedAt)}
                             </p>
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">
-                              Mission: {item.missionState || "—"}
+                              {item.destinationReceivedAt ? "" : ""}
                             </p>
                           </div>
                         </div>
@@ -997,7 +975,7 @@ export function TransitMissionsPage() {
                 ) : (
                   <div className="px-6 py-14 text-center">
                     <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No recorded arrivals or completed missions yet</p>
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Arrival-completed and mission-completed records appear here when returned by Backend, even if customer pickup is pending.</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Arrival-completed and mission-completed records appear here when returned by Backend, including when destination receipt has not been recorded.</p>
                   </div>
                 )}
               </div>
