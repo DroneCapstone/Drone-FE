@@ -490,3 +490,150 @@
   }
   .page-content .mission-builder .mission-review-energy-metrics > div:last-child { border-bottom: 0; }
 }
+
+/* Order consolidation — scoped to Create Mission; no global/theme changes. */
+
+/* Empty/loading consolidation state: a concise note, no fake selection controls. */
+.mission-builder .mission-bundle-availability,
+.mission-builder .mission-bundle-hint {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mission-builder .mission-bundle-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+.mission-builder .mission-bundle-toggle input,
+.mission-builder .mission-bundle-candidate input {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 2px 0 0;
+  accent-color: var(--orange);
+  cursor: pointer;
+}
+.mission-builder .mission-bundle-toggle > span,
+.mission-builder .mission-bundle-candidate-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+.mission-builder .mission-bundle-toggle strong,
+.mission-builder .mission-bundle-candidate strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mission-builder .mission-bundle-toggle small,
+.mission-builder .mission-bundle-candidate small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mission-builder .mission-bundle-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+.mission-builder .mission-bundle-primary,
+.mission-builder .mission-bundle-candidate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+.mission-builder .mission-bundle-primary {
+  justify-content: space-between;
+}
+.mission-builder .mission-bundle-primary > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mission-builder .mission-bundle-primary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mission-builder .mission-bundle-primary strong,
+.mission-builder .mission-bundle-total strong {
+  font-size: 13px;
+  color: var(--text);
+}
+.mission-builder .mission-bundle-candidates {
+  display: grid;
+  gap: 8px;
+}
+.mission-builder .mission-bundle-candidate {
+  cursor: pointer;
+  background: var(--surface);
+}
+.mission-builder .mission-bundle-candidate:hover {
+  border-color: var(--orange);
+}
+.mission-builder .mission-bundle-candidate > strong {
+  white-space: nowrap;
+}
+.mission-builder .mission-bundle-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+.mission-builder .mission-bundle-feedback,
+.mission-builder .mission-bundle-alert,
+.mission-builder .mission-bundle-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mission-builder .mission-bundle-summary {
+  margin-bottom: 14px;
+}
+.mission-builder .mission-bundle-summary strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.mission-builder .mission-bundle-feedback.is-error,
+.mission-builder .mission-bundle-alert,
+.mission-builder .mission-bundle-error {
+  color: var(--red);
+}
+.mission-builder .mission-bundle-error {
+  font-size: 12px;
+}
+.mission-builder .mission-bundle-alert button {
+  margin-top: 5px;
+}
+@media (max-width: 620px) {
+  .mission-builder .mission-bundle-primary,
+  .mission-builder .mission-bundle-candidate,
+  .mission-builder .mission-bundle-total {
+    flex-wrap: wrap;
+  }
+}

@@ -63,7 +63,7 @@ type WorkOrderStatus =
 
 type DashboardWorkOrder = {
   id: string;
-  drone: string;
+  droneId: string;
   title: string;
   status: WorkOrderStatus;
   assignedTo: string;
@@ -138,7 +138,7 @@ export function TechnicianDashboardPage() {
     (workOrdersQuery.data ?? []).map(
       (order) => ({
         id: order.id,
-        drone: order.drone,
+        droneId: order.droneId,
         title: order.title,
         status: order.status,
         assignedTo: order.assignedTo,
@@ -252,7 +252,7 @@ export function TechnicianDashboardPage() {
           value={String(
             hubDrones.length,
           )}
-          description={`Drones physically stored at ${hubLabel}`}
+          description={``}
           icon={Plane}
         />
 
@@ -261,7 +261,7 @@ export function TechnicianDashboardPage() {
           value={String(
             availableDrones.length,
           )}
-          description={`${availablePercent}% of fleet available`}
+          description={``}
           icon={Plane}
         />
 
@@ -270,7 +270,7 @@ export function TechnicianDashboardPage() {
           value={String(
             chargingBatteries.length,
           )}
-          description="Batteries currently charging at the hub"
+          description=""
           icon={BatteryMedium}
         />
 
@@ -279,7 +279,7 @@ export function TechnicianDashboardPage() {
           value={String(
             activeWorkOrders.length,
           )}
-          description={`${inProgressCount} currently in progress`}
+          description={``}
           icon={Wrench}
         />
       </div>
@@ -337,7 +337,7 @@ export function TechnicianDashboardPage() {
                 >
                   <div>
                     <p className="text-[15px] font-medium text-[var(--tech-text)]">
-                      {drone.name}
+                      {drone.id}
                     </p>
 
                     <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
@@ -481,7 +481,7 @@ export function TechnicianDashboardPage() {
             <div className="min-w-[820px]">
               <div className="grid grid-cols-[130px_120px_1fr_160px_180px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
                 <span>Order</span>
-                <span>Drone</span>
+                <span>Drone ID</span>
                 <span>Task</span>
                 <span>Status</span>
                 <span>Assigned to</span>
@@ -516,7 +516,7 @@ export function TechnicianDashboardPage() {
                     </span>
 
                     <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
-                      {order.drone}
+                      {order.droneId}
                     </span>
 
                     <span className="px-4 text-[14px] text-[var(--tech-text-secondary)]">

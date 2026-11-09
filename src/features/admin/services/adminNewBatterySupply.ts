@@ -20,6 +20,16 @@ const BATTERY_KEY = 'droneoptai.admin.batteries.v2';
 const EXPENSE_KEY = 'droneoptai.prototype.v1.expenses';
 const REMOVAL_HISTORY_KEY = 'droneoptai.admin.new-batteries.removal-history.v1';
 
+/** Demo reference values (VND) for supported battery models. Replace with a real
+ * reference price catalogue if the backend later provides one. NOT bank charges. */
+const DEMO_BATTERY_COST_VND: Record<string, number> = {
+  'FC30 Battery Pack': 8_500_000,
+  'TB65': 6_500_000,
+};
+export function getNewBatteryReferenceUnitCostVnd(model: string): number {
+  return DEMO_BATTERY_COST_VND[model] ?? 0;
+}
+
 function nextAdminBatteryId(batteries: AdminBattery[]): string {
   const max = batteries.reduce((value, battery) => {
     const match = /^BAT-(\d+)$/.exec(battery.id);
@@ -60,12 +70,11 @@ function commit(entries: Array<[string, unknown]>) {
 /** Register 1-30 physically received new batteries; each gets its own ID.
  * Model and serial must be real values. Charge/SOH defaults are demo metadata
  * only: units remain in MAINTENANCE / Pending Verification until Technician.
- * A payment expense is created once per batch, only if marked already paid.
+ * A reference acquisition cost is recorded once per batch; no bank payment.
  */
 export function registerAdminNewBatteries(
   model: string,
   serialNumbers: string[],
-  paidUnitCostVnd?: number,
 ): AdminBattery[] {
   const batteries = getAdminBatteries();
   const template = batteries.find((battery) => battery.model === model);
@@ -79,8 +88,9 @@ export function registerAdminNewBatteries(
   const existingSerials = new Set(batteries.map((battery) => battery.serialNumber.trim().toLocaleLowerCase()));
   if (keys.some((key) => existingSerials.has(key)))
     throw new Error('A serial number is already registered in the system.');
-  if (paidUnitCostVnd !== undefined && (!Number.isFinite(paidUnitCostVnd) || paidUnitCostVnd <= 0))
-    throw new Error('Enter a positive unit price when purchase has been paid.');
+  const unitPrice = getNewBatteryReferenceUnitCostVnd(model);
+  if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0 || !Number.isSafeInteger(unitPrice * serials.length))
+    throw new Error('Configure the model reference unit price before registering new batteries.');
 
   const date = new Date().toISOString();
   const working = [...batteries];
@@ -102,15 +112,14 @@ export function registerAdminNewBatteries(
     return battery;
   });
   const entries: Array<[string, unknown]> = [[BATTERY_KEY, [...created, ...batteries]]];
-  if (paidUnitCostVnd !== undefined) {
-    const total = paidUnitCostVnd * created.length;
-    if (!Number.isSafeInteger(total)) throw new Error('Purchase amount is too large.');
-    entries.push([EXPENSE_KEY, [{
-      id: `EXP-NEW-BAT-${created[0].id}-${Date.now()}`,
-      date, category: 'BATTERY', amountVnd: total,
-      description: `Paid purchase: ${created.length} new ${model} batteries (${created[0].id}${created.length > 1 ? '…' : ''})`,
-    }, ...readExpenses()]]);
-  }
+  const total = unitPrice * created.length;
+  entries.push([EXPENSE_KEY, [{
+    id: `EXP-NEW-BAT-${created[0].id}-${Date.now()}`,
+    date, category: 'BATTERY', amountVnd: total, recordType: 'RECORDED',
+    sourceId: created.map((battery) => battery.id).join(', '),
+    quantity: created.length, unitCostVnd: unitPrice,
+    description: `Recorded acquisition: ${created.length} new ${model} batteries (${created.map((battery) => battery.id).join(', ')}) at ${unitPrice} VND/unit; no bank payment`,
+  }, ...readExpenses()]]);
   commit(entries);
   return created;
 }

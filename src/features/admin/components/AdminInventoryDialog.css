@@ -1,0 +1,17 @@
+/* Shared modal layout: the Dialog primitive already adds -translate-x/y-1/2.
+   Set native translate once, reset inherited transform to prevent double shifting. */
+.admin-dialog-typography.admin-inventory-dialog {
+  position: fixed; left: 50%; top: 50%; transform: none; translate: -50% -50%;
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  padding: 0; border-radius: 12px;
+}
+.admin-dialog-typography.admin-inventory-dialog > form {
+  display: flex; flex-direction: column; width: 100%; min-height: 0; max-height: calc(100dvh - 32px);
+}
+.admin-inventory-dialog__header, .admin-inventory-dialog__footer { flex: none; }
+.admin-inventory-dialog__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #bcc3cc transparent; }
+.admin-inventory-dialog__body::-webkit-scrollbar { width: 6px; }
+.admin-inventory-dialog__body::-webkit-scrollbar-thumb { background: #bcc3cc; border-radius: 5px; }
+.admin-inventory-dialog__footer { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; background: #fff; }

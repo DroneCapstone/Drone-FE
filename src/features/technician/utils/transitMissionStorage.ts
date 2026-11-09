@@ -109,7 +109,10 @@ export type TransitMissionHistory = {
   orderId?: string;
   arrivedAt?: string;
   flightEndedAt?: string;
+  /** Timestamp from GET /fleet/history: arrival_confirmed_at. */
   arrivalConfirmedAt?: string;
+  /** Timestamp from GET /fleet/history: destination_received_at. */
+  destinationReceivedAt?: string;
   batteryLevelReported?: boolean;
 
   /** Raw mission state returned by Backend, e.g. "In Progress". */
@@ -141,6 +144,8 @@ export type TransitMissionHistory = {
     | "Returned to hub"
     | "Sent to maintenance"
     | "Arrival confirmed"
+    | "Arrival completed"
+    | "Completed"
     | "Cancelled"
     | "Failed";
 };
@@ -433,7 +438,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   const batteryCode = pickString(
     value,
-    ["battery_code", "battery_id", "installed_battery_id"],
+    ["battery_id", "installed_battery_id", "battery_code"],
     "",
   );
 
@@ -565,18 +570,19 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const id = pickString(value, ["mission_id", "mission_code", "id"], "");
   if (!id) return null;
   const state = pickString(value, ["mission_status", "mission_state", "status"], "");
-  const purpose = normalizedKey(state) === "MISSION_COMPLETED"
+  const purpose = ["MISSION_COMPLETED", "ARRIVAL_COMPLETED"].includes(normalizedKey(state))
     ? "RETURN_TO_HUB"
     : normalizeTransitPurpose(
       pickString(value, ["purpose", "mission_purpose", "arrival_reason"], ""), state,
     );
   const droneId = pickString(value, ["drone_id", "current_drone_id", "droneId"], "");
-  const batteryId = pickString(value, ["battery_code", "battery_id", "battery"], "");
+  const batteryId = pickString(value, ["battery_id", "battery_code", "battery"], "");
   // These are different events: arriving/flight ending is NOT technician receipt.
   const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
   const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
-  // Per BE, arrival_confirmed_at is CUSTOMER PICKUP confirmation, not Tech drone receipt.
-  const confirmedAt = pickString(value, ["arrival_confirmed_at", "pickup_confirmed_at"], "");
+  // Keep the two distinct Backend timestamps; do not substitute end_time or pickup time.
+  const confirmedAt = pickString(value, ["arrival_confirmed_at"], "");
+  const destinationReceivedAt = pickString(value, ["destination_received_at"], "");
   const originHubId = pickNumber(value, ["origin_hub_id"], -1);
   const destinationHubId = pickNumber(value, ["destination_hub_id"], -1);
   const currentHubId = pickNumber(value, ["drone_current_hub_id", "current_hub_id", "hub_id"], -1);
@@ -594,6 +600,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
   const outcome = ["CANCELLED", "CANCELED"].includes(normalizedKey(state)) ? "Cancelled" :
     normalizedKey(state) === "FAILED" ? "Failed" :
     isIncidentMissionState(state) ? "Sent to maintenance" :
+    normalizedKey(state) === "ARRIVAL_COMPLETED" ? "Arrival completed" :
     (isCompletedMissionState(state) || normalizedKey(state) === "MISSION_COMPLETED")
       ? "Completed" : "Continued";
   return {
@@ -604,6 +611,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     arrivedAt: arrivedAt || undefined,
     flightEndedAt: flightEndedAt || undefined,
     arrivalConfirmedAt: confirmedAt || undefined,
+    destinationReceivedAt: destinationReceivedAt || undefined,
     batteryLevelReported,
     missionState: state || undefined,
     handlingStatus: pickString(value, ["handling_status", "handlingStatus"], "") || undefined,
@@ -616,7 +624,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     origin: getHubName(["origin_hub_name", "origin_hub", "origin"], originHubId),
     hub: getHubName(["hub_name", "hub", "target_hub_name"], currentHubId),
     destination: getHubName(["destination_hub_name", "destination_hub", "destination"], destinationHubId),
-    // For UI history only: pickup time is distinct from physical arrival time.
+    // Legacy field retained for other UI consumers; History renders arrival_confirmed_at and destination_received_at separately.
     handledAt: confirmedAt || "—",
     outcome,
   };

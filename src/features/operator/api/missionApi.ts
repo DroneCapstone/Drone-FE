@@ -67,10 +67,24 @@ export interface MissionTelemetryPoint {
   raw: Record<string, unknown>;
 }
 
+// export interface HubCheckpoint {
+//   id: string;
+//   hubId: string;
+//   hubName: string;
+//   reachedAt?: string;
+//   sequence: number;
+//   raw: Record<string, unknown>;
+// }
+
 export interface HubCheckpoint {
   id: string;
   hubId: string;
   hubName: string;
+
+  /** Hub coordinates from the recorded checkpoint event (hub_latitude, hub_longitude). */
+
+  latitude?: number;
+  longitude?: number;
   reachedAt?: string;
   sequence: number;
   raw: Record<string, unknown>;
@@ -94,6 +108,8 @@ export interface OperatorIncident {
 
 export interface MissionPlanningAnalysis {
   routes: RouteOption[];
+  totalPayloadKg?: number;
+  bundledOrderIds?: string[];
   raw: unknown;
 }
 
@@ -136,12 +152,14 @@ export interface CreateMissionInput {
   distanceKm: number;
   predictedEnergyWh: number;
   predictedDurationMin: number;
+  bundledOrderIds?: string[];
 }
 
 export interface AnalyzeMissionPlanningInput {
   orderId: string;
   droneId: string;
   batteryId: string;
+  bundledOrderIds?: string[];
 }
 
 /** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
@@ -291,8 +309,17 @@ function normalizeIso(value: string | undefined) {
 }
 
 function normalizeMissionStatus(value: unknown): MissionStatus {
+  // Four Operator-facing Mission statuses. The BE may still return legacy or
+  // operational aliases; normalize those at the API boundary, not in the UI.
+  // A completed destination arrival is treated as Completed here. The BE
+  // should eventually return the canonical value `Completed` consistently.
   const status = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
   switch (status) {
+    case 'SCHEDULED':
+    case 'PENDING_APPROVAL':
+    case 'APPROVED':
+    case 'AWAITING_PAYMENT':
+      return 'Scheduled';
     case 'IN_PROGRESS':
     case 'FLYING':
     case 'ACTIVE':
@@ -300,25 +327,22 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
       return 'In Progress';
     case 'COMPLETED':
     case 'MISSION_COMPLETED':
+    case 'ARRIVAL_COMPLETED':
       return 'Completed';
-    case 'CANCELLED':
-      return 'Cancelled';
     case 'FAILED':
     case 'REJECTED':
       return 'Failed';
-    case 'PENDING_APPROVAL':
-    case 'APPROVED':
-    case 'AWAITING_PAYMENT':
-    case 'SCHEDULED':
     default:
-      return 'Scheduled';
+      // Do not mislabel legacy `Cancelled` as Failed, or pretend that an
+      // unrecognized future status is Scheduled.
+      throw new Error(`Unsupported Mission status from API: ${status || '(empty)'}`);
   }
 }
 
 function missionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
   if (status === 'In Progress') return 'warning';
-  if (status === 'Cancelled' || status === 'Failed') return 'danger';
+  if (status === 'Failed') return 'danger';
   return 'info';
 }
 
@@ -410,6 +434,10 @@ function mapMission(raw: unknown): Mission {
   const estimatedArrivalAt = explicitEstimatedArrival ?? calculatedArrival ?? '';
   const actualStartedAt = normalizeIso(pickString(record, ['actual_started_at', 'actualStartedAt', 'start_time', 'startTime', 'departed_at', 'departedAt']));
   const actualCompletedAt = normalizeIso(pickString(record, ['actual_completed_at', 'actualCompletedAt', 'end_time', 'endTime', 'arrived_at', 'arrivedAt']));
+  // Preserve true physical-flight timestamps separately. Mission `start_time`
+  // can be set before take-off, so it must not impersonate `departed_at`.
+  const flightDepartedAt = normalizeIso(pickString(record, ['departed_at', 'departedAt']));
+  const flightArrivedAt = normalizeIso(pickString(record, ['arrived_at', 'arrivedAt']));
   const createdAt = normalizeIso(pickString(record, ['created_at', 'createdAt'])) ?? plannedStartAt;
 
   const rawLegs = pickArray(record, ['legs_detail', 'legs', 'mission_legs']);
@@ -439,7 +467,12 @@ function mapMission(raw: unknown): Mission {
   const riskRaw = pickString(routeRecord, ['risk', 'risk_level']) || pickString(record, ['risk', 'risk_level']);
 
   return {
-    id, orderId, type: 'Delivery',
+    id, orderId,
+    bundledOrderIds: pickArray(record, ['bundled_order_ids', 'bundledOrderIds'])
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0 && item !== orderId),
+    totalOrdersCount: pickOptionalNumber(record, ['total_orders_count', 'totalOrdersCount']),
+    payloadWeightKg: pickOptionalNumber(record, ['payload_weight', 'payloadWeight', 'total_payload_kg', 'totalPayloadKg']),
+    type: 'Delivery',
     name: pickString(record, ['name', 'mission_name', 'missionName'], `Delivery ${orderId || id}`),
     droneId, batteryId: pickString(record, ['battery_id', 'batteryId', 'assignedBatteryId']) || undefined, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
@@ -450,7 +483,7 @@ function mapMission(raw: unknown): Mission {
     battery: batteryRemaining ?? Number.NaN,
     plannedStartAt,
     packageReceiveDeadlineAt: normalizeIso(pickString(record, ['package_receive_deadline_at', 'packageReceiveDeadlineAt'])),
-    actualStartedAt, actualCompletedAt, estimatedArrivalAt,
+    actualStartedAt, actualCompletedAt, flightDepartedAt, flightArrivedAt, estimatedArrivalAt,
     predictedDurationMin: predictedDuration ?? Number.NaN,
     estimatedEnergyWh: predictedEnergy ?? Number.NaN,
     batteryConsumptionPct: batteryUse ?? Number.NaN,
@@ -492,7 +525,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
     speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
-    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
+    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], ''),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
@@ -521,8 +554,13 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
   const latitude = pickNumber(record, ['latitude', 'lat'], Number.NaN);
   const longitude = pickNumber(record, ['longitude', 'lng', 'lon'], Number.NaN);
   const altitude = pickNumber(record, ['altitude_m', 'altitude', 'altitudeM'], Number.NaN);
-  const speed = pickNumber(record, ['speed_kmh', 'speed', 'speedKmh'], Number.NaN);
-  const battery = pickNumber(record, ['battery_pct', 'battery', 'battery_level'], Number.NaN);
+  const explicitKmh = pickOptionalNumber(record, ['speed_kmh', 'speedKmh']);
+  const explicitMps = pickOptionalNumber(record, ['speed_mps', 'speedMps']);
+  const genericSpeed = pickOptionalNumber(record, ['speed']);
+  const speed = explicitKmh ?? (explicitMps !== undefined ? explicitMps * 3.6 :
+    genericSpeed === undefined ? undefined :
+      import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
+  const battery = pickNumber(record, ['battery_pct', 'batteryPct', 'battery', 'battery_level'], Number.NaN);
   const batteryVoltage = pickNumber(record, ['battery_voltage', 'batteryVoltage'], Number.NaN);
   const signal = pickNumber(record, ['signal_pct', 'signal', 'signal_strength'], Number.NaN);
   const energyConsumedWh = pickNumber(record, ['energy_consumed_wh', 'energyConsumedWh'], Number.NaN);
@@ -534,8 +572,8 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
     latitude: Number.isFinite(latitude) ? latitude : undefined,
     longitude: Number.isFinite(longitude) ? longitude : undefined,
     altitudeM: Number.isFinite(altitude) ? altitude : undefined,
-    speedKmh: Number.isFinite(speed) ? speed : undefined,
-    batteryPct: Number.isFinite(battery) ? battery : undefined,
+    speedKmh: speed !== undefined && Number.isFinite(speed) ? speed : undefined,
+    batteryPct: Number.isFinite(battery) && battery >= 0 && battery <= 100 ? battery : undefined,
     batteryVoltage: Number.isFinite(batteryVoltage) ? batteryVoltage : undefined,
     signalPct: Number.isFinite(signal) ? signal : undefined,
     energyConsumedWh: Number.isFinite(energyConsumedWh) ? energyConsumedWh : undefined,
@@ -550,6 +588,8 @@ function mapCheckpoint(raw: unknown, index: number): HubCheckpoint {
     id: pickString(record, ['id', 'checkpoint_id', 'checkpointId'], `CHK-${index + 1}`),
     hubId: pickString(record, ['hub_id', 'hubId']),
     hubName: pickString(record, ['hub_name', 'hubName', 'name'], 'Hub'),
+    latitude: pickOptionalNumber(record, ['hub_latitude', 'hubLatitude']),
+    longitude: pickOptionalNumber(record, ['hub_longitude', 'hubLongitude']),
     reachedAt: normalizeIso(pickString(record, ['reached_at', 'arrived_at', 'created_at', 'timestamp', 'passed_at', 'passedAt'])),
     sequence: pickNumber(record, ['sequence', 'sequence_no', 'order', 'checkpoint_order', 'checkpointOrder'], index + 1),
     raw: record,
@@ -753,7 +793,7 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
     const status = statusValue.trim().toUpperCase().replace(/[\s-]+/g, '_');
     if (status === 'SCHEDULED' || status === 'PENDING_APPROVAL' || status === 'APPROVED' || status === 'AWAITING_PAYMENT') result.scheduled = count;
     else if (status === 'IN_PROGRESS' || status === 'ACTIVE' || status === 'FLYING' || status === 'ACTIVE_MISSION') result.inProgress = count;
-    else if (status === 'COMPLETED' || status === 'MISSION_COMPLETED') result.completed = count;
+    else if (status === 'COMPLETED' || status === 'MISSION_COMPLETED' || status === 'ARRIVAL_COMPLETED') result.completed = count;
     else if (status === 'CANCELLED' || status === 'CANCELED') result.cancelled = count;
     else if (status === 'FAILED' || status === 'REJECTED') result.failed = count;
   };
@@ -794,9 +834,42 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   return result;
 }
 
+/**
+ * Preserve the usable Mission list when old BE records contain statuses
+ * outside the four-status UI contract. Never silently recast them as another
+ * official status; skip and log only those incompatible records.
+ */
+function mapMissionCollection(items: unknown[]): Mission[] {
+  const missions: Mission[] = [];
+  const skippedStatuses = new Set<string>();
+  for (const item of items) {
+    try {
+      const mission = mapMission(item);
+      if (mission.id) missions.push(mission);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Unsupported Mission status from API:')) {
+        skippedStatuses.add(error.message.replace('Unsupported Mission status from API: ', ''));
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (skippedStatuses.size > 0) {
+    console.warn(
+      '[Operator] Skipped Mission records with unsupported BE statuses:',
+      Array.from(skippedStatuses).join(', '),
+      '— ask BE to migrate/normalize those statuses.',
+    );
+  }
+  if (items.length > 0 && missions.length === 0 && skippedStatuses.size > 0) {
+    throw new Error(`No Missions with supported statuses. BE returned: ${Array.from(skippedStatuses).join(', ')}`);
+  }
+  return missions;
+}
+
 export async function listMissionsApi(): Promise<Mission[]> {
   const payload = await operatorApiRequest<unknown>('/missions/');
-  return unwrapArray(payload, ['missions']).map(mapMission).filter((mission) => mission.id);
+  return mapMissionCollection(unwrapArray(payload, ['missions']));
 }
 
 export async function getMissionDashboardKpiApi(): Promise<MissionDashboardKpi> {
@@ -817,7 +890,7 @@ export async function getMissionActiveFlightsApi(): Promise<MissionActiveFlights
     .map((item) => typeof item === 'string' ? item : pickString(asRecord(item), ['id', 'mission_id', 'missionId']))
     .filter(Boolean);
   // Swagger declares missions: string[]. Do not parse a string as a full Mission object.
-  const missions = items.filter(isRecord).map(mapMission).filter((mission) => mission.id);
+  const missions = mapMissionCollection(items.filter(isRecord));
   return {
     activeCount: pickOptionalNumber(root, ['active_count', 'activeCount']) ?? missionIds.length,
     missionIds,
@@ -881,6 +954,20 @@ export async function getMissionTelemetryApi(
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
   );
+}
+
+/** Read every recorded telemetry page for the selected mission; never silently truncate logs. */
+export async function getAllMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+  if (!missionId.trim()) return [];
+  const pageSize = 5000; // Maximum documented by GET /telemetry.
+  const points: MissionTelemetryPoint[] = [];
+  // Explicit guard against a broken API returning a full identical page forever.
+  for (let page = 0; page < 1000; page++) {
+    const batch = await getMissionTelemetryApi(missionId, { limit: pageSize, offset: points.length });
+    points.push(...batch);
+    if (batch.length < pageSize) return points;
+  }
+  throw new Error('Telemetry exceeded the supported pagination safety limit; data was not silently truncated.');
 }
 
 export async function getMissionHubCheckpointsApi(missionId: string): Promise<HubCheckpoint[]> {
@@ -978,8 +1065,8 @@ export async function getEligibleMissionBatteriesApi(
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
   if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
-       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
-         'items' in payload || 'data' in payload || 'results' in payload))) {
+    !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+      'items' in payload || 'data' in payload || 'results' in payload))) {
     throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
   }
   return records.map((entry) => {
@@ -1018,6 +1105,7 @@ export async function analyzeMissionPlanningApi(
       orderId: input.orderId,
       droneId: input.droneId,
       batteryId: input.batteryId,
+      ...(input.bundledOrderIds?.length ? { bundledOrderIds: input.bundledOrderIds } : {}),
     }),
   });
   const root = unwrapObject(payload);
@@ -1044,7 +1132,13 @@ export async function analyzeMissionPlanningApi(
     recommended: route.recommended || Boolean(recommendedRouteId && route.id === recommendedRouteId),
   }));
 
-  return { routes, raw: payload };
+  const rawBundleIds = root.bundledOrderIds ?? root.bundled_order_ids;
+  return {
+    routes,
+    totalPayloadKg: pickOptionalNumber(root, ['totalPayloadKg', 'total_payload_kg']),
+    bundledOrderIds: Array.isArray(rawBundleIds) ? rawBundleIds.filter((id): id is string => typeof id === 'string') : undefined,
+    raw: payload,
+  };
 }
 
 export async function createMissionApi(input: CreateMissionInput): Promise<Mission> {
@@ -1059,6 +1153,7 @@ export async function createMissionApi(input: CreateMissionInput): Promise<Missi
       droneId: input.droneId,
       batteryId: input.batteryId,
       routeId: input.routeId,
+      ...(input.bundledOrderIds?.length ? { bundledOrderIds: input.bundledOrderIds } : {}),
       route_string: input.routeString,
       // Send the exact per-leg battery snapshot selected by BE Analyze.
       // BE remains authoritative and validates/re-reserves relay batteries on Assign.

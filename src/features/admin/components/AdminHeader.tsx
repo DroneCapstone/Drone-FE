@@ -10,8 +10,7 @@ import {
 } from "../../../components/ui/DropdownMenu";
 import { Icon } from "../../../components/ui/Icon";
 import { useAuth } from "../../auth/hooks/useAuth";
-import { adminAlerts } from "../data/adminData";
-import { getReplacementRequests } from "../services/prototypeWorkflow";
+import { adminBackend } from "../api/adminBackend";
 import { useEffect, useState } from "react";
 
 function getInitials(name?: string) {
@@ -42,9 +41,16 @@ export function AdminHeader({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const displayName = user?.name || "Administrator";
-  const [,setVersion]=useState(0);
-  useEffect(()=>{const fn=()=>setVersion(v=>v+1);window.addEventListener('admin-data-updated',fn);return()=>window.removeEventListener('admin-data-updated',fn);},[]);
-  const unreadCount = adminAlerts.length + getReplacementRequests().filter(r=>r.status==='PENDING').length;
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => { adminBackend.notifications().then(items => {
+      if (alive) setUnreadCount(items.filter(item => !item.is_read).length);
+    }).catch(() => { if (alive) setUnreadCount(0); }); };
+    refresh();
+    window.addEventListener('admin-notifications-updated', refresh);
+    return () => { alive = false; window.removeEventListener('admin-notifications-updated', refresh); };
+  }, []);
 
   const handleLogout = () => {
     logout();

@@ -37,7 +37,7 @@ export const adminNavigation: AdminNavigationItem[] = [
     path: "/admin/replacement/requests",
     icon: PackageCheck,
     children: [
-      { label: "Requests & Approvals", path: "/admin/replacement/requests" },
+      { label: "Replacement Records", path: "/admin/replacement/requests" },
       { label: "Spare Parts", path: "/admin/replacement/spare-parts" },
       { label: "New Batteries", path: "/admin/replacement/new-batteries" },
     ],

@@ -31,7 +31,7 @@ export function hasDeliveryMission(orderId: string, missions: Mission[]) {
 
 /**
  * Returns the Mission that currently represents this Order in Operator UI.
- * Cancelled/Failed attempts do not block a new planning cycle.
+ * Failed attempts do not block a new planning cycle.
  */
 export function getDeliveryMission(orderId: string, missions: Mission[]) {
   const orderMissions = getMissionsForOrder(orderId, missions);

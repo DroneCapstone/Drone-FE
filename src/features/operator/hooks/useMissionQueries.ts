@@ -18,6 +18,7 @@ import {
   getMissionHubCheckpointsApi,
   getEligibleMissionBatteriesApi,
   getMissionTelemetryApi,
+  getAllMissionTelemetryApi,
   listIncidentsApi,
   listMissionsApi,
   listMissionHubsApi,
@@ -28,6 +29,10 @@ import {
   type CreateMissionInput,
   type UpdateIncidentStatusInput,
 } from '../api/missionApi';
+import {
+  getPreAnalyzeBundleCandidatesApi,
+  validateMissionBundleApi,
+} from '../api/missionBundleApi';
 import { operatorQueryKeys } from '../query/queryKeys';
 
 export function useMissionListQuery() {
@@ -97,9 +102,10 @@ export function useMissionDetailQuery(missionId: string) {
 export function useMissionTelemetryQuery(missionId: string) {
   return useQuery({
     queryKey: operatorQueryKeys.missionTelemetry(missionId),
-    queryFn: () => getMissionTelemetryApi(missionId),
+    queryFn: () => getAllMissionTelemetryApi(missionId),
     enabled: Boolean(missionId.trim()),
-    refetchInterval: 5_000,
+    refetchInterval: 8_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -135,6 +141,24 @@ export function useEligibleMissionBatteriesQuery(orderId: string, droneId: strin
   });
 }
 
+export function usePreAnalyzeBundleCandidatesQuery(orderId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionBundleCandidates(orderId),
+    queryFn: () => getPreAnalyzeBundleCandidatesApi(orderId),
+    enabled: enabled && Boolean(orderId.trim()),
+    staleTime: 0,
+  });
+}
+
+export function useValidateMissionBundleQuery(orderIds: string[], droneId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionBundleValidation(orderIds, droneId),
+    queryFn: () => validateMissionBundleApi({ orderIds, ...(droneId ? { droneId } : {}) }),
+    enabled: enabled && orderIds.length > 1,
+    staleTime: 0,
+  });
+}
+
 export function useMissionPlanningAnalysisQuery(
   input: AnalyzeMissionPlanningInput | null,
 ) {
@@ -143,6 +167,7 @@ export function useMissionPlanningAnalysisQuery(
       input?.orderId ?? '',
       input?.droneId ?? '',
       input?.batteryId ?? '',
+      input?.bundledOrderIds ?? [],
     ),
     queryFn: () => analyzeMissionPlanningApi(input as AnalyzeMissionPlanningInput),
     enabled: Boolean(input?.orderId.trim() && input?.droneId.trim() && input?.batteryId.trim()),
