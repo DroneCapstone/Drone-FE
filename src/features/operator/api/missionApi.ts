@@ -80,6 +80,9 @@ export interface HubCheckpoint {
   id: string;
   hubId: string;
   hubName: string;
+
+  /** Hub coordinates from the recorded checkpoint event (hub_latitude, hub_longitude). */
+
   latitude?: number;
   longitude?: number;
   reachedAt?: string;
@@ -522,7 +525,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
     speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
-    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], 'Live telemetry is within the latest Backend state.'),
+    aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], ''),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
     incidentReason: pickString(record, ['incident_reason', 'incidentReason', 'reason']) || undefined,
     latitude: Number.isFinite(latitude) ? latitude : undefined,
@@ -951,6 +954,20 @@ export async function getMissionTelemetryApi(
   return unwrapArray(payload, ['telemetry', 'points', 'history']).map((item, index) =>
     mapTelemetryPoint(item, index, missionId),
   );
+}
+
+/** Read every recorded telemetry page for the selected mission; never silently truncate logs. */
+export async function getAllMissionTelemetryApi(missionId: string): Promise<MissionTelemetryPoint[]> {
+  if (!missionId.trim()) return [];
+  const pageSize = 5000; // Maximum documented by GET /telemetry.
+  const points: MissionTelemetryPoint[] = [];
+  // Explicit guard against a broken API returning a full identical page forever.
+  for (let page = 0; page < 1000; page++) {
+    const batch = await getMissionTelemetryApi(missionId, { limit: pageSize, offset: points.length });
+    points.push(...batch);
+    if (batch.length < pageSize) return points;
+  }
+  throw new Error('Telemetry exceeded the supported pagination safety limit; data was not silently truncated.');
 }
 
 export async function getMissionHubCheckpointsApi(missionId: string): Promise<HubCheckpoint[]> {
