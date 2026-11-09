@@ -19,6 +19,14 @@ import {
   useParams,
 } from "react-router-dom";
 
+import { useQueries } from "@tanstack/react-query";
+import { getHubSupplyDetailApi } from "../api/hubSuppliesApi";
+import {
+  inventoryDetailKey,
+  useHubSuppliesQuery,
+  useUseHubPartsMutation,
+} from "../hooks/useHubSuppliesQueries";
+
 import { Button } from "@/components/shadcn/ui/button";
 
 import {
@@ -83,6 +91,11 @@ export function WorkOrderDetailPage() {
   const updateInspectionMutation =
     useUpdateWorkOrderInspectionMutation();
 
+  // Replacement parts are consumed immediately via the existing hub inventory API.
+  // They are NOT deducted again when the Work Order is completed.
+  const inventoryQuery = useHubSuppliesQuery();
+  const usePartsMutation = useUseHubPartsMutation();
+
   const order =
     workOrderQuery.data;
 
@@ -124,6 +137,32 @@ export function WorkOrderDetailPage() {
     setDroneStatus,
   ] = useState<WorkOrderResultingDroneStatus>(
     "Maintenance",
+  );
+
+  const [correctiveActionMode, setCorrectiveActionMode] =
+    useState<"general" | "replace">("general");
+  const [replacementInventoryId, setReplacementInventoryId] = useState("");
+  const [replacementQuantity, setReplacementQuantity] = useState("1");
+  const [recordedReplacements, setRecordedReplacements] = useState<string[]>([]);
+  const [replacementFeedback, setReplacementFeedback] = useState("");
+  const replacementLock = useRef(false);
+
+  const partDetails = useQueries({
+    queries: (inventoryQuery.data ?? []).map((item) => ({
+      queryKey: inventoryDetailKey(item.id),
+      queryFn: () => getHubSupplyDetailApi(item.id),
+      enabled: correctiveActionMode === "replace",
+      staleTime: 5 * 60_000,
+      gcTime: 60 * 60_000,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const inventoryParts = (inventoryQuery.data ?? []).map((item, index) => ({
+    ...item,
+    partCategory: partDetails[index]?.data?.partCategory ?? item.partCategory,
+  }));
+  const selectedInventory = inventoryParts.find(
+    (item) => String(item.id) === replacementInventoryId,
   );
 
   useEffect(() => {
@@ -233,13 +272,70 @@ export function WorkOrderDetailPage() {
     checkedItems.length ===
     inspectionItems.length;
 
+  // Preserve confirmed inventory usage in the Work Order action, even if
+  // the free-text field is edited after the stock deduction.
+  const actionTakenForServer = [
+    correctiveAction.trim(),
+    ...recordedReplacements.filter((note) => !correctiveAction.includes(note)),
+  ].filter(Boolean).join("\n");
   const correctiveActionIsValid =
-    hasMeaningfulCorrectiveAction(correctiveAction);
+    hasMeaningfulCorrectiveAction(actionTakenForServer);
+
+  // A selected replacement must actually be issued before this WO can close.
+  const replacementConfirmed =
+    correctiveActionMode !== "replace" || recordedReplacements.length > 0;
 
   const canComplete =
     workOrderStatus === "In Progress" &&
     allInspectionCompleted &&
-    correctiveActionIsValid;
+    correctiveActionIsValid &&
+    replacementConfirmed &&
+    !usePartsMutation.isPending;
+
+  const confirmPartReplacement = async () => {
+    if (replacementLock.current || usePartsMutation.isPending || inventoryQuery.isFetching ||
+        workOrderStatus !== "In Progress" || !selectedInventory) return;
+
+    const quantity = Number(replacementQuantity);
+    if (!Number.isSafeInteger(quantity) || quantity < 1 ||
+        quantity > selectedInventory.quantity) {
+      setReplacementFeedback("Invalid quantity or insufficient inventory. Refresh and try again.");
+      return;
+    }
+
+    const model = (order.model ?? fleetDrone?.model ?? "").trim().toLowerCase();
+    const compatible = selectedInventory.partCategory?.compatibleDroneModels ?? [];
+    if (model && compatible.length > 0 &&
+        !compatible.some((value) => value.trim().toLowerCase() === model)) {
+      setReplacementFeedback("This part is not listed as compatible with the selected drone model.");
+      return;
+    }
+
+    replacementLock.current = true;
+    setReplacementFeedback("");
+    try {
+      const updated = await usePartsMutation.mutateAsync({
+        inventoryId: selectedInventory.id,
+        quantityUsed: quantity,
+      });
+      const partName = selectedInventory.partCategory?.name ??
+        `Part category #${selectedInventory.partCategoryId}`;
+      const note = `Replaced ${quantity} x ${partName} (inventory #${selectedInventory.id})`;
+      setRecordedReplacements((current) => [...current, note]);
+      setCorrectiveAction((current) => [current.trim(), note].filter(Boolean).join("\n"));
+      setReplacementQuantity("1");
+      setReplacementFeedback(`Inventory updated: ${quantity} part(s) issued. Remaining: ${updated.quantity}.`);
+      // Refresh for further replacements; not part of the confirmed write.
+      void inventoryQuery.refetch();
+    } catch (error) {
+      setReplacementFeedback(
+        `${error instanceof Error ? error.message : "Unable to issue parts."} ` +
+        "If the request may have reached the server, check inventory before retrying to avoid double deduction.",
+      );
+    } finally {
+      replacementLock.current = false;
+    }
+  };
 
   const completeWorkOrder = async () => {
     if (
@@ -262,7 +358,7 @@ export function WorkOrderDetailPage() {
         workOrderId: order.id,
         payload: {
           status: "Completed",
-          action_taken: correctiveAction.trim(),
+          action_taken: actionTakenForServer,
           ...(diagnosis.trim() ? { diagnosis: diagnosis.trim() } : {}),
           resulting_drone_status: droneStatus,
         },
@@ -501,6 +597,113 @@ export function WorkOrderDetailPage() {
               or corrective action
               performed on the drone.
             </p>
+
+            <label className="mb-3 block text-[13px] text-[var(--tech-text-secondary)]">
+              Corrective action type
+              <select
+                className="tech-control mt-1 h-10 w-full px-3"
+                value={correctiveActionMode}
+                onChange={(event) => {
+                  setCorrectiveActionMode(event.target.value as "general" | "replace");
+                  setReplacementFeedback("");
+                }}
+                disabled={workOrderStatus === "Completed" || usePartsMutation.isPending}
+              >
+                <option value="general">Repair / adjustment / other</option>
+                <option value="replace">Replace parts (deduct from Hub inventory)</option>
+              </select>
+            </label>
+
+            {correctiveActionMode === "replace" && (
+              <div className="mb-4 space-y-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-3">
+                <p className="text-[12px] text-[var(--tech-muted)]">
+                  Select the spare part and quantity actually replaced. Confirming will immediately
+                  deduct stock at your assigned Hub; completing this Work Order will not deduct it again.
+                </p>
+                {inventoryQuery.isError && (
+                  <p role="alert" className="text-[12px] text-red-500">
+                    {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load parts."}
+                    <button type="button" className="ml-2 underline"
+                      onClick={() => void inventoryQuery.refetch()}>Retry</button>
+                  </p>
+                )}
+                <label className="block text-[12px] text-[var(--tech-text-secondary)]">
+                  Part in Hub inventory
+                  <select
+                    className="tech-control mt-1 h-10 w-full px-3"
+                    value={replacementInventoryId}
+                    onChange={(event) => {
+                      setReplacementInventoryId(event.target.value);
+                      setReplacementQuantity("1");
+                      setReplacementFeedback("");
+                    }}
+                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending}
+                  >
+                    <option value="">Select a part...</option>
+                    {inventoryParts.filter((item) => item.quantity > 0).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.partCategory?.name ?? `Category #${item.partCategoryId}`} · #{item.id} · {item.quantity} available
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[12px] text-[var(--tech-text-secondary)]">
+                  Quantity to replace
+                  <input
+                    className="tech-control mt-1 h-10 w-full px-3"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={selectedInventory?.quantity}
+                    step={1}
+                    value={replacementQuantity}
+                    onKeyDown={(event) => {
+                      // Keep native number input spinner, but block decimal,
+                      // negative and exponent characters when typing.
+                      if ([".", ",", "-", "+", "e", "E"].includes(event.key)) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onPaste={(event) => {
+                      // Reject non-integer pasted values as well.
+                      if (!/^[0-9]+$/.test(event.clipboardData.getData("text").trim())) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (/^[0-9]*$/.test(next)) {
+                        setReplacementQuantity(next);
+                      }
+                    }}
+                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending}
+                  />
+                </label>
+                {selectedInventory?.partCategory?.compatibleDroneModels?.length ? (
+                  <p className="text-[11px] text-[var(--tech-muted)]">
+                    Compatible models: {selectedInventory.partCategory.compatibleDroneModels.join(", ")}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending ||
+                    inventoryQuery.isFetching || !selectedInventory || !Number.isSafeInteger(Number(replacementQuantity)) ||
+                    Number(replacementQuantity) < 1 ||
+                    Number(replacementQuantity) > (selectedInventory?.quantity ?? 0)}
+                  onClick={() => void confirmPartReplacement()}
+                >
+                  {usePartsMutation.isPending ? "Updating inventory..." : "Confirm replacement & deduct stock"}
+                </button>
+                {replacementFeedback && <p role="status" className="text-[12px] text-[var(--tech-text-secondary)]">{replacementFeedback}</p>}
+                {recordedReplacements.length > 0 && (
+                  <div className="text-[12px] text-emerald-500">
+                    <p className="font-medium">Parts already issued in this session:</p>
+                    {recordedReplacements.map((note, index) => <p key={index}>• {note}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
 
             <Textarea
               value={
