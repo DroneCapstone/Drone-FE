@@ -11,11 +11,13 @@ import { getAdminBatteries } from '../../services/adminStore';
 import {
   editAvailableNewBattery,
   getAvailableNewBatteries,
+  getNewBatteryReferenceUnitCostVnd,
   registerAdminNewBatteries,
   removeAvailableNewBattery,
   seedNewBatteriesDemo,
 } from '../../services/adminNewBatterySupply';
 import type { AdminBattery } from '../../types';
+import '../../components/AdminInventoryDialog.css';
 
 const adminDialogFont = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
@@ -61,8 +63,6 @@ export function NewBatteriesPage() {
   const [creating, setCreating] = useState(false);
   const [model, setModel] = useState('');
   const [serials, setSerials] = useState('');
-  const [paid, setPaid] = useState(false);
-  const [unitPrice, setUnitPrice] = useState(0);
   const [editing, setEditing] = useState<AdminBattery | null>(null);
   const [editModel, setEditModel] = useState('');
   const [editSerial, setEditSerial] = useState('');
@@ -94,16 +94,17 @@ export function NewBatteriesPage() {
     return receivedAt >= startOfWeek && receivedAt <= Date.now();
   }).length;
   const serialCount = serials.split(/\r?\n/).filter((serial) => serial.trim()).length;
+  const referencePrice = getNewBatteryReferenceUnitCostVnd(model);
 
   const openCreate = () => {
     setModel(models.includes(modelHint) ? modelHint : (models[0] ?? ''));
-    setSerials(''); setPaid(false); setUnitPrice(0);
+    setSerials('');
     setNotice(''); setError(''); setCreating(true);
   };
   const register = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const entries = registerAdminNewBatteries(model, serials.split(/\r?\n/), paid ? unitPrice : undefined);
+      const entries = registerAdminNewBatteries(model, serials.split(/\r?\n/));
       setCreating(false); setError('');
       setNotice(`${entries.length} new battery${entries.length === 1 ? '' : ' units'} registered (${model}): ${entries.map((battery) => battery.id).join(', ')}.`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not register new batteries.'); }
@@ -180,12 +181,12 @@ export function NewBatteriesPage() {
     </OperatorPanel>
 
     <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>
-      {creating && <DialogContent className="max-h-[85vh] overflow-y-auto" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
-        <div className="border-b border-border p-5">
+      {creating && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><form onSubmit={register}>
+        <div className="admin-inventory-dialog__header border-b border-border p-5">
           <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Create new battery</div></DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">Enter one serial number per battery.</p>
         </div>
-        <div className="space-y-4 p-5">
+        <div className="admin-inventory-dialog__body space-y-4 p-5">
           <label className="block text-sm"><span>Battery model</span>
             <select required className={`${field} mt-2`} value={model} onChange={(event) => setModel(event.target.value)}>
               {models.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -195,23 +196,25 @@ export function NewBatteriesPage() {
             <textarea required rows={4} className={`${field} mt-2 !h-auto py-2`} placeholder={'SERIAL-001\nSERIAL-002'} value={serials} onChange={(event) => setSerials(event.target.value)} />
           </label>
           <div className="text-xs text-[var(--admin-muted)]">Battery IDs are generated automatically · {serialCount} serial(s)</div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> Purchase already paid</label>
-          {paid && <label className="block text-sm"><span>Actual unit purchase price (VND)</span>
-            <input required className={`${field} mt-2`} min={1} step={1} type="number" value={unitPrice || ''} onChange={(event) => setUnitPrice(Number(event.target.value))}/>
-          </label>}
+          <div className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4 text-sm">
+            <strong className="block mb-3">Acquisition Cost <span className="float-right text-xs font-normal text-[var(--admin-muted)]">Auto calculated · demo</span></strong>
+            <div className="flex justify-between gap-2"><span>Reference Unit Price</span><strong>{referencePrice > 0 ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(referencePrice) : 'Not configured'}</strong></div>
+            <div className="mt-3 flex justify-between gap-2 border-t border-[var(--admin-border)] pt-3"><span>Total Recorded Cost</span><strong>{referencePrice > 0 && serialCount > 0 ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(referencePrice * serialCount) : '—'}</strong></div>
+            <p className="mt-2 text-xs text-[var(--admin-muted)]">One internal recorded cost for this registration batch. No real bank transfer or supplier payment.</p>
+          </div>
           {error && <p className="text-sm text-red-500" role="alert">{error}</p>}
         </div>
-        <div className="form-actions border-t border-border p-5">
+        <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5">
           <ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton>
-          <ActionButton type="submit" disabled={!model || serialCount < 1}>Register batteries</ActionButton>
+          <ActionButton type="submit" disabled={!model || serialCount < 1 || referencePrice <= 0}>Register batteries</ActionButton>
         </div>
       </form></DialogContent>}
     </Dialog>
 
     <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-      {editing && <DialogContent style={{ fontFamily: adminDialogFont }}><form onSubmit={saveEdit}>
-        <div className="border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Edit {editing.id}</div></DialogTitle></div>
-        <div className="space-y-4 p-5">
+      {editing && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><form onSubmit={saveEdit}>
+        <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Edit {editing.id}</div></DialogTitle></div>
+        <div className="admin-inventory-dialog__body space-y-4 p-5">
           <label className="block text-sm"><span>Battery model</span>
             <select className={`${field} mt-2`} value={editModel} onChange={(event) => setEditModel(event.target.value)}>
               {models.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -221,13 +224,14 @@ export function NewBatteriesPage() {
           </label>
           {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         </div>
-        <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save changes</ActionButton></div>
+        <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save changes</ActionButton></div>
       </form></DialogContent>}
     </Dialog>
 
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open) { setRemoving(null); setRemovalReason(''); setError(''); } }}>
-      {removing && <DialogContent style={{ fontFamily: adminDialogFont }}><div className="p-5">
-        <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Remove {removing.id}?</div></DialogTitle>
+      {removing && <DialogContent className="admin-inventory-dialog" style={{ fontFamily: adminDialogFont }}><div className="admin-inventory-dialog__form">
+        <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>Remove {removing.id}?</div></DialogTitle></div>
+        <div className="admin-inventory-dialog__body px-5 py-4">
         <label className="mt-4 block text-sm font-medium text-[var(--admin-text)]" htmlFor="new-battery-removal-reason" style={{ fontFamily: adminDialogFont }}>Reason for removal <span className="text-red-500">*</span></label>
         <textarea
           id="new-battery-removal-reason"
@@ -241,7 +245,8 @@ export function NewBatteriesPage() {
           onChange={(event) => setRemovalReason(event.target.value)}
         />
         {error && <p role="alert" className="mt-3 text-sm text-red-500">{error}</p>}
-        <div className="mt-5 flex justify-end gap-2">
+        </div>
+        <div className="admin-inventory-dialog__footer border-t border-border px-5 py-4">
           <ActionButton variant="secondary" style={{ fontFamily: adminDialogFont }} onClick={() => { setRemoving(null); setRemovalReason(''); setError(''); }}>Cancel</ActionButton>
           <ActionButton variant="danger" style={{ fontFamily: adminDialogFont }} disabled={!removalReason.trim()} onClick={remove}>Remove battery</ActionButton>
         </div>

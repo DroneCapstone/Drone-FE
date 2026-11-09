@@ -40,9 +40,7 @@ export function DashboardPage() {
   const activeMissions = missions.filter((mission) => mission.status === 'In Progress');
   const scheduledMissions = missions.filter((mission) => mission.status === 'Scheduled');
   const completedMissions = missions.filter((mission) => mission.status === 'Completed');
-  const failedMissions = missions.filter(
-    (mission) => mission.status === 'Failed' || mission.status === 'Cancelled',
-  );
+  const failedMissions = missions.filter((mission) => mission.status === 'Failed');
 
   const activeCount =
     missionKpi?.activeMissions ??
@@ -53,10 +51,7 @@ export function DashboardPage() {
     missionKpi?.scheduledMissions ?? missionStatus?.scheduled ?? scheduledMissions.length;
   const completedCount =
     missionKpi?.completedMissions ?? missionStatus?.completed ?? completedMissions.length;
-  const failedCount =
-    (missionKpi?.failedMissions ?? missionStatus?.failed ?? 0) +
-    (missionKpi?.cancelledMissions ?? missionStatus?.cancelled ?? 0) ||
-    failedMissions.length;
+  const failedCount = missionKpi?.failedMissions ?? missionStatus?.failed ?? failedMissions.length;
   const totalMissions =
     missionKpi?.totalMissions ?? missionStatus?.total ?? missions.length;
   const readyPlanningCount = readyOrders.length; // Receipt is required for actionable planning.
@@ -138,7 +133,7 @@ export function DashboardPage() {
                   <span className="alert-icon"><Icon name="clock" /></span>
                   <div>
                     <strong>Order needs replanning</strong>
-                    <small>{needsReplanning[0].id} · previous Mission was cancelled</small>
+                    <small>{needsReplanning[0].id} · replanning needed</small>
                   </div>
                   <Icon name="chevron" size={15} />
                 </button>
@@ -253,7 +248,7 @@ export function DashboardPage() {
               <span><i className="green" />Completed <b>{completedCount}</b></span>
               <span><i className="orange" />In progress <b>{activeCount}</b></span>
               <span><i className="blue" />Scheduled <b>{scheduledCount}</b></span>
-              <span><i className="red" />Cancelled / Failed <b>{failedCount}</b></span>
+              <span><i className="red" />Failed <b>{failedCount}</b></span>
             </div>
           </div>
         </OperatorPanel>

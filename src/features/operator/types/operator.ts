@@ -2,11 +2,11 @@ export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unknown';
 
+/** The four authoritative Mission statuses returned by Backend. */
 export type MissionStatus =
   | 'Scheduled'
   | 'In Progress'
   | 'Completed'
-  | 'Cancelled'
   | 'Failed';
 
 export type MissionLegStatus = 'Pending' | 'In Progress' | 'Completed';
@@ -93,7 +93,7 @@ export interface Order {
   originHubReceivedAt?: string;
   /** Technician event at the Pick-up Point. Completing this event closes Operator scope. */
   destinationHubReceivedAt?: string;
-  /** Set when a Mission is cancelled/failed and a new customer delivery window is required. */
+  /** An Order may require a new planning cycle; this is separate from Mission status. */
   replanRequiredAt?: string;
 
   createdAt: string;
@@ -147,6 +147,9 @@ export interface Mission {
   packageReceiveDeadlineAt?: string;
   actualStartedAt?: string;
   actualCompletedAt?: string;
+  /** Physical departure and landing, used in Operator Flight History. */
+  flightDepartedAt?: string;
+  flightArrivedAt?: string;
   estimatedArrivalAt: string;
   predictedDurationMin: number;
   estimatedEnergyWh: number;

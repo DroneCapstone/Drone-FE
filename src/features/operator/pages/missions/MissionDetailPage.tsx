@@ -5,6 +5,7 @@ import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
+import { isFlightHistoryRecord } from '../../api/flightHistoryEligibility';
 import {
   useMissionDetailQuery,
   useMissionHubCheckpointsQuery,
@@ -58,7 +59,8 @@ export function MissionDetailPage() {
     .filter((hub): hub is NonNullable<typeof hub> => Boolean(hub));
   const hubName = (hubId: string) => hubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const currentIndex = progressOrder.indexOf(mission.status);
-  const isTerminalException = mission.status === 'Cancelled' || mission.status === 'Failed';
+  const isTerminalException = mission.status === 'Failed';
+  const hasFlightHistory = isFlightHistoryRecord(mission);
   const originName = originHub?.name || mission.originHubId || '—';
   const destinationName = destinationHub?.name || mission.destinationHubId || '—';
   const originBatteryId = mission.legs?.[0]?.batteryId || mission.batteryId || '—';
@@ -107,20 +109,26 @@ export function MissionDetailPage() {
                     Track live
                   </ActionButton>
                 )}
-                {mission.status !== 'Cancelled' && (
+                {hasFlightHistory && (
                   <ActionButton
                     variant="secondary"
-                    onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
-                      orderId: mission.orderId,
-                      droneId: mission.droneId,
-                      ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
-                      routeId: mission.routeId,
-                      ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
-                    }).toString()}`)}
+                    onClick={() => navigate(`/operator/operations/history?q=${encodeURIComponent(mission.id)}`)}
                   >
-                    AI analysis
+                    Flight history
                   </ActionButton>
                 )}
+                <ActionButton
+                  variant="secondary"
+                  onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
+                    orderId: mission.orderId,
+                    droneId: mission.droneId,
+                    ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
+                    routeId: mission.routeId,
+                    ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
+                  }).toString()}`)}
+                >
+                  AI analysis
+                </ActionButton>
               </div>
             </div>
 

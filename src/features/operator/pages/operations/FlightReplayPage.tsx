@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import * as maplibregl from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { fetchFlightTelemetry, gpsDistanceKm, type HistoricalTelemetry } from '../../api/flightHistoryApi';
+import { fetchFlightTelemetry, gpsDistanceKm, hasReplayableTelemetry, type HistoricalTelemetry } from '../../api/flightHistoryApi';
+import { canReplayFlight } from '../../api/flightHistoryEligibility';
+import type { HubCheckpoint } from '../../api/missionApi';
 import { useMissionDetailQuery, useMissionHubCheckpointsQuery, useMissionHubsQuery } from '../../hooks/useMissionQueries';
 import { PageHeader } from '../../components/PageHeader';
 import './flight-history.css';
@@ -42,7 +44,7 @@ function splitSegments(points: HistoricalTelemetry[]): GeoPoint[][] {
   for (let i = 0; i < points.length; i++) {
     const p = point(points[i]);
     if (!p) continue;
-    const gap = i ? millis(points[i]) - millis(points[i-1]) : 0;
+    const gap = i ? millis(points[i]) - millis(points[i - 1]) : 0;
     if (i > 0 && (gap > 30_000 || gap <= 0)) {
       if (current.length > 1) groups.push(current);
       current = [];
@@ -59,10 +61,12 @@ function getStyle(): string {
   return `https://api.maptiler.com/maps/${dark ? 'streets-v4-dark' : 'streets-v4'}/style.json?key=${encodeURIComponent(KEY)}`;
 }
 
-function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: HistoricalTelemetry[]; elapsed: number; follow: boolean; onLeaveFollow: () => void }) {
+function FlightReplayMap({ points, checkpoints, elapsed, follow, onLeaveFollow }: { points: HistoricalTelemetry[]; checkpoints: HubCheckpoint[]; elapsed: number; follow: boolean; onLeaveFollow: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const checkpointMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const lastTravelledRef = useRef<LineCollection>({ type: 'FeatureCollection', features: [] });
   const lastTrailPaintRef = useRef<{ wall: number; cursor: number }>({ wall: -Infinity, cursor: -Infinity });
   const [mapError, setMapError] = useState('');
   const timeStart = points.length ? millis(points[0]) : 0;
@@ -80,8 +84,10 @@ function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: H
     let disposed = false;
     let map: maplibregl.Map;
     try {
-      map = new maplibregl.Map({ container: container.current, style: getStyle(), center: coords[0], zoom: 14,
-        attributionControl: false, canvasContextAttributes: { antialias: true } });
+      map = new maplibregl.Map({
+        container: container.current, style: getStyle(), center: coords[0], zoom: 14,
+        attributionControl: false, canvasContextAttributes: { antialias: true }
+      });
     } catch (e) { setMapError(e instanceof Error ? e.message : 'Cannot initialize MapTiler map'); return; }
     mapRef.current = map;
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
@@ -93,11 +99,15 @@ function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: H
       if (disposed || !map.isStyleLoaded()) return;
       try {
         if (!map.getSource('flight-history-track')) map.addSource('flight-history-track', { type: 'geojson', data: sourceData });
-        if (!map.getLayer('flight-history-track')) map.addLayer({ id: 'flight-history-track', source: 'flight-history-track', type: 'line',
-          paint: { 'line-color': '#64748b', 'line-width': 2.5, 'line-opacity': .52, 'line-dasharray': [3, 2] } });
-        if (!map.getSource('flight-history-travelled')) map.addSource('flight-history-travelled', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-        if (!map.getLayer('flight-history-travelled')) map.addLayer({ id: 'flight-history-travelled', source: 'flight-history-travelled', type: 'line',
-          paint: { 'line-color': '#ea580c', 'line-width': 4, 'line-opacity': .95 } });
+        if (!map.getLayer('flight-history-track')) map.addLayer({
+          id: 'flight-history-track', source: 'flight-history-track', type: 'line',
+          paint: { 'line-color': '#64748b', 'line-width': 2.5, 'line-opacity': .52, 'line-dasharray': [3, 2] }
+        });
+        if (!map.getSource('flight-history-travelled')) map.addSource('flight-history-travelled', { type: 'geojson', data: lastTravelledRef.current });
+        if (!map.getLayer('flight-history-travelled')) map.addLayer({
+          id: 'flight-history-travelled', source: 'flight-history-travelled', type: 'line',
+          paint: { 'line-color': '#ea580c', 'line-width': 4, 'line-opacity': .95 }
+        });
       } catch (e) { setMapError(e instanceof Error ? e.message : 'Unable to draw flight path'); }
     };
     const loaded = () => {
@@ -118,9 +128,30 @@ function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: H
     const themeObserver = new MutationObserver(() => map.setStyle(getStyle()));
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const ro = new ResizeObserver(() => map.resize()); ro.observe(container.current);
-    return () => { disposed = true; ro.disconnect(); themeObserver.disconnect(); marker.remove(); markerRef.current = null; map.remove(); mapRef.current = null; };
-  // Recreate only on a new mission/history, not on each playback frame.
+    return () => { disposed = true; ro.disconnect(); themeObserver.disconnect(); checkpointMarkersRef.current.forEach(cp => cp.remove()); checkpointMarkersRef.current = []; marker.remove(); markerRef.current = null; map.remove(); mapRef.current = null; };
+    // Recreate only on a new mission/history, not on each playback frame.
   }, [points, sourceData, coords]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    checkpointMarkersRef.current.forEach(marker => marker.remove());
+    checkpointMarkersRef.current = [];
+    if (!map) return;
+    for (const cp of checkpoints) {
+      if (cp.latitude === undefined || cp.longitude === undefined ||
+        Math.abs(cp.latitude) > 90 || Math.abs(cp.longitude) > 180) continue;
+      // These coordinates come from the recorded BE checkpoint event, never
+      // from the scheduled route. The label is not a live GPS position.
+      const el = document.createElement('div');
+      el.className = 'fh-replay-checkpoint-pin';
+      el.textContent = String(cp.sequence);
+      el.title = `${cp.hubName} · ${cp.reachedAt ? new Date(cp.reachedAt).toLocaleString('en-GB') : 'Recorded checkpoint'}`;
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([cp.longitude, cp.latitude]).addTo(map);
+      checkpointMarkersRef.current.push(marker);
+    }
+    return () => { checkpointMarkersRef.current.forEach(marker => marker.remove()); checkpointMarkersRef.current = []; };
+  }, [checkpoints, points]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -139,7 +170,7 @@ function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: H
       const p = points[i];
       if (millis(p) > cursor) break;
       const gp = point(p); if (!gp) continue;
-      if (i > 0 && millis(points[i]) - millis(points[i-1]) > 30_000) {
+      if (i > 0 && (millis(points[i]) - millis(points[i - 1]) > 30_000 || millis(points[i]) - millis(points[i - 1]) <= 0)) {
         if (currentSegment.length > 1) travelled.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: currentSegment } });
         currentSegment = [];
       }
@@ -152,8 +183,10 @@ function FlightReplayMap({ points, elapsed, follow, onLeaveFollow }: { points: H
       if (gap > 0 && gap <= 30_000) currentSegment.push(current.coord);
     }
     if (currentSegment.length > 1) travelled.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: currentSegment } });
+    const data: LineCollection = { type: 'FeatureCollection', features: travelled };
+    lastTravelledRef.current = data;
     const src = map.getSource('flight-history-travelled') as maplibregl.GeoJSONSource | undefined;
-    src?.setData({ type: 'FeatureCollection', features: travelled });
+    src?.setData(data);
   }, [points, elapsed, timeStart, follow, current]);
 
   return <div className="fh-replay-map-wrap"><div className="fh-replay-map" ref={container} aria-label="MapTiler historical flight route" />
@@ -167,14 +200,16 @@ export function FlightReplayPage() {
   const { missionId = '' } = useParams();
   const mission = useMissionDetailQuery(missionId);
   const hubsQuery = useMissionHubsQuery();
-  const checkpoints = useMissionHubCheckpointsQuery(missionId);
-  const telemetry = useQuery({ queryKey: ['operator', 'flight-history', 'telemetry-all', missionId], queryFn: () => fetchFlightTelemetry(missionId), enabled: Boolean(missionId), staleTime: Infinity, retry: 1 });
+  const replayAllowed = Boolean(mission.data && canReplayFlight(mission.data));
+  // A scheduled mission can have stale/test telemetry in BE. Do not load or replay it.
+  const checkpoints = useMissionHubCheckpointsQuery(replayAllowed ? missionId : '');
+  const telemetry = useQuery({ queryKey: ['operator', 'flight-history', 'telemetry-all', missionId], queryFn: () => fetchFlightTelemetry(missionId), enabled: Boolean(missionId) && replayAllowed, staleTime: 60_000, retry: 1, refetchOnWindowFocus: false });
   const points = useMemo(() => (telemetry.data ?? []).filter(p => Number.isFinite(millis(p)) && point(p) !== null), [telemetry.data]);
+  const recordedCheckpoints = useMemo(() => checkpoints.data ?? [], [checkpoints.data]);
   const [elapsed, setElapsed] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [follow, setFollow] = useState(false);
-  const [chart, setChart] = useState<'speed' | 'altitude' | 'battery' | 'energy'>('altitude');
   const firstMs = points.length ? millis(points[0]) : 0;
   const duration = points.length > 1 ? Math.max(0, millis(points[points.length - 1]) - firstMs) : 0;
   const selected = useMemo(() => positionAt(points, firstMs + elapsed), [points, elapsed, firstMs]);
@@ -203,32 +238,30 @@ export function FlightReplayPage() {
   const hubNames = new Map((hubsQuery.data ?? []).map(h => [h.id, h.name]));
   const fromName = m ? hubNames.get(m.originHubId) ?? m.originHubId : '—';
   const toName = m ? hubNames.get(m.destinationHubId) ?? m.destinationHubId : '—';
-  const series = points.map(p => chart === 'speed' ? p.speed : chart === 'altitude' ? p.altitudeM : chart === 'battery' ? p.batteryPct ?? p.batteryVoltage : p.energyConsumedWh);
-  const valid = series.map((v, i) => ({ v, i })).filter((v): v is { v: number; i: number } => v.v !== undefined && Number.isFinite(v.v));
-  const [min, max] = valid.reduce<[number, number]>(([lo, hi], p) => [Math.min(lo, p.v), Math.max(hi, p.v)], [0, 1]);
-  const graph = valid.length > 1 ? valid.map(p => `${(p.i / Math.max(1, points.length - 1) * 500).toFixed(1)},${(70 - (p.v - min) / (max - min) * 58).toFixed(1)}`).join(' ') : '';
-
   return <div className="flight-history-screen">
     <PageHeader section="operations" title="Flight playback" subtitle="Review a recorded mission using its original GPS and telemetry timestamps." />
-    <div className="fh-playback-top"><Link className="fh-button" to="/operator/operations/history">← Flight history</Link><span className="fh-historical-tag">HISTORICAL · NOT LIVE</span></div>
+    <div className="fh-playback-top"><Link className="fh-button" to="/operator/operations/history">← Flight history</Link><span className="fh-historical-tag"></span></div>
     <div className="fh-card fh-playback-panel">
       <header className="fh-playback-header"><div><h2>{missionId}</h2><p>{m?.drone || m?.droneId || 'Drone'} · {fromName} → {toName}</p></div><Link className="fh-button" to={`/operator/missions/${encodeURIComponent(missionId)}`}>Mission details →</Link></header>
       {(mission.isError || telemetry.isError) && <div className="fh-warning" role="alert">{telemetry.error instanceof Error ? telemetry.error.message : mission.error instanceof Error ? mission.error.message : 'Unable to load flight data.'}</div>}
-      {telemetry.isLoading ? <div className="fh-empty">Loading recorded telemetry…</div> : points.length < 2 ? <div className="fh-empty"><strong>Flight recording unavailable</strong><p>This mission has fewer than two valid timestamped GPS points. Check telemetry storage and mission data integrity.</p></div> : <>
-        <FlightReplayMap points={points} elapsed={elapsed} follow={follow} onLeaveFollow={() => setFollow(false)} />
-        <div className="fh-player"><div className="fh-player-buttons">
-          <button type="button" className="fh-button" onClick={() => { if (elapsed >= duration) { cursor.current = 0; setElapsed(0); } setPlaying(v => !v); }}>{playing ? 'Ⅱ Pause' : '▶ Play'}</button>
-          <button type="button" className="fh-button" onClick={() => { cursor.current = 0; setElapsed(0); setPlaying(false); }}>↺ Reset</button>
-          <button type="button" className={`fh-button ${follow ? 'fh-button-active' : ''}`} onClick={() => setFollow(v => !v)}>{follow ? '✓ Following' : 'Follow drone'}</button>
-        </div>
-        <div className="fh-player-timeline"><span>{clock(firstMs + elapsed)}</span><input type="range" aria-label="Flight playback timeline" min={0} max={Math.max(1, duration)} step={100} value={elapsed} onChange={e => { const v = Number(e.target.value); cursor.current = v; setElapsed(v); }} /><span>{clock(firstMs + duration)}</span></div>
-        <label className="fh-speed-control">Speed <select value={speed} onChange={e => setSpeed(Number(e.target.value))}>{[1,2,4,8,16,32].map(v => <option key={v} value={v}>{v}×</option>)}</select></label>
-        </div>
-        {gapCount > 0 && <div className="fh-warning" role="status">{gapCount} telemetry gap{gapCount > 1 ? 's' : ''} detected (over 30 seconds). Playback does not invent movement across missing GPS intervals.</div>}
-        <div className="fh-replay-metrics"><div><small>Recorded points</small><strong>{points.length}</strong></div><div><small>GPS distance</small><strong>{distance.toFixed(2)} km</strong></div><div><small>Speed (source unit)</small><strong>{format(selected?.row.speed)}</strong></div><div><small>Altitude</small><strong>{format(selected?.row.altitudeM, ' m')}</strong></div><div><small>Battery</small><strong>{selected?.row.batteryPct != null ? format(selected.row.batteryPct, '%') : format(selected?.row.batteryVoltage, ' V')}</strong></div><div><small>Energy</small><strong>{format(selected?.row.energyConsumedWh, ' Wh')}</strong></div></div>
-        <div className="fh-playback-bottom"><section><div className="fh-card-subtitle"><h3>Flight performance</h3><label>Metric <select value={chart} onChange={e => setChart(e.target.value as typeof chart)}><option value="altitude">Altitude</option><option value="speed">Speed</option><option value="battery">Battery</option><option value="energy">Energy</option></select></label></div><svg className="fh-chart" viewBox="0 0 500 85" preserveAspectRatio="none" aria-label={`${chart} over flight records`}>{graph && <polyline fill="none" stroke="var(--orange)" strokeWidth="2.5" points={graph} />}</svg></section>
-        <section><div className="fh-card-subtitle"><h3>Recorded checkpoints</h3><span>{checkpoints.data?.length ?? 0}</span></div>{checkpoints.isLoading ? <p className="fh-subtle">Loading checkpoints…</p> : checkpoints.data?.length ? <ul className="fh-checkpoints">{checkpoints.data.map(cp => <li key={cp.id}><span>{cp.hubName}</span><time>{cp.reachedAt ? new Date(cp.reachedAt).toLocaleString('en-GB') : '—'}</time></li>)}</ul> : <p className="fh-subtle">No checkpoint events recorded.</p>}</section></div>
-      </>}
+      {mission.isLoading ? <div className="fh-empty">Loading mission status…</div>
+        : mission.isError ? <div className="fh-empty"><strong>Unable to verify mission status</strong><p>Flight Replay is unavailable until the mission status can be confirmed.</p></div>
+          : !m ? <div className="fh-empty"><strong>Mission not found</strong><p>Unable to verify the recorded flight.</p></div>
+            : !replayAllowed ? <div className="fh-empty"><strong>Flight replay unavailable</strong><p>{m.status === 'Scheduled' ? 'This mission has not departed. Scheduled routes and any telemetry attached to a Scheduled mission must not be shown as a recorded flight.' : m.status === 'In Progress' ? 'This mission is still in progress. Use Live tracking to monitor the flight; replay will be available after it ends.' : 'This mission has no confirmed take-off event, so there is no historical flight to replay.'}</p></div>
+              : telemetry.isLoading ? <div className="fh-empty">Loading recorded telemetry…</div> : !hasReplayableTelemetry(points) ? <div className="fh-empty"><strong>Flight recording unavailable</strong><p>This mission has fewer than two valid timestamped GPS points at distinct times. Check telemetry storage and mission data integrity.</p></div> : <>
+                <FlightReplayMap points={points} checkpoints={recordedCheckpoints} elapsed={elapsed} follow={follow} onLeaveFollow={() => setFollow(false)} />
+                <div className="fh-player"><div className="fh-player-buttons">
+                  <button type="button" className="fh-button" onClick={() => { if (elapsed >= duration) { cursor.current = 0; setElapsed(0); } setPlaying(v => !v); }}>{playing ? 'Ⅱ Pause' : '▶ Play'}</button>
+                  <button type="button" className="fh-button" onClick={() => { cursor.current = 0; setElapsed(0); setPlaying(false); }}>↺ Reset</button>
+                  <button type="button" className={`fh-button ${follow ? 'fh-button-active' : ''}`} onClick={() => setFollow(v => !v)}>{follow ? '✓ Following' : 'Follow drone'}</button>
+                </div>
+                  <div className="fh-player-timeline"><span>{clock(firstMs + elapsed)}</span><input type="range" aria-label="Flight playback timeline" min={0} max={Math.max(1, duration)} step={100} value={elapsed} onChange={e => { const v = Number(e.target.value); cursor.current = v; setElapsed(v); }} /><span>{clock(firstMs + duration)}</span></div>
+                  <label className="fh-speed-control">Speed <select value={speed} onChange={e => setSpeed(Number(e.target.value))}>{[1, 2, 4, 8, 16, 32].map(v => <option key={v} value={v}>{v}×</option>)}</select></label>
+                </div>
+                {gapCount > 0 && <div className="fh-warning" role="status">{gapCount} telemetry gap{gapCount > 1 ? 's' : ''} detected (over 30 seconds). Playback does not invent movement across missing GPS intervals.</div>}
+                <div className="fh-replay-metrics"><div><small>Recorded points</small><strong>{points.length}</strong></div><div><small>GPS distance</small><strong>{distance.toFixed(2)} km</strong></div><div><small>Speed</small><strong>{format(selected?.row.speedKmh, ' km/h')}</strong></div><div><small>Altitude</small><strong>{format(selected?.row.altitudeM, ' m')}</strong></div><div><small>Battery</small><strong>{selected?.row.batteryPct != null ? format(selected.row.batteryPct, '%') : format(selected?.row.batteryVoltage, ' V')}</strong></div><div><small>Energy</small><strong>{format(selected?.row.energyConsumedWh, ' Wh')}</strong></div></div>
+
+              </>}
     </div>
   </div>;
 }

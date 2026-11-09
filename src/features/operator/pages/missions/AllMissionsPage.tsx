@@ -33,7 +33,7 @@ export function AllMissionsPage() {
   );
 
   return (
-    <MissionPageShell active="/operator/missions/all">
+    <MissionPageShell active="/operator/missions/all" showFlightHistory>
       <OperatorPanel className="flush-panel">
         <div className="toolbar">
           <div className="filter-search">
@@ -46,7 +46,7 @@ export function AllMissionsPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={['All mission statuses', 'Scheduled', 'In Progress', 'Incident return', 'Completed', 'Cancelled', 'Failed']}
+            options={['All mission statuses', 'Scheduled', 'In Progress', 'Completed', 'Failed']}
             onChange={(value) => { setStatus(value); setPage(1); }}
             ariaLabel="Mission status"
           />
