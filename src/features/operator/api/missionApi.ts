@@ -67,10 +67,21 @@ export interface MissionTelemetryPoint {
   raw: Record<string, unknown>;
 }
 
+// export interface HubCheckpoint {
+//   id: string;
+//   hubId: string;
+//   hubName: string;
+//   reachedAt?: string;
+//   sequence: number;
+//   raw: Record<string, unknown>;
+// }
+
 export interface HubCheckpoint {
   id: string;
   hubId: string;
   hubName: string;
+  latitude?: number;
+  longitude?: number;
   reachedAt?: string;
   sequence: number;
   raw: Record<string, unknown>;
@@ -545,7 +556,7 @@ function mapTelemetryPoint(raw: unknown, index: number, missionId: string): Miss
   const genericSpeed = pickOptionalNumber(record, ['speed']);
   const speed = explicitKmh ?? (explicitMps !== undefined ? explicitMps * 3.6 :
     genericSpeed === undefined ? undefined :
-    import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
+      import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? genericSpeed : genericSpeed * 3.6);
   const battery = pickNumber(record, ['battery_pct', 'batteryPct', 'battery', 'battery_level'], Number.NaN);
   const batteryVoltage = pickNumber(record, ['battery_voltage', 'batteryVoltage'], Number.NaN);
   const signal = pickNumber(record, ['signal_pct', 'signal', 'signal_strength'], Number.NaN);
@@ -1037,8 +1048,8 @@ export async function getEligibleMissionBatteriesApi(
   const records = Array.isArray(payload) ? payload :
     isRecord(payload) ? unwrapArray(payload, ['eligible_batteries', 'eligibleBatteries', 'batteries', 'compatible_batteries', 'compatibleBatteries']) : [];
   if (typeof payload === 'string' || (isRecord(payload) && records.length === 0 &&
-       !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
-         'items' in payload || 'data' in payload || 'results' in payload))) {
+    !('batteries' in payload || 'eligible_batteries' in payload || 'eligibleBatteries' in payload ||
+      'items' in payload || 'data' in payload || 'results' in payload))) {
     throw new Error('Eligible-batteries API response is not a supported battery list. Check its actual JSON response.');
   }
   return records.map((entry) => {
