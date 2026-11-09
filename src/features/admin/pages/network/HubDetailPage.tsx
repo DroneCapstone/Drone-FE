@@ -1,214 +1,78 @@
-import { useEffect, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
-import { Boxes, MapPin, UsersRound, PackageCheck } from "lucide-react";
-import { StatusBadge } from "../../../../components/ui/StatusBadge";
-import { AdminPageShell } from "../../components/AdminPageShell";
-import { getAdminBatteries, getAdminDrones, getAdminHubs, getAdminUsers } from "../../services/adminStore";
-import { getHubSupplyHistory } from "../../services/adminReplacementSupply";
-import { hubTone } from "../../utils/adminDisplay";
-import "./HubDetailPage.css";
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, Boxes, MapPin, UsersRound } from 'lucide-react';
+import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { AdminPageShell } from '../../components/AdminPageShell';
+import { adminOperationsApi, apiError, type HubDetailApi, type StockApi } from '../../api/adminOperationsApi';
+import './HubDetailPage.css';
 
-/** Administrative Hub overview. The technician and asset statuses are read-only. */
 export function HubDetailPage() {
   const { hubId } = useParams();
-  const [selectedAsset, setSelectedAsset] = useState<"drones" | "batteries">("drones");
-  const [, setVersion] = useState(0);
-
+  const [hub, setHub] = useState<HubDetailApi | null>(null);
+  const [spareStock, setSpareStock] = useState<StockApi[]>([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [assetTab, setAssetTab] = useState<'drones' | 'batteries'>('drones');
   useEffect(() => {
-    const refresh = () => setVersion((previous) => previous + 1);
-    window.addEventListener("admin-data-updated", refresh);
-    return () => window.removeEventListener("admin-data-updated", refresh);
-  }, []);
+    if (!hubId) return;
+    let live = true; setLoading(true); setHub(null);
+    void adminOperationsApi.hub(hubId).then(async (data) => {
+      if (!live) return;
+      setHub(data); setError('');
+      try {
+        const rows = await adminOperationsApi.stocks();
+        if (live) setSpareStock(rows.filter((r) => String(r.hub_id) === hubId));
+      } catch (cause) { if (live) setError(`Hub loaded, but spare parts could not load: ${apiError(cause)}`); }
+    }).catch((cause: unknown) => { if (live) setError(apiError(cause)); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [hubId]);
+  const drones = hub?.assigned_drones ?? [];
+  const batteries = hub?.assigned_batteries ?? [];
+  const technicians = hub?.assigned_technicians?.length ? hub.assigned_technicians : hub?.assigned_technician ? [hub.assigned_technician] : [];
+  const date = hub?.updated_at ? new Date(hub.updated_at) : null;
+  const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleString('en-GB') : '—';
 
-  const hub = getAdminHubs().find((item) => item.id === hubId);
-  if (!hub) return <Navigate to="/admin/network/hubs" replace />;
-
-  const drones = getAdminDrones().filter((drone) => drone.hubId === hub.id);
-  const batteries = getAdminBatteries().filter((battery) => battery.hubId === hub.id);
-  const technician = getAdminUsers().find((user) => user.role === "technician" && user.hubId === hub.id);
-  const updatedAt = new Date(hub.updatedAt);
-  const updatedText = Number.isNaN(updatedAt.getTime()) ? "—" : updatedAt.toLocaleString("en-GB");
-  const items = selectedAsset === "drones" ? drones : batteries;
-  const supplied = getHubSupplyHistory(hub.id);
-
-  return (
-    <AdminPageShell
-      title={hub.name}
-      backTo={{ path: "/admin/network/hubs", label: "Hubs" }}
-      breadcrumbLabel="Hubs"
-      description=""
-      actions={<StatusBadge tone={hubTone(hub.status)}>{hub.status}</StatusBadge>}
-    >
-      <div className="admin-hub-detail">
-        <section className="admin-hub-section" aria-labelledby="admin-hub-info-heading">
-          <h2 className="admin-hub-section-title" id="admin-hub-info-heading">
-            <MapPin size={17} strokeWidth={1.9} aria-hidden="true" />
-            Hub information
-          </h2>
-
-          <div className="admin-hub-info-grid">
-            <div className="admin-hub-info-column">
-              <div className="admin-hub-info-row">
-                <span className="admin-hub-info-label">Address</span>
-                <strong>{hub.address}</strong>
-              </div>
-              <div className="admin-hub-info-row">
-                <span className="admin-hub-info-label">Capacity</span>
-                <strong>{hub.capacity} drone slots</strong>
-              </div>
-            </div>
-            <div className="admin-hub-info-column">
-              <div className="admin-hub-info-row">
-                <span className="admin-hub-info-label">Coordinates</span>
-                <strong>{hub.latitude.toFixed(4)}, {hub.longitude.toFixed(4)}</strong>
-              </div>
-              <div className="admin-hub-info-row">
-                <span className="admin-hub-info-label">Last updated</span>
-                <strong>{updatedText}</strong>
-              </div>
-            </div>
+  return <AdminPageShell title={hub?.name ?? `Hub ${hubId ?? ''}`} description="" actions={hub ? <StatusBadge tone={hub.status?.toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{hub.status ?? '—'}</StatusBadge> : undefined}>
+    <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/hubs"><ArrowLeft size={15}/>Back to Hubs</Link>
+    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Hub Detail from Backend…</p>}
+    {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
+    {hub && <div className="admin-hub-detail">
+      <section className="admin-hub-section" aria-labelledby="hub-information">
+        <h2 id="hub-information" className="admin-hub-section-title"><MapPin size={17} aria-hidden="true"/>Hub information</h2>
+        <div className="admin-hub-info-grid">
+          <div className="admin-hub-info-column">
+            <div className="admin-hub-info-row"><span className="admin-hub-info-label">Address</span><strong>{hub.address || '—'}</strong></div>
+            <div className="admin-hub-info-row"><span className="admin-hub-info-label">Capacity</span><strong>{hub.capacity} drone slots</strong></div>
           </div>
-
-          <div className="admin-hub-technician-row">
-            <UsersRound size={17} strokeWidth={1.9} aria-hidden="true" />
-            <span className="admin-hub-technician-label">Assigned technician</span>
-            <div className="admin-hub-technician-person">
-              {technician ? (
-                <>
-                  <strong>{technician.fullName}</strong>
-                  <span className="admin-hub-technician-separator" aria-hidden="true">·</span>
-                  <span className="admin-hub-technician-email">{technician.email}</span>
-                </>
-              ) : (
-                <span className="admin-hub-technician-email">Not assigned</span>
-              )}
-            </div>
+          <div className="admin-hub-info-column">
+            <div className="admin-hub-info-row"><span className="admin-hub-info-label">Coordinates</span><strong>{hub.latitude == null || hub.longitude == null ? '—' : `${hub.latitude.toFixed(4)}, ${hub.longitude.toFixed(4)}`}</strong></div>
+            <div className="admin-hub-info-row"><span className="admin-hub-info-label">Last updated</span><strong>{dateLabel}</strong></div>
           </div>
-        </section>
-
-        <section className="admin-hub-section" aria-labelledby="admin-hub-assets-heading">
-          <div className="admin-hub-assets-header">
-            <h2 className="admin-hub-section-title" id="admin-hub-assets-heading">
-              <Boxes size={17} strokeWidth={1.9} aria-hidden="true" />
-              Assigned assets
-            </h2>
-            <div className="admin-hub-switch" role="tablist" aria-label="Assigned asset type">
-              <span
-                className={`admin-hub-switch-indicator${selectedAsset === "batteries" ? " is-right" : ""}`}
-                aria-hidden="true"
-              />
-              <button
-                type="button"
-                role="tab"
-                id="admin-hub-drones-tab"
-                aria-selected={selectedAsset === "drones"}
-                aria-controls="admin-hub-assets-panel"
-                tabIndex={selectedAsset === "drones" ? 0 : -1}
-                className={selectedAsset === "drones" ? "is-active" : ""}
-                onClick={() => setSelectedAsset("drones")}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    setSelectedAsset("batteries");
-                    document.getElementById("admin-hub-batteries-tab")?.focus();
-                  }
-                }}
-              >Drones ({drones.length})</button>
-              <button
-                type="button"
-                role="tab"
-                id="admin-hub-batteries-tab"
-                aria-selected={selectedAsset === "batteries"}
-                aria-controls="admin-hub-assets-panel"
-                tabIndex={selectedAsset === "batteries" ? 0 : -1}
-                className={selectedAsset === "batteries" ? "is-active" : ""}
-                onClick={() => setSelectedAsset("batteries")}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    setSelectedAsset("drones");
-                    document.getElementById("admin-hub-drones-tab")?.focus();
-                  }
-                }}
-              >Batteries ({batteries.length})</button>
-            </div>
+        </div>
+        <div className="admin-hub-technician-row"><UsersRound size={17} aria-hidden="true"/><span className="admin-hub-technician-label">Assigned technicians</span>
+          <div className="admin-hub-technician-person">{technicians.length ? technicians.map((t) => <span key={t.id}><strong>{t.full_name}</strong> · {t.email} </span>) : <span className="admin-hub-technician-email">Not assigned</span>}</div>
+        </div>
+      </section>
+      <section className="admin-hub-section" aria-labelledby="hub-assets">
+        <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true"/>Assigned assets</h2>
+          <div className="admin-hub-switch" role="tablist" aria-label="Assigned assets">
+            <button type="button" role="tab" aria-selected={assetTab === 'drones'} className={assetTab === 'drones' ? 'is-active' : ''} onClick={() => setAssetTab('drones')}>Drones ({drones.length})</button>
+            <button type="button" role="tab" aria-selected={assetTab === 'batteries'} className={assetTab === 'batteries' ? 'is-active' : ''} onClick={() => setAssetTab('batteries')}>Batteries ({batteries.length})</button>
           </div>
-
-          <div
-            key={selectedAsset}
-            className="admin-hub-assets-table-wrap"
-            id="admin-hub-assets-panel"
-            role="tabpanel"
-            aria-labelledby={selectedAsset === "drones" ? "admin-hub-drones-tab" : "admin-hub-batteries-tab"}
-            tabIndex={0}
-          >
-            <table className="admin-hub-assets-table">
-              <thead>
-                <tr>
-                  <th scope="col">Asset ID</th>
-                  <th scope="col">Model</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedAsset === "drones"
-                  ? drones.map((drone) => (
-                    <tr key={drone.id}>
-                      <td className="admin-hub-asset-id">{drone.id}</td>
-                      <td>{drone.model}</td>
-                      <td>{drone.status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}</td>
-                      <td><Link to={`/admin/network/drones/${encodeURIComponent(drone.id)}`}>View</Link></td>
-                    </tr>
-                  ))
-                  : batteries.map((battery) => (
-                    <tr key={battery.id}>
-                      <td className="admin-hub-asset-id">{battery.id}</td>
-                      <td>{battery.model}</td>
-                      <td>{battery.operationalStatus.toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}</td>
-                      <td><Link to={`/admin/network/batteries/${encodeURIComponent(battery.id)}`}>View</Link></td>
-                    </tr>
-                  ))}
-                {items.length === 0 && (
-                  <tr><td colSpan={4} className="admin-hub-assets-empty">No {selectedAsset} assigned to this hub.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="admin-hub-assets-footer">
-            Showing {items.length} of {items.length} {selectedAsset}
-          </div>
-        </section>
-
-        <section className="admin-hub-section" aria-labelledby="admin-hub-supply-heading">
-          <div className="admin-hub-assets-header">
-            <h2 className="admin-hub-section-title" id="admin-hub-supply-heading">
-              <PackageCheck size={17} strokeWidth={1.9} aria-hidden="true" />
-              Replacement supply history
-            </h2>
-            <Link className="admin-hub-supply-all" to="/admin/replacement/requests">View all records</Link>
-          </div>
-          <p className="admin-hub-supply-note">Admin-issued replacements for this Hub. This is a supply history, not a Hub spare-parts inventory or proof of physical delivery.</p>
-          <div className="admin-hub-assets-table-wrap">
-            <table className="admin-hub-assets-table">
-              <thead><tr><th scope="col">Issued at</th><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Drone</th><th scope="col">Record</th></tr></thead>
-              <tbody>
-                {supplied.slice(0, 6).map((entry) => (
-                  <tr key={entry.requestId}>
-                    <td>{new Date(entry.issuedAt).toLocaleDateString('en-GB')}</td>
-                    <td><strong className="admin-hub-supply-item">{entry.itemName}</strong>{entry.itemId && <small className="admin-hub-supply-id">{entry.itemId}</small>}</td>
-                    <td>{entry.quantity}</td>
-                    <td>{entry.droneId ?? '—'}</td>
-                    <td><Link to={`/admin/replacement/requests?request=${encodeURIComponent(entry.requestId)}`}>View</Link></td>
-                  </tr>
-                ))}
-                {supplied.length === 0 && <tr><td colSpan={5} className="admin-hub-assets-empty">No replacements have been issued for this Hub.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-          {supplied.length > 6 && <div className="admin-hub-assets-footer">Showing 6 of {supplied.length} issued replacement records</div>}
-        </section>
-      </div>
-    </AdminPageShell>
-  );
+        </div>
+        <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Asset ID</th><th>Model</th><th>Status</th><th>Action</th></tr></thead><tbody>
+          {assetTab === 'drones' ? drones.map((d) => <tr key={d.id}><td><strong>{d.id}</strong></td><td>{d.model}</td><td>{d.status}</td><td><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></td></tr>) : batteries.map((b) => <tr key={b.id}><td><strong>{b.id}</strong></td><td>{b.battery_model || '—'}</td><td>{b.status ?? '—'}</td><td><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View</Link></td></tr>)}
+          {(assetTab === 'drones' ? drones.length === 0 : batteries.length === 0) && <tr><td colSpan={4}>No assets assigned.</td></tr>}
+        </tbody></table></div>
+      </section>
+      <section className="admin-hub-section" aria-labelledby="hub-spareparts">
+        <h2 id="hub-spareparts" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true"/>Spare parts at this Hub</h2>
+        <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Part</th><th>Quantity</th><th>Minimum threshold</th><th>Stock alert</th></tr></thead><tbody>
+          {spareStock.map((part) => <tr key={part.id}><td><strong>{part.part_name}</strong></td><td>{part.quantity}</td><td>{part.min_stock_threshold}</td><td>{part.is_low_stock ? 'Low stock' : 'Normal'}</td></tr>)}
+          {spareStock.length === 0 && <tr><td colSpan={4}>No spare parts registered for this Hub.</td></tr>}
+        </tbody></table></div>
+      </section>
+    </div>}
+  </AdminPageShell>;
 }

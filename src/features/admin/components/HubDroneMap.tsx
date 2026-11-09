@@ -41,7 +41,11 @@ function makeHubMarker(hub: AdminHub, droneCount: number, selected: boolean) {
 
   const label = document.createElement("span");
   label.className = "admin-hub-network-marker__label";
-  label.innerHTML = `${hub.code} <span>· ${droneCount}</span>`;
+  // Hub codes now come from Backend; do not interpolate them into innerHTML.
+  label.append(document.createTextNode(`${hub.code} `));
+  const count = document.createElement('span');
+  count.textContent = `· ${droneCount}`;
+  label.appendChild(count);
 
   button.append(pin, label);
   return button;
