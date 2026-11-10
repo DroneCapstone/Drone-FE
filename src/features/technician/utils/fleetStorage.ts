@@ -12,10 +12,6 @@ import {
   unwrapObject,
 } from "../api/httpClient";
 
-import {
-  technicianDrones,
-} from "../data/technicianMockData";
-
 export type DroneStatus =
   | "Available"
   | "Maintenance";
@@ -45,15 +41,14 @@ export type FleetDrone = {
   lastFlightAt?: string;
 };
 
-export const TECHNICIAN_HUB =
-  "Hub HCM-02";
-
+// Retained for compatibility with existing UI imports.
+// These labels are not used to manufacture drone records or hub assignments.
+export const TECHNICIAN_HUB = "Hub HCM-02";
 export const HUB_OPTIONS = [
   "Hub HCM-01",
   "Hub HCM-02",
   "Hub HCM-03",
 ];
-
 export const LOCATION_OPTIONS = [
   "Hub HCM-01",
   "Hub HCM-02",
@@ -63,131 +58,48 @@ export const LOCATION_OPTIONS = [
   "Heading to Hub HCM-03",
 ];
 
-/*
- * DEMO INITIAL LOCATION
- * ---------------------------------------------------------
- * DR-002 is the drone used by the Incoming transit mission.
- * Therefore it must NOT appear in Hub HCM-02 before
- * Technician confirms its arrival.
- */
-const defaultLocationById: Record<
-  string,
-  string
-> = {
-  "DR-001": "Hub HCM-02",
-  "DR-002": "Heading to Hub HCM-02",
-  "DR-003": "Hub HCM-02",
-  "DR-004": "Hub HCM-02",
-};
-
-export function normalizeDroneStatus(
-  status: string,
-): DroneStatus {
+export function normalizeDroneStatus(status: string): DroneStatus {
   if (status.trim().toUpperCase() === "MAINTENANCE") {
     return "Maintenance";
   }
 
   /*
-   * Legacy "Battery Replacement" is no longer an
-   * operational status. Battery service is handled
-   * separately by Transit missions.
+   * Legacy "Battery Replacement" is no longer an operational status.
+   * Battery service is handled separately by Transit missions.
    */
   return "Available";
 }
 
-function createDefaultFleet(): FleetDrone[] {
-  return technicianDrones.map(
-    (drone, index) => ({
-      id: drone.id,
-      name: drone.name,
-      model: drone.model,
-      status: normalizeDroneStatus(
-        String(drone.status),
-      ),
-      battery: Number(
-        drone.battery,
-      ),
-      utilization: Number(
-        drone.utilization ?? 0,
-      ),
-      lastFlight:
-        drone.lastFlight ??
-        "Not flown",
-      location:
-        defaultLocationById[
-          drone.id
-        ] ??
-        HUB_OPTIONS[
-          index %
-            HUB_OPTIONS.length
-        ],
-    }),
-  );
-}
-
 /*
- * DEMO RUNTIME STORE
- * ---------------------------------------------------------
- * Keep changes while navigating inside the SPA.
- *
- * Full browser refresh:
- * -> module reloads
- * -> fleet resets to createDefaultFleet()
- *
- * This keeps demo data consistent with Transit missions:
- * - Incoming DR-002 starts outside Hub HCM-02
- * - Confirm arrival moves DR-002 into Hub HCM-02
- * - Refresh restores the initial demo state
- *
- * Later, replace this runtime store with backend APIs.
+ * In-memory cache of fleet data loaded from Backend.
+ * No mock records are created when the app starts or refreshes.
+ * The existing loadFleet/saveFleet/resetDemoFleet exports remain for callers.
  */
-let demoFleet: FleetDrone[] =
-  createDefaultFleet();
+let demoFleet: FleetDrone[] = [];
 
 export function loadFleet(): FleetDrone[] {
-  return demoFleet.map(
-    (drone) => ({
-      ...drone,
-    }),
-  );
+  return demoFleet.map((drone) => ({ ...drone }));
 }
 
-export function saveFleet(
-  drones: FleetDrone[],
-) {
-  demoFleet =
-    drones.map(
-      (drone) => ({
-        ...drone,
-        status:
-          normalizeDroneStatus(
-            String(
-              drone.status,
-            ),
-          ),
-      }),
-    );
+export function saveFleet(drones: FleetDrone[]) {
+  demoFleet = drones.map((drone) => ({
+    ...drone,
+    status: normalizeDroneStatus(String(drone.status)),
+  }));
 
-  window.dispatchEvent(
-    new Event(
-      "technician-fleet-updated",
-    ),
-  );
+  window.dispatchEvent(new Event("technician-fleet-updated"));
 }
 
+/** Legacy name kept for compatibility; clears the local cache, not Backend. */
 export function resetDemoFleet() {
-  demoFleet =
-    createDefaultFleet();
-
-  window.dispatchEvent(
-    new Event(
-      "technician-fleet-updated",
-    ),
-  );
+  demoFleet = [];
+  window.dispatchEvent(new Event("technician-fleet-updated"));
 }
 
-
-function readOptionalNumber(record: Record<string, unknown>, keys: string[]): number | undefined {
+function readOptionalNumber(
+  record: Record<string, unknown>,
+  keys: string[],
+): number | undefined {
   for (const key of keys) {
     const raw = record[key];
     if (raw === null || raw === undefined || raw === "") continue;
@@ -209,7 +121,7 @@ function mapApiDrone(value: unknown, forDetail = false): FleetDrone | null {
 
   const name = pickString(value, ["name", "drone_name", "code"], id);
   const model = pickString(value, ["model", "drone_model"], "—");
-  // Hub Fleet is *physical hub inventory*. Never display a flying drone as
+  // Hub Fleet is physical hub inventory. Never display a flying drone as
   // Available. BE should also clear its hub assignment on successful Dispatch.
   const rawStatus = pickString(
     value, ["status", "operational_status", "flight_status", "technical_status"], "",
@@ -217,8 +129,11 @@ function mapApiDrone(value: unknown, forDetail = false): FleetDrone | null {
   // Explicit null hub means BE has unassigned this drone from physical hub stock.
   // Do not do this check for older responses which omit current_hub_id.
   const currentHub = value.current_hub_id ?? value.currentHubId;
-  if (!forDetail && ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
-      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null))) {
+  if (
+    !forDetail &&
+    ((Object.prototype.hasOwnProperty.call(value, "current_hub_id") && value.current_hub_id === null) ||
+      (Object.prototype.hasOwnProperty.call(value, "currentHubId") && value.currentHubId === null))
+  ) {
     return null;
   }
   const flightStatuses = [
@@ -241,7 +156,7 @@ function mapApiDrone(value: unknown, forDetail = false): FleetDrone | null {
   const installedBatteryId = (() => {
     const raw = pickString(value, ["installed_battery_id", "battery_id"], "");
     if (!raw) return undefined;
-    // Never fabricate a battery identifier; API ids and serials may differ.
+    // Never fabricate a battery identifier; API IDs and serials may differ.
     return raw.trim();
   })();
 
