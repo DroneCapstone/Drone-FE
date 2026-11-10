@@ -14,7 +14,6 @@ import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { type FleetDrone } from "../utils/fleetStorage";
 import {
   useDroneDetailQuery,
-  useDroneFlightHistoryQuery,
   useDroneMaintenanceHistoryQuery,
   useFleetQuery,
 } from "../hooks/useFleetQueries";
@@ -118,7 +117,6 @@ export function DroneDetailPage() {
 
   const droneQuery = useDroneDetailQuery(droneId);
   const fleetQuery = useFleetQuery();
-  const flightHistoryQuery = useDroneFlightHistoryQuery(droneId, tab === "flight");
   const historyQuery = useDroneMaintenanceHistoryQuery(droneId);
   const recordsQuery = useMaintenanceRecordsQuery(droneId);
   const scheduleQuery = useDroneMaintenanceSchedulesQuery(droneId);
@@ -250,43 +248,11 @@ export function DroneDetailPage() {
 
       {tab === "flight" && <Card className={PANEL}><CardContent className="p-6">
         <h2 className={`text-[18px] font-semibold ${TEXT}`}>Flight history</h2>
-        <p className={`mt-1 text-[13px] ${MUTED}`}>
-          Flights returned by Backend for {drone.id}.
-        </p>
-        {flightHistoryQuery.isPending ? (
-          <p role="status" className={`mt-6 text-[13px] ${MUTED}`}>Loading flight history...</p>
-        ) : flightHistoryQuery.isError ? (
-          <div role="alert" className="mt-5 text-[13px] text-red-500">
-            {flightHistoryQuery.error instanceof Error ? flightHistoryQuery.error.message : "Unable to load flight history."}
-            <button type="button" onClick={() => void flightHistoryQuery.refetch()}
-              className="ml-3 font-semibold underline">Retry</button>
-          </div>
-        ) : (flightHistoryQuery.data ?? []).length === 0 ? (
-          <p className={`mt-6 rounded-md border border-dashed border-[var(--tech-border)] p-5 text-center text-[13px] ${MUTED}`}>
-            No flight history recorded for this drone.
-          </p>
-        ) : (
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-[13px]">
-              <thead className="border-b border-[var(--tech-border)] text-[var(--tech-text)]">
-                <tr>{["Mission / Flight", "Order", "Route", "Departed at", "Arrived at", "Status"].map((column) =>
-                  <th key={column} className="px-3 py-3 font-semibold">{column}</th>)}</tr>
-              </thead>
-              <tbody>
-                {(flightHistoryQuery.data ?? []).map((flight) => (
-                  <tr key={flight.id} className="border-b border-[var(--tech-border)] last:border-0">
-                    <td className={`px-3 py-3 font-medium ${TEXT}`}>{flight.id}</td>
-                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.orderId}</td>
-                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.route}</td>
-                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.departedAt ? formatDate(parseApiDate(flight.departedAt)) : EMPTY}</td>
-                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.arrivedAt ? formatDate(parseApiDate(flight.arrivedAt)) : EMPTY}</td>
-                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          <InfoItem label="Last flight time" value={formatDate(parseApiDate(drone.lastFlightAt))} />
+          <InfoItem label="Last flight / mission reference" value={display(drone.lastFlight)} />
+        </div>
+       
       </CardContent></Card>}
 
       {tab === "maintenance" && <div className="space-y-5">
@@ -304,9 +270,7 @@ export function DroneDetailPage() {
             <CheckCircle2 size={19} className="text-emerald-500" />
             <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance records</h2>
           </div>
-          <p className={`mt-1 text-[13px] ${MUTED}`}>
-            Records for this drone from Maintenance History / Maintenance Records APIs.
-          </p>
+         
           {maintenanceError && <p className="mt-3 text-[12px] text-amber-500">
             Some maintenance data could not be loaded: {maintenanceError}
           </p>}
@@ -319,29 +283,27 @@ export function DroneDetailPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[15px] font-semibold ${TEXT}`}>{record.workOrderId}</span>
-                      <span className="text-[12px] font-medium text-emerald-500">Recorded</span>
+                      <span className="text-[12px] font-medium text-emerald-500">{record.workOrderStatus || "Recorded"}</span>
                     </div>
                     <p className={`mt-1 text-[14px] ${SECONDARY}`}>{record.title}</p>
+                    {record.maintenanceType && (
+                      <p className={`mt-1 text-[12px] ${MUTED}`}>
+                        {[record.maintenanceType].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                   </div>
-                  <span className={`shrink-0 text-right text-[12px] ${MUTED}`}>{display(record.completedAt)}</span>
+                  <span className={`shrink-0 text-right text-[12px] ${MUTED}`}>{parseApiDate(record.completedAt) ? formatDate(parseApiDate(record.completedAt)) : display(record.completedAt)}</span>
                 </summary>
                 <div className="border-t border-[var(--tech-border)] px-4 py-4">
                   <div className="grid gap-5 md:grid-cols-2">
-                    <InfoItem label="Diagnosis" value={record.diagnosis} />
+                    {record.recordDescription &&
+                      <InfoItem label="Record description" value={record.recordDescription} />}
+                    
                     <InfoItem label="Corrective action" value={record.correctiveAction} />
-                    <InfoItem label="Resulting status" value={record.resultingStatus} />
+             
                     <InfoItem label="Performed / assigned to" value={record.assignedTo} />
                   </div>
-                  <div className="mt-5 border-t border-[var(--tech-border)] pt-4">
-                    <p className={`text-[12px] font-medium ${MUTED}`}>
-                      Inspection checklist ({record.inspectionItems.length} item(s))
-                    </p>
-                    {record.inspectionItems.length > 0 ?
-                      <ul className={`mt-2 space-y-1.5 text-[13px] ${SECONDARY}`}>
-                        {record.inspectionItems.map((item, index) => <li key={`${record.id}-${index}`}>• {item}</li>)}
-                      </ul> :
-                      <p className={`mt-2 text-[13px] ${MUTED}`}>No inspection items returned</p>}
-                  </div>
+                  
                 </div>
               </details>
             )) : <div className={`rounded-md border border-dashed border-[var(--tech-border)] px-4 py-9 text-center text-[14px] ${MUTED}`}>

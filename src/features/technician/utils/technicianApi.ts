@@ -539,9 +539,10 @@ export const getDroneFlightHistoryApi = (droneId: string | number) =>
 export const getDroneMaintenanceHistoryApi = (
   droneId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/drones/${id}/maintenance-history`,
-    droneId,
+  technicianApiRequest(
+    `/technician/fleet/drones/${encodeURIComponent(
+      String(droneId).trim()
+    )}/maintenance-history`
   );
 
 // ---------------------------------------------------------------------------
