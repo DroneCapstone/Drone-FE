@@ -178,9 +178,7 @@ export function HubSuppliesPage() {
         </div>
       )}
 
-      <p className="mb-4 text-[12px] text-[var(--tech-muted)]">
-        View spare parts at your assigned Hub. Admin manages replenishment; Technician records parts used.
-      </p>
+      
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[230px] flex-1">
