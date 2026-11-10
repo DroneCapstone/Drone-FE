@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
@@ -152,7 +151,6 @@ export function LiveTrackingPage() {
   useEffect(() => { if (!isMapExpanded) return; const handle = (e: KeyboardEvent) => { if (e.key === 'Escape') setMapExpanded(false); }; window.addEventListener('keydown', handle); return () => window.removeEventListener('keydown', handle); }, [isMapExpanded]);
   const filterCount = (value: Filter) => value === 'All' ? liveDrone.length : liveDrone.filter(d => d.health === value).length;
   const handleFilterChange = (next: Filter) => { setFilter(next); if (next !== 'All' && selectedDrone?.health !== next) { const found = sortedDrone.find(d => d.health === next); if (found) followFromAircraftList(found); } };
-  const openIncident = () => { if (selectedDrone?.alertId) navigate(`/operator/operations/incidents?create=1&alertId=${selectedDrone.alertId}`); };
   return <OperationPageShell active="/operator/operations/live">
     <div className="live-ops-layout">
       <div className="live-ops-main">
@@ -226,24 +224,28 @@ export function LiveTrackingPage() {
           {selectedDrone ? <OperatorPanel className="live-selection-panel">
             <div className="live-selection-head">
               <div className="live-selection-id"><span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span><div><div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div><small>{selectedDrone.orderId ? `Delivery ${selectedDrone.orderId} · ` : ''}{selectedDrone.route}</small></div></div>
-              <div className="live-selection-metrics">
-                <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
-                <span><Icon name="radar" size={16} /><strong>{selectedDrone.signal === undefined ? '—' : `${selectedDrone.signal}%`}</strong><small>Signal</small></span>
-                <span><Icon name="pin" size={16} /><strong>{measure(selectedDrone.altitudeM, ' m')}</strong><small>Altitude</small></span>
-                <span><Icon name="speed" size={16} /><strong>{measure(selectedDrone.speedKmh)}</strong><small>Speed</small></span>
-              </div>
-            </div>
-            <div className={`live-ai-assessment health-${selectedDrone.health.toLowerCase()}`}>
-              <div><strong>AI assessment</strong><p>{selectedDrone.aiAssessment}</p>{selectedDrone.incidentReason && <small>{selectedDrone.incidentReason}</small>}</div>
-              <div className="live-ai-actions"><ActionButton variant="secondary" onClick={() => navigate(`/operator/operations/telemetry?aircraft=${selectedDrone.id}&missionId=${selectedDrone.missionId}`)}>View telemetry</ActionButton>
-                {selectedDrone.incidentPolicy === 'recommended' && selectedDrone.alertId ? <ActionButton onClick={openIncident}>Create incident</ActionButton> : selectedDrone.health === 'Normal' ? <span className="live-incident-state">No active anomaly</span> : <span className="live-incident-state">Continue monitoring</span>}
+              <div className="live-selection-tools">
+                <div className="live-selection-metrics">
+                  <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
+                  <span><Icon name="pin" size={16} /><strong>{measure(selectedDrone.altitudeM, ' m')}</strong><small>Altitude</small></span>
+                  <span><Icon name="speed" size={16} /><strong>{measure(selectedDrone.speedKmh, ' km/h')}</strong><small>Speed</small></span>
+                </div>
+                <button
+                  type="button"
+                  className="live-view-telemetry"
+                  onClick={() => navigate(`/operator/operations/telemetry?aircraft=${encodeURIComponent(selectedDrone.id)}&missionId=${encodeURIComponent(selectedDrone.missionId)}`)}
+                >
+                  <Icon name="chart" size={16} />
+                  View telemetry
+                  <Icon name="chevron" size={15} />
+                </button>
               </div>
             </div>
           </OperatorPanel> : <OperatorPanel className="live-selection-panel"><div className="operator-empty-state">Select an aircraft in flight to view details.</div></OperatorPanel>}
         </div>
         <div className="live-ops-bottom">
           <OperatorPanel className="live-events-panel">
-            <div className="live-events-head"><div><strong>LIVE OPERATIONS LOG</strong><small>Recorded telemetry and checkpoint events</small></div>
+            <div className="live-events-head"><div><strong>LIVE OPERATIONS LOG</strong><small></small></div>
               <div className="live-events-filters"><button type="button" className={logFilter === 'all' ? 'active' : ''} onClick={() => setLogFilter('all')}>All</button><button type="button" className={logFilter === 'selected' ? 'active' : ''} onClick={() => setLogFilter('selected')}>Selected</button></div></div>
             <div className="live-events-scroll" aria-live="polite">
               {!visibleLogs.length ? <p className="live-events-empty">No recorded events yet.</p> : visibleLogs.map(e => <div key={e.key} className={`live-events-entry level-${e.level.toLowerCase()}`}><time>{eventTime(e.time)}</time><strong>{e.droneId}</strong><span>{e.message}</span></div>)}
@@ -254,7 +256,7 @@ export function LiveTrackingPage() {
             <div className="live-route-metric"><small>MISSION</small><strong title={selectedDrone?.missionId}>{selectedDrone?.missionId ?? '—'}</strong></div>
             <div className="live-route-metric"><small>HEADING (GPS)</small><strong>{heading !== undefined ? `${Math.round(heading)}°` : '—'}</strong></div>
             <div className="live-route-metric"><small>CHECKPOINTS</small><strong>{selectedDrone?.checkpointsPassed ?? '—'}</strong></div>
-            <p>Heading is calculated from consecutive GPS coordinates. Click an aircraft to follow it on the map.</p>
+            {/* <p>Heading is calculated from consecutive GPS coordinates. Click an aircraft to follow it on the map.</p> */}
           </OperatorPanel>
         </div>
       </div>
@@ -305,7 +307,6 @@ export function LiveTrackingPage() {
                 </span>
                 <span className="live-aircraft-card-metrics">
                   <span><Icon name="battery" size={14} />{formatBattery(aircraft)}</span>
-                  <span><Icon name="radar" size={14} />{aircraft.signal !== undefined ? `${aircraft.signal}%` : '—'}</span>
                   <Icon name="chevron" size={15} />
                 </span>
               </button>

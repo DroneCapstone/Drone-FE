@@ -1,5 +1,5 @@
 import { MapPin, CircleCheck, Plane, BatteryCharging } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ActionButton } from "../../../../components/ui/ActionButton";
@@ -11,45 +11,83 @@ import { OperatorPanel } from "../../../operator/components/OperatorPanel";
 import { AdminPageShell } from "../../components/AdminPageShell";
 import { AdminToolbar } from "../../components/AdminToolbar";
 import { HubDroneMap } from "../../components/HubDroneMap";
-import { getAdminBatteries, getAdminDrones, getAdminHubs, upsertAdminHub } from "../../services/adminStore";
+import { adminOperationsApi, apiError, type HubApi } from '../../api/adminOperationsApi';
+import type { AdminDrone } from '../../types';
 import type { AdminHub } from "../../types";
 import { hubTone } from "../../utils/adminDisplay";
 
 export function HubsPage() {
-  const [version, setVersion] = useState(0);
+  const [hubs, setHubs] = useState<AdminHub[]>([]);
+  const [drones, setDrones] = useState<AdminDrone[]>([]);
+  const [batteriesCount, setBatteriesCount] = useState(0);
+  const [counts, setCounts] = useState<Record<string, { technicians: number; batteries: number }>>({});
+  const [summary, setSummary] = useState<{ total_hubs: number; active_hubs: number; total_drones: number; total_batteries: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [editing, setEditing] = useState<AdminHub | null>(null);
 
-  useEffect(() => {
-    const listener = () => setVersion((value) => value + 1);
-    window.addEventListener("admin-data-updated", listener);
-    return () => window.removeEventListener("admin-data-updated", listener);
-  }, []);
+  function asHub(item: HubApi): AdminHub {
+    return {
+      id: String(item.id), name: item.name, code: item.code ?? String(item.id),
+      area: item.area ?? '', address: item.address ?? '',
+      latitude: item.latitude ?? Number.NaN, longitude: item.longitude ?? Number.NaN,
+      status: (item.status?.toUpperCase() === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE') as AdminHub['status'],
+      capacity: item.capacity ?? 0, technicianIds: [],
+      createdAt: item.created_at ?? '', updatedAt: item.updated_at ?? '',
+    };
+  }
+  async function refresh() {
+    setLoading(true);
+    try {
+      const [h, d, b, kpi] = await Promise.all([
+        adminOperationsApi.hubs(), adminOperationsApi.drones(),
+        adminOperationsApi.batteries(), adminOperationsApi.hubSummary(),
+      ]);
+      setHubs(h.map(asHub));
+      setCounts(Object.fromEntries(h.map((item) => [String(item.id), {
+        technicians: item.technicians_count ?? item.technicians ?? 0,
+        batteries: item.batteries_count ?? item.batteries ?? 0,
+      }])));
+      setDrones(d.map((item) => ({
+        id: item.id, name: item.name, displayId: item.id, model: item.model,
+        serialNumber: item.serial_number, hubId: item.hub_id == null ? '' : String(item.hub_id),
+        status: (item.status.toUpperCase() === 'AVAILABLE' ? 'AVAILABLE' : item.status.toUpperCase() === 'IN FLIGHT' ? 'IN_FLIGHT' : 'MAINTENANCE') as AdminDrone['status'],
+        isActive: item.admin_state.toUpperCase() === 'ACTIVE', batteryPct: item.battery_level_pct ?? 0,
+        maxPayloadKg: item.payload_capacity_kg, createdAt: '', updatedAt: '',
+      })));
+      setBatteriesCount(b.filter((item) => item.current_hub_id != null).length);
+      setSummary(kpi);
+      setError('');
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void refresh(); }, []);
 
-  const hubs = useMemo(() => getAdminHubs(), [version]);
-  const drones = useMemo(() => getAdminDrones(), [version]);
-  const batteries = useMemo(() => getAdminBatteries(), [version]);
   const visible = hubs.filter((hub) => {
     const matchesQuery = `${hub.name} ${hub.code} ${hub.area} ${hub.address}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (status === "all" || hub.status === status);
   });
 
-  const save = (event: FormEvent) => {
+  const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!editing) return;
-    const now = new Date().toISOString();
-    upsertAdminHub({
-      ...editing,
-      id: editing.id,
-      code: editing.code.trim().toUpperCase(),
-      name: editing.name.trim(),
-      area: editing.area.trim(),
-      address: editing.address.trim(),
-      createdAt: editing.createdAt,
-      updatedAt: now,
-    });
-    setEditing(null);
+    if (!editing || saving) return;
+    if (!Number.isFinite(editing.latitude) || !Number.isFinite(editing.longitude)) { setError('Enter valid hub coordinates.'); return; }
+    setSaving(true); setError('');
+    try {
+      await adminOperationsApi.updateHub(Number(editing.id), {
+        name: editing.name.trim(), code: editing.code.trim(), area: editing.area.trim(),
+        address: editing.address.trim(), status: editing.status === 'ACTIVE' ? 'Active' : 'Inactive',
+        latitude: editing.latitude, longitude: editing.longitude, capacity: editing.capacity,
+      });
+      setEditing(null);
+      setNotice('Hub updated in Backend.');
+      await refresh();
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -58,13 +96,16 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
     >
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminSummaryCard label="Total hubs" value={hubs.length} note="Registered hubs" icon={MapPin} />
-        <AdminSummaryCard label="Active" value={hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
-        <AdminSummaryCard label="Drones" value={drones.length} note="Registered drones" icon={Plane} />
-        <AdminSummaryCard label="Batteries" value={batteries.filter((battery) => Boolean(battery.hubId)).length} note="Assigned to Hubs" icon={BatteryCharging} />
+        <AdminSummaryCard label="Total hubs" value={summary?.total_hubs ?? hubs.length} note="Registered hubs" icon={MapPin} />
+        <AdminSummaryCard label="Active" value={summary?.active_hubs ?? hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
+        <AdminSummaryCard label="Drones" value={summary?.total_drones ?? drones.length} note="Registered drones" icon={Plane} />
+        <AdminSummaryCard label="Batteries" value={summary?.total_batteries ?? batteriesCount} note="Assigned to Hubs" icon={BatteryCharging} />
       </div>
 
-      <HubDroneMap hubs={hubs} drones={drones} />
+      {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
+      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs from Backend…</p>}
+      <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">
         <AdminToolbar
@@ -90,8 +131,8 @@ export function HubsPage() {
                   <td><strong>{hub.area}</strong><small>{hub.address}</small></td>
                   <td><StatusBadge tone={hubTone(hub.status)}>{hub.status}</StatusBadge></td>
                   <td>{drones.filter((drone) => drone.hubId === hub.id).length}</td>
-                  <td>{batteries.filter((battery) => battery.hubId === hub.id).length}</td>
-                  <td>{hub.technicianIds.length}</td>
+                  <td>{counts[hub.id]?.batteries ?? 0}</td>
+                  <td>{counts[hub.id]?.technicians ?? 0}</td>
                   <td>
                     <div className="flex gap-2">
                       <Link className="text-button" to={`/admin/network/hubs/${hub.id}`}>View</Link>
@@ -124,7 +165,7 @@ export function HubsPage() {
               </div>
               <div className="form-actions border-t border-border p-5">
                 <ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton>
-                <ActionButton type="submit">Save hub</ActionButton>
+                <ActionButton type="submit" disabled={saving}>{saving ? "Saving…" : "Save hub"}</ActionButton>
               </div>
             </form>
           </DialogContent>

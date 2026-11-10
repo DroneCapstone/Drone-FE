@@ -21,14 +21,15 @@ export interface UpdateAdminUserInput {
   email?: string;
   role?: AdminApiRole;
 }
-export interface AdminUserAuditItem {
+export interface AdminUserActivityItem {
   id: number;
   user_id: string | number | null;
   action: string;
-  resource_table: string | null;
+  resource_type: string | null;
+  description?: string | null;
   created_at: string;
 }
-interface AuditResponse { items: AdminUserAuditItem[] }
+interface ActivityResponse { items: AdminUserActivityItem[] }
 
 export class AdminUsersApiError extends Error {
   public status: number;
@@ -131,12 +132,12 @@ export const adminUsersApi = {
   async restoreUser(id: string): Promise<AdminApiUser> {
     return asUser(unwrap(await request<unknown>(`/admin/users/${encodeURIComponent(id)}/restore`, { method: 'PATCH' })));
   },
-  /** This endpoint filters events performed BY the user, not changes made TO their account. */
-  async listActionsByUser(id: string): Promise<AdminUserAuditItem[]> {
+  /** user_id filters events performed BY this user, not changes made TO their account. */
+  async listActionsByUser(id: string): Promise<AdminUserActivityItem[]> {
     const query = new URLSearchParams({ user_id: id, page: '1', page_size: '5' });
-    const payload = unwrap(await request<unknown>(`/system/audit-logs?${query.toString()}`));
+    const payload = unwrap(await request<unknown>(`/admin/activity-logs?${query.toString()}`));
     if (!isRecord(payload) || !Array.isArray(payload.items)) return [];
-    return (payload as unknown as AuditResponse).items.filter((item) =>
+    return (payload as unknown as ActivityResponse).items.filter((item) =>
       typeof item.id === 'number' && typeof item.action === 'string' && typeof item.created_at === 'string');
   },
 };
