@@ -12,6 +12,14 @@ import {
 const PAGE_SIZE = 9;
 const inputClass = "tech-control h-10 w-full rounded-md px-3 text-[13px]";
 const subtle = "text-[var(--tech-muted)]";
+// Neutral dividers remain subtle in both the light and dark Technician themes.
+const rowDivider = "1px solid rgba(128, 128, 128, 0.18)";
+const headerCellStyle = {
+  color: "var(--tech-text)",
+  fontWeight: 700,
+  opacity: 1,
+  borderBottom: rowDivider,
+};
 const outlineBtn =
   "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[var(--tech-border)] px-3 text-[12px] text-[var(--tech-text-secondary)] transition-colors hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -98,7 +106,7 @@ export function HubSuppliesPage() {
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <TechnicianPageShell title="Spare Parts" description="">
+    <TechnicianPageShell title="Hub supplies" description="">
       {inventoryQuery.isError && (
         <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">
           {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load hub inventory."}
@@ -106,7 +114,9 @@ export function HubSuppliesPage() {
         </div>
       )}
 
-     
+      <p className="mb-4 text-[12px] text-[var(--tech-muted)]">
+        View spare parts at your assigned Hub. Parts used for repairs are recorded in Work Order Detail.
+      </p>
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[230px] flex-1">
@@ -129,29 +139,29 @@ export function HubSuppliesPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[740px] text-[12px]">
-              <thead className="border-b border-[var(--tech-border)] bg-[var(--tech-surface)] text-[10px] uppercase tracking-wide text-[var(--tech-subtle)]">
+              <thead className="bg-[var(--tech-surface)] text-[12px] uppercase tracking-wide">
                 <tr>
-                  <th className="w-[36%] px-4 py-4 text-left">Spare part</th>
-                  <th className="w-[17%] px-4 py-4 text-left">Category</th>
-                  <th className="w-[35%] px-4 py-4 text-left">Compatible drone models</th>
-                  <th className="w-[12%] px-4 py-4 text-center">Quantity</th>
+                  <th style={headerCellStyle} className="w-[36%] px-4 py-4 text-left">Spare part</th>
+                  <th style={headerCellStyle} className="w-[17%] px-4 py-4 text-left">Category</th>
+                  <th style={headerCellStyle} className="w-[35%] px-4 py-4 text-left">Compatible drone models</th>
+                  <th style={headerCellStyle} className="w-[12%] px-4 py-4 text-center">Quantity</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--tech-border)]">
+              <tbody>
                 {visible.map((item) => (
                   <tr key={item.id} className="hover:bg-[var(--tech-surface-2)]">
-                    <td className="px-4 py-4 text-[13px] font-semibold text-[var(--tech-text)]">
+                    <td style={{ borderBottom: rowDivider }} className="px-4 py-4 text-[13px] font-semibold text-[var(--tech-text)]">
                       {partName(item)}
                     </td>
-                    <td className="px-4 py-4 text-[12px] text-[var(--tech-text-secondary)]">
+                    <td style={{ borderBottom: rowDivider }} className="px-4 py-4 text-[12px] text-[var(--tech-text-secondary)]">
                       {item.partCategory?.categoryType || "—"}
                     </td>
-                    <td className="px-4 py-4 text-[12px] text-[var(--tech-text-secondary)]">
+                    <td style={{ borderBottom: rowDivider }} className="px-4 py-4 text-[12px] text-[var(--tech-text-secondary)]">
                       {item.partCategory?.compatibleDroneModels.length
                         ? item.partCategory.compatibleDroneModels.join(", ")
                         : "—"}
                     </td>
-                    <td className="px-4 py-4 text-center text-[14px] font-semibold text-[var(--tech-text)]">
+                    <td style={{ borderBottom: rowDivider }} className="px-4 py-4 text-center text-[14px] font-semibold text-[var(--tech-text)]">
                       {item.quantity}
                     </td>
                   </tr>
