@@ -186,9 +186,7 @@ export function HubSuppliesPage() {
           <button type="button" className="ml-3 underline" onClick={() => void inventoryQuery.refetch()}>Retry</button>
         </div>
       )}
-      <p className="mb-4 text-[12px] text-[var(--tech-muted)]">
-        Manage spare parts at your assigned Hub. Technician can record parts used; Admin manages replenishment.
-      </p>
+      
       <div className="mb-4 grid gap-4 md:grid-cols-3">
         {[
           { label: "Supply categories", value: inventoryQuery.isPending ? "—" : supplies.length },
@@ -243,7 +241,7 @@ export function HubSuppliesPage() {
                     <td className={`px-4 py-4 text-center ${subtle}`}>{start + index + 1}</td>
                     <td className="px-4 py-4">
                       <p className="font-semibold text-[var(--tech-text)]">{partName(item)}</p>
-                      <p className={`mt-1 text-[10px] ${subtle}`}>Inventory #{item.id} · Category #{item.partCategoryId}</p>
+                      
                     </td>
                     <td className={`px-4 py-4 text-center ${subtle}`}>{item.hubId || "—"}</td>
                     <td className="px-4 py-4 text-center font-semibold text-[var(--tech-text)]">{item.quantity}</td>
