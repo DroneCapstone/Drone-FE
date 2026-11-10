@@ -235,7 +235,7 @@ function normalizeAlertSource(value: string): AlertSource {
   return "Schedule";
 }
 
-function mapApiMaintenanceAlert(value: unknown): MaintenanceAlert | null {
+export function mapApiMaintenanceAlert(value: unknown): MaintenanceAlert | null {
   if (!isRecord(value)) return null;
 
   const rawId = pickString(value, ["alert_id", "id"]);

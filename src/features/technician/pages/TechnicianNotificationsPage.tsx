@@ -42,6 +42,7 @@ import {
 
 import {
   useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
   useNotificationsQuery,
 } from "../hooks/useNotificationQueries";
 
@@ -59,6 +60,7 @@ type NotificationFilter =
 
 type TechnicianNotification = {
   id: string;
+  backendId: string;
   type: NotificationType;
 
   title: string;
@@ -93,8 +95,6 @@ type TechnicianNotification = {
  * - Work order assigned
  * - Overdue work order
  */
-const NOTIFICATION_STORAGE_KEY =
-  "droneoptai.technician.notifications.v4";
 
 function mapApiNotification(
   value: unknown,
@@ -124,6 +124,7 @@ function mapApiNotification(
 
   return {
     id: /^NOT-/i.test(id) ? id : `NOT-${id}`,
+    backendId: id,
     type,
     title: pickString(value, ["title", "subject"], "Notification"),
     message: pickString(value, ["message", "body", "content"], ""),
@@ -135,31 +136,6 @@ function mapApiNotification(
   };
 }
 
-function loadNotifications():
-  TechnicianNotification[] {
-  try {
-    const stored =
-      localStorage.getItem(
-        NOTIFICATION_STORAGE_KEY,
-      );
-
-    if (!stored) {
-      return [];
-    }
-
-    const parsed =
-      JSON.parse(
-        stored,
-      ) as TechnicianNotification[];
-
-    return Array.isArray(parsed)
-      ? parsed
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 export function TechnicianNotificationsPage() {
   const navigate =
     useNavigate();
@@ -169,13 +145,15 @@ export function TechnicianNotificationsPage() {
 
   const markAllMutation =
     useMarkAllNotificationsReadMutation();
+  const markOneMutation = useMarkNotificationReadMutation();
+  const [readError, setReadError] = useState("");
 
   const [
     notifications,
     setNotifications,
   ] = useState<
     TechnicianNotification[]
-  >(loadNotifications);
+  >([]);
 
   const [
     filter,
@@ -199,11 +177,6 @@ export function TechnicianNotificationsPage() {
       );
 
     setNotifications(next);
-
-    localStorage.setItem(
-      NOTIFICATION_STORAGE_KEY,
-      JSON.stringify(next),
-    );
   }, [notificationsQuery.data]);
 
 
@@ -241,29 +214,20 @@ export function TechnicianNotificationsPage() {
       TechnicianNotification[],
   ) => {
     setNotifications(next);
-
-    localStorage.setItem(
-      NOTIFICATION_STORAGE_KEY,
-      JSON.stringify(next),
-    );
   };
 
-  const markAsRead = (
-    notificationId: string,
-  ) => {
-    const next =
-      notifications.map(
-        (notification) =>
-          notification.id ===
-          notificationId
-            ? {
-                ...notification,
-                unread: false,
-              }
-            : notification,
-      );
-
-    saveNotifications(next);
+  const markAsRead = async (notification: TechnicianNotification) => {
+    if (!notification.unread) return;
+    try {
+      setReadError("");
+      await markOneMutation.mutateAsync(notification.backendId);
+      // Update UI only after a successful Backend PATCH.
+      saveNotifications(notifications.map((item) =>
+        item.id === notification.id ? { ...item, unread: false } : item,
+      ));
+    } catch (error) {
+      setReadError(error instanceof Error ? error.message : "Unable to mark notification as read.");
+    }
   };
 
   const markAllAsRead = async () => {
@@ -282,14 +246,11 @@ export function TechnicianNotificationsPage() {
     saveNotifications(next);
   };
 
-  const handleViewDetail = (
-    notification:
-      TechnicianNotification,
+  const handleViewDetail = async (
+    notification: TechnicianNotification,
   ) => {
     if (notification.unread) {
-      markAsRead(
-        notification.id,
-      );
+      await markAsRead(notification);
     }
 
     /*
@@ -452,6 +413,10 @@ export function TechnicianNotificationsPage() {
       title="Notifications"
       description=""
     >
+      {readError && <div role="alert" className="mb-3 text-[13px] text-red-500">
+        {readError}
+        <button type="button" className="ml-2 underline" onClick={() => setReadError("")}>Dismiss</button>
+      </div>}
       {/* FILTERS */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">

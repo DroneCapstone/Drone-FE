@@ -6,6 +6,10 @@ import {
 
   Plus,
 
+  Pencil,
+
+  Trash2,
+
   Search,
 
   X,
@@ -83,6 +87,10 @@ import { isRecord, unwrapList } from "../api/httpClient";
 import {
 
   useCreateWorkOrderMutation,
+
+  useUpdateWorkOrderMutation,
+
+  useDeleteWorkOrderMutation,
 
   useWorkOrdersQuery,
 
@@ -410,6 +418,59 @@ export function WorkOrdersPage() {
   const createWorkOrderMutation =
 
     useCreateWorkOrderMutation();
+  const updateWorkOrderMutation = useUpdateWorkOrderMutation();
+  const deleteWorkOrderMutation = useDeleteWorkOrderMutation();
+  const [editOrder, setEditOrder] = useState<WorkOrder | null>(null);
+  const [editIssue, setEditIssue] = useState("");
+  const [writeMessage, setWriteMessage] = useState("");
+  const writeLock = useRef(false);
+
+  const editPendingOrder = (order: WorkOrder) => {
+    if (order.status !== "Pending") return;
+    setEditOrder(order);
+    setEditIssue(order.title);
+    setApiError("");
+    setWriteMessage("");
+  };
+
+  const savePendingOrder = async () => {
+    if (!editOrder || editOrder.status !== "Pending" || writeLock.current) return;
+    const issue = editIssue.trim();
+    if (!issue) {
+      setApiError("Issue description cannot be empty.");
+      return;
+    }
+    writeLock.current = true;
+    try {
+      setApiError("");
+      await updateWorkOrderMutation.mutateAsync({
+        workOrderId: editOrder.id,
+        payload: { issue_description: issue },
+      });
+      setEditOrder(null);
+      setWriteMessage(`${editOrder.id} updated in Backend.`);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to update Work Order.");
+    } finally {
+      writeLock.current = false;
+    }
+  };
+
+  const deletePendingOrder = async (order: WorkOrder) => {
+    if (order.status !== "Pending" || writeLock.current) return;
+    if (!window.confirm(`Delete ${order.id}? This removes the Work Order from Backend and cannot be undone.`)) return;
+    writeLock.current = true;
+    try {
+      setApiError("");
+      setWriteMessage("");
+      await deleteWorkOrderMutation.mutateAsync(order.id);
+      setWriteMessage(`${order.id} deleted from Backend.`);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Unable to delete Work Order.");
+    } finally {
+      writeLock.current = false;
+    }
+  };
 
 
 
@@ -1068,6 +1129,7 @@ export function WorkOrdersPage() {
 
 
 
+      {writeMessage && <div role="status" className="mb-4 rounded-md border border-[var(--tech-border)] px-4 py-3 text-[13px] text-[var(--tech-text-secondary)]">{writeMessage}</div>}
       {/* WORK ORDERS */}
 
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
@@ -1232,7 +1294,7 @@ export function WorkOrdersPage() {
 
             <div className="min-w-[1000px]">
 
-              <div className="grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_70px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+              <div className="grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_160px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
 
                 <span>Order</span>
 
@@ -1244,7 +1306,7 @@ export function WorkOrdersPage() {
 
                 <span>Created at</span>
 
-                <span />
+                <span>Actions</span>
 
               </div>
 
@@ -1258,7 +1320,7 @@ export function WorkOrdersPage() {
 
                     key={order.id}
 
-                    className="group grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_70px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0 hover:bg-[var(--tech-surface-2)]"
+                    className="group grid grid-cols-[125px_155px_minmax(240px,1fr)_145px_195px_160px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0 hover:bg-[var(--tech-surface-2)]"
 
                   >
 
@@ -1300,31 +1362,29 @@ export function WorkOrdersPage() {
 
 
 
-                    <button
-
-                      type="button"
-
-                      onClick={() =>
-
-                        navigate(
-
-                          `/technician/maintenance/work-orders/${order.id}`,
-
-                        )
-
-                      }
-
-                      className="mx-auto text-[var(--tech-subtle)] transition-colors hover:text-orange-500"
-
-                    >
-
-                      <ArrowUpRight
-
-                        size={16}
-
-                      />
-
-                    </button>
+                    <div className="flex items-center justify-center gap-3">
+                      {order.status === "Pending" && (
+                        <>
+                          <button type="button" aria-label={`Edit ${order.id}`} title="Edit issue"
+                            onClick={() => editPendingOrder(order)}
+                            disabled={updateWorkOrderMutation.isPending || deleteWorkOrderMutation.isPending}
+                            className="text-[var(--tech-subtle)] hover:text-orange-500 disabled:opacity-40">
+                            <Pencil size={16}/>
+                          </button>
+                          <button type="button" aria-label={`Delete ${order.id}`} title="Delete pending work order"
+                            onClick={() => void deletePendingOrder(order)}
+                            disabled={deleteWorkOrderMutation.isPending || updateWorkOrderMutation.isPending}
+                            className="text-[var(--tech-subtle)] hover:text-red-500 disabled:opacity-40">
+                            <Trash2 size={16}/>
+                          </button>
+                        </>
+                      )}
+                      <button type="button" aria-label={`Open ${order.id}`} title="View work order"
+                        onClick={() => navigate(`/technician/maintenance/work-orders/${order.id}`)}
+                        className="text-[var(--tech-subtle)] transition-colors hover:text-orange-500">
+                        <ArrowUpRight size={16}/>
+                      </button>
+                    </div>
 
                   </div>
 
@@ -1357,6 +1417,34 @@ export function WorkOrdersPage() {
 
 
 
+
+      {editOrder && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[560px] rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Edit {editOrder.id}</h2>
+              <button type="button" title="Close" aria-label="Close edit dialog"
+                onClick={() => setEditOrder(null)} className="text-[var(--tech-muted)] hover:text-orange-500"><X size={18}/></button>
+            </div>
+            
+            <label className="mt-5 block text-[13px] text-[var(--tech-text-secondary)]">
+         
+              <textarea value={editIssue} onChange={(event) => setEditIssue(event.target.value)} rows={4}
+                className="tech-control mt-2 w-full resize-y p-3 text-[14px]"/>
+            </label>
+            {apiError && <p role="alert" className="mt-3 text-[12px] text-red-500">{apiError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditOrder(null)}
+                className="rounded-md border border-[var(--tech-border)] px-4 py-2 text-[13px] text-[var(--tech-text-secondary)]">Cancel</button>
+              <button type="button" disabled={updateWorkOrderMutation.isPending || !editIssue.trim()}
+                onClick={() => void savePendingOrder()}
+                className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black disabled:opacity-40">
+                {updateWorkOrderMutation.isPending ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {historyOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4">
