@@ -106,7 +106,7 @@ export function HubSuppliesPage() {
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <TechnicianPageShell title="Hub supplies" description="">
+    <TechnicianPageShell title="Spare Parts" description="">
       {inventoryQuery.isError && (
         <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">
           {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load hub inventory."}
@@ -114,9 +114,7 @@ export function HubSuppliesPage() {
         </div>
       )}
 
-      <p className="mb-4 text-[12px] text-[var(--tech-muted)]">
-        View spare parts at your assigned Hub. Parts used for repairs are recorded in Work Order Detail.
-      </p>
+    
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <div className="flex flex-wrap items-center gap-3 border-b border-[var(--tech-border)] p-4">
           <div className="relative min-w-[230px] flex-1">
