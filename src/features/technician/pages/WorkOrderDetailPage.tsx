@@ -66,6 +66,12 @@ function hasMeaningfulCorrectiveAction(value: string): boolean {
   return text.length >= 10 && characters.length >= 5;
 }
 
+// Compare the exact drone model, ignoring only case and repeated whitespace.
+// A DJI Matrice part must not automatically match a DJI FlyCart model.
+function normalizeDroneModel(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
 const inspectionItems = [
   "Visual inspection of drone body",
   "Propeller and motor condition",
@@ -161,10 +167,6 @@ export function WorkOrderDetailPage() {
     ...item,
     partCategory: partDetails[index]?.data?.partCategory ?? item.partCategory,
   }));
-  const selectedInventory = inventoryParts.find(
-    (item) => String(item.id) === replacementInventoryId,
-  );
-
   useEffect(() => {
     if (order) {
       setWorkOrderStatus(
@@ -182,6 +184,23 @@ export function WorkOrderDetailPage() {
             order.droneId,
         )
       : undefined;
+
+  const workOrderDroneModel = (order?.model || fleetDrone?.model || "").trim();
+  const normalizedDroneModel = normalizeDroneModel(workOrderDroneModel);
+
+  // Show only in-stock parts whose Backend compatibility list explicitly
+  // includes this Work Order's exact drone model. Unknown compatibility is
+  // NOT treated as compatible.
+  const compatibleInventoryParts = inventoryParts.filter((item) =>
+    item.quantity > 0 &&
+    normalizedDroneModel !== "" &&
+    (item.partCategory?.compatibleDroneModels ?? []).some(
+      (model) => normalizeDroneModel(model) === normalizedDroneModel,
+    ),
+  );
+  const selectedInventory = compatibleInventoryParts.find(
+    (item) => String(item.id) === replacementInventoryId,
+  );
 
   if (loading) {
     return (
@@ -303,11 +322,10 @@ export function WorkOrderDetailPage() {
       return;
     }
 
-    const model = (order.model ?? fleetDrone?.model ?? "").trim().toLowerCase();
     const compatible = selectedInventory.partCategory?.compatibleDroneModels ?? [];
-    if (model && compatible.length > 0 &&
-        !compatible.some((value) => value.trim().toLowerCase() === model)) {
-      setReplacementFeedback("This part is not listed as compatible with the selected drone model.");
+    if (!normalizedDroneModel ||
+        !compatible.some((model) => normalizeDroneModel(model) === normalizedDroneModel)) {
+      setReplacementFeedback("This part is not verified as compatible with this Work Order's drone model.");
       return;
     }
 
@@ -499,11 +517,7 @@ export function WorkOrderDetailPage() {
             icon={ClipboardCheck}
             title="Inspection"
           >
-            <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-              Complete each inspection
-              item before closing the
-              work order.
-            </p>
+           
 
             {order.batteryId && (
               <div className="mb-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-3 py-2.5">
@@ -592,11 +606,7 @@ export function WorkOrderDetailPage() {
             icon={Wrench}
             title="Corrective action"
           >
-            <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-              Record the maintenance
-              or corrective action
-              performed on the drone.
-            </p>
+            
 
             <label className="mb-3 block text-[13px] text-[var(--tech-text-secondary)]">
               Corrective action type
@@ -616,10 +626,7 @@ export function WorkOrderDetailPage() {
 
             {correctiveActionMode === "replace" && (
               <div className="mb-4 space-y-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-3">
-                <p className="text-[12px] text-[var(--tech-muted)]">
-                  Select the spare part and quantity actually replaced. Confirming will immediately
-                  deduct stock at your assigned Hub; completing this Work Order will not deduct it again.
-                </p>
+               
                 {inventoryQuery.isError && (
                   <p role="alert" className="text-[12px] text-red-500">
                     {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load parts."}
@@ -631,7 +638,7 @@ export function WorkOrderDetailPage() {
                   Part in Hub inventory
                   <select
                     className="tech-control mt-1 h-10 w-full px-3"
-                    value={replacementInventoryId}
+                    value={selectedInventory ? replacementInventoryId : ""}
                     onChange={(event) => {
                       setReplacementInventoryId(event.target.value);
                       setReplacementQuantity("1");
@@ -639,14 +646,25 @@ export function WorkOrderDetailPage() {
                     }}
                     disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending}
                   >
-                    <option value="">Select a part...</option>
-                    {inventoryParts.filter((item) => item.quantity > 0).map((item) => (
+                    <option value="">Select a part</option>
+                    {compatibleInventoryParts.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.partCategory?.name ?? `Category #${item.partCategoryId}`} · #{item.id} · {item.quantity} available
                       </option>
                     ))}
                   </select>
                 </label>
+                <p className="text-[11px] text-[var(--tech-muted)]">
+                  {workOrderDroneModel
+                    ? `Showing parts compatible with: ${workOrderDroneModel}`
+                    : "Drone model unavailable. Parts cannot be selected until the model is known."}
+                </p>
+                {workOrderDroneModel && compatibleInventoryParts.length === 0 &&
+                  !inventoryQuery.isPending && !partDetails.some((query) => query.isPending) && (
+                    <p className="text-[12px] text-[var(--tech-muted)]">
+                      No in-stock parts registered as compatible with this model at your Hub.
+                    </p>
+                  )}
                 <label className="block text-[12px] text-[var(--tech-text-secondary)]">
                   Quantity to replace
                   <input
@@ -732,11 +750,7 @@ export function WorkOrderDetailPage() {
             icon={Check}
             title="Update drone status"
           >
-            <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-              Select the resulting
-              technical status after
-              maintenance.
-            </p>
+            
 
             <select
               value={droneStatus}
