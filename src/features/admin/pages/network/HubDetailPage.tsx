@@ -34,12 +34,12 @@ export function HubDetailPage() {
   const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleString('en-GB') : '—';
 
   return <AdminPageShell title={hub?.name ?? `Hub ${hubId ?? ''}`} description="" actions={hub ? <StatusBadge tone={hub.status?.toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{hub.status ?? '—'}</StatusBadge> : undefined}>
-    <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/hubs"><ArrowLeft size={15}/>Back to Hubs</Link>
-    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Hub Detail from Backend…</p>}
+    <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/hubs"><ArrowLeft size={15} />Back to Hubs</Link>
+    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Hub Detail…</p>}
     {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
     {hub && <div className="admin-hub-detail">
       <section className="admin-hub-section" aria-labelledby="hub-information">
-        <h2 id="hub-information" className="admin-hub-section-title"><MapPin size={17} aria-hidden="true"/>Hub information</h2>
+        <h2 id="hub-information" className="admin-hub-section-title"><MapPin size={17} aria-hidden="true" />Hub information</h2>
         <div className="admin-hub-info-grid">
           <div className="admin-hub-info-column">
             <div className="admin-hub-info-row"><span className="admin-hub-info-label">Address</span><strong>{hub.address || '—'}</strong></div>
@@ -50,12 +50,12 @@ export function HubDetailPage() {
             <div className="admin-hub-info-row"><span className="admin-hub-info-label">Last updated</span><strong>{dateLabel}</strong></div>
           </div>
         </div>
-        <div className="admin-hub-technician-row"><UsersRound size={17} aria-hidden="true"/><span className="admin-hub-technician-label">Assigned technicians</span>
+        <div className="admin-hub-technician-row"><UsersRound size={17} aria-hidden="true" /><span className="admin-hub-technician-label">Assigned technicians</span>
           <div className="admin-hub-technician-person">{technicians.length ? technicians.map((t) => <span key={t.id}><strong>{t.full_name}</strong> · {t.email} </span>) : <span className="admin-hub-technician-email">Not assigned</span>}</div>
         </div>
       </section>
       <section className="admin-hub-section" aria-labelledby="hub-assets">
-        <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true"/>Assigned assets</h2>
+        <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Assigned assets</h2>
           <div className="admin-hub-switch" role="tablist" aria-label="Assigned assets">
             <button type="button" role="tab" aria-selected={assetTab === 'drones'} className={assetTab === 'drones' ? 'is-active' : ''} onClick={() => setAssetTab('drones')}>Drones ({drones.length})</button>
             <button type="button" role="tab" aria-selected={assetTab === 'batteries'} className={assetTab === 'batteries' ? 'is-active' : ''} onClick={() => setAssetTab('batteries')}>Batteries ({batteries.length})</button>
@@ -67,7 +67,7 @@ export function HubDetailPage() {
         </tbody></table></div>
       </section>
       <section className="admin-hub-section" aria-labelledby="hub-spareparts">
-        <h2 id="hub-spareparts" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true"/>Spare parts at this Hub</h2>
+        <h2 id="hub-spareparts" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Spare parts at this Hub</h2>
         <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Part</th><th>Quantity</th><th>Minimum threshold</th><th>Stock alert</th></tr></thead><tbody>
           {spareStock.map((part) => <tr key={part.id}><td><strong>{part.part_name}</strong></td><td>{part.quantity}</td><td>{part.min_stock_threshold}</td><td>{part.is_low_stock ? 'Low stock' : 'Normal'}</td></tr>)}
           {spareStock.length === 0 && <tr><td colSpan={4}>No spare parts registered for this Hub.</td></tr>}

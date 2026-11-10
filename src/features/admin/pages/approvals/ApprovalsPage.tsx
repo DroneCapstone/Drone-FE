@@ -297,9 +297,9 @@ export function ApprovalsPage() {
 
   const workOrderId = (request as (ReplacementRequest & { workOrderId?: string }) | undefined)?.workOrderId;
 
-  return <AdminPageShell title="Replacement Records" description="Review Backend Spare Part requests and separately track demo Battery supplies.">
+  return <AdminPageShell title="Replacement Records" description="">
     <div className="mb-5"><BackendPartsRequests /></div>
-    <p className="mb-3 text-xs text-muted-foreground">Battery replacement records below remain local demo data until BE provides a matching battery supply workflow.</p>
+    {/* <p className="mb-3 text-xs text-muted-foreground">Battery replacement records below remain local demo data until BE provides a matching battery supply workflow.</p> */}
 
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
 
