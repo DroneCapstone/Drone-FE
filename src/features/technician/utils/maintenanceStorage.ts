@@ -364,7 +364,7 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
         ? maintenanceDisplayId("BAT", rawBatteryId, 3)
         : undefined;
     })(),
-    title: pickString(value, ["title", "issue_description", "task", "description"], "Maintenance work order"),
+    title: pickString(value, ["issue_description", "title", "task", "description"], "Maintenance work order"),
     priority: normalizeApiPriority(
       pickString(value, ["priority"], "Medium"),
     ),
@@ -540,9 +540,9 @@ export async function updateWorkOrderOnServer(
   workOrderId: string,
   payload: Record<string, unknown>,
 ) {
-  const result = await updateWorkOrderApi(workOrderId, payload);
-  await refreshWorkOrdersFromApi();
-  return result;
+  // The PUT is the authoritative write. React Query invalidates the list
+  // separately; a failed follow-up GET must not mark the PUT as failed.
+  return updateWorkOrderApi(workOrderId, payload);
 }
 
 export async function updateWorkOrderInspectionOnServer(
@@ -649,7 +649,6 @@ export async function refreshMaintenanceRecordsFromApi(
 export async function deleteWorkOrderOnServer(
   workOrderId: string,
 ) {
-  const result = await deleteWorkOrderApi(workOrderId);
-  await refreshWorkOrdersFromApi();
-  return result;
+  // No follow-up GET here: DELETE may already have succeeded even if GET fails.
+  return deleteWorkOrderApi(workOrderId);
 }

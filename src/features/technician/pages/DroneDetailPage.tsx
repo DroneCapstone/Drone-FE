@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { type FleetDrone } from "../utils/fleetStorage";
 import {
   useDroneDetailQuery,
+  useDroneFlightHistoryQuery,
   useDroneMaintenanceHistoryQuery,
   useFleetQuery,
 } from "../hooks/useFleetQueries";
@@ -117,6 +118,7 @@ export function DroneDetailPage() {
 
   const droneQuery = useDroneDetailQuery(droneId);
   const fleetQuery = useFleetQuery();
+  const flightHistoryQuery = useDroneFlightHistoryQuery(droneId, tab === "flight");
   const historyQuery = useDroneMaintenanceHistoryQuery(droneId);
   const recordsQuery = useMaintenanceRecordsQuery(droneId);
   const scheduleQuery = useDroneMaintenanceSchedulesQuery(droneId);
@@ -248,14 +250,43 @@ export function DroneDetailPage() {
 
       {tab === "flight" && <Card className={PANEL}><CardContent className="p-6">
         <h2 className={`text-[18px] font-semibold ${TEXT}`}>Flight history</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
-          <InfoItem label="Last flight time" value={formatDate(parseApiDate(drone.lastFlightAt))} />
-          <InfoItem label="Last flight / mission reference" value={display(drone.lastFlight)} />
-        </div>
-        <div className={`mt-5 rounded-md border border-dashed border-[var(--tech-border)] px-4 py-5 text-[13px] ${MUTED}`}>
-          A per-drone flight history endpoint is not available in the supplied Technician API contract.
-          This tab only displays last-flight fields actually returned by the drone API; it does not invent flight records.
-        </div>
+        <p className={`mt-1 text-[13px] ${MUTED}`}>
+          Flights returned by Backend for {drone.id}.
+        </p>
+        {flightHistoryQuery.isPending ? (
+          <p role="status" className={`mt-6 text-[13px] ${MUTED}`}>Loading flight history...</p>
+        ) : flightHistoryQuery.isError ? (
+          <div role="alert" className="mt-5 text-[13px] text-red-500">
+            {flightHistoryQuery.error instanceof Error ? flightHistoryQuery.error.message : "Unable to load flight history."}
+            <button type="button" onClick={() => void flightHistoryQuery.refetch()}
+              className="ml-3 font-semibold underline">Retry</button>
+          </div>
+        ) : (flightHistoryQuery.data ?? []).length === 0 ? (
+          <p className={`mt-6 rounded-md border border-dashed border-[var(--tech-border)] p-5 text-center text-[13px] ${MUTED}`}>
+            No flight history recorded for this drone.
+          </p>
+        ) : (
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-[13px]">
+              <thead className="border-b border-[var(--tech-border)] text-[var(--tech-text)]">
+                <tr>{["Mission / Flight", "Order", "Route", "Departed at", "Arrived at", "Status"].map((column) =>
+                  <th key={column} className="px-3 py-3 font-semibold">{column}</th>)}</tr>
+              </thead>
+              <tbody>
+                {(flightHistoryQuery.data ?? []).map((flight) => (
+                  <tr key={flight.id} className="border-b border-[var(--tech-border)] last:border-0">
+                    <td className={`px-3 py-3 font-medium ${TEXT}`}>{flight.id}</td>
+                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.orderId}</td>
+                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.route}</td>
+                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.departedAt ? formatDate(parseApiDate(flight.departedAt)) : EMPTY}</td>
+                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.arrivedAt ? formatDate(parseApiDate(flight.arrivedAt)) : EMPTY}</td>
+                    <td className={`px-3 py-3 ${SECONDARY}`}>{flight.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent></Card>}
 
       {tab === "maintenance" && <div className="space-y-5">
