@@ -53,10 +53,9 @@ export const adminNavigation: AdminNavigationItem[] = [
       { label: "Financial Overview", path: "/admin/payments/financial" },
     ],
   },
-  { label: "Audit & Logs", path: "/admin/audit", icon: ScrollText, children: [
-    { label: "Audit Logs", path: "/admin/audit" },
-    { label: "Activity Logs", path: "/admin/audit/activity" },
-    { label: "System Logs", path: "/admin/audit/system" },
+  { label: "Logs", path: "/admin/logs/activity", icon: ScrollText, children: [
+    { label: "Activity Logs", path: "/admin/logs/activity" },
+    { label: "System Logs", path: "/admin/logs/system" },
   ] },
   { label: "System Settings", path: "/admin/settings", icon: Settings },
   { label: "Profile", path: "/admin/profile", icon: UserRound },

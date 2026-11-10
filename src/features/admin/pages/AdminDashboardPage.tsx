@@ -47,30 +47,30 @@ export function AdminDashboardPage() {
     {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard from Backend…</p>}
     {data && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminSummaryCard label="Revenue today" value={money(data.revenue.today)} note="Backend recorded revenue" icon={Wallet}/>
-        <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Backend recorded revenue" icon={Activity}/>
-        <AdminSummaryCard label="Paid orders" value={data.revenue.paid_orders} note="Payment confirmations" icon={CircleCheck}/>
-        <AdminSummaryCard label="Pending payments" value={money(data.revenue.pending_payments)} note="Unpaid amount" icon={Wallet}/>
+        <AdminSummaryCard label="Revenue today" value={money(data.revenue.today)} note="Backend recorded revenue" icon={Wallet} />
+        <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Backend recorded revenue" icon={Activity} />
+        <AdminSummaryCard label="Paid orders" value={data.revenue.paid_orders} note="Payment confirmations" icon={CircleCheck} />
+        <AdminSummaryCard label="Pending payments" value={money(data.revenue.pending_payments)} note="Unpaid amount" icon={Wallet} />
       </div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminSummaryCard label="Total users" value={data.users.total} note={`${data.users.active} active · ${data.users.inactive} inactive`} icon={UsersRound}/>
-        <AdminSummaryCard label="Total drones" value={data.fleet.total_drones} note="Registered fleet" icon={Plane}/>
-        <AdminSummaryCard label="Total batteries" value={data.batteries.total} note="Registered batteries" icon={BatteryCharging}/>
-        <AdminSummaryCard label="Open incidents" value={data.alerts.open_incidents} note="Operational incidents" icon={Bell}/>
+        <AdminSummaryCard label="Total users" value={data.users.total} note={`${data.users.active} active · ${data.users.inactive} inactive`} icon={UsersRound} />
+        <AdminSummaryCard label="Total drones" value={data.fleet.total_drones} note="Registered fleet" icon={Plane} />
+        <AdminSummaryCard label="Total batteries" value={data.batteries.total} note="Registered batteries" icon={BatteryCharging} />
+        <AdminSummaryCard label="Open incidents" value={data.alerts.open_incidents} note="Operational incidents" icon={Bell} />
       </div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Mission status</h2><StatusRows items={data.missions.by_status}/><p className="mt-3 text-xs text-[var(--admin-muted)]">Total missions: {data.missions.total} · Success rate: {data.missions.success_rate}%</p></div></OperatorPanel>
-        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Fleet status</h2><StatusRows items={data.fleet.by_status}/><p className="mt-3 text-xs text-[var(--admin-muted)]">Average utilization: {data.fleet.avg_utilization_pct}%</p></div></OperatorPanel>
-        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Battery status</h2><StatusRows items={data.batteries.by_status}/><p className="mt-3 text-xs text-[var(--admin-muted)]">Average charge: {data.batteries.avg_charge_pct}%</p></div></OperatorPanel>
+        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Mission status</h2><StatusRows items={data.missions.by_status} /><p className="mt-3 text-xs text-[var(--admin-muted)]">Total missions: {data.missions.total} · Success rate: {data.missions.success_rate}%</p></div></OperatorPanel>
+        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Fleet status</h2><StatusRows items={data.fleet.by_status} /><p className="mt-3 text-xs text-[var(--admin-muted)]">Average utilization: {data.fleet.avg_utilization_pct}%</p></div></OperatorPanel>
+        <OperatorPanel><div className="p-4"><h2 className="mb-3 font-semibold">Battery status</h2><StatusRows items={data.batteries.by_status} /><p className="mt-3 text-xs text-[var(--admin-muted)]">Average charge: {data.batteries.avg_charge_pct}%</p></div></OperatorPanel>
       </div>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <AdminSummaryCard label="Maintenance alerts" value={data.alerts.pending_maintenance_alerts} note="Backend alert count" icon={Wrench}/>
-        <AdminSummaryCard label="AI predicted missions" value={data.ai.missions_with_prediction} note="Energy model coverage" icon={Activity}/>
-        <AdminSummaryCard label="Audit events" value={data.alerts.total_audit_logs} note="Recorded system events" icon={Bell}/>
+        <AdminSummaryCard label="Maintenance alerts" value={data.alerts.pending_maintenance_alerts} note="Backend alert count" icon={Wrench} />
+        <AdminSummaryCard label="AI predicted missions" value={data.ai.missions_with_prediction} note="Energy model coverage" icon={Activity} />
+        <AdminSummaryCard label="Audit events" value={data.alerts.total_audit_logs} note="Recorded system events" icon={Bell} />
       </div>
       <div className="mb-3 flex justify-between"><h2 className="font-semibold">Hub network</h2><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
-      <HubDroneMap hubs={hubs} drones={drones}/>
+      <HubDroneMap hubs={hubs} drones={drones} />
     </>}
-    <p className="mt-4 text-xs text-muted-foreground">Revenue metrics are provided by the Backend Dashboard endpoint. Inventory acquisition costs are not subtracted here until the Financial Overview API is finalized.</p>
+    {/* <p className="mt-4 text-xs text-muted-foreground">Revenue metrics are provided by the Backend Dashboard endpoint. Inventory acquisition costs are not subtracted here until the Financial Overview API is finalized.</p> */}
   </AdminPageShell>;
 }
