@@ -306,6 +306,16 @@ export function WorkOrderDetailPage() {
 
   const replacementLock = useRef(false);
 
+  // A confirmed replacement must not deduct stock again for the same Work Order.
+  // Include the creation date so an ID reused after a database reset is a new order.
+  const replacementStorageKey = order
+    ? `technician:replacement-confirmed:${order.id}:${order.droneId}:${order.createdAt}`
+    : null;
+  const [confirmedReplacementKey, setConfirmedReplacementKey] = useState<string | null>(null);
+  const replacementAlreadyConfirmed =
+    recordedReplacements.length > 0 ||
+    (replacementStorageKey !== null && confirmedReplacementKey === replacementStorageKey);
+
 
 
   const partDetails = useQueries({
@@ -349,6 +359,29 @@ export function WorkOrderDetailPage() {
     }
 
   }, [order]);
+
+  // Restore the single confirmed replacement after a refresh or reopening the page.
+  // The recorded note is also needed when completing the Work Order.
+  useEffect(() => {
+    if (!replacementStorageKey) return;
+    setConfirmedReplacementKey(null);
+    setRecordedReplacements([]);
+    try {
+      const storedNote = window.localStorage.getItem(replacementStorageKey);
+      if (!storedNote) return;
+      setConfirmedReplacementKey(replacementStorageKey);
+      setRecordedReplacements([storedNote]);
+      setCorrectiveAction((current) =>
+        current.includes(storedNote)
+          ? current
+          : [current.trim(), storedNote].filter(Boolean).join("\n"),
+      );
+      setCorrectiveActionMode("replace");
+      setReplacementFeedback("Replacement already confirmed. Stock will not be deducted again.");
+    } catch {
+      // Storage can be disabled. In that case the in-page confirmation lock remains.
+    }
+  }, [replacementStorageKey]);
 
 
 
@@ -626,9 +659,16 @@ export function WorkOrderDetailPage() {
 
   const confirmPartReplacement = async () => {
 
-    if (replacementLock.current || usePartsMutation.isPending || inventoryQuery.isFetching ||
+    if (replacementLock.current || replacementAlreadyConfirmed || usePartsMutation.isPending || inventoryQuery.isFetching ||
 
         workOrderStatus !== "In Progress" || !selectedInventory) return;
+
+    // Also guard against a second click after reload before the effect runs.
+    try {
+      if (replacementStorageKey && window.localStorage.getItem(replacementStorageKey)) return;
+    } catch {
+      // The React state still blocks repeated submissions within this page.
+    }
 
 
 
@@ -680,7 +720,16 @@ export function WorkOrderDetailPage() {
 
       const note = `Replaced ${quantity} x ${partName}`;
 
-      setRecordedReplacements((current) => [...current, note]);
+      // Lock immediately after success; persist for refresh/navigation on this browser.
+      if (replacementStorageKey) {
+        setConfirmedReplacementKey(replacementStorageKey);
+        try {
+          window.localStorage.setItem(replacementStorageKey, note);
+        } catch {
+          // State still prevents another confirmation until the page is reloaded.
+        }
+      }
+      setRecordedReplacements([note]);
 
       setCorrectiveAction((current) => [current.trim(), note].filter(Boolean).join("\n"));
 
@@ -688,7 +737,7 @@ export function WorkOrderDetailPage() {
 
       setReplacementFeedback(`Inventory updated: ${quantity} part(s) issued. Remaining: ${updated.quantity}.`);
 
-      // Refresh for further replacements; not part of the confirmed write.
+      // Keep inventory figures up-to-date; no further replacement is allowed for this Work Order.
 
       void inventoryQuery.refetch();
 
@@ -1168,15 +1217,7 @@ export function WorkOrderDetailPage() {
 
           >
 
-            <p className="mb-3 text-[13px] text-[var(--tech-muted)]">
-
-              Record the technical
-
-              findings identified
-
-              during inspection (optional).
-
-            </p>
+           
 
 
 
@@ -1290,7 +1331,7 @@ export function WorkOrderDetailPage() {
 
                     }}
 
-                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending}
+                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending || replacementAlreadyConfirmed}
 
                   >
 
@@ -1390,7 +1431,7 @@ export function WorkOrderDetailPage() {
 
                     }}
 
-                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending}
+                    disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending || replacementAlreadyConfirmed}
 
                   />
 
@@ -1412,7 +1453,7 @@ export function WorkOrderDetailPage() {
 
                   className="inline-flex h-9 items-center justify-center rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
 
-                  disabled={workOrderStatus !== "In Progress" || usePartsMutation.isPending ||
+                  disabled={replacementAlreadyConfirmed || workOrderStatus !== "In Progress" || usePartsMutation.isPending ||
 
                     inventoryQuery.isFetching || !selectedInventory || !Number.isSafeInteger(Number(replacementQuantity)) ||
 
@@ -1424,23 +1465,15 @@ export function WorkOrderDetailPage() {
 
                 >
 
-                  {usePartsMutation.isPending ? "Updating inventory..." : "Confirm replacement"}
+                  {replacementAlreadyConfirmed
+                    ? "Replacement confirmed"
+                    : usePartsMutation.isPending
+                      ? "Updating inventory..."
+                      : "Confirm replacement"}
 
                 </button>
 
-                {replacementFeedback && <p role="status" className="text-[12px] text-[var(--tech-text-secondary)]">{replacementFeedback}</p>}
-
-                {recordedReplacements.length > 0 && (
-
-                  <div className="text-[12px] text-emerald-500">
-
-                    <p className="font-medium">Parts already issued in this session:</p>
-
-                    {recordedReplacements.map((note, index) => <p key={index}>• {note}</p>)}
-
-                  </div>
-
-                )}
+                
 
               </div>
 
