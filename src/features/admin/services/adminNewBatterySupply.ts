@@ -1,6 +1,7 @@
 /**
- * Admin-controlled NEW BATTERIES: uniquely serialized units purchased/received
- * but not yet supplied to any Hub. No warehouse, Hub stock, or transfer flow.
+ * Admin-controlled NEW BATTERIES: uniquely identified units registered in a
+ * demo-only, unassigned inventory. Physical manufacturer serials are optional.
+ * No real supplier purchase, Hub transfer, or Backend mutation occurs here.
  * Records share Admin Battery Management's existing battery storage key: a
  * supplied unit moves to the Hub list without creating another Battery ID.
  */
@@ -31,8 +32,14 @@ export function getNewBatteryReferenceUnitCostVnd(model: string): number {
 }
 
 function nextAdminBatteryId(batteries: AdminBattery[]): string {
-  const max = batteries.reduce((value, battery) => {
-    const match = /^BAT-(\d+)$/.exec(battery.id);
+  // Never reuse a removed Battery ID: replacement/work-order references might
+  // still point to it. No auto-generated manufacturer serials are involved.
+  const allIds = [
+    ...batteries.map((battery) => battery.id),
+    ...getNewBatteryRemovalHistory().map((item) => item.batteryId),
+  ];
+  const max = allIds.reduce((value, id) => {
+    const match = /^BAT-(\d+)$/.exec(id);
     return match ? Math.max(value, Number(match[1])) : value;
   }, 0);
   return `BAT-${String(max + 1).padStart(3, '0')}`;
@@ -67,40 +74,52 @@ function commit(entries: Array<[string, unknown]>) {
   window.dispatchEvent(new Event('admin-data-updated'));
 }
 
-/** Register 1-30 physically received new batteries; each gets its own ID.
- * Model and serial must be real values. Charge/SOH defaults are demo metadata
- * only: units remain in MAINTENANCE / Pending Verification until Technician.
- * A reference acquisition cost is recorded once per batch; no bank payment.
+/**
+ * Demo-only registration: Add Quantity of a battery MODEL, not one record per
+ * manufacturer serial. Each unit still receives a unique internal Battery ID.
+ * Optional serials are supplied one per line in creation order; remaining units
+ * keep an empty serialNumber ("not provided") rather than a fictitious serial.
+ *
+ * Writes units and exactly one reference acquisition cost per registration
+ * batch with localStorage rollback on write errors. No Backend API is called.
  */
 export function registerAdminNewBatteries(
   model: string,
-  serialNumbers: string[],
+  quantity: number,
+  serialNumbers: string[] = [],
 ): AdminBattery[] {
   const batteries = getAdminBatteries();
   const template = batteries.find((battery) => battery.model === model);
   if (!template) throw new Error('Choose an existing supported battery model.');
-  const serials = serialNumbers.map((s) => s.trim()).filter(Boolean);
-  if (serials.length < 1 || serials.length > 30)
-    throw new Error('Enter 1 to 30 serial numbers, one per line.');
-  const keys = serials.map((s) => s.toLocaleLowerCase());
-  if (new Set(keys).size !== keys.length)
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 30)
+    throw new Error('Quantity must be a whole number between 1 and 30.');
+
+  const provided = serialNumbers.map((serial) => serial.trim());
+  while (provided.length && !provided[provided.length - 1]) provided.pop();
+  if (provided.length > quantity)
+    throw new Error('The number of serial lines cannot exceed Quantity.');
+  const normalized = provided.filter(Boolean).map((serial) => serial.toLocaleLowerCase());
+  if (new Set(normalized).size !== normalized.length)
     throw new Error('Duplicate serial numbers in this batch.');
-  const existingSerials = new Set(batteries.map((battery) => battery.serialNumber.trim().toLocaleLowerCase()));
-  if (keys.some((key) => existingSerials.has(key)))
+  const existingSerials = new Set(batteries.map((battery) => battery.serialNumber.trim().toLocaleLowerCase()).filter(Boolean));
+  if (normalized.some((serial) => existingSerials.has(serial)))
     throw new Error('A serial number is already registered in the system.');
+
   const unitPrice = getNewBatteryReferenceUnitCostVnd(model);
-  if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0 || !Number.isSafeInteger(unitPrice * serials.length))
-    throw new Error('Configure the model reference unit price before registering new batteries.');
+  if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0 || !Number.isSafeInteger(unitPrice * quantity))
+    throw new Error('Configure a valid reference unit price for this battery model first.');
 
   const date = new Date().toISOString();
   const working = [...batteries];
-  const created: AdminBattery[] = serials.map((serialNumber) => {
+  const created: AdminBattery[] = [];
+  for (let index = 0; index < quantity; index++) {
     const battery: AdminBattery = {
-      id: nextAdminBatteryId(working), model, serialNumber,
-      hubId: '', // NO Hub assignment until Confirm supply for an approved request.
+      id: nextAdminBatteryId(working), model,
+      serialNumber: provided[index] ?? '', // Empty is intentional; serial is optional.
+      hubId: '', // Not assigned to a Hub until Admin explicitly supplies the unit.
       operationalStatus: 'MAINTENANCE', administrativeStatus: 'ACTIVE',
       inspectionPending: true, replacementSupplyState: 'AVAILABLE',
-      adminReceivedAt: date, chargeLevelPct: 0, // actual charge unknown until checked
+      adminReceivedAt: date, chargeLevelPct: 0, // Unknown until technical check.
       designCapacityMah: template.designCapacityMah,
       designEnergyWh: template.designEnergyWh,
       fullChargeCapacityMah: template.designCapacityMah,
@@ -109,18 +128,20 @@ export function registerAdminNewBatteries(
       createdAt: date, updatedAt: date,
     };
     working.push(battery);
-    return battery;
-  });
-  const entries: Array<[string, unknown]> = [[BATTERY_KEY, [...created, ...batteries]]];
-  const total = unitPrice * created.length;
-  entries.push([EXPENSE_KEY, [{
+    created.push(battery);
+  }
+  const total = unitPrice * quantity;
+  const expense = {
     id: `EXP-NEW-BAT-${created[0].id}-${Date.now()}`,
     date, category: 'BATTERY', amountVnd: total, recordType: 'RECORDED',
     sourceId: created.map((battery) => battery.id).join(', '),
-    quantity: created.length, unitCostVnd: unitPrice,
-    description: `Recorded acquisition: ${created.length} new ${model} batteries (${created.map((battery) => battery.id).join(', ')}) at ${unitPrice} VND/unit; no bank payment`,
-  }, ...readExpenses()]]);
-  commit(entries);
+    quantity, unitCostVnd: unitPrice,
+    description: `Recorded acquisition: ${quantity} new ${model} batteries (${created.map((battery) => battery.id).join(', ')}) at ${unitPrice} VND/unit; no bank payment`,
+  };
+  commit([
+    [BATTERY_KEY, [...created, ...batteries]],
+    [EXPENSE_KEY, [expense, ...readExpenses()]],
+  ]);
   return created;
 }
 
@@ -190,8 +211,7 @@ export function editAvailableNewBattery(id: string, model: string, serial: strin
   const template = items.find((battery) => battery.model === model);
   if (!template) throw new Error('Choose a supported battery model.');
   const cleaned = serial.trim();
-  if (!cleaned) throw new Error('Serial number is required.');
-  if (items.some((battery) => battery.id !== id && battery.serialNumber.trim().toLowerCase() === cleaned.toLowerCase()))
+  if (cleaned && items.some((battery) => battery.id !== id && battery.serialNumber.trim().toLowerCase() === cleaned.toLowerCase()))
     throw new Error('This serial number is already registered.');
   const updated = items.map((battery) => battery.id !== id ? battery : {
     ...battery, model, serialNumber: cleaned,
