@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
@@ -40,7 +41,7 @@ export function OrderDetailPage() {
     return (
       <OrderPageShell active="/operator/orders/all">
         <OperatorPanel>
-          <div className="operator-empty-state">Loading Order…</div>
+          <OperatorLoadingState label="Loading order…" />
         </OperatorPanel>
       </OrderPageShell>
     );

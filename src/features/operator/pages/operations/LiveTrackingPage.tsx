@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
@@ -215,7 +216,7 @@ export function LiveTrackingPage() {
                 if (matching) { setSelectedDroneId(matching.id); window.requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })); }
               }}
             />
-            {isLoading && <div className="live-3d-overlay">Loading live tracking…</div>}
+            {isLoading && <div className="live-3d-loading"><OperatorLoadingState label="Loading live tracking…" /></div>}
             {error && <div className="live-3d-api-error" role="alert">Live tracking request failed: {error instanceof Error ? error.message : 'Unknown API error'}</div>}
             {!isLoading && !error && liveDrone.length === 0 && <div className="live-3d-empty">No aircraft in flight · Awaiting Technician dispatch</div>}
           </div>

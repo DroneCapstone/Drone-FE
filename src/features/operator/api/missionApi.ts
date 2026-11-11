@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -704,6 +704,26 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
   };
 }
 
+/** Only finite, numeric SHAP values are plotted; absent/null values stay absent. */
+function mapRouteShapValues(raw: unknown): Record<string, number> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const numeric = Object.entries(raw).filter((entry): entry is [string, number] =>
+    typeof entry[1] === 'number' && Number.isFinite(entry[1]));
+  return numeric.length ? Object.fromEntries(numeric) : undefined;
+}
+
+function mapRouteAiExplanation(raw: unknown): RouteAiExplanation | undefined {
+  if (!isRecord(raw)) return undefined;
+  return {
+    flightSpeedMps: pickOptionalNumber(raw, ['flight_speed_mps', 'flightSpeedMps']),
+    flightSpeedKmh: pickOptionalNumber(raw, ['flight_speed_kmh', 'flightSpeedKmh']),
+    totalEnergyWh: pickOptionalNumber(raw, ['total_energy_wh', 'totalEnergyWh']),
+    summary: pickString(raw, ['summary']) || undefined,
+    featureContributions: pickArray(raw, ['feature_contributions', 'featureContributions']),
+    legsBreakdown: pickArray(raw, ['legs_breakdown', 'legsBreakdown']),
+  };
+}
+
 function mapRouteOption(raw: unknown, index: number): RouteOption {
   const record = asRecord(raw);
   const legRecords = pickArray(record, ['legs_detail', 'legsDetail', 'legs', 'route_legs', 'routeLegs']);
@@ -744,7 +764,13 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
-    infeasibleReason: pickString(record, ['unselectable_reason', 'unselectableReason', 'infeasible_reason', 'infeasibleReason']) || undefined,
+    isSelectable: pickOptionalBoolean(record, ['is_selectable', 'isSelectable']),
+    infeasibleReason: pickString(record, ['infeasible_reason', 'infeasibleReason']) || undefined,
+    unselectableReason: pickString(record, ['unselectable_reason', 'unselectableReason']) || undefined,
+    shapValues: mapRouteShapValues(record.shap_values ?? record.shapValues),
+    flightSpeedMps: pickOptionalNumber(record, ['flight_speed_mps', 'flightSpeedMps']),
+    speedProfileLabel: pickString(record, ['speed_profile_label', 'speedProfileLabel']) || undefined,
+    aiExplanation: mapRouteAiExplanation(record.ai_explanation ?? record.aiExplanation),
     legs: legRecords.map(mapRouteLeg),
     relayBatteryPlan: (detailedPlan.length > 0 ? detailedPlan : relayBatteryStatus).map(mapRelayBattery),
     rawRelayBatteryStatus: relayBatteryStatus,
@@ -856,13 +882,13 @@ function mapMissionCollection(items: unknown[]): Mission[] {
   }
   if (skippedStatuses.size > 0) {
     console.warn(
-      '[Operator] Skipped Mission records with unsupported BE statuses:',
+      '[Operator] Skipped mission records with unsupported statuses:',
       Array.from(skippedStatuses).join(', '),
-      '— ask BE to migrate/normalize those statuses.',
+      '— these statuses need review.',
     );
   }
   if (items.length > 0 && missions.length === 0 && skippedStatuses.size > 0) {
-    throw new Error(`No Missions with supported statuses. BE returned: ${Array.from(skippedStatuses).join(', ')}`);
+    throw new Error(`No missions with supported statuses were found: ${Array.from(skippedStatuses).join(', ')}`);
   }
   return missions;
 }
@@ -1133,10 +1159,28 @@ export async function analyzeMissionPlanningApi(
   }));
 
   const rawBundleIds = root.bundledOrderIds ?? root.bundled_order_ids;
+  const analyzedBundleIds = Array.isArray(rawBundleIds)
+    ? rawBundleIds.filter((id): id is string => typeof id === 'string')
+    : undefined;
+  const analyzedTotalPayloadKg = pickOptionalNumber(root, ['totalPayloadKg', 'total_payload_kg']);
+  if (input.bundledOrderIds?.length) {
+    // A single-order energy estimate must not be reused for multiple packages.
+    // Swagger Analyze includes both fields; a missing/mismatched response is unsafe.
+    const expectedIds = new Set(input.bundledOrderIds);
+    const confirmed = analyzedBundleIds && analyzedBundleIds.length === expectedIds.size &&
+      new Set(analyzedBundleIds).size === expectedIds.size &&
+      analyzedBundleIds.every((id) => expectedIds.has(id));
+    if (!confirmed || analyzedTotalPayloadKg === undefined || analyzedTotalPayloadKg <= 0) {
+      throw new OperatorApiError(
+        'The selected order group and total payload could not be verified. Please analyze again.',
+        502, payload,
+      );
+    }
+  }
   return {
     routes,
-    totalPayloadKg: pickOptionalNumber(root, ['totalPayloadKg', 'total_payload_kg']),
-    bundledOrderIds: Array.isArray(rawBundleIds) ? rawBundleIds.filter((id): id is string => typeof id === 'string') : undefined,
+    totalPayloadKg: analyzedTotalPayloadKg,
+    bundledOrderIds: analyzedBundleIds,
     raw: payload,
   };
 }

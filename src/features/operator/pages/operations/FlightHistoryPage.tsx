@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useQueries } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
@@ -147,7 +148,7 @@ export function FlightHistoryPage() {
         <section className="fh-card fh-table-card">
           <div className="fh-card-head"><h2>Flight history</h2><span>{isFetching ? 'Refreshing…' : `${filtered.length} records`}</span></div>
           {error ? <div className="fh-empty" role="alert"><strong>Unable to load mission history.</strong><p>{error instanceof Error ? error.message : 'Please try again.'}</p><button type="button" className="fh-button" onClick={() => void refetch()}>Retry</button></div>
-            : isLoading ? <div className="fh-empty">Loading flight history…</div>
+            : isLoading ? <OperatorLoadingState label="Loading flight history…" />
               : filtered.length === 0 ? <div className="fh-empty"><strong>No recorded flights found</strong><p>Try different filters. Only completed missions and failed missions with a recorded take-off appear here. Scheduled and In Progress missions are excluded.</p></div>
                 : <>
                   <div className="fh-table-scroll"><table className="fh-table"><thead><tr><th>Date</th><th>Mission</th><th>Drone</th><th>Route</th><th title="First recorded GPS fix">Start</th><th title="Last recorded GPS fix">End</th><th title="Recorded GPS interval, not the Mission lifecycle duration">Duration</th><th>Status</th><th>Action</th></tr></thead><tbody>

@@ -295,6 +295,18 @@ export interface RouteLegSnapshot {
   remaining_battery_pct?: number;
 }
 
+/** Explicit AI explanation returned for one Analyze route; arrays have undocumented item shapes. */
+export interface RouteAiExplanation {
+  flightSpeedMps?: number;
+  flightSpeedKmh?: number;
+  totalEnergyWh?: number;
+  summary?: string;
+  /** Preserve every BE contribution item, without inventing a SHAP unit or field schema. */
+  featureContributions: unknown[];
+  /** Preserve BE leg breakdown as supplied, including future fields. */
+  legsBreakdown: unknown[];
+}
+
 export interface RouteOption {
   id: string;
   name: string;
@@ -312,7 +324,15 @@ export interface RouteOption {
   relayStopMinutes?: number;
   /** BE-authoritative feasibility flag. Only BE can validate reserve/availability atomically. */
   feasible?: boolean;
+  /** BE permission to assign this particular route. False overrides feasible=true. */
+  isSelectable?: boolean;
   infeasibleReason?: string;
+  unselectableReason?: string;
+  /** Model output: signed SHAP values, as supplied by BE; target units are not assumed. */
+  shapValues?: Record<string, number>;
+  flightSpeedMps?: number;
+  speedProfileLabel?: string;
+  aiExplanation?: RouteAiExplanation;
   /** Optional FE display of the new BE relay_battery_status payload (schema not documented). */
   rawRelayBatteryStatus?: unknown[];
   legs?: PlannedRouteLeg[];
