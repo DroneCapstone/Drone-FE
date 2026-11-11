@@ -105,6 +105,7 @@ export function RouteOptionCard({
           </span>
           <span className="mission-route-tags">
             {route.recommended && <StatusBadge tone="success">AI Recommended</StatusBadge>}
+            {route.isSelectable === false && <span title={route.unselectableReason || route.infeasibleReason || 'Route is not selectable'} className="mission-route-muted">Not selectable</span>}
             <span className={`mission-route-chevron${expanded ? ' is-open' : ''}`}><Icon name="chevron" size={17} /></span>
           </span>
         </span>

@@ -309,9 +309,10 @@ export function CreateMissionPage() {
   const analyzedBundleIds = planningAnalysis?.bundledOrderIds;
   const analyzedPayloadKg = planningAnalysis?.totalPayloadKg;
   const analysisMatchesBundle = bundledOrderIds.length === 0 || Boolean(
-    (!analyzedBundleIds || (analyzedBundleIds.length === bundledOrderIds.length &&
-      bundledOrderIds.every((id) => analyzedBundleIds.includes(id)))) &&
-    (analyzedPayloadKg === undefined || Math.abs(analyzedPayloadKg - totalPayloadKg) <= 0.02)
+    analyzedBundleIds && analyzedBundleIds.length === bundledOrderIds.length &&
+    new Set(analyzedBundleIds).size === bundledOrderIds.length &&
+    bundledOrderIds.every((id) => analyzedBundleIds.includes(id)) &&
+    analyzedPayloadKg !== undefined && Math.abs(analyzedPayloadKg - totalPayloadKg) <= 0.02
   );
   const routeOptions = analysisMatchesBundle ? planningAnalysis?.routes ?? [] : [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
@@ -490,10 +491,11 @@ export function CreateMissionPage() {
       // A route analyzed for the primary order alone must never be assigned to a bundle.
       if (bundledOrderIds.length > 0) {
         const replyIds = current.data.bundledOrderIds;
-        if ((replyIds && (replyIds.length !== bundledOrderIds.length ||
-          bundledOrderIds.some((id) => !replyIds.includes(id)))) ||
-          (current.data.totalPayloadKg !== undefined &&
-            Math.abs(current.data.totalPayloadKg - totalPayloadKg) > 0.02)) {
+        if (!replyIds || replyIds.length !== bundledOrderIds.length ||
+          new Set(replyIds).size !== bundledOrderIds.length ||
+          bundledOrderIds.some((id) => !replyIds.includes(id)) ||
+          current.data.totalPayloadKg === undefined ||
+          Math.abs(current.data.totalPayloadKg - totalPayloadKg) > 0.02) {
           setStep(3);
           showToast('Bundle/payload changed during Analyze. Please review the route again.');
           return;
@@ -869,7 +871,11 @@ export function CreateMissionPage() {
               </div>
               {selectedRoute && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
                 <p className="mission-route-unavailable" role="status">
-                  This route has flight planning warnings. You can review the plan, but Assign will require a valid route.
+                  {selectedRoute.isSelectable === false
+                    ? `Route unavailable: ${selectedRoute.unselectableReason || selectedRoute.infeasibleReason || 'Backend does not allow assigning this route.'}`
+                    : selectedRoute.feasible === false
+                      ? `Route infeasible: ${selectedRoute.infeasibleReason || 'Backend marked this route as infeasible.'}`
+                      : 'This route has flight planning warnings. You can review the plan, but Assign will require a valid route.'}
                 </p>
               )}
             </OperatorPanel>

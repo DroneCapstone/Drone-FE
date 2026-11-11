@@ -1,0 +1,35 @@
+/* Scoped AI explanation display; keeps existing Operator panels, typography, and light/dark variables. */
+.mission-ai-shap-list,
+.mission-ai-detail-rows {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.mission-ai-shap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  font-size: 13px;
+}
+.mission-ai-shap-row span { overflow-wrap: anywhere; }
+.mission-ai-shap-row strong { font-variant-numeric: tabular-nums; font-size: 13px; }
+.mission-ai-shap-row strong.is-positive { color: var(--orange, #ea580c); }
+.mission-ai-shap-row strong.is-negative { color: var(--muted, #64748b); }
+.mission-ai-note { margin: 12px 0 0; font-size: 11px; line-height: 1.6; color: var(--muted, #64748b); }
+.mission-ai-detail-section { margin-top: 16px; }
+.mission-ai-detail-section h4 { font-size: 13px; font-weight: 650; margin: 0 0 8px; }
+.mission-ai-detail-row { padding: 10px 0; border-bottom: 1px solid var(--border, #e5e7eb); overflow-wrap: anywhere; }
+.mission-ai-detail-row > strong { font-size: 13px; }
+.mission-ai-detail-row > small { display: block; margin-top: 4px; color: var(--muted, #64748b); font-size: 12px; }
+.mission-ai-detail-row dl,
+.mission-ai-facts { margin: 8px 0 0; display: grid; gap: 7px; }
+.mission-ai-detail-row dl > div,
+.mission-ai-facts > div { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; font-size: 12px; }
+.mission-ai-detail-row dt,
+.mission-ai-facts dt { color: var(--muted, #64748b); text-transform: none; min-width: 0; }
+.mission-ai-detail-row dd,
+.mission-ai-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.mission-ai-unavailable { font-size: 12px; color: var(--muted, #64748b); }

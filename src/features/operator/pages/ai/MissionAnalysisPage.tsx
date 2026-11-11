@@ -14,6 +14,7 @@ import { getDroneDisplayCode } from '../../utils/droneDisplay';
 import { loadMissionDraft, updateMissionDraftRoute } from '../../utils/missionDraftStorage';
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 import { AiPageShell } from './AiPageShell';
+import './mission-ai-explanation.css';
 
 const tabs = ['Prediction', 'Recommendation', 'Explainability', 'Weather / Risk'] as const;
 type AnalysisTab = typeof tabs[number];
@@ -22,6 +23,55 @@ function riskTone(level: 'Low' | 'Medium' | 'High'): Tone {
   if (level === 'High') return 'danger';
   if (level === 'Medium') return 'warning';
   return 'success';
+}
+
+/** These list-item shapes are intentionally not assumed: the BE Swagger uses [] without item schemas. */
+function asAiObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function displayAiValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(Number(value.toPrecision(6))) : '—';
+  if (typeof value === 'string') return value.trim() || '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  try { return JSON.stringify(value); } catch { return '—'; }
+}
+
+function displayShapValue(value: number): string {
+  const display = Number(value.toPrecision(6));
+  return `${display > 0 ? '+' : ''}${display}`;
+}
+
+function aiListTitle(value: unknown, index: number, kind: 'feature' | 'leg'): string {
+  const object = asAiObject(value);
+  if (!object) return kind === 'feature' ? `Feature ${index + 1}` : `Leg ${index + 1}`;
+  for (const key of (kind === 'feature'
+    ? ['feature', 'feature_name', 'featureName', 'name', 'label']
+    : ['leg_name', 'legName', 'route', 'label', 'name'])) {
+    if (typeof object[key] === 'string' && object[key].trim()) return object[key].trim();
+  }
+  const sequence = object.sequence_no ?? object.sequenceNo ?? object.leg_number ?? object.legNumber;
+  return kind === 'leg' ? `Leg ${sequence !== undefined ? displayAiValue(sequence) : index + 1}` : `Feature ${index + 1}`;
+}
+
+function AiDetailRows({ values, kind }: { values: unknown[]; kind: 'feature' | 'leg' }) {
+  return <div className="mission-ai-detail-rows">
+    {values.map((item, index) => {
+      const obj = asAiObject(item);
+      const title = aiListTitle(item, index, kind);
+      const titleFields = kind === 'feature'
+        ? ['feature', 'feature_name', 'featureName', 'name', 'label']
+        : ['leg_name', 'legName', 'route', 'label', 'name'];
+      const details = obj ? Object.entries(obj).filter(([key]) => !titleFields.includes(key)) : [];
+      return <div className="mission-ai-detail-row" key={`${kind}-${index}`}>
+        <strong>{title}</strong>
+        {details.length > 0 ? <dl>
+          {details.map(([key, value]) => <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{displayAiValue(value)}</dd></div>)}
+        </dl> : <small>{displayAiValue(item)}</small>}
+      </div>;
+    })}
+  </div>;
 }
 
 export function MissionAnalysisPage() {
@@ -70,6 +120,11 @@ export function MissionAnalysisPage() {
   const route = routeOptions.find((item) => item.id === analysisRouteId) ?? routeOptions[0];
   const timing = order && route ? calculateRouteTiming(order, route) : undefined;
   const energy = drone && route ? getEnergyFeasibility(route) : undefined;
+  const routeAssignable = route ? getEnergyFeasibility(route).feasible : false;
+  const explanation = route?.aiExplanation;
+  const shapValues: Array<[string, number]> = route?.shapValues
+    ? (Object.entries(route.shapValues) as Array<[string, number]>).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    : [];
 
   const changeRoute = (routeId: string) => {
     setSelectedRouteId(routeId);
@@ -79,7 +134,7 @@ export function MissionAnalysisPage() {
   };
 
   const useThisRoute = () => {
-    if (!returnToMission || !order || !route) return;
+    if (!returnToMission || !order || !route || !routeAssignable) return;
     updateMissionDraftRoute(order.id, route.id);
     navigate(`/operator/missions/create?orderId=${order.id}&resume=1`);
   };
@@ -170,6 +225,8 @@ export function MissionAnalysisPage() {
               <span><small>Confidence</small><strong>{route.confidencePct}%</strong></span>
               <span><small>Risk</small><strong>{route.risk}</strong></span>
               <span><small>Battery after</small><strong>{energy && Number.isFinite(energy.remainingBattery) ? `${energy.remainingBattery}%` : '—'}</strong></span>
+              <span><small>Flight speed (BE)</small><strong>{route.flightSpeedMps !== undefined ? `${displayAiValue(route.flightSpeedMps)} m/s` : '—'}</strong></span>
+              <span><small>Speed profile (BE)</small><strong>{route.speedProfileLabel ?? '—'}</strong></span>
             </div>
           </OperatorPanel>
           {/* Order eyebrow hidden by request. */}
@@ -178,7 +235,7 @@ export function MissionAnalysisPage() {
               <div><dt>Mission</dt><dd>{queryMission?.id ?? selectedMission?.id ?? '—'}</dd></div>
               <div><dt>Order</dt><dd>{order?.id ?? '—'}</dd></div>
               <div><dt>Drone</dt><dd>{drone ? getDroneDisplayCode(drone) : '—'}</dd></div>
-              <div><dt>Payload</dt><dd>{order ? `${order.payloadKg} kg` : '—'}</dd></div>
+              <div><dt>Payload</dt><dd>{planningAnalysis?.totalPayloadKg !== undefined ? `${planningAnalysis.totalPayloadKg} kg (analyzed)` : analysisBundleIds.length ? 'Bundle payload not returned' : order ? `${order.payloadKg} kg` : '—'}</dd></div>
               <div><dt>Route distance</dt><dd>{route.distanceKm} km</dd></div>
               <div><dt>Planned start</dt><dd>{timing ? formatMissionTime(timing.plannedStartAt) : selectedMission ? formatMissionTime(selectedMission.plannedStartAt) : '—'}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{timing ? formatMissionTime(timing.estimatedArrivalAt) : selectedMission ? formatMissionTime(selectedMission.estimatedArrivalAt) : '—'}</dd></div>
@@ -216,19 +273,43 @@ export function MissionAnalysisPage() {
               {route.recommendationReasons.map((reason) => <p key={reason}>✓ {reason}</p>)}
               <p><strong>Trade-off:</strong> {route.tradeOff}</p>
             </div>
-            {returnToMission && <ActionButton onClick={useThisRoute}>Use {route.id} in mission draft</ActionButton>}
+            {route.isSelectable === false && <p className="mission-ai-unavailable" role="status">Route unavailable: {route.unselectableReason || route.infeasibleReason || 'BE marked this route as not selectable.'}</p>}
+            {returnToMission && <ActionButton onClick={useThisRoute} disabled={!routeAssignable}>Use {route.id} in mission draft</ActionButton>}
           </OperatorPanel>
         </div>
       )}
 
       {tab === 'Explainability' && (
         <div className="ai-grid">
-          <OperatorPanel title="Why this prediction?" eyebrow="LOCAL SHAP · THIS ROUTE">
-            <div className="operator-empty-state">The current Mission Planning API does not return SHAP factors. No mock explanation is displayed.</div>
+          <OperatorPanel title="Why this prediction?" eyebrow="SHAP · THIS ROUTE">
+            {shapValues.length ? <>
+              <div className="mission-ai-shap-list">
+                {shapValues.map(([feature, value]) => <div key={feature} className="mission-ai-shap-row">
+                  <span>{feature.replace(/_/g, ' ')}</span>
+                  <strong className={value < 0 ? 'is-negative' : value > 0 ? 'is-positive' : ''}>{displayShapValue(value)}</strong>
+                </div>)}
+              </div>
+              <p className="mission-ai-note">Signed SHAP values from Backend. Units depend on the prediction target; these are not percentages.</p>
+            </> : <div className="operator-empty-state">BE did not return numeric SHAP values for this route.</div>}
+            {explanation?.featureContributions.length ? <section className="mission-ai-detail-section">
+              <h4>Feature contributions (BE)</h4>
+              <AiDetailRows kind="feature" values={explanation.featureContributions} />
+            </section> : null}
           </OperatorPanel>
-          <OperatorPanel title="Interpretation" eyebrow="DECISION SUPPORT">
-            <div className="reasoning-block"><p><strong>{route.id}</strong> is predicted at <strong>{route.predictedEnergyWh.toFixed(1)} Wh</strong>. The explanation is specific to this route and should not be treated as a universal cause across all flights.</p></div>
-            <div className="explanation-callout"><strong>Operator takeaway</strong><p>{route.weatherImpact}</p></div>
+          <OperatorPanel title="Interpretation" eyebrow="BACKEND AI EXPLANATION">
+            {explanation?.summary
+              ? <div className="reasoning-block"><p>{explanation.summary}</p></div>
+              : <div className="operator-empty-state">BE did not return an AI explanation summary for this route.</div>}
+            <dl className="mission-ai-facts">
+              <div><dt>AI total energy</dt><dd>{explanation?.totalEnergyWh !== undefined ? `${displayAiValue(explanation.totalEnergyWh)} Wh` : '—'}</dd></div>
+              <div><dt>AI flight speed</dt><dd>{explanation?.flightSpeedMps !== undefined ? `${displayAiValue(explanation.flightSpeedMps)} m/s` : '—'}</dd></div>
+              <div><dt>AI speed (km/h)</dt><dd>{explanation?.flightSpeedKmh !== undefined ? `${displayAiValue(explanation.flightSpeedKmh)} km/h` : '—'}</dd></div>
+              <div><dt>Speed profile</dt><dd>{route.speedProfileLabel ?? '—'}</dd></div>
+            </dl>
+            {explanation?.legsBreakdown.length ? <section className="mission-ai-detail-section">
+              <h4>Energy breakdown by leg (BE)</h4>
+              <AiDetailRows kind="leg" values={explanation.legsBreakdown} />
+            </section> : null}
           </OperatorPanel>
         </div>
       )}
@@ -249,7 +330,7 @@ export function MissionAnalysisPage() {
       {returnToMission && tab !== 'Recommendation' && (
         <div className="ai-context-actions">
           <ActionButton variant="secondary" onClick={() => navigate(`/operator/missions/create?orderId=${queryOrderId}&resume=1`)}>Back to mission</ActionButton>
-          <ActionButton onClick={useThisRoute}>Use {route.id}</ActionButton>
+          <ActionButton onClick={useThisRoute} disabled={!routeAssignable}>Use {route.id}</ActionButton>
         </div>
       )}
     </AiPageShell>
