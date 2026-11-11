@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
@@ -131,7 +132,7 @@ export function BatteryInventoryPage() {
             }}>Retry</button>
           </div>
         ) : loading ? (
-          <div className="operator-empty-state">Loading batteries…</div>
+          <OperatorLoadingState label="Loading batteries…" />
         ) : filtered.length === 0 ? (
           <div className="operator-empty-state">No batteries match the current filters.</div>
         ) : (

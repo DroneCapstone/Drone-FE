@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
@@ -152,7 +153,7 @@ export function TelemetryPage() {
             </button>)}
           </div>
           {liveError && <p className="telemetry-error" role="alert">{liveErrorDetail instanceof Error ? liveErrorDetail.message : 'Cannot load active flights.'}</p>}
-          {liveLoading ? <p className="telemetry-hint">Loading active aircraft…</p> : filtered.length === 0 ?
+          {liveLoading ? <OperatorLoadingState label="Loading active aircraft…" compact /> : filtered.length === 0 ?
             <p className="telemetry-hint">{liveDrones.length ? 'No aircraft match your search or filter.' : 'No aircraft currently reported in Live Tracking.'}</p> :
             <div className="telemetry-aircraft-list">
               {visibleAircraft.map(drone => {
@@ -198,7 +199,7 @@ export function TelemetryPage() {
               {(activeIncidents.has(selectedDrone.missionId) || selectedDrone.incidentReason) && <span>Incident / anomaly recorded</span>}
               {telemetryFetching && !telemetryLoading && <small>Updating log…</small>}
             </div>}
-            {telemetryLoading ? <div className="telemetry-hint">Loading all recorded telemetry pages…</div> :
+            {telemetryLoading ? <OperatorLoadingState label="Loading telemetry records…" /> :
               telemetryError ? <div className="telemetry-error" role="alert">{telemetryError instanceof Error ? telemetryError.message : 'Unable to load telemetry.'}</div> :
               points.length === 0 ? <div className="telemetry-hint">No telemetry points recorded for this Mission yet.</div> :
               <div className="telemetry-table-scroll" role="region" aria-label="Telemetry logs" tabIndex={0}>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 // import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
@@ -16,8 +17,9 @@ import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTimi
 import { AiPageShell } from './AiPageShell';
 import './mission-ai-explanation.css';
 
-const tabs = ['Prediction', 'Recommendation', 'Explainability', 'Weather / Risk'] as const;
-type AnalysisTab = typeof tabs[number];
+// Prediction and Recommendation remain in source for compatibility, but their
+// panels are not rendered: Create Mission already displays those results.
+const SHOW_LEGACY_ANALYSIS_TABS = false;
 
 function riskTone(level: 'Low' | 'Medium' | 'High'): Tone {
   if (level === 'High') return 'danger';
@@ -43,35 +45,78 @@ function displayShapValue(value: number): string {
   return `${display > 0 ? '+' : ''}${display}`;
 }
 
-function aiListTitle(value: unknown, index: number, kind: 'feature' | 'leg'): string {
-  const object = asAiObject(value);
-  if (!object) return kind === 'feature' ? `Feature ${index + 1}` : `Leg ${index + 1}`;
-  for (const key of (kind === 'feature'
-    ? ['feature', 'feature_name', 'featureName', 'name', 'label']
-    : ['leg_name', 'legName', 'route', 'label', 'name'])) {
-    if (typeof object[key] === 'string' && object[key].trim()) return object[key].trim();
+/** Use only the supplied explanation values; no locally generated AI conclusions. */
+function readAiField(object: Record<string, unknown> | null, ...keys: string[]): unknown {
+  for (const key of keys) {
+    const result = object?.[key];
+    if (result !== undefined && result !== null && result !== '') return result;
   }
-  const sequence = object.sequence_no ?? object.sequenceNo ?? object.leg_number ?? object.legNumber;
-  return kind === 'leg' ? `Leg ${sequence !== undefined ? displayAiValue(sequence) : index + 1}` : `Feature ${index + 1}`;
+  return undefined;
 }
 
-function AiDetailRows({ values, kind }: { values: unknown[]; kind: 'feature' | 'leg' }) {
-  return <div className="mission-ai-detail-rows">
-    {values.map((item, index) => {
-      const obj = asAiObject(item);
-      const title = aiListTitle(item, index, kind);
-      const titleFields = kind === 'feature'
-        ? ['feature', 'feature_name', 'featureName', 'name', 'label']
-        : ['leg_name', 'legName', 'route', 'label', 'name'];
-      const details = obj ? Object.entries(obj).filter(([key]) => !titleFields.includes(key)) : [];
-      return <div className="mission-ai-detail-row" key={`${kind}-${index}`}>
-        <strong>{title}</strong>
-        {details.length > 0 ? <dl>
-          {details.map(([key, value]) => <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{displayAiValue(value)}</dd></div>)}
-        </dl> : <small>{displayAiValue(item)}</small>}
-      </div>;
-    })}
-  </div>;
+function asText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getRoutePath(route: NonNullable<ReturnType<typeof useMissionPlanningAnalysisQuery>['data']>['routes'][number]): string | undefined {
+  const legs = route.legDetails ?? [];
+  if (legs.length) {
+    const names = [legs[0].from_hub_name || legs[0].from_hub_code, ...legs.map(leg => leg.to_hub_name || leg.to_hub_code)].filter(Boolean);
+    if (names.length > 1) return names.join(' → ');
+  }
+  const fromRoute = route.routeString?.split('(')[0]?.trim();
+  return fromRoute || undefined;
+}
+
+function shortRouteName(name: string, profile?: string): string {
+  // Speed profiles are supplied by Analyze. Only shorten their parenthesized detail.
+  const selected = profile || name;
+  const concise = selected.split('(')[0]?.trim();
+  return concise || selected;
+}
+
+function FeatureInsights({ contributions }: { contributions: unknown[] }) {
+  const entries = contributions.map(asAiObject).filter((item): item is Record<string, unknown> => item !== null);
+  const rows = entries.map((item, index) => ({
+    key: `${asText(readAiField(item, 'feature', 'feature_name', 'featureName')) ?? index}-${index}`,
+    name: asText(readAiField(item, 'label', 'feature', 'feature_name', 'featureName', 'name')) || `Feature ${index + 1}`,
+    value: readAiField(item, 'value'),
+    impact: asText(readAiField(item, 'impact')),
+  })).filter(row => row.value !== undefined || row.impact);
+  if (!rows.length) return null;
+  return <section className="mission-ai-insights">
+    <h3>Feature insights</h3>
+    <div className="mission-ai-insight-list">
+      {rows.map(row => <div className="mission-ai-insight" key={row.key}>
+        <div className="mission-ai-insight-header"><strong>{row.name}</strong>{row.value !== undefined && <span>{displayAiValue(row.value)}</span>}</div>
+        {row.impact && <p>{row.impact}</p>}
+      </div>)}
+    </div>
+  </section>;
+}
+
+function LegEnergySummary({ breakdown }: { breakdown: unknown[] }) {
+  // Single-leg energy is already visible in the route card; avoid duplicate tables.
+  if (breakdown.length < 2) return null;
+  const rows = breakdown.map((raw, index) => {
+    const item = asAiObject(raw);
+    if (!item) return null;
+    const from = asText(readAiField(item, 'from_hub_name', 'fromHubName', 'from_hub_code', 'fromHubCode'));
+    const to = asText(readAiField(item, 'to_hub_name', 'toHubName', 'to_hub_code', 'toHubCode'));
+    const energy = readAiField(item, 'energy_wh', 'energyWh');
+    const distance = readAiField(item, 'distance_km', 'distanceKm');
+    const action = asText(readAiField(item, 'action'));
+    if (!from && !to && energy === undefined && distance === undefined && !action) return null;
+    const sequence = readAiField(item, 'leg', 'sequence_no', 'sequenceNo');
+    return <div className="mission-ai-leg" key={`leg-${index}`}>
+      <div className="mission-ai-leg-header"><strong>Leg {sequence === undefined ? index + 1 : displayAiValue(sequence)}</strong>{energy !== undefined && <span>{displayAiValue(energy)} Wh</span>}</div>
+      {(from || to) && <p className="mission-ai-leg-route">{[from, to].filter(Boolean).join(' → ')}</p>}
+      {distance !== undefined && <small>{displayAiValue(distance)} km</small>}
+      {action && <p className="mission-ai-leg-note">{action}</p>}
+    </div>;
+  }).filter(Boolean);
+  if (!rows.length) return null;
+  return <section className="mission-ai-leg-summary"><h3>Energy by leg</h3>{rows}</section>;
 }
 
 export function MissionAnalysisPage() {
@@ -91,7 +136,6 @@ export function MissionAnalysisPage() {
     .map((mission) => `${mission.id} · ${mission.orderId}`);
   const queryMission = missions.find((mission) => mission.orderId === queryOrderId && mission.droneId === queryDroneId && (!queryRouteId || mission.routeId === queryRouteId));
   const selectedMissionLabel = queryMission ? `${queryMission.id} · ${queryMission.orderId}` : missionOptions[0] ?? 'No mission';
-  const [tab, setTab] = useState<AnalysisTab>('Prediction');
 
   const selectedMissionId = selectedMissionLabel.split(' · ')[0];
   const selectedMission = missions.find((mission) => mission.id === selectedMissionId);
@@ -143,7 +187,7 @@ export function MissionAnalysisPage() {
     return (
       <AiPageShell active="/operator/ai/mission-analysis">
         <OperatorPanel title="Mission analysis">
-          <div className="operator-empty-state">Loading route analysis…</div>
+          <OperatorLoadingState label="Analyzing flight routes…" />
         </OperatorPanel>
       </AiPageShell>
     );
@@ -158,7 +202,7 @@ export function MissionAnalysisPage() {
             <span>
               {planningAnalysisError instanceof Error
                 ? planningAnalysisError.message
-                : !contextBatteryId ? 'Battery ID is required for the updated AI analysis. Open a Mission with a selected battery.' : 'The Backend did not return any route options for this Order, Drone, and Battery.'}
+                : !contextBatteryId ? 'Battery ID is required for the updated AI analysis. Open a Mission with a selected battery.' : 'No route options are available for the selected Order, Drone, and Battery.'}
             </span>
           </div>
         </OperatorPanel>
@@ -199,19 +243,36 @@ export function MissionAnalysisPage() {
         </>
       )}
 
-      <div className="inner-tabs">
-        {tabs.map((item) => <button type="button" className={tab === item ? 'active' : ''} onClick={() => setTab(item)} key={item}>{item}</button>)}
+      <div className="mission-ai-section-head">
+        <div><span className="eyebrow">AI EXPLAINABILITY</span><h2>Route insights</h2></div>
+        <small>Select a route to review its explanation</small>
       </div>
 
-      <div className="ai-route-switcher">
-        {routeOptions.map((item) => (
-          <button type="button" key={item.id} className={`selectable-card ${analysisRouteId === item.id ? 'active' : ''}`} aria-pressed={analysisRouteId === item.id} onClick={() => changeRoute(item.id)}>
-            <span>{item.id}</span><strong>{item.name}</strong>{item.recommended && <small>Recommended</small>}
-          </button>
-        ))}
+      <div className="ai-route-switcher mission-ai-route-switcher" aria-label="Route options">
+        {routeOptions.map((item) => {
+          const active = analysisRouteId === item.id;
+          const path = getRoutePath(item);
+          return <button type="button" key={item.id} title={item.id}
+            className={`selectable-card mission-ai-route-option ${active ? 'active' : ''}`}
+            aria-pressed={active} onClick={() => changeRoute(item.id)}>
+            <span className="mission-ai-route-top">
+              <strong>{shortRouteName(item.name, item.speedProfileLabel)}</strong>
+              <span className="mission-ai-route-flags">
+                {item.recommended && <span className="mission-ai-route-recommended">AI Recommended</span>}
+                {active && <span className="mission-ai-route-selected">Selected</span>}
+              </span>
+            </span>
+            {path && <span className="mission-ai-route-path" title={path}>{path}</span>}
+            <span className="mission-ai-route-metrics">
+              <span><small>Energy</small><b>{displayAiValue(item.predictedEnergyWh)} Wh</b></span>
+              <span><small>Duration</small><b>{displayAiValue(item.predictedDurationMin)} min</b></span>
+              <span><small>Distance</small><b>{displayAiValue(item.distanceKm)} km</b></span>
+            </span>
+          </button>;
+        })}
       </div>
 
-      {tab === 'Prediction' && (
+      {SHOW_LEGACY_ANALYSIS_TABS && (
         <div className="ai-grid">
           {/* eyebrow="PREDICTED OUTCOME" hidden by request. */}
           <OperatorPanel title={`${route.id} ${route.name}`}>
@@ -225,8 +286,8 @@ export function MissionAnalysisPage() {
               <span><small>Confidence</small><strong>{route.confidencePct}%</strong></span>
               <span><small>Risk</small><strong>{route.risk}</strong></span>
               <span><small>Battery after</small><strong>{energy && Number.isFinite(energy.remainingBattery) ? `${energy.remainingBattery}%` : '—'}</strong></span>
-              <span><small>Flight speed (BE)</small><strong>{route.flightSpeedMps !== undefined ? `${displayAiValue(route.flightSpeedMps)} m/s` : '—'}</strong></span>
-              <span><small>Speed profile (BE)</small><strong>{route.speedProfileLabel ?? '—'}</strong></span>
+              <span><small>Flight speed</small><strong>{route.flightSpeedMps !== undefined ? `${displayAiValue(route.flightSpeedMps)} m/s` : '—'}</strong></span>
+              <span><small>Speed profile</small><strong>{route.speedProfileLabel ?? '—'}</strong></span>
             </div>
           </OperatorPanel>
           {/* Order eyebrow hidden by request. */}
@@ -247,7 +308,7 @@ export function MissionAnalysisPage() {
         </div>
       )}
 
-      {tab === 'Recommendation' && (
+      {SHOW_LEGACY_ANALYSIS_TABS && (
         <div className="recommendation-layout">
           <OperatorPanel title="Route comparison" eyebrow="3 CANDIDATES">
             <div className="route-ranking">
@@ -273,48 +334,37 @@ export function MissionAnalysisPage() {
               {route.recommendationReasons.map((reason) => <p key={reason}>✓ {reason}</p>)}
               <p><strong>Trade-off:</strong> {route.tradeOff}</p>
             </div>
-            {route.isSelectable === false && <p className="mission-ai-unavailable" role="status">Route unavailable: {route.unselectableReason || route.infeasibleReason || 'BE marked this route as not selectable.'}</p>}
+            {route.isSelectable === false && <p className="mission-ai-unavailable" role="status">Route unavailable: {route.unselectableReason || route.infeasibleReason || 'This route is not available.'}</p>}
             {returnToMission && <ActionButton onClick={useThisRoute} disabled={!routeAssignable}>Use {route.id} in mission draft</ActionButton>}
           </OperatorPanel>
         </div>
       )}
 
-      {tab === 'Explainability' && (
-        <div className="ai-grid">
-          <OperatorPanel title="Why this prediction?" eyebrow="SHAP · THIS ROUTE">
-            {shapValues.length ? <>
-              <div className="mission-ai-shap-list">
-                {shapValues.map(([feature, value]) => <div key={feature} className="mission-ai-shap-row">
+      <div className="mission-ai-explanation-layout">
+        <OperatorPanel title="Why this prediction?" eyebrow="SHAP ANALYSIS" className="mission-ai-shap-panel">
+          {shapValues.length > 0 && <div className="mission-ai-shap-chart" aria-label="SHAP feature contributions">
+            {shapValues.map(([feature, value]) => {
+              const maximum = Math.max(...shapValues.map(([, amount]) => Math.abs(amount)), 0.000001);
+              return <div className="mission-ai-shap-item" key={feature}>
+                <div className="mission-ai-shap-text">
                   <span>{feature.replace(/_/g, ' ')}</span>
                   <strong className={value < 0 ? 'is-negative' : value > 0 ? 'is-positive' : ''}>{displayShapValue(value)}</strong>
-                </div>)}
-              </div>
-              <p className="mission-ai-note">Signed SHAP values from Backend. Units depend on the prediction target; these are not percentages.</p>
-            </> : <div className="operator-empty-state">BE did not return numeric SHAP values for this route.</div>}
-            {explanation?.featureContributions.length ? <section className="mission-ai-detail-section">
-              <h4>Feature contributions (BE)</h4>
-              <AiDetailRows kind="feature" values={explanation.featureContributions} />
-            </section> : null}
-          </OperatorPanel>
-          <OperatorPanel title="Interpretation" eyebrow="BACKEND AI EXPLANATION">
-            {explanation?.summary
-              ? <div className="reasoning-block"><p>{explanation.summary}</p></div>
-              : <div className="operator-empty-state">BE did not return an AI explanation summary for this route.</div>}
-            <dl className="mission-ai-facts">
-              <div><dt>AI total energy</dt><dd>{explanation?.totalEnergyWh !== undefined ? `${displayAiValue(explanation.totalEnergyWh)} Wh` : '—'}</dd></div>
-              <div><dt>AI flight speed</dt><dd>{explanation?.flightSpeedMps !== undefined ? `${displayAiValue(explanation.flightSpeedMps)} m/s` : '—'}</dd></div>
-              <div><dt>AI speed (km/h)</dt><dd>{explanation?.flightSpeedKmh !== undefined ? `${displayAiValue(explanation.flightSpeedKmh)} km/h` : '—'}</dd></div>
-              <div><dt>Speed profile</dt><dd>{route.speedProfileLabel ?? '—'}</dd></div>
-            </dl>
-            {explanation?.legsBreakdown.length ? <section className="mission-ai-detail-section">
-              <h4>Energy breakdown by leg (BE)</h4>
-              <AiDetailRows kind="leg" values={explanation.legsBreakdown} />
-            </section> : null}
-          </OperatorPanel>
-        </div>
-      )}
+                </div>
+                <div className="mission-ai-shap-track" aria-hidden="true"><span className={value < 0 ? 'is-negative' : ''} style={{ width: `${Math.abs(value) / maximum * 100}%` }} /></div>
+              </div>;
+            })}
+          </div>}
+          {explanation?.featureContributions?.length ? <FeatureInsights contributions={explanation.featureContributions} /> : null}
+          {!shapValues.length && !explanation?.featureContributions?.length && <p className="mission-ai-no-explanation">No feature explanation is available for this route.</p>}
+        </OperatorPanel>
+        <OperatorPanel title="Interpretation" eyebrow="AI EXPLANATION" className="mission-ai-interpretation-panel">
+          {explanation?.summary && <div className="mission-ai-summary"><p>{explanation.summary}</p></div>}
+          {explanation?.legsBreakdown?.length ? <LegEnergySummary breakdown={explanation.legsBreakdown} /> : null}
+          {!explanation?.summary && (explanation?.legsBreakdown?.length ?? 0) < 2 && <p className="mission-ai-no-explanation">No additional explanation is available for this route.</p>}
+        </OperatorPanel>
+      </div>
 
-      {tab === 'Weather / Risk' && (
+      {SHOW_LEGACY_ANALYSIS_TABS && (
         <div className="ai-grid">
           <OperatorPanel title="Weather snapshot" eyebrow="PLANNED FLIGHT WINDOW">
             <div className="operator-empty-state">The current Mission Planning API does not return a weather snapshot. No mock weather is displayed.</div>
@@ -327,7 +377,7 @@ export function MissionAnalysisPage() {
         </div>
       )}
 
-      {returnToMission && tab !== 'Recommendation' && (
+      {returnToMission && (
         <div className="ai-context-actions">
           <ActionButton variant="secondary" onClick={() => navigate(`/operator/missions/create?orderId=${queryOrderId}&resume=1`)}>Back to mission</ActionButton>
           <ActionButton onClick={useThisRoute} disabled={!routeAssignable}>Use {route.id}</ActionButton>

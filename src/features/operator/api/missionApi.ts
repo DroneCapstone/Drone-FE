@@ -882,13 +882,13 @@ function mapMissionCollection(items: unknown[]): Mission[] {
   }
   if (skippedStatuses.size > 0) {
     console.warn(
-      '[Operator] Skipped Mission records with unsupported BE statuses:',
+      '[Operator] Skipped mission records with unsupported statuses:',
       Array.from(skippedStatuses).join(', '),
-      '— ask BE to migrate/normalize those statuses.',
+      '— these statuses need review.',
     );
   }
   if (items.length > 0 && missions.length === 0 && skippedStatuses.size > 0) {
-    throw new Error(`No Missions with supported statuses. BE returned: ${Array.from(skippedStatuses).join(', ')}`);
+    throw new Error(`No missions with supported statuses were found: ${Array.from(skippedStatuses).join(', ')}`);
   }
   return missions;
 }
@@ -1172,7 +1172,7 @@ export async function analyzeMissionPlanningApi(
       analyzedBundleIds.every((id) => expectedIds.has(id));
     if (!confirmed || analyzedTotalPayloadKg === undefined || analyzedTotalPayloadKg <= 0) {
       throw new OperatorApiError(
-        'Analyze did not confirm the selected bundledOrderIds and totalPayloadKg. Please ask Backend to return both fields for bundle planning.',
+        'The selected order group and total payload could not be verified. Please analyze again.',
         502, payload,
       );
     }

@@ -176,12 +176,12 @@ export function RouteOptionCard({
                       >View Battery</a>
                     </div>
                     <div className="mission-route-battery-metrics">
-                      <div><small>BE-assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
+                      <div><small>Assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
                       <div><small>Battery model</small><strong>{model || '—'}</strong></div>
                       <div><small>Charge</small><strong>{displayPct(charge)}</strong></div>
                       <div><small>Available energy</small><strong>{displayEnergy(energy)}</strong></div>
                     </div>
-                    {!batteryId && <p className="mission-route-muted">No eligible relay battery was allocated by BE for this route.</p>}
+                    {!batteryId && <p className="mission-route-muted">No eligible relay battery has been assigned for this route.</p>}
                   </div>
                 );
               })}

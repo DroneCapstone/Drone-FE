@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Zap } from 'lucide-react';
 import { validateMissionBundleApi } from '../../api/missionBundleApi';
@@ -244,7 +245,7 @@ export function CreateMissionPage() {
     return (
       <MissionPageShell active="/operator/missions/all">
         <OperatorPanel title="Create a mission from an order" eyebrow="DELIVERY OPERATIONS">
-          <div className="operator-empty-state mission-create-gate">Loading Order…</div>
+          <OperatorLoadingState label="Loading order…" />
         </OperatorPanel>
       </MissionPageShell>
     );
@@ -516,7 +517,7 @@ export function CreateMissionPage() {
         !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
         !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
         setStep(3);
-        showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
+        showToast('Route information is incomplete. Please analyze again before assigning.');
         return;
       }
 
@@ -596,7 +597,7 @@ export function CreateMissionPage() {
                 {planningState === 'Ready for Planning'
                   ? canCreateMissionForOrder(order) ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
                   : planningState === 'Needs Replanning'
-                    ? 'This Order requires replanning. Create a new Mission only when Backend confirms that it is eligible.'
+                    ? 'This order requires replanning. Create a new Mission when it becomes eligible.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
             </div>
@@ -609,7 +610,7 @@ export function CreateMissionPage() {
           {canCreateMissionForOrder(order) && (
             <OperatorPanel title="Combine eligible orders" eyebrow="ORDER CONSOLIDATION">
               {isBundleCandidatesLoading || (isBundleCandidatesFetching && !bundleCandidates) ? (
-                <div className="mission-bundle-availability" role="status">Checking for eligible orders…</div>
+                <OperatorLoadingState label="Checking eligible orders…" compact />
               ) : bundleCandidatesError ? (
                 <div className="operator-empty-state mission-create-gate">
                   <strong>Unable to load orders eligible for consolidation</strong>
@@ -726,7 +727,7 @@ export function CreateMissionPage() {
               {bundledOrderIds.length > 0 && (
                 <div className="mission-bundle-summary">
                   <strong>{bundleOrderIds.length} orders · {totalPayloadKg.toFixed(2)} kg</strong>
-                  <span>Select a Drone with enough payload capacity. The Backend will validate the full bundle for this Drone.</span>
+                  <span>Select a Drone with enough payload capacity. The full order group will be validated before assignment.</span>
                   {selectedDroneId && (isDroneBundleValidating ? <small>Checking Drone capacity and route compatibility…</small> :
                     droneBundleValidationError ? <small className="mission-bundle-error">{droneBundleValidationError instanceof Error ? droneBundleValidationError.message : 'Validation unavailable.'}</small> :
                       droneBundleValidation && !droneBundleValidation.isValid ? <small className="mission-bundle-error">{droneBundleValidation.message || 'This Drone cannot carry the selected orders.'}</small> :
@@ -734,7 +735,7 @@ export function CreateMissionPage() {
                 </div>
               )}
               {isEligibleDronesLoading ? (
-                <div className="operator-empty-state">Loading available drones…</div>
+                <OperatorLoadingState label="Loading available drones…" />
               ) : eligibleDronesError ? (
                 <div className="operator-empty-state mission-create-gate">
                   <strong>Unable to load eligible drones</strong>
@@ -770,7 +771,7 @@ export function CreateMissionPage() {
                         {/* <StatusBadge tone="info">{originHubLabel}</StatusBadge> */}
                       </div>
                       {eligibleBatteriesLoading || eligibleBatteriesFetching ? (
-                        <div className="operator-empty-state">Loading available batteries…</div>
+                        <OperatorLoadingState label="Loading available batteries…" />
                       ) : eligibleBatteriesError ? (
                         <div className="operator-empty-state mission-create-gate">
                           <strong>Unable to load available batteries</strong>
@@ -828,7 +829,7 @@ export function CreateMissionPage() {
                 <p className="mission-bundle-error" role="alert">Analyze returned a different order group or total payload. Route assignment is blocked.</p>
               )}
               {isPlanningAnalysisFetching && (
-                <p className="section-note">Analyzing routes…</p>
+                <OperatorLoadingState label="Analyzing routes…" />
               )}
               {planningAnalysisError && (
                 <p className="section-note danger-note">
@@ -872,9 +873,9 @@ export function CreateMissionPage() {
               {selectedRoute && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
                 <p className="mission-route-unavailable" role="status">
                   {selectedRoute.isSelectable === false
-                    ? `Route unavailable: ${selectedRoute.unselectableReason || selectedRoute.infeasibleReason || 'Backend does not allow assigning this route.'}`
+                    ? `Route unavailable: ${selectedRoute.unselectableReason || selectedRoute.infeasibleReason || 'This route cannot be assigned.'}`
                     : selectedRoute.feasible === false
-                      ? `Route infeasible: ${selectedRoute.infeasibleReason || 'Backend marked this route as infeasible.'}`
+                      ? `Route infeasible: ${selectedRoute.infeasibleReason || 'This route is not feasible.'}`
                       : 'This route has flight planning warnings. You can review the plan, but Assign will require a valid route.'}
                 </p>
               )}
