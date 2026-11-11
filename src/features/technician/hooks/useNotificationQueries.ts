@@ -8,6 +8,7 @@ import {
   getNotificationsApi,
   getUnreadNotificationCountApi,
   markAllNotificationsReadApi,
+  markNotificationReadApi,
 } from "../api/notificationApi";
 
 import {
@@ -39,22 +40,31 @@ export function useUnreadCountQuery() {
   });
 }
 
+export function useMarkNotificationReadMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: string) => markNotificationReadApi(notificationId),
+    onSuccess: () => {
+      // Invalidate in the background: a successful PATCH should not be marked failed
+      // only because a subsequent GET has a transient error.
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.notifications() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.unreadCount() }),
+      ]);
+    },
+  });
+}
+
 export function useMarkAllNotificationsReadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn:
       markAllNotificationsReadApi,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.notifications(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.unreadCount(),
-        }),
+    onSuccess: () => {
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.notifications() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.unreadCount() }),
       ]);
     },
   });

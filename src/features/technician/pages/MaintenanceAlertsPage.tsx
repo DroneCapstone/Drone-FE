@@ -1,5 +1,8 @@
 import {
   History,
+  Eye,
+  CheckCheck,
+  RefreshCw,
   Plus,
   Search,
   X,
@@ -27,10 +30,16 @@ import {
   type AlertSource,
   type AlertStatus,
   type MaintenanceAlert,
+  mapApiMaintenanceAlert,
 } from "../utils/maintenanceAlertStorage";
+import { formatApiDateTime, isRecord, pickString, unwrapList, unwrapObject } from "../api/httpClient";
 
 import {
   useMaintenanceAlertsQuery,
+  useMaintenanceAlertsHistoryQuery,
+  useMaintenanceAlertQuery,
+  useAcknowledgeMaintenanceAlertMutation,
+  useSyncBatteryOverdueAlertsMutation,
 } from "../hooks/useMaintenanceQueries";
 
 type AlertLog = {
@@ -39,13 +48,30 @@ type AlertLog = {
   drone: string;
   title: string;
   source: AlertSource;
-  status: "Pending" | "Handled";
+  status: AlertStatus;
   workOrderId: string;
   handledAt: string;
 };
 
-const ALERT_LOG_STORAGE_KEY =
-  "droneoptai.technician.maintenance-alert-log.v1";
+function mapAlertHistoryRow(raw: unknown, index: number): AlertLog | null {
+  if (!isRecord(raw)) return null;
+  const combined = isRecord(raw.alert) ? { ...raw.alert, ...raw } : raw;
+  const alert = mapApiMaintenanceAlert(combined);
+  const rawId = pickString(combined, ["alert_id", "id"], "");
+  if (!rawId) return null;
+  const alertId = alert?.id ?? (/^ALT-/i.test(rawId) ? rawId : `ALT-${rawId}`);
+  return {
+    id: `${alertId}-${pickString(raw, ["history_id", "id"], String(index))}`,
+    alertId,
+    drone: alert?.droneId ?? pickString(combined, ["drone_id"], "—"),
+    title: alert?.title ?? pickString(combined, ["title", "message", "issue_description"], "—"),
+    source: alert?.source ?? "Schedule",
+    status: alert?.status ?? "Handled",
+    workOrderId: pickString(raw, ["work_order_id", "workOrderId"], "—"),
+    handledAt: formatApiDateTime(pickString(raw,
+      ["acknowledged_at", "resolved_at", "handled_at", "updated_at"], ""), "—"),
+  };
+}
 
 // Stable empty list while the first API request is pending.
 const EMPTY_MAINTENANCE_ALERTS: MaintenanceAlert[] = [];
@@ -61,27 +87,6 @@ const EMPTY_MAINTENANCE_ALERTS: MaintenanceAlert[] = [];
  *   readiness check and the system creates the alert.
  */
 
-function loadAlertLogs(): AlertLog[] {
-  try {
-    const stored = localStorage.getItem(
-      ALERT_LOG_STORAGE_KEY,
-    );
-
-    if (!stored) {
-      return [];
-    }
-
-    const parsed = JSON.parse(
-      stored,
-    ) as AlertLog[];
-
-    return Array.isArray(parsed)
-      ? parsed
-      : [];
-  } catch {
-    return [];
-  }
-}
 
 export function MaintenanceAlertsPage() {
   const navigate = useNavigate();
@@ -111,10 +116,44 @@ export function MaintenanceAlertsPage() {
     "all" | AlertSource
   >("all");
 
-  const [alertLogs] =
-    useState<AlertLog[]>(
-      loadAlertLogs,
-    );
+  const [selectedAlertId, setSelectedAlertId] = useState<string | undefined>();
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [acknowledgedIds, setAcknowledgedIds] = useState<string[]>([]);
+  const alertHistoryQuery = useMaintenanceAlertsHistoryQuery(historyOpen);
+  const alertDetailQuery = useMaintenanceAlertQuery(selectedAlertId);
+  const acknowledgeMutation = useAcknowledgeMaintenanceAlertMutation();
+  const batteryOverdueMutation = useSyncBatteryOverdueAlertsMutation();
+  const alertLogs = useMemo(() => unwrapList(alertHistoryQuery.data)
+    .map(mapAlertHistoryRow)
+    .filter((row): row is AlertLog => row !== null), [alertHistoryQuery.data]);
+  const selectedAlert = selectedAlertId
+    ? mapApiMaintenanceAlert(unwrapObject(alertDetailQuery.data))
+    : null;
+
+  const acknowledgeAlert = async (alertId: string) => {
+    try {
+      setActionError("");
+      setActionMessage("");
+      await acknowledgeMutation.mutateAsync(alertId);
+      setAcknowledgedIds((prev) => prev.includes(alertId) ? prev : [...prev, alertId]);
+      setActionMessage(`Alert ${alertId} acknowledged. Status refreshed from Backend.`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to acknowledge alert.");
+    }
+  };
+
+  const syncOverdueBatteries = async () => {
+    if (!window.confirm("Run the Backend overdue-battery alert check now? This may generate notifications.")) return;
+    try {
+      setActionError("");
+      setActionMessage("");
+      await batteryOverdueMutation.mutateAsync();
+      setActionMessage("Battery overdue check completed. Alert list is being refreshed.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to check overdue batteries.");
+    }
+  };
 
 
 
@@ -210,6 +249,12 @@ export function MaintenanceAlertsPage() {
       title="Maintenance alerts"
       description=""
     >
+      {(actionError || actionMessage) && (
+        <div role={actionError ? "alert" : "status"}
+          className={`mb-4 rounded-md border border-[var(--tech-border)] px-4 py-3 text-[13px] ${actionError ? "text-red-500" : "text-[var(--tech-text-secondary)]"}`}>
+          {actionError || actionMessage}
+        </div>
+      )}
       {/* ACTIVE ALERTS */}
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         {/* FILTERS */}
@@ -267,6 +312,12 @@ export function MaintenanceAlertsPage() {
           </h2>
 
           <div className="flex items-center gap-4">
+            <button type="button" onClick={() => void syncOverdueBatteries()}
+              disabled={batteryOverdueMutation.isPending}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-50">
+              <RefreshCw size={14} />
+              {batteryOverdueMutation.isPending ? "Checking..." : "Check overdue batteries"}
+            </button>
             <span className="text-[13px] text-[var(--tech-subtle)]">
               {alertsLoading
                 ? "Loading..."
@@ -297,7 +348,7 @@ export function MaintenanceAlertsPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <div className="min-w-[980px]">
-              <div className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_130px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+              <div className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
                 <span>Alert</span>
                 <span>Drone</span>
                 <span>Issue</span>
@@ -311,11 +362,13 @@ export function MaintenanceAlertsPage() {
                 (alert) => (
                   <div
                     key={alert.id}
-                    className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_130px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
+                    className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
                   >
-                    <span className="text-center text-[14px] text-[var(--tech-muted)]">
+                    <button type="button" onClick={() => setSelectedAlertId(alert.id)}
+                      title="View alert details from Backend"
+                      className="text-center text-[14px] font-medium text-orange-500 hover:underline">
                       {alert.id}
-                    </span>
+                    </button>
 
                     <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
                       {alert.drone}
@@ -366,7 +419,14 @@ export function MaintenanceAlertsPage() {
                       {alert.createdAt}
                     </span>
 
-                    <div className="flex justify-center">
+                    <div className="flex items-center justify-center gap-3">
+                      <button type="button" title="View details" onClick={() => setSelectedAlertId(alert.id)}
+                        className="text-[var(--tech-muted)] hover:text-orange-500"><Eye size={15} /></button>
+                      <button type="button" disabled={acknowledgeMutation.isPending || acknowledgedIds.includes(alert.id)}
+                        title="Acknowledge this alert" onClick={() => void acknowledgeAlert(alert.id)}
+                        className="inline-flex items-center gap-1 text-[12px] text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-40">
+                        <CheckCheck size={14}/> {acknowledgedIds.includes(alert.id) ? "Acked" : "Ack"}
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -465,15 +525,25 @@ export function MaintenanceAlertsPage() {
                   <span>Handled at</span>
                 </div>
 
+                {alertHistoryQuery.isPending && (
+                  <div role="status" className="px-5 py-8 text-center text-[13px] text-[var(--tech-muted)]">Loading alert history...</div>
+                )}
+                {alertHistoryQuery.isError && (
+                  <div role="alert" className="px-5 py-8 text-center text-[13px] text-red-500">
+                    {alertHistoryQuery.error instanceof Error ? alertHistoryQuery.error.message : "Unable to load history."}
+                    <button type="button" className="ml-2 underline" onClick={() => void alertHistoryQuery.refetch()}>Retry</button>
+                  </div>
+                )}
                 {alertLogs.map(
                   (log) => (
                     <div
                       key={log.id}
                       className="grid grid-cols-[110px_110px_1fr_140px_130px_130px_170px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
                     >
-                      <span className="text-center text-[14px] text-[var(--tech-muted)]">
+                      <button type="button" onClick={() => setSelectedAlertId(log.alertId)}
+                        className="text-center text-[14px] font-medium text-orange-500 hover:underline">
                         {log.alertId}
-                      </span>
+                      </button>
 
                       <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
                         {log.drone}
@@ -510,13 +580,54 @@ export function MaintenanceAlertsPage() {
                   ),
                 )}
 
-                {alertLogs.length === 0 && (
+                {!alertHistoryQuery.isPending && !alertHistoryQuery.isError && alertLogs.length === 0 && (
                   <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
                     No handled alert history yet.
                   </div>
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAlertId && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-[600px] rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Maintenance alert details</h2>
+              <button type="button" onClick={() => setSelectedAlertId(undefined)}
+                aria-label="Close alert details" className="text-[var(--tech-muted)] hover:text-orange-500"><X size={18}/></button>
+            </div>
+            {alertDetailQuery.isPending ? (
+              <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Loading alert details from Backend...</p>
+            ) : alertDetailQuery.isError ? (
+              <div role="alert" className="mt-5 text-[13px] text-red-500">
+                {alertDetailQuery.error instanceof Error ? alertDetailQuery.error.message : "Unable to load alert."}
+                <button type="button" className="ml-2 underline" onClick={() => void alertDetailQuery.refetch()}>Retry</button>
+              </div>
+            ) : selectedAlert ? (
+              <div className="mt-5 space-y-3 text-[14px] text-[var(--tech-text-secondary)]">
+                <p><strong>Alert:</strong> {selectedAlert.id}</p>
+                <p><strong>Drone:</strong> {selectedAlert.droneId}</p>
+                <p><strong>Issue:</strong> {selectedAlert.title}</p>
+                <p><strong>Source:</strong> {selectedAlert.source}</p>
+                <p><strong>Status:</strong> {selectedAlert.status ?? "—"}</p>
+                <p><strong>Created:</strong> {selectedAlert.createdAt}</p>
+                {selectedAlert.missionId && <p><strong>Mission:</strong> {selectedAlert.missionId}</p>}
+                {selectedAlert.reason && <p className="whitespace-pre-wrap"><strong>Details:</strong> {selectedAlert.reason}</p>}
+                {selectedAlert.status !== "Handled" && (
+                  <button type="button" disabled={acknowledgeMutation.isPending || acknowledgedIds.includes(selectedAlertId)}
+                    onClick={() => void acknowledgeAlert(selectedAlertId)}
+                    className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black disabled:opacity-40">
+                    {acknowledgeMutation.isPending ? "Acknowledging..." : acknowledgedIds.includes(selectedAlertId) ? "Acknowledged" : "Acknowledge alert"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Backend returned no valid alert details.</p>
+            )}
+            {actionError && <p role="alert" className="mt-3 text-[12px] text-red-500">{actionError}</p>}
           </div>
         </div>
       )}

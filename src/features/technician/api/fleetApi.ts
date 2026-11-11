@@ -1,5 +1,6 @@
 export {
   getDroneDetailApi,
+  getDroneFlightHistoryApi,
   getDroneMaintenanceHistoryApi,
   getFleetDronesApi,
   updateDroneStatusApi,

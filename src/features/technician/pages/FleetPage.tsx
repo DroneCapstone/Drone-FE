@@ -193,7 +193,7 @@ export function FleetPage() {
   return (
     <TechnicianPageShell
       title="Hub fleet"
-      description={`Drones physically stored at ${hubLabel}.`}
+      description={``}
     >
       {queryError && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">

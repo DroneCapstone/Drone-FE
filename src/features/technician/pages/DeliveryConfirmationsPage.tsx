@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -16,8 +16,6 @@ import {
   useConfirmPickupMutation,
   useDeliveryConfirmationsQuery,
 } from "../hooks/useDeliveryQueries";
-
-type DeliveryFilter = "Pending confirmation" | "Completed" | "Cancelled";
 
 type Remaining = {
   expired: boolean;
@@ -46,7 +44,6 @@ export function DeliveryConfirmationsPage() {
   const confirmationsQuery = useDeliveryConfirmationsQuery();
   const confirmPickupMutation = useConfirmPickupMutation();
   const deliveries = confirmationsQuery.data ?? [];
-  const [filter, setFilter] = useState<DeliveryFilter>("Pending confirmation");
   const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState("");
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
@@ -71,23 +68,8 @@ export function DeliveryConfirmationsPage() {
     }
   }, [deliveries, now, confirmationsQuery.refetch]);
 
-  const visible: DeliveryConfirmation[] = useMemo(() => {
-    const rows = deliveries.filter((delivery) =>
-      filter === "Pending confirmation"
-        ? delivery.status === "Delivered"
-        : delivery.status === filter,
-    );
-    if (filter !== "Pending confirmation") return rows;
-    return [...rows].sort((a, b) => {
-      const ta = a.pickupDeadlineAtIso ? Date.parse(a.pickupDeadlineAtIso) : Infinity;
-      const tb = b.pickupDeadlineAtIso ? Date.parse(b.pickupDeadlineAtIso) : Infinity;
-      return ta - tb;
-    });
-  }, [deliveries, filter]);
-
-  const pendingCount = deliveries.filter((item) => item.status === "Delivered").length;
-  const completedCount = deliveries.filter((item) => item.status === "Completed").length;
-  const cancelledCount = deliveries.filter((item) => item.status === "Cancelled").length;
+  // With the filter tabs removed, display all statuses from Backend.
+  const visible: DeliveryConfirmation[] = deliveries;
 
   async function handleConfirm(delivery: DeliveryConfirmation) {
     if (!delivery.backendOrderId || confirmPickupMutation.isPending) return;
@@ -101,7 +83,6 @@ export function DeliveryConfirmationsPage() {
       await confirmPickupMutation.mutateAsync(delivery.backendOrderId);
       // Only BE can complete the order. The invalidated list is the source of truth.
       setMessage(`Pickup confirmed for ${delivery.orderCode}. Status is refreshed from Backend.`);
-      setFilter("Completed");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Could not confirm customer pickup.";
       setMessage(`${detail} — If Backend rejects ${delivery.backendOrderId}, ask BE to return the actual order_id.`);
@@ -114,7 +95,7 @@ export function DeliveryConfirmationsPage() {
   return (
     <TechnicianPageShell
       title="Delivery confirmations"
-      description="Confirm customer pickup at the destination hub. Uncollected parcels expire after 72 hours according to Backend policy."
+      description=""
     >
       {message && (
         <div className="mb-4 flex items-start justify-between gap-4 rounded-md border border-orange-500/30 px-4 py-3 text-[13px] text-[var(--tech-text-secondary)]">
@@ -130,22 +111,11 @@ export function DeliveryConfirmationsPage() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <FilterButton active={filter === "Pending confirmation"} onClick={() => setFilter("Pending confirmation")}>
-            Pending confirmation ({pendingCount})
-          </FilterButton>
-          <FilterButton active={filter === "Completed"} onClick={() => setFilter("Completed")}>
-            Completed ({completedCount})
-          </FilterButton>
-          <FilterButton active={filter === "Cancelled"} onClick={() => setFilter("Cancelled")}>
-            Cancelled ({cancelledCount})
-          </FilterButton>
-        </div>
         <button
           type="button"
           onClick={() => void confirmationsQuery.refetch()}
           disabled={confirmationsQuery.isFetching}
-          className="inline-flex items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 py-2 text-[12px] text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 py-2 text-[12px] text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-50"
         >
           <RefreshCw size={14} className={confirmationsQuery.isFetching ? "animate-spin" : ""} />
           {confirmationsQuery.isFetching && !confirmationsQuery.isPending ? "Updating..." : "Refresh"}
@@ -236,7 +206,7 @@ export function DeliveryConfirmationsPage() {
                       ? "Loading delivery confirmations..."
                       : confirmationsQuery.isError && !confirmationsQuery.data
                         ? "Unable to load delivery confirmations."
-                        : "No deliveries in this category."}
+                        : "No delivery confirmations available."}
                   </div>
                 )}
               </div>
@@ -263,8 +233,4 @@ function StatusCell({ delivery }: { delivery: DeliveryConfirmation }) {
 
 function Header({ children, alignRight = false }: { children: ReactNode; alignRight?: boolean }) {
   return <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)] ${alignRight ? "text-right" : ""}`}>{children}</span>;
-}
-
-function FilterButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`rounded-md px-3 py-2 text-[12px] font-medium transition-colors ${active ? "bg-[var(--tech-surface-2)] text-orange-500" : "text-[var(--tech-muted)] hover:text-[var(--tech-text-secondary)]"}`}>{children}</button>;
 }

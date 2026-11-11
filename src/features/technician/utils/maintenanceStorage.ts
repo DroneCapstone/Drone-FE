@@ -73,10 +73,15 @@ export type CompletedMaintenanceRecord = {
   diagnosis: string;
   correctiveAction: string;
   inspectionItems: string[];
-  resultingStatus: DroneStatus;
+  resultingStatus: DroneStatus | "Retired" | "—";
   createdAt: string;
   scheduledAt?: string;
   completedAt: string;
+  // Optional fields returned by Drone Maintenance History, which may include
+  // Work Order history entries rather than standalone Maintenance Records.
+  maintenanceType?: string;
+  recordDescription?: string;
+  workOrderStatus?: string;
 };
 
 export const WORK_ORDERS_STORAGE_KEY =
@@ -364,7 +369,7 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
         ? maintenanceDisplayId("BAT", rawBatteryId, 3)
         : undefined;
     })(),
-    title: pickString(value, ["title", "issue_description", "task", "description"], "Maintenance work order"),
+    title: pickString(value, ["issue_description", "title", "task", "description"], "Maintenance work order"),
     priority: normalizeApiPriority(
       pickString(value, ["priority"], "Medium"),
     ),
@@ -432,12 +437,30 @@ function extractInspectionChecklist(action: string) {
   };
 }
 
-function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | null {
+function normalizeRecordDroneId(id: string): string {
+  const cleaned = id.trim();
+  // The API uses full IDs such as DRN-0003. Do not rewrite these as DR-0003.
+  return /^DRN-/i.test(cleaned) ? cleaned.toUpperCase() : maintenanceDisplayId("DR", cleaned, 3);
+}
+
+function mapApiMaintenanceRecord(
+  value: unknown,
+  requestedDroneId?: string,
+): CompletedMaintenanceRecord | null {
   if (!isRecord(value)) return null;
 
-  const rawWorkOrderId = pickString(value, ["work_order_id", "workOrderId"]);
-  const rawDroneId = pickString(value, ["drone_id", "droneId"]);
-  if (!rawWorkOrderId || !rawDroneId) return null;
+  // /drones/{drone_id}/maintenance-history may return Work Order-based
+  // records without a drone_id on every row. The URL already scopes them.
+  const rawWorkOrderId = pickString(value, ["work_order_id", "workOrderId"], "");
+  const rawRecordId = pickString(value, ["maintenance_record_id", "id"], "");
+  const explicitDroneId = pickString(value, ["drone_id", "droneId"], "");
+  const rawDroneId = explicitDroneId || requestedDroneId || "";
+  if ((!rawWorkOrderId && !rawRecordId) || !rawDroneId) return null;
+
+  const droneId = normalizeRecordDroneId(rawDroneId);
+  // Even for a per-drone endpoint, reject an explicitly mismatched ID.
+  if (explicitDroneId && requestedDroneId &&
+      droneId !== normalizeRecordDroneId(requestedDroneId)) return null;
 
   const savedAction = pickString(value, ["corrective_action", "action_taken"], "—");
   const checklistBackup = extractInspectionChecklist(savedAction);
@@ -451,47 +474,40 @@ function mapApiMaintenanceRecord(value: unknown): CompletedMaintenanceRecord | n
             : String(item),
       )
     : [];
-  const inspectionItems = structuredItems.length > 0
-    ? structuredItems
-    : checklistBackup.items;
+  const inspectionItems = structuredItems.length > 0 ? structuredItems : checklistBackup.items;
 
-  const resultStatus = pickString(
-    value,
-    ["resulting_drone_status", "resulting_status"],
-    "Available",
-  );
+  const rawResultStatus = pickString(value, ["resulting_drone_status", "resulting_status"], "");
+  const normalizedStatus = rawResultStatus.trim().toUpperCase();
+  const resultingStatus: CompletedMaintenanceRecord["resultingStatus"] =
+    normalizedStatus === "MAINTENANCE" ? "Maintenance"
+      : normalizedStatus === "READY" || normalizedStatus === "AVAILABLE" ? "Available"
+      : normalizedStatus === "RETIRED" ? "Retired"
+      : "—";
 
   return {
-    id: maintenanceDisplayId(
-      "MR",
-      pickString(value, ["maintenance_record_id", "id"], `${rawWorkOrderId}`),
-      4,
-    ),
-    workOrderId: maintenanceDisplayId("WO", rawWorkOrderId, 4),
-    droneId: maintenanceDisplayId("DR", rawDroneId, 3),
-    drone: pickString(value, ["drone_name", "drone_code"], maintenanceDisplayId("DR", rawDroneId, 3)),
+    id: maintenanceDisplayId("MR", rawRecordId || rawWorkOrderId, 4),
+    workOrderId: rawWorkOrderId ? maintenanceDisplayId("WO", rawWorkOrderId, 4) : "—",
+    droneId,
+    drone: pickString(value, ["drone_name", "drone_code"], droneId),
     title: pickString(value, ["title", "issue_description"], "Maintenance record"),
-    priority: normalizeApiPriority(
-      pickString(value, ["priority"], "Medium"),
-    ),
-    assignedTo: pickString(value, ["assigned_to", "technician_name"], "Technician"),
+    priority: normalizeApiPriority(pickString(value, ["priority"], "Medium")),
+    assignedTo: pickString(value, ["assigned_to", "assigned_technician_name", "technician_name"], "Technician"),
     diagnosis: pickString(value, ["diagnosis"], "—"),
     correctiveAction: checklistBackup.action,
     inspectionItems,
-    resultingStatus:
-      resultStatus.trim().toUpperCase() === "MAINTENANCE"
-        ? "Maintenance"
-        : "Available",
-    createdAt: formatApiDateTime(
-      pickString(value, ["created_at"], ""),
-      "—",
-    ),
+    resultingStatus,
+    maintenanceType: pickString(value, ["maintenance_type"], "") || undefined,
+    recordDescription: pickString(value, ["record_description"], "") || undefined,
+    workOrderStatus: pickString(value, ["status", "work_order_status"], "") || undefined,
+    createdAt: formatApiDateTime(pickString(value, ["created_at"], ""), "—"),
     scheduledAt: (() => {
       const scheduled = pickString(value, ["scheduled_at"], "");
       return scheduled ? formatApiDateTime(scheduled, scheduled) : undefined;
     })(),
+    // Completed Work Orders expose resolved_at, while maintenance records
+    // often expose completed_at; do not invent an update time as completion.
     completedAt: formatApiDateTime(
-      pickString(value, ["completed_at", "updated_at"], ""),
+      pickString(value, ["resolved_at", "completed_at", "performed_at", "updated_at"], ""),
       "—",
     ),
   };
@@ -540,9 +556,9 @@ export async function updateWorkOrderOnServer(
   workOrderId: string,
   payload: Record<string, unknown>,
 ) {
-  const result = await updateWorkOrderApi(workOrderId, payload);
-  await refreshWorkOrdersFromApi();
-  return result;
+  // The PUT is the authoritative write. React Query invalidates the list
+  // separately; a failed follow-up GET must not mark the PUT as failed.
+  return updateWorkOrderApi(workOrderId, payload);
 }
 
 export async function updateWorkOrderInspectionOnServer(
@@ -603,8 +619,12 @@ export async function createMaintenanceRecordOnServer(payload: {
 
 export async function refreshDroneMaintenanceHistoryFromApi(droneId: string) {
   const payload = await getDroneMaintenanceHistoryApi(droneId);
-  const next = unwrapList(payload)
-    .map(mapApiMaintenanceRecord)
+  const rows = unwrapList(payload);
+  const records = rows.length > 0 ? rows :
+    isRecord(payload) && ("work_order_id" in payload || "maintenance_record_id" in payload)
+      ? [payload] : [];
+  const next = records
+    .map((value) => mapApiMaintenanceRecord(value, droneId))
     .filter((item): item is CompletedMaintenanceRecord => Boolean(item));
 
   const all = loadMaintenanceRecords();
@@ -634,8 +654,12 @@ export async function refreshMaintenanceRecordsFromApi(
   droneId: string,
 ) {
   const payload = await getMaintenanceRecordsApi(droneId);
-  const next = unwrapList(payload)
-    .map(mapApiMaintenanceRecord)
+  const rows = unwrapList(payload);
+  const records = rows.length > 0 ? rows :
+    isRecord(payload) && ("work_order_id" in payload || "maintenance_record_id" in payload)
+      ? [payload] : [];
+  const next = records
+    .map((value) => mapApiMaintenanceRecord(value, droneId))
     .filter((item): item is CompletedMaintenanceRecord => Boolean(item));
 
   const current = loadMaintenanceRecords();
@@ -649,7 +673,6 @@ export async function refreshMaintenanceRecordsFromApi(
 export async function deleteWorkOrderOnServer(
   workOrderId: string,
 ) {
-  const result = await deleteWorkOrderApi(workOrderId);
-  await refreshWorkOrdersFromApi();
-  return result;
+  // No follow-up GET here: DELETE may already have succeeded even if GET fails.
+  return deleteWorkOrderApi(workOrderId);
 }
