@@ -1559,7 +1559,7 @@ export function WorkOrderDetailPage() {
 
             >
 
-              <option value="Ready">Ready (Available)</option>
+              <option value="Available">Available</option>
 
               <option value="Maintenance">Maintenance</option>
 
