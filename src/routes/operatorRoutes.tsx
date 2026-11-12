@@ -1,5 +1,5 @@
 import { lazy, type ComponentType } from "react";
-import { Navigate, type RouteObject } from "react-router-dom";
+import { Navigate, useLocation, type RouteObject } from "react-router-dom";
 
 const lazyPage = <
   TModule,
@@ -177,13 +177,21 @@ const MissionAnalysisPage = lazyPage(
 //   "SimulationPage",
 // );
 
-const ModelInsightsPage = lazyPage(
-  () =>
-    import(
-      "../features/operator/pages/ai/ModelInsightsPage"
-    ),
-  "ModelInsightsPage",
-);
+// Model Insights is intentionally hidden while its metrics are mock values.
+// Keep the lazy import for re-enable once real metrics are available.
+// const ModelInsightsPage = lazyPage(
+//   () => import("../features/operator/pages/ai/ModelInsightsPage"),
+//   "ModelInsightsPage",
+// );
+
+/** Only the Create Mission route review may open mission-level AI analysis. */
+function MissionAnalysisEntry() {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  const hasDraftContext = params.get('returnTo') === 'mission-create'
+    && Boolean(params.get('orderId') && params.get('droneId') && params.get('batteryId') && params.get('routeId'));
+  return hasDraftContext ? <MissionAnalysisPage /> : <Navigate to="/operator/missions/all" replace />;
+}
 
 /* =========================================================
    ROUTES
@@ -337,7 +345,7 @@ export const operatorRoutes: RouteObject[] = [
 
   {
     path: "ai/mission-analysis",
-    element: <MissionAnalysisPage />,
+    element: <MissionAnalysisEntry />,
   },
 
   // Scenario simulation disabled — leave route commented for future re-enable.
@@ -346,9 +354,11 @@ export const operatorRoutes: RouteObject[] = [
   //   element: <SimulationPage />,
   // },
 
+  // Model Insights page is preserved, but the mock-metrics screen is inaccessible.
+  // { path: "ai/model-insights", element: <ModelInsightsPage /> },
   {
     path: "ai/model-insights",
-    element: <ModelInsightsPage />,
+    element: <Navigate to="/operator/missions/all" replace />,
   },
 
   // Backward-compatible redirects from old AI routes.

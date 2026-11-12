@@ -124,6 +124,8 @@ export function CreateMissionPage() {
   }, [orderId]);
 
   const bundleOrderIds = [orderId, ...bundledOrderIds];
+  // Display only; the original mission bundle used for validation/submission stays unchanged.
+  const additionalReviewOrderIds = [...new Set(bundledOrderIds.filter((id) => id && id !== orderId))];
   const {
     data: bundleCandidates,
     error: bundleCandidatesError,
@@ -317,8 +319,8 @@ export function CreateMissionPage() {
   );
   const routeOptions = analysisMatchesBundle ? planningAnalysis?.routes ?? [] : [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Drop-off Point';
-  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Pick-up Point';
+  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
+  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
   const hubName = (hubId: string) =>
     networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const selectedRouteEnergy = selectedRoute
@@ -587,8 +589,8 @@ export function CreateMissionPage() {
                   readOnly
                 />
               </label>
-              <label><span>Drop-off Point</span><input value={originHubLabel} readOnly /></label>
-              <label><span>Pick-up Point</span><input value={destinationHubLabel} readOnly /></label>
+              <label><span>Origin hub</span><input value={originHubLabel} readOnly /></label>
+              <label><span>Destination hub</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
@@ -603,7 +605,7 @@ export function CreateMissionPage() {
             </div>
             {!hasOrderHubs && (
               <div className="operator-empty-state">
-                This Order does not contain a valid Drop-off Point and Pick-up Point.
+                This Order does not contain a valid Origin hub and Destination hub.
               </div>
             )}
           </OperatorPanel>
@@ -707,12 +709,12 @@ export function CreateMissionPage() {
             <OperatorPanel title="Delivery network">
               <div className="delivery-network-strip">
                 <div className="delivery-network-node">
-                  <small>Drop-off Point</small>
+                  <small>Origin hub</small>
                   <strong>{originHubLabel}</strong>
                 </div>
                 <div className="delivery-network-arrow">→</div>
                 <div className="delivery-network-node">
-                  <small>Pick-up Point</small>
+                  <small>Destination hub</small>
                   <strong>{destinationHubLabel}</strong>
                 </div>
               </div>
@@ -910,12 +912,15 @@ export function CreateMissionPage() {
                   </dl>
                 </div>
 
-                <div className="mission-review-info-row mission-review-info-row--full">
-                  <dl className="mission-review-field">
-                    <dt>Orders on this mission ({bundleOrderIds.length})</dt>
-                    <dd className="mission-review-order-code">{bundleOrderIds.join(', ')}</dd>
-                  </dl>
-                </div>
+                {/* Primary Order is shown above; show only additional orders when bundling. */}
+                {additionalReviewOrderIds.length > 0 && (
+                  <div className="mission-review-info-row mission-review-info-row--full">
+                    <dl className="mission-review-field">
+                      <dt>Additional orders ({additionalReviewOrderIds.length})</dt>
+                      <dd className="mission-review-order-code">{additionalReviewOrderIds.join(', ')}</dd>
+                    </dl>
+                  </div>
+                )}
                 <div className="mission-review-info-row mission-review-info-row--full">
                   <dl className="mission-review-field">
                     <dt>Total payload</dt>
@@ -958,8 +963,8 @@ export function CreateMissionPage() {
                 )}
 
                 <div className="mission-review-info-row">
-                  <dl className="mission-review-field"><dt>Drop-off Point</dt><dd>{originHubLabel}</dd></dl>
-                  <dl className="mission-review-field"><dt>Pick-up Point</dt><dd>{destinationHubLabel}</dd></dl>
+                  <dl className="mission-review-field"><dt>Origin hub</dt><dd>{originHubLabel}</dd></dl>
+                  <dl className="mission-review-field"><dt>Destination hub</dt><dd>{destinationHubLabel}</dd></dl>
                 </div>
                 <div className="mission-review-info-row">
                   <dl className="mission-review-field">

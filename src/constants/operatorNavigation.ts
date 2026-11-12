@@ -32,17 +32,18 @@ export const operatorNavigation: OperatorNavItem[] = [
       { label: 'Incidents', path: '/operator/operations/incidents' },
     ],
   },
+  /* AI Decision Center hidden from the Operator sidebar until a verified Model Insights source is available.
+   * Mission Analysis remains accessible only through Create Mission > View AI details.
   {
     label: 'AI Decision Center',
     path: '/operator/ai/mission-analysis',
     icon: 'spark',
     children: [
       { label: 'Mission analysis', path: '/operator/ai/mission-analysis' },
-      // Scenario simulation disabled — keep for future re-enable.
-      // { label: 'Scenario simulation', path: '/operator/ai/simulation' },
       { label: 'Model insights', path: '/operator/ai/model-insights' },
     ],
   },
+  */
   // ANALYTICS TEMPORARILY DISABLED — restore when real analytics API is integrated.
   // { label: 'Analytics', path: '/operator/analytics', icon: 'chart' },
 

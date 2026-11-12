@@ -20,11 +20,12 @@ export const operationTabs = [
   { label: 'Incidents', path: '/operator/operations/incidents' },
 ];
 
+// AI analysis is reached from Create Mission > View AI details; model metrics are mock data.
+// Keep these tabs in comments for later re-enable when validated model metrics are ready.
 export const aiTabs = [
-  { label: 'Mission analysis', path: '/operator/ai/mission-analysis' },
-  // Scenario simulation disabled — keep for future re-enable.
+  // { label: 'Mission analysis', path: '/operator/ai/mission-analysis' },
   // { label: 'Scenario simulation', path: '/operator/ai/simulation' },
-  { label: 'Model insights', path: '/operator/ai/model-insights' },
+  // { label: 'Model insights', path: '/operator/ai/model-insights' },
 ];
 
 export const sectionTitles: Record<string, [string, string]> = {

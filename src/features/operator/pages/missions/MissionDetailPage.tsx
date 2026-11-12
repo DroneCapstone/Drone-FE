@@ -118,6 +118,7 @@ export function MissionDetailPage() {
                     Flight history
                   </ActionButton>
                 )}
+                {/* AI analysis is only offered while choosing a route in Create Mission.
                 <ActionButton
                   variant="secondary"
                   onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
@@ -130,6 +131,7 @@ export function MissionDetailPage() {
                 >
                   AI analysis
                 </ActionButton>
+                */}
               </div>
             </div>
 
