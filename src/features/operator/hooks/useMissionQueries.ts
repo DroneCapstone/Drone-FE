@@ -31,6 +31,7 @@ import {
 } from '../api/missionApi';
 import {
   getPreAnalyzeBundleCandidatesApi,
+  getPostAnalyzeBundleCandidatesApi,
   validateMissionBundleApi,
 } from '../api/missionBundleApi';
 import { operatorQueryKeys } from '../query/queryKeys';
@@ -155,6 +156,21 @@ export function useValidateMissionBundleQuery(orderIds: string[], droneId: strin
     queryKey: operatorQueryKeys.missionBundleValidation(orderIds, droneId),
     queryFn: () => validateMissionBundleApi({ orderIds, ...(droneId ? { droneId } : {}) }),
     enabled: enabled && orderIds.length > 1,
+    staleTime: 0,
+  });
+}
+
+/** BE candidate discovery for the chosen primary-order route; never a safety validation. */
+export function usePostAnalyzeBundleCandidatesQuery(
+  orderId: string,
+  droneId: string,
+  routeId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: operatorQueryKeys.missionPostAnalyzeBundleCandidates(orderId, droneId, routeId),
+    queryFn: () => getPostAnalyzeBundleCandidatesApi({ orderId, droneId, routeId }),
+    enabled: enabled && Boolean(orderId.trim() && droneId.trim() && routeId.trim()),
     staleTime: 0,
   });
 }
