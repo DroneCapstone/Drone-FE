@@ -65,7 +65,15 @@ function formatPlanningTime(order: Order): PlanningTime | undefined {
   return { label: `${formatCompactMinutes(slack)} left`, overdue: false };
 }
 
-export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mission[] }) {
+export function OrderTable({
+  orders,
+  missions,
+  startIndex = 0,
+}: {
+  orders: Order[];
+  missions: Mission[];
+  startIndex?: number;
+}) {
   const navigate = useNavigate();
 
   return (
@@ -73,6 +81,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
       <table className="order-table">
         <thead>
           <tr>
+            <th scope="col" className="order-number-heading">No.</th>
             <th>Order</th>
             <th className="order-route-heading">Hub Point</th>
             <th>Package</th>
@@ -82,7 +91,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => {
+          {orders.map((order, index) => {
             const planning = getOrderPlanningBadge(order, missions);
             const deliveryMission = getDeliveryMission(order.id, missions);
             const canCreate = canCreateMissionForOrder(order, missions);
@@ -103,6 +112,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
 
             return (
               <tr key={order.id} onClick={() => navigate(`/operator/orders/${order.id}`)}>
+                <td className="order-number-cell">{startIndex + index + 1}</td>
                 <td>
                   <strong>{order.id}</strong>
                   <small>{order.deliveryMode} · {order.status}</small>

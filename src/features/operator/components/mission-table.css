@@ -1,0 +1,13 @@
+/* Flight Missions: add No. column without changing existing table styles or behavior. */
+.mission-table--numbered { min-width: 950px; }
+.mission-table--numbered .mission-number-heading,
+.mission-table--numbered .mission-number-cell {
+  width: 52px;
+  min-width: 52px;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

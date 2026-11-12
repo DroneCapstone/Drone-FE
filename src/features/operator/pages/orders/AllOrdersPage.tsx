@@ -132,7 +132,11 @@ export function AllOrdersPage() {
           <div className="operator-empty-state">No Orders match the current filters.</div>
         ) : (
           <>
-            <OrderTable orders={paginatedOrders} missions={missions} />
+            <OrderTable
+              orders={paginatedOrders}
+              missions={missions}
+              startIndex={(currentPage - 1) * OPERATOR_PAGE_SIZE}
+            />
             <OperatorPagination
               currentPage={currentPage}
               totalItems={filtered.length}
