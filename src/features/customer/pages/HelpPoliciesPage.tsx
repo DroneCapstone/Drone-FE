@@ -6,6 +6,7 @@ import {
 import {
   useMemo,
   useState,
+  type ReactNode,
 } from "react";
 
 import deliveryHandoverImage from "../../../assets/images/customer/help-delivery-handover.png";
@@ -60,7 +61,7 @@ const CATEGORIES: CategoryCard[] = [
     id: "policy",
     title: "Insurance & policies",
     description:
-      "Insurance, changes and cancellation.",
+      "Insurance, refunds, compensation and cancellation.",
     image: insurancePoliciesImage,
   },
 ];
@@ -136,7 +137,7 @@ const ARTICLES: HelpArticle[] = [
     summary:
       "Optional protection for eligible packages.",
     content:
-      "Package insurance is optional. When selected, the current pricing rule adds 10% of the core fee to the quotation.",
+      "Package insurance is optional and adds 10% of the core fee. Insurance compensation for lost or damaged goods is assessed separately under the applicable coverage terms; the 10% premium is not a guaranteed payout rate.",
   },
   {
     id: "changes-cancellation",
@@ -145,9 +146,158 @@ const ARTICLES: HelpArticle[] = [
     summary:
       "Availability depends on the current order stage.",
     content:
-      "Open the delivery details to review the current order and payment status before making changes. Cancellation availability depends on the current order stage.",
+      "An unpaid PENDING order with no mission can be deleted in Order Details. Paid orders cannot be deleted using this feature; for paid-order cancellation or refund review, contact Customer Support. Eligibility depends on the order stage and backend rules.",
+  },
+
+  {
+    id: "refund-rules",
+    category: "policy",
+    title: "Refund conditions & compensation",
+    summary: "Who qualifies, what fees are covered, and what happens when parcels are lost or damaged.",
+    // Includes searchable terms for the former detailed policy articles.
+    content: `Draft policy. Refund eligibility is verified against confirmed payment, order history, hub handovers, mission records and liability. Eligible delivery-related charges include paid core fee and applicable handling/Express surcharges. Insurance premiums and compensation for the value of goods are assessed separately. No double refunds for the same fee. Estimated arrival (ETA) is not a guaranteed deadline; delay refunds need a confirmed delivery deadline. Applicable law and consumer rights prevail.
+
+    Full refund 100%: service cancelled or permanently impossible due to DroneOptAI issues, drone battery hub failures, parcel lost after origin-hub acceptance, or severe weather disruption when no rescheduling is accepted and the paid service cannot be provided. Duplicate payment returns 100% of duplicate amount; incorrect overcharge returns 100% of excess amount only.
+
+    Late delivery after a confirmed deadline caused by DroneOptAI: under 60 minutes 0%; from 60 to 120 minutes 20%; above 120 minutes 50%. Express priority failure refunds 100% of Express surcharge paid (Express surcharge is currently 25% of core fee); Express does not guarantee immediate flight or a fixed ETA.
+
+    Parcel lost: 100% of eligible delivery charges; minor damage but usable: 50%; severe damage making goods unusable: 100%. Actual value compensation is reviewed separately based on evidence, liability, packaging and insurance cover. Insurance fee is 10% of core fee but is not the payout rate.
+
+    Weather and rescheduling: safety first. New schedule accepted and completed: no automatic refund. If service becomes impossible with no accepted alternative: proposed 100%, reviewed case by case. Weather-only delay is not automatically eligible for 20% or 50%.
+
+    Customer-caused delays, missed drop-off, invalid package, incorrect information and failure to collect after fulfilled hub-to-hub delivery: proposed 0% where exclusively due to Customer, subject to law. Unpaid PENDING orders can have no payment refund. Deleting an eligible unpaid pending order is not a refund. Paid orders cannot use the current DELETE order API.`,
+  },
+  {
+    id: "refund-claims",
+    category: "policy",
+    title: "How to request a refund",
+    summary: "What to prepare, how claims are reviewed, and expected processing times.",
+    content: `Contact DroneOptAI Customer Support with order ID, payment reference, description and evidence; for parcel loss or damage include photos and handover records. Report promptly, preferably within 7 calendar days; later reports may still be considered. Customer Support verifies payment, hub events, mission, deadline, incident, liability and insurance, then decides eligible fee base, percentage and amount. A first response within 3 business days is a proposed target. Approved refunds may take 5–15 business days depending on the bank and provider; not guaranteed. Rejected claims can be reconsidered with new evidence. Help & Policies does not submit a claim or transfer refunds automatically.`,
   },
 ];
+
+
+/** One clear reference table instead of nine separate refund articles. */
+type RefundRow = {
+  situation: string;
+  detail: string;
+  rate: string;
+};
+
+const REFUND_ROWS: RefundRow[] = [
+  { situation: "Service cancelled or parcel lost", detail: "DroneOptAI responsibility confirmed", rate: "100%" },
+  { situation: "Late by 60–120 minutes", detail: "Verified operational fault and confirmed deadline", rate: "20%" },
+  { situation: "Late by over 120 minutes", detail: "Verified operational fault and confirmed deadline", rate: "50%" },
+  { situation: "Express priority not provided", detail: "Express surcharge only", rate: "100% surcharge" },
+  { situation: "Parcel damaged during transport", detail: "Minor 50% · Severe 100%", rate: "50–100%" },
+  { situation: "Customer-caused issue", detail: "Only where the agreed service was fulfilled", rate: "0%" },
+];
+
+function RefundQuickGuide() {
+  return (
+    <section className="mb-4 overflow-hidden rounded-[18px] border border-white/[0.10] bg-[#151217]/92" aria-label="Refund rates summary">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.09] px-4 py-3.5 sm:px-5">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-orange-300">Refund guide</p>
+          <h3 className="mt-1 text-[17px] font-semibold text-white">Refunds at a glance</h3>
+        </div>
+        <span className="rounded-md border border-orange-500/[0.22] bg-orange-500/[0.09] px-2 py-1 text-[10px] font-semibold text-orange-300">DRAFT</span>
+      </div>
+      <table className="w-full table-fixed border-collapse text-left">
+        <thead>
+          <tr className="border-b border-white/[0.08] bg-white/[0.025]">
+            <th scope="col" className="w-[68%] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-white/[0.55] sm:px-5">Situation</th>
+            <th scope="col" className="w-[32%] px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-white/[0.55] sm:px-5">Refund</th>
+          </tr>
+        </thead>
+        <tbody>
+          {REFUND_ROWS.map(({ situation, detail, rate }) => (
+            <tr key={situation} className="border-b border-white/[0.07] last:border-0">
+              <td className="px-4 py-3 align-middle sm:px-5">
+                <p className="text-[12px] font-semibold leading-5 text-white/[0.90] sm:text-[13px]">{situation}</p>
+                <p className="mt-0.5 text-[11px] leading-[1.5] text-white/[0.58]">{detail}</p>
+              </td>
+              <td className="px-3 py-3 text-right align-middle sm:px-5">
+                <span className={`inline-block rounded-md px-2 py-1 text-[11px] font-bold leading-4 ${rate === "0%" ? "bg-white/[0.05] text-white/[0.62]" : "bg-orange-500/[0.10] text-orange-300"}`}>
+                  {rate}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="border-t border-white/[0.08] px-4 py-3 text-[11px] leading-[1.6] text-white/[0.62] sm:px-5">
+        Proposed rates on eligible <strong className="font-semibold text-white/[0.84]">paid delivery fees</strong>, not the value of goods. Claims require verification; they are not automatic refunds.
+      </p>
+    </section>
+  );
+}
+
+function PolicySubsection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h4 className="border-l-[3px] border-orange-500 pl-3 text-[13px] font-semibold text-white">{title}</h4>
+      <div className="pl-3 text-[12px] leading-[1.7] text-white/[0.78]">{children}</div>
+    </section>
+  );
+}
+
+function RefundRules() {
+  return (
+    <div className="space-y-4">
+      <PolicySubsection title="When a refund applies">
+        <p>Payment and the reason for the issue must be verified using the order, hub handovers and mission records. A confirmed delivery deadline is required for delay-based refunds; the ETA is only an estimate.</p>
+      </PolicySubsection>
+      <PolicySubsection title="Loss, damage & insurance">
+        <p>A confirmed lost parcel or severe transport damage may qualify for a 100% delivery-fee refund; minor damage may qualify for 50%. The value of the goods is handled separately through liability and insurance review. Insurance costs 10% of the core fee but does not guarantee a matching compensation percentage.</p>
+      </PolicySubsection>
+      <PolicySubsection title="Weather & customer-caused issues">
+        <p>Weather-related delays or accepted rescheduling do not automatically qualify for a delay refund. If the paid service becomes impossible and no alternative is accepted, a full refund may be reviewed. Late drop-off, incorrect details, invalid parcels or uncollected deliveries are generally not refundable when solely caused by the Customer and the delivery obligation was met.</p>
+      </PolicySubsection>
+      <PolicySubsection title="How the amount is calculated">
+        <p>Rates are based on eligible delivery fees actually paid, including relevant handling surcharges. A missed Express priority refunds the Express surcharge (currently 25% of core fee). Duplicate payments or excess charges are corrected in full for the duplicated or excess amount. The same service fee is never refunded twice.</p>
+      </PolicySubsection>
+      <p className="rounded-lg border border-white/[0.09] bg-white/[0.025] px-3 py-2.5 text-[11px] leading-[1.65] text-white/[0.62]">This is a draft policy, subject to approval and applicable consumer rights. Refund requests are reviewed case by case.</p>
+    </div>
+  );
+}
+
+const REFUND_STEPS = [
+  { title: "Contact support", detail: "Provide your order ID, payment reference, issue description and photos or other evidence if needed." },
+  { title: "Claim review", detail: "Support verifies payment, hub handovers, mission events and the cause of the issue before deciding the eligible amount." },
+  { title: "Refund decision", detail: "If approved, payment is returned through an available provider method. You may request a review of a rejection." },
+];
+
+function RefundClaimSteps() {
+  return (
+    <div className="space-y-4">
+      <ol className="space-y-4">
+        {REFUND_STEPS.map((step, index) => (
+          <li key={step.title} className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-orange-500/[0.25] bg-orange-500/[0.09] text-[12px] font-bold text-orange-300">{index + 1}</span>
+            <div className="min-w-0 pt-0.5">
+              <p className="text-[12px] font-semibold text-white/[0.92]">{step.title}</p>
+              <p className="mt-1 text-[12px] leading-[1.7] text-white/[0.68]">{step.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {[
+          ["7 days", "Suggested claim window"],
+          ["3 days", "Target first response"],
+          ["5–15 days", "Target refund processing"],
+        ].map(([time, description]) => (
+          <div key={time} className="rounded-lg border border-white/[0.09] bg-white/[0.025] px-3 py-2.5">
+            <p className="text-[14px] font-semibold text-orange-300">{time}</p>
+            <p className="mt-1 text-[10px] leading-4 text-white/[0.58]">{description}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] leading-[1.7] text-white/[0.60]">The 7-day reporting window is recommended (calendar days). Response and processing estimates use business days and are not guaranteed. This page does not submit claims or transfer refunds automatically; later claims may still be reviewed where justified or legally required.</p>
+    </div>
+  );
+}
 
 export function HelpPoliciesPage() {
   const [query, setQuery] =
@@ -323,6 +473,8 @@ export function HelpPoliciesPage() {
           ) : null}
         </div>
 
+        {!isSearching && selectedCategory === "policy" && <RefundQuickGuide />}
+
         {visibleArticles.length >
           0 ? (
           <div className="overflow-hidden rounded-[20px] border border-white/[0.09] bg-[#151217]/92">
@@ -420,9 +572,15 @@ function ArticleRow({
       </summary>
 
       <div className="border-t border-white/[0.06] px-4 py-4 sm:px-5">
-        <p className="max-w-[720px] text-[13px] leading-7 text-white/[0.92]">
-          {article.content}
-        </p>
+        {article.id === "refund-rules" ? (
+          <RefundRules />
+        ) : article.id === "refund-claims" ? (
+          <RefundClaimSteps />
+        ) : (
+          <p className="max-w-[720px] whitespace-pre-line text-[13px] leading-7 text-white/[0.92]">
+            {article.content}
+          </p>
+        )}
       </div>
     </details>
   );
