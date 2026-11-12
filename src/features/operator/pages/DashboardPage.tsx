@@ -37,7 +37,7 @@ export function DashboardPage() {
     (order) => getOrderPlanningBadge(order, missions) === 'Needs Replanning',
   );
 
-  const activeMissions = missions.filter((mission) => mission.status === 'In Progress');
+  const activeMissions = missions.filter((mission) => mission.status === 'Flying');
   const scheduledMissions = missions.filter((mission) => mission.status === 'Scheduled');
   const completedMissions = missions.filter((mission) => mission.status === 'Completed');
   const failedMissions = missions.filter((mission) => mission.status === 'Failed');
@@ -246,7 +246,7 @@ export function DashboardPage() {
             </div>
             <div className="donut-legend">
               <span><i className="green" />Completed <b>{completedCount}</b></span>
-              <span><i className="orange" />In progress <b>{activeCount}</b></span>
+              <span><i className="orange" />Flying <b>{activeCount}</b></span>
               <span><i className="blue" />Scheduled <b>{scheduledCount}</b></span>
               <span><i className="red" />Failed <b>{failedCount}</b></span>
             </div>
