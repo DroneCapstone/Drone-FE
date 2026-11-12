@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { Clock, Info } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -35,7 +36,7 @@ export function MissionDetailPage() {
   if (isMissionLoading) {
     return (
       <MissionPageShell active="/operator/missions/all">
-        <OperatorPanel><div className="operator-empty-state">Loading Mission…</div></OperatorPanel>
+        <OperatorPanel><OperatorLoadingState label="Loading mission…" /></OperatorPanel>
       </MissionPageShell>
     );
   }

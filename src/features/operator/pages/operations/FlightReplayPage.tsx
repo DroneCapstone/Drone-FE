@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import * as maplibregl from 'maplibre-gl';
@@ -244,11 +245,11 @@ export function FlightReplayPage() {
     <div className="fh-card fh-playback-panel">
       <header className="fh-playback-header"><div><h2>{missionId}</h2><p>{m?.drone || m?.droneId || 'Drone'} · {fromName} → {toName}</p></div><Link className="fh-button" to={`/operator/missions/${encodeURIComponent(missionId)}`}>Mission details →</Link></header>
       {(mission.isError || telemetry.isError) && <div className="fh-warning" role="alert">{telemetry.error instanceof Error ? telemetry.error.message : mission.error instanceof Error ? mission.error.message : 'Unable to load flight data.'}</div>}
-      {mission.isLoading ? <div className="fh-empty">Loading mission status…</div>
+      {mission.isLoading ? <OperatorLoadingState label="Checking flight status…" />
         : mission.isError ? <div className="fh-empty"><strong>Unable to verify mission status</strong><p>Flight Replay is unavailable until the mission status can be confirmed.</p></div>
           : !m ? <div className="fh-empty"><strong>Mission not found</strong><p>Unable to verify the recorded flight.</p></div>
             : !replayAllowed ? <div className="fh-empty"><strong>Flight replay unavailable</strong><p>{m.status === 'Scheduled' ? 'This mission has not departed. Scheduled routes and any telemetry attached to a Scheduled mission must not be shown as a recorded flight.' : m.status === 'In Progress' ? 'This mission is still in progress. Use Live tracking to monitor the flight; replay will be available after it ends.' : 'This mission has no confirmed take-off event, so there is no historical flight to replay.'}</p></div>
-              : telemetry.isLoading ? <div className="fh-empty">Loading recorded telemetry…</div> : !hasReplayableTelemetry(points) ? <div className="fh-empty"><strong>Flight recording unavailable</strong><p>This mission has fewer than two valid timestamped GPS points at distinct times. Check telemetry storage and mission data integrity.</p></div> : <>
+              : telemetry.isLoading ? <OperatorLoadingState label="Loading recorded flight…" /> : !hasReplayableTelemetry(points) ? <div className="fh-empty"><strong>Flight recording unavailable</strong><p>This mission has fewer than two valid timestamped GPS points at distinct times. Check telemetry storage and mission data integrity.</p></div> : <>
                 <FlightReplayMap points={points} checkpoints={recordedCheckpoints} elapsed={elapsed} follow={follow} onLeaveFollow={() => setFollow(false)} />
                 <div className="fh-player"><div className="fh-player-buttons">
                   <button type="button" className="fh-button" onClick={() => { if (elapsed >= duration) { cursor.current = 0; setElapsed(0); } setPlaying(v => !v); }}>{playing ? 'Ⅱ Pause' : '▶ Play'}</button>

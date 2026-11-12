@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useLocation } from 'react-router-dom';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
@@ -126,7 +127,7 @@ export function AllOrdersPage() {
             </button>
           </div>
         ) : isLoading ? (
-          <div className="operator-empty-state">Loading Orders…</div>
+          <OperatorLoadingState label="Loading orders…" />
         ) : filtered.length === 0 ? (
           <div className="operator-empty-state">No Orders match the current filters.</div>
         ) : (

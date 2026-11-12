@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate } from 'react-router-dom';
 import { HubCard } from '../../components/HubCard';
 import { OperatorPanel } from '../../components/OperatorPanel';
@@ -55,13 +56,13 @@ export function HubNetworkPage() {
         action={<small className="hub-network-total">{loading ? 'Loading hubs…' : error ? '— hubs' : `${hubs.length} hubs`}</small>}
       >
         {loading ? (
-          <div className="operator-empty-state">Loading hubs…</div>
+          <OperatorLoadingState label="Loading hubs…" />
         ) : error ? (
           <div className="operator-empty-state">
             {error instanceof Error ? error.message : 'Unable to load hubs.'}
           </div>
         ) : hubs.length === 0 ? (
-          <div className="operator-empty-state">No hubs were returned by the Backend.</div>
+          <div className="operator-empty-state">No hubs are available.</div>
         ) : (
           <>
             {/* {batteriesError || fleetError ? (

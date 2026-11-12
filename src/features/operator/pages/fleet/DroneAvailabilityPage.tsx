@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
@@ -170,7 +171,7 @@ export function DroneAvailabilityPage() {
             </button>
           </div>
         ) : loading ? (
-          <div className="operator-empty-state">Loading Fleet…</div>
+          <OperatorLoadingState label="Loading fleet…" />
         ) : filtered.length === 0 ? (
           <div className="operator-empty-state">No drones match the current filters.</div>
         ) : (
