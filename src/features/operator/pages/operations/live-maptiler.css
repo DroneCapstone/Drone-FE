@@ -23,3 +23,10 @@
 .live-geo-hint{bottom:13px;right:13px;background:var(--surface);color:var(--muted);font-size:9px;border:1px solid var(--border);border-radius:6px;padding:7px 9px;pointer-events:none}
 .live-geo-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;max-width:85%;width:390px;background:var(--surface);color:var(--red,#ef4444);border:1px solid var(--red,#ef4444);border-radius:9px;padding:14px;font-size:12px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.2)}
 @media(max-width:720px){.live-geo-weather{width:175px}.live-geo-badge{max-width:125px}.live-geo-hint{display:none}.live-geo-layers{flex-wrap:wrap}}
+
+/* Separate planned hub-to-hub routes from recorded GPS, as on Flight Replay. */
+.live-geo-route-legend{position:absolute;right:13px;bottom:12px;z-index:3;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:58%;background:var(--surface,#fff);color:var(--muted,#64748b);border:1px solid var(--border,#ddd);border-radius:7px;padding:7px 9px;font-size:10px;box-shadow:0 2px 7px rgba(0,0,0,.08);pointer-events:none}
+.live-geo-route-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.live-geo-route-legend i{width:22px;height:0;display:inline-block;flex:none;border-top:3px solid #fb923c}
+.live-geo-route-legend i.live-geo-route-dash{border-top:3px dashed #f97316}
+@media(max-width:720px){.live-geo-route-legend{bottom:53px;right:10px;max-width:calc(100% - 20px);font-size:9px;gap:8px}}
