@@ -6,10 +6,12 @@ import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { getMissionApi, getMissionTelemetryApi, type LiveTrackingDrone, type MissionTelemetryPoint } from '../../api/missionApi';
+import type { Mission } from '../../types/operator';
 import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuery } from '../../hooks/useMissionQueries';
 import { operatorQueryKeys } from '../../query/queryKeys';
 import { LiveMapTiler, type LiveMapTilerHandle, type LiveMapStyle } from './LiveMapTiler';
 import { OperationPageShell } from './OperationPageShell';
+import { resolveLiveFlightStatus } from './liveFlightStatus';
 import './operations-enhanced.css';
 import './digital-twin-live.css';
 import './live-map-style-picker.css';
@@ -19,6 +21,9 @@ type Filter = 'All' | Health;
 type LogEvent = { key: string; time: string; missionId: string; droneId: string; level: Health; message: string };
 const FILTERS: Filter[] = ['All', 'Critical', 'Attention', 'Normal'];
 const STALE_MS = 10_000;
+/** UI-only visibility window for confirmed completed missions previously seen live. */
+const RECENTLY_COMPLETED_MS = 120_000;
+const MAX_RECENT_MISSIONS = 12;
 const MAP_STYLE_STORAGE_KEY = 'droneoptai.operator.live-map-style';
 const MAP_CHOICES: { id: LiveMapStyle; label: string; description: string }[] = [
   { id: 'default', label: 'Default', description: 'Current operations map' },
@@ -60,12 +65,32 @@ export function LiveTrackingPage() {
   const hubsQuery = useMissionHubsQuery();
   const [clockTick, setClockTick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => setClockTick(v => v + 1), 5000); return () => window.clearInterval(id); }, []);
-  const liveDrone = useMemo(() => (rawDrones ?? []).map(drone => {
-    if (drone.health !== 'Normal' || !stale(drone.lastUpdated)) return drone;
-    return { ...drone, health: 'Attention' as const, anomaly: 'Telemetry update delayed (>10 seconds)', incidentPolicy: 'monitor' as const };
-    // clockTick keeps stale telemetry status current even if API stops returning new data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [rawDrones, dataUpdatedAt, clockTick]);
+  const sourceDrones = useMemo(() => rawDrones ?? [], [rawDrones]);
+  // Remember only missions actually seen in Live Tracking. We keep their last
+  // card snapshot briefly so a confirmed Completed status doesn't vanish as
+  // soon as the live-only BE endpoint stops returning that aircraft.
+  const lastSeenMissions = useRef(new Map<string, { drone: LiveTrackingDrone; seenAt: number }>());
+  const [rememberedIds, setRememberedIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!rawDrones || error) return; // Never clear a live snapshot because of a network error.
+    const now = Date.now();
+    for (const drone of rawDrones) {
+      if (drone.missionId) lastSeenMissions.current.set(drone.missionId, { drone, seenAt: now });
+    }
+    for (const [missionId, entry] of lastSeenMissions.current) {
+      if (now - entry.seenAt > RECENTLY_COMPLETED_MS) lastSeenMissions.current.delete(missionId);
+    }
+    // Active mission IDs are queried separately. Retain a bounded number of
+    // missions that disappeared from live tracking, not a random subset of
+    // all currently active drones.
+    const activeIds = new Set(rawDrones.map(drone => drone.missionId));
+    const next = [...lastSeenMissions.current.entries()]
+      .filter(([id]) => !activeIds.has(id))
+      .sort((a, b) => b[1].seenAt - a[1].seenAt)
+      .slice(0, MAX_RECENT_MISSIONS)
+      .map(([id]) => id);
+    setRememberedIds(previous => previous.length === next.length && previous.every((id, i) => id === next[i]) ? previous : next);
+  }, [rawDrones, dataUpdatedAt, clockTick, error]);
   const [selectedDroneId, setSelectedDroneId] = useState('');
   const [filter, setFilter] = useState<Filter>('All');
   const [logFilter, setLogFilter] = useState<'all' | 'selected'>('all');
@@ -93,10 +118,11 @@ export function LiveTrackingPage() {
   }, [mapStyleMenuOpen]);
   const mapRef = useRef<LiveMapTilerHandle>(null);
   const detailRef = useRef<HTMLDivElement>(null);
-  const sortedDrone = useMemo(() => [...liveDrone].sort((a, b) => priority[a.health] - priority[b.health] || a.id.localeCompare(b.id)), [liveDrone]);
-  const selectedDrone = liveDrone.find(drone => drone.id === selectedDroneId) ?? liveDrone[0];
-  const filteredDrone = filter === 'All' ? sortedDrone : sortedDrone.filter(drone => drone.health === filter);
-  const missionIds = useMemo(() => Array.from(new Set(liveDrone.map(drone => drone.missionId).filter(Boolean))), [liveDrone]);
+  const missionIds = useMemo(() => Array.from(new Set(sourceDrones.map(drone => drone.missionId).filter(Boolean))), [sourceDrones]);
+  const trackedMissionIds = useMemo(
+    () => Array.from(new Set([...missionIds, ...rememberedIds])),
+    [missionIds, rememberedIds],
+  );
   const trailsQuery = useQueries({
     queries: missionIds.map(id => ({
       queryKey: [...operatorQueryKeys.missionTelemetry(id), 'live-3d-trail', 200] as const,
@@ -105,28 +131,61 @@ export function LiveTrackingPage() {
   });
   // Load assigned route geometry independently from GPS telemetry. A planned
   // line must remain visible before the drone records its second GPS point.
-  // Keep a moderate refresh interval so an updated mission route can be shown.
+  // Mission status changes at relay arrival and destination confirmation,
+  // even when GPS remains stationary. Poll the same detail API already used
+  // for planned-route geometry; do not create a separate status endpoint.
   const routesQuery = useQueries({
-    queries: missionIds.map(id => ({
+    queries: trackedMissionIds.map(id => ({
       queryKey: operatorQueryKeys.missionDetail(id),
       queryFn: () => getMissionApi(id),
-      staleTime: 15_000,
-      refetchInterval: 30_000,
+      staleTime: 5_000,
+      refetchInterval: 8_000,
       refetchOnWindowFocus: false,
     })),
   });
-  const routesKey = routesQuery.map(item => item.dataUpdatedAt).join(':');
+  const routesKey = routesQuery.map(item => `${item.dataUpdatedAt}:${item.isError}`).join(':');
+  const missionById = useMemo(() => {
+    const result: Record<string, Mission | undefined> = {};
+    trackedMissionIds.forEach((id, index) => { result[id] = routesQuery[index]?.data; });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackedMissionIds, routesKey]);
   const plannedRoutes = useMemo(() => {
-    const result: Record<string, NonNullable<(typeof routesQuery)[number]['data']>['plannedRouteLegs']> = {};
-    missionIds.forEach((id, index) => {
-      const legs = routesQuery[index]?.data?.plannedRouteLegs;
+    const result: Record<string, Mission['plannedRouteLegs']> = {};
+    missionIds.forEach(id => {
+      const legs = missionById[id]?.plannedRouteLegs;
       if (legs?.length) result[id] = legs;
     });
     return result;
+  }, [missionIds, missionById]);
+  const hubNames = useMemo(() => new Map((hubsQuery.data ?? []).map(hub => [hub.id, hub.name])), [hubsQuery.data]);
+  const liveDrone = useMemo(() => sourceDrones.map(drone => {
+    const flight = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
+    const confirmedGroundStop = ['relay', 'awaiting-swap', 'swapping', 'ready-to-depart', 'destination', 'completed', 'scheduled'].includes(flight.key);
+    // Preserve explicit BE warnings and DISCONNECTED. Suppress only the FE's
+    // fabricated "delayed telemetry" warning at a BE-confirmed ground stop.
+    if (drone.health !== 'Normal' || !stale(drone.lastUpdated) || confirmedGroundStop) return drone;
+    return { ...drone, health: 'Attention' as const, anomaly: 'Telemetry update delayed (>10 seconds)', incidentPolicy: 'monitor' as const };
+    // clockTick refreshes computed age even when no new telemetry arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missionIds, routesKey]);
+  }), [sourceDrones, missionById, hubNames, clockTick]);
+  const sortedDrone = useMemo(() => [...liveDrone].sort((a, b) => priority[a.health] - priority[b.health] || a.id.localeCompare(b.id)), [liveDrone]);
+  const selectedDrone = liveDrone.find(drone => drone.id === selectedDroneId) ?? liveDrone[0];
+  const filteredDrone = filter === 'All' ? sortedDrone : sortedDrone.filter(drone => drone.health === filter);
+  const recentlyCompleted = useMemo(() => {
+    if (filter !== 'All') return []; // These cards are no longer "live" health measurements.
+    const active = new Set(missionIds);
+    return rememberedIds.flatMap(id => {
+      const cached = lastSeenMissions.current.get(id);
+      const mission = missionById[id];
+      if (!cached || active.has(id) || mission?.status !== 'Completed' || Date.now() - cached.seenAt > RECENTLY_COMPLETED_MS) return [];
+      return [{ mission, drone: cached.drone }];
+    });
+    // clockTick makes expired cards disappear without needing another API event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rememberedIds, missionIds, missionById, filter, clockTick]);
   const trailsKey = trailsQuery.map(item => item.dataUpdatedAt).join(':');
-  const checkpointQuery = useMissionHubCheckpointsQuery(selectedDrone?.missionId ?? '');
+  const checkpointQuery = useMissionHubCheckpointsQuery(selectedDrone?.missionId ?? '', 10_000);
   useEffect(() => {
     if (!selectedDroneId && liveDrone[0]) setSelectedDroneId(liveDrone[0].id);
     else if (selectedDroneId && !liveDrone.some(d => d.id === selectedDroneId)) setSelectedDroneId(liveDrone[0]?.id ?? '');
@@ -155,7 +214,7 @@ export function LiveTrackingPage() {
       history.slice(-12).forEach(p => {
         if (p.recordedAt) events.push({ key: `${drone.missionId}:telemetry:${p.id}`, time: p.recordedAt, missionId: drone.missionId, droneId: drone.id, level: 'Normal', message: `Telemetry received · ${measure(p.altitudeM, ' m')} altitude · ${measure(p.batteryVoltage, ' V')}` });
       });
-      if (stale(drone.lastUpdated)) events.push({ key: `${drone.missionId}:stale`, time: drone.lastUpdated ?? '', missionId: drone.missionId, droneId: drone.id, level: 'Attention', message: 'Telemetry update delayed (>10 seconds)' });
+      if (drone.anomaly === 'Telemetry update delayed (>10 seconds)') events.push({ key: `${drone.missionId}:stale`, time: drone.lastUpdated ?? '', missionId: drone.missionId, droneId: drone.id, level: 'Attention', message: 'Telemetry update delayed (>10 seconds)' });
     });
     const id = selectedDrone?.missionId;
     if (id) (checkpointQuery.data ?? []).forEach(c => {
@@ -305,10 +364,11 @@ export function LiveTrackingPage() {
         </div>
 
         <div className="live-aircraft-list">
-          {!filteredDrone.length && <div className="operator-empty-state">No aircraft match the selected filter.</div>}
+          {!filteredDrone.length && !recentlyCompleted.length && <div className="operator-empty-state">No aircraft match the selected filter.</div>}
           {filteredDrone.map((aircraft) => {
             const isSelected = selectedDrone?.id === aircraft.id;
             const healthClass = aircraft.health.toLowerCase();
+            const flightStatus = resolveLiveFlightStatus(aircraft, missionById[aircraft.missionId], hubNames);
 
             return (
               <button
@@ -325,6 +385,11 @@ export function LiveTrackingPage() {
                   </span>
                   <small>{aircraft.orderId ? `Delivery ${aircraft.orderId}` : `Mission ${aircraft.missionId || '—'}`}</small>
                   <small>{aircraft.route}</small>
+                  <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
+                    <span className="live-aircraft-flight-dot" aria-hidden="true" />
+                    <span>Flight: {flightStatus.label}</span>
+                  </span>
+                  {flightStatus.detail && <small title={flightStatus.detail}>{flightStatus.detail}</small>}
                   <em className="live-aircraft-state">
                     {aircraft.anomaly ? `${aircraft.anomaly}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
                   </em>
@@ -336,6 +401,32 @@ export function LiveTrackingPage() {
               </button>
             );
           })}
+          {recentlyCompleted.length > 0 && <div className="live-recently-completed-heading">Recently completed</div>}
+          {recentlyCompleted.map(({ mission, drone }) => (
+            <button
+              type="button"
+              key={`completed-${mission.id}`}
+              className="live-aircraft-card is-recently-completed"
+              onClick={() => navigate(`/operator/missions/${encodeURIComponent(mission.id)}`)}
+              title="View completed mission details"
+            >
+              <span className="live-aircraft-card-icon"><Icon name="drone" size={18} /></span>
+              <span className="live-aircraft-card-main">
+                <span className="live-aircraft-card-title">
+                  <strong>{drone.id}</strong>
+                  <StatusBadge tone="success">Completed</StatusBadge>
+                </span>
+                <small>Mission {mission.id}</small>
+                <small>{mission.route || drone.route}</small>
+                <span className="live-aircraft-flight-status status-success">
+                  <span className="live-aircraft-flight-dot" aria-hidden="true" />
+                  <span>Flight: Completed</span>
+                </span>
+                <small>View details in Mission History</small>
+              </span>
+              <span className="live-aircraft-card-metrics"><Icon name="chevron" size={15} /></span>
+            </button>
+          ))}
         </div>
 
         <div className="live-aircraft-footer">

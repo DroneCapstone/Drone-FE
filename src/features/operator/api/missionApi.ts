@@ -18,6 +18,11 @@ export interface LiveTrackingDrone {
   orderId: string;
   route: string;
   health: 'Normal' | 'Attention' | 'Critical';
+  /** Explicit BE status only; never infer the Mission status from GPS metrics. */
+  missionStatusRaw?: string;
+  /** Optional status fields if BE exposes these in live-tracking. */
+  failsafeStatus?: string;
+  batterySwapStatus?: string;
   alertId?: string;
   anomaly?: string;
   anomalyDuration?: string;
@@ -519,6 +524,9 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     orderId: pickString(record, ['order_id', 'orderId']),
     route: pickString(record, ['route', 'route_name', 'routeName', 'route_id', 'routeId'], 'Active route'),
     health,
+    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus']) || undefined,
+    failsafeStatus: pickString(record, ['failsafe_status', 'failsafeStatus']) || undefined,
+    batterySwapStatus: pickString(record, ['battery_swap_status', 'batterySwapStatus']) || undefined,
     alertId: pickString(record, ['alert_id', 'alertId']) || undefined,
     anomaly: pickString(record, ['anomaly', 'alert', 'issue']) || undefined,
     anomalyDuration: pickString(record, ['anomaly_duration', 'anomalyDuration', 'duration']) || undefined,
