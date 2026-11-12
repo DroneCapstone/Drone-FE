@@ -1,6 +1,5 @@
 import {
   BatteryFull,
-  Check,
   Eye,
   History,
   PackageCheck,
@@ -26,7 +25,7 @@ import {
   useOutboundReadyMutation,
 } from "../hooks/useOutboundQueries";
 import { technicianQueryKeys } from "../hooks/queryKeys";
-import { historyFromConfirmedDispatch, mergeOutboundHistoryRows } from "../api/outboundHistoryApi";
+import { historyFromConfirmedDispatch, mergeOutboundHistoryRows, type OutboundHistoryViewRow } from "../api/outboundHistoryApi";
 import type { OutboundDeliveryHistory } from "../utils/outboundDeliveryStorage";
 
 type Status = OutboundDelivery["status"];
@@ -158,7 +157,7 @@ export function OutboundDeliveriesPage() {
   const outboundReadyMutation = useOutboundReadyMutation();
 
   const deliveries: OutboundDelivery[] = outboundQuery.data ?? [];
-  const history = historyQuery.data ?? [];
+  const history = (historyQuery.data ?? []) as OutboundHistoryViewRow[];
 
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
@@ -655,7 +654,7 @@ export function OutboundDeliveriesPage() {
             <div className="flex items-start justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
               <div>
                 <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Outbound history</h2>
-                <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Previously recorded departures from {hubLabel}.</p>
+                <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Flight missions from {hubLabel}.</p>
               </div>
               <button type="button" aria-label="Close outbound history" onClick={() => setHistoryOpen(false)} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
             </div>
@@ -666,19 +665,30 @@ export function OutboundDeliveriesPage() {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1000px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[140px_140px_145px_135px_1fr_160px_100px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
-                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Destination Hub</Header><Header>Departed</Header><Header>Result</Header>
+              <div className="min-w-[1500px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_150px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
+                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Origin Hub</Header><Header>Destination Hub</Header><Header>Customer Drop-off</Header><Header>Drone Departed</Header><Header>Status</Header>
                 </div>
                 {history.length ? history.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[140px_140px_145px_135px_1fr_160px_100px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
-                    <span className="break-all font-semibold">{item.orderId}</span>
+                  <div key={item.id} className="grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_150px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
+                    <div className="min-w-0">
+                      <p className="break-all font-semibold">{display(item.orderId)}</p>
+                      {item.receiverName && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.receiverName}>Receiver: {item.receiverName}</p>}
+                    </div>
                     <span className="break-all">{display(item.missionId)}</span>
-                    <span className="truncate" title={item.droneId}>{display(item.droneId)}</span>
-                    <span className="text-orange-500">{display(item.batteryId)}</span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium" title={item.droneId}>{display(item.droneId)}</p>
+                      {item.droneCode && item.droneCode !== item.droneId && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.droneCode}>{item.droneCode}</p>}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-orange-500" title={item.batteryId}>{display(item.batteryId)}</p>
+                      {item.batteryCode && item.batteryCode !== item.batteryId && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.batteryCode}>{item.batteryCode}</p>}
+                    </div>
+                    <span className="truncate" title={item.hub}>{display(item.hub)}</span>
                     <span className="truncate" title={item.destination}>{display(item.destination)}</span>
+                    <span>{formatDate(item.customerDropoffAt)}</span>
                     <span>{formatDate(item.departedAt)}</span>
-                    <span className="inline-flex items-center gap-1 text-orange-500"><Check size={13} />{item.result}</span>
+                    <span className="font-medium text-[var(--tech-text-secondary)]">{display(item.result)}</span>
                   </div>
                 )) : (
                   <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">
@@ -686,10 +696,8 @@ export function OutboundDeliveriesPage() {
                       ? "Loading outbound history from Backend..."
                       : historyQuery.isError
                         ? "Unable to load outbound history."
-                        : "No recorded outbound departures found."}
-                    {!historyQuery.isPending && !historyQuery.isFetching && !historyQuery.isError && (
-                      <button type="button" onClick={() => void historyQuery.refetch()} className="mt-3 text-[12px] font-medium text-orange-500 underline">Refresh history from Backend</button>
-                    )}
+                        : "No outbound mission history found."}
+                    
                   </div>
                 )}
               </div>
