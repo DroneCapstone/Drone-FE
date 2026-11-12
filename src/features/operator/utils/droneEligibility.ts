@@ -56,7 +56,7 @@ export function getEnergyFeasibility(
       route.batteryConsumptionPct <= 100;
     return {
       remainingBattery,
-      feasible: metricsValid && route.feasible === true && remainingBattery >= minimumReservePct,
+      feasible: metricsValid && route.feasible === true && route.isSelectable !== false && remainingBattery >= minimumReservePct,
     };
   }
 
@@ -67,6 +67,6 @@ export function getEnergyFeasibility(
   // and recheck the availability atomically on POST /operator/missions.
   return {
     remainingBattery,
-    feasible: route.feasible === true,
+    feasible: route.feasible === true && route.isSelectable !== false,
   };
 }

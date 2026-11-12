@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { Icon } from '../../../../components/ui/Icon';
 import { MissionTable } from '../../components/MissionTable';
@@ -63,7 +64,7 @@ export function AllMissionsPage() {
             </button>
           </div>
         ) : isLoading ? (
-          <div className="operator-empty-state">Loading Missions…</div>
+          <OperatorLoadingState label="Loading missions…" />
         ) : filtered.length === 0 ? (
           <div className="operator-empty-state">No Missions match the current filters.</div>
         ) : (

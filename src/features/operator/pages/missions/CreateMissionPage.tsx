@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BarChart3, Zap } from 'lucide-react';
 import { validateMissionBundleApi } from '../../api/missionBundleApi';
@@ -123,6 +124,8 @@ export function CreateMissionPage() {
   }, [orderId]);
 
   const bundleOrderIds = [orderId, ...bundledOrderIds];
+  // Display only; the original mission bundle used for validation/submission stays unchanged.
+  const additionalReviewOrderIds = [...new Set(bundledOrderIds.filter((id) => id && id !== orderId))];
   const {
     data: bundleCandidates,
     error: bundleCandidatesError,
@@ -244,7 +247,7 @@ export function CreateMissionPage() {
     return (
       <MissionPageShell active="/operator/missions/all">
         <OperatorPanel title="Create a mission from an order" eyebrow="DELIVERY OPERATIONS">
-          <div className="operator-empty-state mission-create-gate">Loading Order…</div>
+          <OperatorLoadingState label="Loading order…" />
         </OperatorPanel>
       </MissionPageShell>
     );
@@ -309,14 +312,15 @@ export function CreateMissionPage() {
   const analyzedBundleIds = planningAnalysis?.bundledOrderIds;
   const analyzedPayloadKg = planningAnalysis?.totalPayloadKg;
   const analysisMatchesBundle = bundledOrderIds.length === 0 || Boolean(
-    (!analyzedBundleIds || (analyzedBundleIds.length === bundledOrderIds.length &&
-      bundledOrderIds.every((id) => analyzedBundleIds.includes(id)))) &&
-    (analyzedPayloadKg === undefined || Math.abs(analyzedPayloadKg - totalPayloadKg) <= 0.02)
+    analyzedBundleIds && analyzedBundleIds.length === bundledOrderIds.length &&
+    new Set(analyzedBundleIds).size === bundledOrderIds.length &&
+    bundledOrderIds.every((id) => analyzedBundleIds.includes(id)) &&
+    analyzedPayloadKg !== undefined && Math.abs(analyzedPayloadKg - totalPayloadKg) <= 0.02
   );
   const routeOptions = analysisMatchesBundle ? planningAnalysis?.routes ?? [] : [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Drop-off Point';
-  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Pick-up Point';
+  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
+  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
   const hubName = (hubId: string) =>
     networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
   const selectedRouteEnergy = selectedRoute
@@ -490,10 +494,11 @@ export function CreateMissionPage() {
       // A route analyzed for the primary order alone must never be assigned to a bundle.
       if (bundledOrderIds.length > 0) {
         const replyIds = current.data.bundledOrderIds;
-        if ((replyIds && (replyIds.length !== bundledOrderIds.length ||
-          bundledOrderIds.some((id) => !replyIds.includes(id)))) ||
-          (current.data.totalPayloadKg !== undefined &&
-            Math.abs(current.data.totalPayloadKg - totalPayloadKg) > 0.02)) {
+        if (!replyIds || replyIds.length !== bundledOrderIds.length ||
+          new Set(replyIds).size !== bundledOrderIds.length ||
+          bundledOrderIds.some((id) => !replyIds.includes(id)) ||
+          current.data.totalPayloadKg === undefined ||
+          Math.abs(current.data.totalPayloadKg - totalPayloadKg) > 0.02) {
           setStep(3);
           showToast('Bundle/payload changed during Analyze. Please review the route again.');
           return;
@@ -514,7 +519,7 @@ export function CreateMissionPage() {
         !Number.isFinite(currentRoute.predictedEnergyWh) || currentRoute.predictedEnergyWh <= 0 ||
         !Number.isFinite(currentRoute.predictedDurationMin) || currentRoute.predictedDurationMin <= 0) {
         setStep(3);
-        showToast('BE did not return a complete route snapshot. Please re-analyze before Assign.');
+        showToast('Route information is incomplete. Please analyze again before assigning.');
         return;
       }
 
@@ -584,8 +589,8 @@ export function CreateMissionPage() {
                   readOnly
                 />
               </label>
-              <label><span>Drop-off Point</span><input value={originHubLabel} readOnly /></label>
-              <label><span>Pick-up Point</span><input value={destinationHubLabel} readOnly /></label>
+              <label><span>Origin hub</span><input value={originHubLabel} readOnly /></label>
+              <label><span>Destination hub</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
@@ -594,20 +599,20 @@ export function CreateMissionPage() {
                 {planningState === 'Ready for Planning'
                   ? canCreateMissionForOrder(order) ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
                   : planningState === 'Needs Replanning'
-                    ? 'This Order requires replanning. Create a new Mission only when Backend confirms that it is eligible.'
+                    ? 'This order requires replanning. Create a new Mission when it becomes eligible.'
                     : `Planning opens ${formatMissionTime(order.planningAt)}.`}
               </span>
             </div>
             {!hasOrderHubs && (
               <div className="operator-empty-state">
-                This Order does not contain a valid Drop-off Point and Pick-up Point.
+                This Order does not contain a valid Origin hub and Destination hub.
               </div>
             )}
           </OperatorPanel>
           {canCreateMissionForOrder(order) && (
             <OperatorPanel title="Combine eligible orders" eyebrow="ORDER CONSOLIDATION">
               {isBundleCandidatesLoading || (isBundleCandidatesFetching && !bundleCandidates) ? (
-                <div className="mission-bundle-availability" role="status">Checking for eligible orders…</div>
+                <OperatorLoadingState label="Checking eligible orders…" compact />
               ) : bundleCandidatesError ? (
                 <div className="operator-empty-state mission-create-gate">
                   <strong>Unable to load orders eligible for consolidation</strong>
@@ -704,12 +709,12 @@ export function CreateMissionPage() {
             <OperatorPanel title="Delivery network">
               <div className="delivery-network-strip">
                 <div className="delivery-network-node">
-                  <small>Drop-off Point</small>
+                  <small>Origin hub</small>
                   <strong>{originHubLabel}</strong>
                 </div>
                 <div className="delivery-network-arrow">→</div>
                 <div className="delivery-network-node">
-                  <small>Pick-up Point</small>
+                  <small>Destination hub</small>
                   <strong>{destinationHubLabel}</strong>
                 </div>
               </div>
@@ -724,7 +729,7 @@ export function CreateMissionPage() {
               {bundledOrderIds.length > 0 && (
                 <div className="mission-bundle-summary">
                   <strong>{bundleOrderIds.length} orders · {totalPayloadKg.toFixed(2)} kg</strong>
-                  <span>Select a Drone with enough payload capacity. The Backend will validate the full bundle for this Drone.</span>
+                  <span>Select a Drone with enough payload capacity. The full order group will be validated before assignment.</span>
                   {selectedDroneId && (isDroneBundleValidating ? <small>Checking Drone capacity and route compatibility…</small> :
                     droneBundleValidationError ? <small className="mission-bundle-error">{droneBundleValidationError instanceof Error ? droneBundleValidationError.message : 'Validation unavailable.'}</small> :
                       droneBundleValidation && !droneBundleValidation.isValid ? <small className="mission-bundle-error">{droneBundleValidation.message || 'This Drone cannot carry the selected orders.'}</small> :
@@ -732,7 +737,7 @@ export function CreateMissionPage() {
                 </div>
               )}
               {isEligibleDronesLoading ? (
-                <div className="operator-empty-state">Loading available drones…</div>
+                <OperatorLoadingState label="Loading available drones…" />
               ) : eligibleDronesError ? (
                 <div className="operator-empty-state mission-create-gate">
                   <strong>Unable to load eligible drones</strong>
@@ -768,7 +773,7 @@ export function CreateMissionPage() {
                         {/* <StatusBadge tone="info">{originHubLabel}</StatusBadge> */}
                       </div>
                       {eligibleBatteriesLoading || eligibleBatteriesFetching ? (
-                        <div className="operator-empty-state">Loading available batteries…</div>
+                        <OperatorLoadingState label="Loading available batteries…" />
                       ) : eligibleBatteriesError ? (
                         <div className="operator-empty-state mission-create-gate">
                           <strong>Unable to load available batteries</strong>
@@ -826,7 +831,7 @@ export function CreateMissionPage() {
                 <p className="mission-bundle-error" role="alert">Analyze returned a different order group or total payload. Route assignment is blocked.</p>
               )}
               {isPlanningAnalysisFetching && (
-                <p className="section-note">Analyzing routes…</p>
+                <OperatorLoadingState label="Analyzing routes…" />
               )}
               {planningAnalysisError && (
                 <p className="section-note danger-note">
@@ -869,7 +874,11 @@ export function CreateMissionPage() {
               </div>
               {selectedRoute && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
                 <p className="mission-route-unavailable" role="status">
-                  This route has flight planning warnings. You can review the plan, but Assign will require a valid route.
+                  {selectedRoute.isSelectable === false
+                    ? `Route unavailable: ${selectedRoute.unselectableReason || selectedRoute.infeasibleReason || 'This route cannot be assigned.'}`
+                    : selectedRoute.feasible === false
+                      ? `Route infeasible: ${selectedRoute.infeasibleReason || 'This route is not feasible.'}`
+                      : 'This route has flight planning warnings. You can review the plan, but Assign will require a valid route.'}
                 </p>
               )}
             </OperatorPanel>
@@ -903,12 +912,15 @@ export function CreateMissionPage() {
                   </dl>
                 </div>
 
-                <div className="mission-review-info-row mission-review-info-row--full">
-                  <dl className="mission-review-field">
-                    <dt>Orders on this mission ({bundleOrderIds.length})</dt>
-                    <dd className="mission-review-order-code">{bundleOrderIds.join(', ')}</dd>
-                  </dl>
-                </div>
+                {/* Primary Order is shown above; show only additional orders when bundling. */}
+                {additionalReviewOrderIds.length > 0 && (
+                  <div className="mission-review-info-row mission-review-info-row--full">
+                    <dl className="mission-review-field">
+                      <dt>Additional orders ({additionalReviewOrderIds.length})</dt>
+                      <dd className="mission-review-order-code">{additionalReviewOrderIds.join(', ')}</dd>
+                    </dl>
+                  </div>
+                )}
                 <div className="mission-review-info-row mission-review-info-row--full">
                   <dl className="mission-review-field">
                     <dt>Total payload</dt>
@@ -951,8 +963,8 @@ export function CreateMissionPage() {
                 )}
 
                 <div className="mission-review-info-row">
-                  <dl className="mission-review-field"><dt>Drop-off Point</dt><dd>{originHubLabel}</dd></dl>
-                  <dl className="mission-review-field"><dt>Pick-up Point</dt><dd>{destinationHubLabel}</dd></dl>
+                  <dl className="mission-review-field"><dt>Origin hub</dt><dd>{originHubLabel}</dd></dl>
+                  <dl className="mission-review-field"><dt>Destination hub</dt><dd>{destinationHubLabel}</dd></dl>
                 </div>
                 <div className="mission-review-info-row">
                   <dl className="mission-review-field">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -215,7 +216,7 @@ export function IncidentsPage() {
   const detailMissionId = selectedIncident?.missionId ?? listDetail?.missionId ?? '—';
   const detailDroneId = selectedIncident?.droneId ?? listDetail?.aircraft ?? '—';
   const detailStatus = selectedIncident?.status ?? listDetail?.state ?? 'Open';
-  const detailDescription = selectedIncident?.description || 'No incident description was returned by the Backend.';
+  const detailDescription = selectedIncident?.description || 'No incident description is available.';
 
   const resolveIncident = async () => {
     if (!selectedIncidentId) return;
@@ -259,13 +260,13 @@ export function IncidentsPage() {
             </div>
 
             {incidentsLoading ? (
-              <div className="operator-empty-state">Loading incidents…</div>
+              <OperatorLoadingState label="Loading incidents…" />
             ) : incidentsError ? (
               <div className="operator-empty-state">
                 {incidentsError instanceof Error ? incidentsError.message : 'Unable to load incidents.'}
               </div>
             ) : visibleRows.length === 0 ? (
-              <div className="operator-empty-state">No incidents were returned by the Backend.</div>
+              <div className="operator-empty-state">No incidents found.</div>
             ) : (
               <div className="incident-list">
                 {visibleRows.map((row) => (
@@ -362,7 +363,7 @@ export function IncidentsPage() {
             <button className="text-button" onClick={() => setMode('list')}>← Back to incidents</button>
 
             {incidentDetailLoading ? (
-              <div className="operator-empty-state">Loading incident…</div>
+              <OperatorLoadingState label="Loading incident…" />
             ) : (
               <>
                 <div className="incident-detail-title">
@@ -387,7 +388,7 @@ export function IncidentsPage() {
                     <i />
                     <div>
                       <strong>Anomaly detected</strong>
-                      <small>{selectedIncident?.detectedAt ?? 'Backend event'}</small>
+                      <small>{selectedIncident?.detectedAt ?? 'Event recorded'}</small>
                       <p>{detailDescription}</p>
                     </div>
                   </span>

@@ -51,16 +51,16 @@ export function getMissionPreflight(
       label: 'Route & weather',
       passed: mission.risk === 'Low' || mission.risk === 'Medium',
       detail: !mission.risk
-        ? 'Route/weather risk is not available from Backend. Do not assume safe.'
+        ? 'Route and weather risk cannot be verified.'
         : mission.risk === 'High'
           ? 'Current route or weather conditions are not safe for departure.'
-          : 'Route risk from stored plan is not High. A fresh BE preflight is still required.',
+          : 'The latest preflight checks must pass before departure.',
     },
     {
       label: 'Energy sufficient',
       passed: mission.battery >= MINIMUM_BATTERY_RESERVE_PCT,
       detail: !Number.isFinite(mission.battery)
-        ? 'No verified remaining battery estimate is available. BE must check energy before launch.'
+        ? 'The remaining battery estimate is unavailable. Energy must be verified before launch.'
         : mission.battery >= MINIMUM_BATTERY_RESERVE_PCT
           ? `Predicted battery after the planned route: ${mission.battery}%.`
           : `Predicted battery after the planned route is below the ${MINIMUM_BATTERY_RESERVE_PCT}% reserve.`,

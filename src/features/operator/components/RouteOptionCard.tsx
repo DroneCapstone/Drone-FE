@@ -105,6 +105,7 @@ export function RouteOptionCard({
           </span>
           <span className="mission-route-tags">
             {route.recommended && <StatusBadge tone="success">AI Recommended</StatusBadge>}
+            {route.isSelectable === false && <span title={route.unselectableReason || route.infeasibleReason || 'Route is not selectable'} className="mission-route-muted">Not selectable</span>}
             <span className={`mission-route-chevron${expanded ? ' is-open' : ''}`}><Icon name="chevron" size={17} /></span>
           </span>
         </span>
@@ -175,12 +176,12 @@ export function RouteOptionCard({
                       >View Battery</a>
                     </div>
                     <div className="mission-route-battery-metrics">
-                      <div><small>BE-assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
+                      <div><small>Assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
                       <div><small>Battery model</small><strong>{model || '—'}</strong></div>
                       <div><small>Charge</small><strong>{displayPct(charge)}</strong></div>
                       <div><small>Available energy</small><strong>{displayEnergy(energy)}</strong></div>
                     </div>
-                    {!batteryId && <p className="mission-route-muted">No eligible relay battery was allocated by BE for this route.</p>}
+                    {!batteryId && <p className="mission-route-muted">No eligible relay battery has been assigned for this route.</p>}
                   </div>
                 );
               })}

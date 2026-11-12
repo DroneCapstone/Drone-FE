@@ -11,7 +11,8 @@ export function AiPageShell({ active, children }: { active: string; children: Re
         section="ai"
         action={<span className="model-chip"><Icon name="spark" />Energy Model <span className="model-health"><i />Ready</span></span>}
       />
-      <RouteTabs items={aiTabs} active={active} />
+      {/* Hidden tabs: this page is opened from Create Mission, not independent AI navigation. */}
+      {aiTabs.length > 0 && <RouteTabs items={aiTabs} active={active} />}
       {/* <div className="model-audit-strip">
         <span><small>ROLE</small><strong>Decision support only</strong></span>
         <span><small>INPUT SOURCES</small><strong>Order · Drone · Route · Weather</strong></span>
