@@ -530,12 +530,19 @@ export const updateDroneStatusApi = (
     },
   );
 
+/** Exact Backend ID is used for per-drone flight history. */
+export const getDroneFlightHistoryApi = (droneId: string | number) =>
+  technicianApiRequest(
+    `/technician/fleet/drones/${encodeURIComponent(String(droneId).trim())}/flight-history`,
+  );
+
 export const getDroneMaintenanceHistoryApi = (
   droneId: string | number,
 ) =>
-  requestWithFlexibleId(
-    (id) => `/technician/fleet/drones/${id}/maintenance-history`,
-    droneId,
+  technicianApiRequest(
+    `/technician/fleet/drones/${encodeURIComponent(
+      String(droneId).trim()
+    )}/maintenance-history`
   );
 
 // ---------------------------------------------------------------------------
@@ -689,8 +696,9 @@ export const getMaintenanceAlertsHistoryApi = () =>
 
 /** Acknowledge only with the alert's real Backend id. */
 export const acknowledgeMaintenanceAlertApi = (alertId: string | number) =>
-  technicianApiRequest(
-    `/technician/fleet/maintenance-alerts/${encodeURIComponent(String(alertId))}/acknowledge`,
+  requestWithFlexibleId(
+    (id) => `/technician/fleet/maintenance-alerts/${id}/acknowledge`,
+    alertId,
     { method: "PATCH" },
   );
 
@@ -827,6 +835,13 @@ export const getNotificationsApi = () =>
 
 export const getUnreadNotificationCountApi = () =>
   technicianApiRequest("/notifications/unread-count");
+
+/** Mark a single notification read using its original id returned by the Backend. */
+export const markNotificationReadApi = (notificationId: string | number) =>
+  technicianApiRequest(
+    `/notifications/${encodeURIComponent(String(notificationId))}/read`,
+    { method: "PATCH" },
+  );
 
 export const markAllNotificationsReadApi = () =>
   technicianApiRequest("/notifications/read-all", {

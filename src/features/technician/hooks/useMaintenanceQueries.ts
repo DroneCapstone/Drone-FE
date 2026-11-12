@@ -17,11 +17,14 @@ import {
   fetchWorkOrderLogsFromApi,
   refreshMaintenanceRecordsFromApi,
   refreshWorkOrdersFromApi,
+  type WorkOrder,
   updateWorkOrderInspectionOnServer,
   updateWorkOrderOnServer,
 } from "../utils/maintenanceStorage";
 
 import {
+  acknowledgeMaintenanceAlertApi,
+  getMaintenanceAlertsHistoryApi,
   createMaintenanceScheduleApi,
   getDroneMaintenanceSchedulesApi,
   getMaintenanceAlertApi,
@@ -80,6 +83,30 @@ export function useWorkOrderQuery(
   });
 }
 
+
+export function useMaintenanceAlertsHistoryQuery(enabled = true) {
+  return useQuery({
+    queryKey: technicianQueryKeys.maintenanceAlertsHistory(),
+    queryFn: getMaintenanceAlertsHistoryApi,
+    enabled,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useAcknowledgeMaintenanceAlertMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: string) => acknowledgeMaintenanceAlertApi(alertId),
+    onSuccess: (_result, alertId) => {
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlertsHistory() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlert(alertId) }),
+      ]);
+    },
+  });
+}
 
 export function useMaintenanceAlertQuery(
   alertId?: string,
@@ -176,11 +203,13 @@ export function useDeleteWorkOrderMutation() {
   return useMutation({
     mutationFn: (workOrderId: string) =>
       deleteWorkOrderOnServer(workOrderId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey:
-          technicianQueryKeys.workOrders(),
-      });
+    onSuccess: (_result, workOrderId) => {
+      queryClient.setQueryData<WorkOrder[]>(technicianQueryKeys.workOrders(),
+        (current) => current?.filter((order) => order.id !== workOrderId));
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
+      ]);
     },
   });
 }
@@ -190,16 +219,10 @@ export function useSyncBatteryOverdueAlertsMutation() {
 
   return useMutation({
     mutationFn: syncBatteryOverdueAlertsApi,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.maintenanceAlerts(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.batteries(),
-        }),
+    onSuccess: () => {
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.maintenanceAlerts() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
       ]);
     },
   });
@@ -237,18 +260,17 @@ export function useUpdateWorkOrderMutation() {
         workOrderId,
         payload,
       ),
-    onSuccess: async (_, variables) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrders(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey:
-            technicianQueryKeys.workOrder(
-              variables.workOrderId,
-            ),
-        }),
+    onSuccess: (_result, variables) => {
+      const issue = variables.payload.issue_description;
+      if (typeof issue === "string") {
+        queryClient.setQueryData<WorkOrder[]>(technicianQueryKeys.workOrders(),
+          (current) => current?.map((order) => order.id === variables.workOrderId
+            ? { ...order, title: issue }
+            : order));
+      }
+      void Promise.allSettled([
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrders() }),
+        queryClient.invalidateQueries({ queryKey: technicianQueryKeys.workOrder(variables.workOrderId) }),
       ]);
     },
   });

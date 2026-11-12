@@ -29,6 +29,12 @@ export const technicianQueryKeys = {
       droneId,
     ] as const,
 
+  droneFlights: (droneId: string) =>
+    [...technicianQueryKeys.all, "drone-flights", droneId] as const,
+
+  maintenanceAlertsHistory: () =>
+    [...technicianQueryKeys.all, "maintenance-alerts-history"] as const,
+
   droneMaintenance: (droneId: string) =>
     [
       ...technicianQueryKeys.all,

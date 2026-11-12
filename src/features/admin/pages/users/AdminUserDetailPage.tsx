@@ -7,7 +7,7 @@ import { AdminDialogContent as DialogContent } from '../../components/AdminDialo
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { authService } from '../../../auth/services/authService';
-import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser, type AdminUserAuditItem } from '../../api/adminUsersApi';
+import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser, type AdminUserActivityItem } from '../../api/adminUsersApi';
 import './AdminUsers.css';
 
 type EditDraft = { full_name: string; email: string; role: AdminApiRole };
@@ -35,7 +35,7 @@ export function AdminUserDetailPage() {
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [activity, setActivity] = useState<AdminUserAuditItem[]>([]);
+  const [activity, setActivity] = useState<AdminUserActivityItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -58,7 +58,7 @@ export function AdminUserDetailPage() {
     setError('');
   }, [editing, user]);
 
-  // GET /system/audit-logs?user_id=... returns actions performed BY this user.
+  // GET /admin/activity-logs?user_id=... returns actions performed BY this user.
   // Do not mistake these for changes made by Admin to this user's account.
   useEffect(() => {
     if (!userId) return;
@@ -195,10 +195,10 @@ export function AdminUserDetailPage() {
         </section>
       </div>
       {activity.length > 0 && <section className="admin-ud-card admin-ud-activity" aria-labelledby="admin-ud-activity-title">
-        <div className="admin-ud-card-head"><h2 id="admin-ud-activity-title">Recent actions by this user</h2><span className="admin-ud-helper">System audit logs</span></div>
+        <div className="admin-ud-card-head"><h2 id="admin-ud-activity-title">Recent actions by this user</h2><span className="admin-ud-helper">Activity Logs</span></div>
         <div className="admin-ud-events">
           {activity.map((event) => <div className="admin-ud-event" key={event.id}>
-            <div><strong>{event.action.replaceAll('_', ' ')}</strong><small>{event.resource_table ?? 'System'}</small></div>
+            <div><strong>{event.action.replaceAll('_', ' ')}</strong><small>{event.resource_type ?? 'General'}</small></div>
             <time>{formatDate(event.created_at)}</time>
           </div>)}
         </div>

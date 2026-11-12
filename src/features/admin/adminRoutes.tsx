@@ -13,7 +13,6 @@ import { AdminUserDetailPage } from "./pages/users/AdminUserDetailPage";
 import { TransactionsPage } from "./pages/payments/TransactionsPage";
 import { RefundsPage } from "./pages/payments/RefundsPage";
 import { ExpensesPage } from "./pages/payments/ExpensesPage";
-import { AuditLogsPage } from "./pages/audit/AuditLogsPage";
 import { AdminSettingsPage } from "./pages/system/AdminSettingsPage";
 import { ApprovalsPage } from "./pages/approvals/ApprovalsPage";
 import { SparePartsPage } from "./pages/network/SparePartsPage";
@@ -51,9 +50,12 @@ export const adminRoutes: RouteObject[] = [
   { path: "payments/transactions", element: <TransactionsPage /> },
   { path: "payments/refunds", element: <RefundsPage /> },
   { path: "payments/financial", element: <ExpensesPage /> },
-  { path: "audit", element: <AuditLogsPage /> },
-  { path: "audit/system", element: <SystemLogsPage /> },
-  { path: "audit/activity", element: <ActivityLogPage /> },
+  { path: "logs", element: <Navigate to="/admin/logs/activity" replace /> },
+  { path: "logs/activity", element: <ActivityLogPage /> },
+  { path: "logs/system", element: <SystemLogsPage /> },
+  { path: "audit", element: <Navigate to="/admin/logs/activity" replace /> },
+  { path: "audit/activity", element: <Navigate to="/admin/logs/activity" replace /> },
+  { path: "audit/system", element: <Navigate to="/admin/logs/system" replace /> },
   { path: "notifications", element: <AdminNotificationsPage /> },
   { path: "settings", element: <AdminSettingsPage /> },
   { path: "profile", element: <AdminProfilePage /> },

@@ -252,10 +252,7 @@ export function DroneDetailPage() {
           <InfoItem label="Last flight time" value={formatDate(parseApiDate(drone.lastFlightAt))} />
           <InfoItem label="Last flight / mission reference" value={display(drone.lastFlight)} />
         </div>
-        <div className={`mt-5 rounded-md border border-dashed border-[var(--tech-border)] px-4 py-5 text-[13px] ${MUTED}`}>
-          A per-drone flight history endpoint is not available in the supplied Technician API contract.
-          This tab only displays last-flight fields actually returned by the drone API; it does not invent flight records.
-        </div>
+       
       </CardContent></Card>}
 
       {tab === "maintenance" && <div className="space-y-5">
@@ -273,9 +270,7 @@ export function DroneDetailPage() {
             <CheckCircle2 size={19} className="text-emerald-500" />
             <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance records</h2>
           </div>
-          <p className={`mt-1 text-[13px] ${MUTED}`}>
-            Records for this drone from Maintenance History / Maintenance Records APIs.
-          </p>
+         
           {maintenanceError && <p className="mt-3 text-[12px] text-amber-500">
             Some maintenance data could not be loaded: {maintenanceError}
           </p>}
@@ -288,29 +283,27 @@ export function DroneDetailPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[15px] font-semibold ${TEXT}`}>{record.workOrderId}</span>
-                      <span className="text-[12px] font-medium text-emerald-500">Recorded</span>
+                      <span className="text-[12px] font-medium text-emerald-500">{record.workOrderStatus || "Recorded"}</span>
                     </div>
                     <p className={`mt-1 text-[14px] ${SECONDARY}`}>{record.title}</p>
+                    {record.maintenanceType && (
+                      <p className={`mt-1 text-[12px] ${MUTED}`}>
+                        {[record.maintenanceType].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                   </div>
-                  <span className={`shrink-0 text-right text-[12px] ${MUTED}`}>{display(record.completedAt)}</span>
+                  <span className={`shrink-0 text-right text-[12px] ${MUTED}`}>{parseApiDate(record.completedAt) ? formatDate(parseApiDate(record.completedAt)) : display(record.completedAt)}</span>
                 </summary>
                 <div className="border-t border-[var(--tech-border)] px-4 py-4">
                   <div className="grid gap-5 md:grid-cols-2">
-                    <InfoItem label="Diagnosis" value={record.diagnosis} />
+                    {record.recordDescription &&
+                      <InfoItem label="Record description" value={record.recordDescription} />}
+                    
                     <InfoItem label="Corrective action" value={record.correctiveAction} />
-                    <InfoItem label="Resulting status" value={record.resultingStatus} />
+             
                     <InfoItem label="Performed / assigned to" value={record.assignedTo} />
                   </div>
-                  <div className="mt-5 border-t border-[var(--tech-border)] pt-4">
-                    <p className={`text-[12px] font-medium ${MUTED}`}>
-                      Inspection checklist ({record.inspectionItems.length} item(s))
-                    </p>
-                    {record.inspectionItems.length > 0 ?
-                      <ul className={`mt-2 space-y-1.5 text-[13px] ${SECONDARY}`}>
-                        {record.inspectionItems.map((item, index) => <li key={`${record.id}-${index}`}>• {item}</li>)}
-                      </ul> :
-                      <p className={`mt-2 text-[13px] ${MUTED}`}>No inspection items returned</p>}
-                  </div>
+                  
                 </div>
               </details>
             )) : <div className={`rounded-md border border-dashed border-[var(--tech-border)] px-4 py-9 text-center text-[14px] ${MUTED}`}>

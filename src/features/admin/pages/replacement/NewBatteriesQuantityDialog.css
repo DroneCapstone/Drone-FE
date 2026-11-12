@@ -1,0 +1,37 @@
+/* Mirrors the Spare Parts Add Quantity popup without editing shared Admin UI. */
+.admin-dialog-typography.new-batteries-quantity-dialog {
+  top: 50%; left: 50%; transform: translate(-50%, -50%); translate: none;
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  display: flex; flex-direction: column; padding: 0;
+  border: 1px solid var(--admin-border, #d4d4d8);
+  background: var(--admin-surface, #fff);
+  border-radius: 12px; overflow: hidden;
+}
+.new-batteries-quantity-dialog > form {
+  display: flex; flex-direction: column; min-height: 0; min-width: 0; width: 100%;
+  max-height: calc(100dvh - 32px);
+}
+.new-batteries-quantity-header {flex: none; padding: 20px 24px 16px; border-bottom: 1px solid var(--admin-border, #d4d4d8);}
+.new-batteries-quantity-header p { margin-top: 5px; color: var(--admin-muted, #71717a); font-size: 12px; }
+.new-batteries-quantity-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 24px 22px; display: grid; gap: 14px; scrollbar-width: thin; }
+.new-batteries-quantity-fields {display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px;}
+.new-batteries-quantity-fields label {min-width:0; display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:600;}
+.new-batteries-quantity-input { width:100%; height:44px; box-sizing:border-box; border:1px solid var(--admin-border, #d4d4d8); border-radius:8px; padding:0 12px; font: inherit; font-size:14px; color:var(--admin-text, #18181b); background:var(--admin-surface, #fff); }
+.new-batteries-quantity-input.is-readonly {background:var(--admin-surface-2, #f5f5f5); cursor:default;}
+.new-batteries-quantity-input:focus:not(:read-only) {outline:2px solid #ff6b00; outline-offset:1px;}
+.new-batteries-quantity-result {display:flex;justify-content:space-between;align-items:center;gap:12px;border-radius:9px;background:var(--admin-surface-2, #f5f5f5);padding:12px;font-size:13px;}
+.new-batteries-quantity-result span {color:var(--admin-muted, #71717a);}
+.new-batteries-quantity-cost {border:1px solid var(--admin-border, #d4d4d8); border-radius:9px; padding:16px;}
+.new-batteries-quantity-cost-title, .new-batteries-quantity-cost-row {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.new-batteries-quantity-cost-title {margin-bottom:12px;font-size:13px;font-weight:600;}
+.new-batteries-quantity-cost-title > span {display:flex;align-items:center;gap:8px;}
+.new-batteries-quantity-cost-title svg {color:#ff6b00;}
+.new-batteries-quantity-cost-title small {font-size:11px;font-weight:400;color:var(--admin-muted, #71717a);}
+.new-batteries-quantity-cost-row {padding:7px 0;font-size:13px;}
+.new-batteries-quantity-cost-row span {color:var(--admin-muted, #71717a);}
+.new-batteries-quantity-cost-row.is-total {border-top:1px solid var(--admin-border, #d4d4d8);margin-top:8px;padding-top:13px;font-weight:700;}
+.new-batteries-quantity-cost-row.is-total strong {color:#ff6b00;font-size:16px;}
+.new-batteries-quantity-hint {font-size:12px;line-height:1.55;color:var(--admin-muted, #71717a);}
+.new-batteries-quantity-error {font-size:12px;line-height:1.5;color:#dc2626;}
+.new-batteries-quantity-footer {flex:none;display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid var(--admin-border, #d4d4d8);padding:14px 24px;background:var(--admin-surface, #fff);}
+@media (max-width:480px) { .new-batteries-quantity-fields {grid-template-columns:1fr;} .new-batteries-quantity-header,.new-batteries-quantity-body {padding:16px;} .new-batteries-quantity-footer {padding:12px 16px;} }

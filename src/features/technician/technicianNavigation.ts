@@ -81,7 +81,7 @@ export const technicianNavigation:
         path: "/technician/maintenance/work-orders",
       },
       {
-        label: "Hub supplies",
+        label: "Spare parts",
         path: "/technician/maintenance/supplies",
       },
     ],
