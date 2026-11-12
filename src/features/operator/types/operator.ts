@@ -136,6 +136,8 @@ export interface Mission {
   destinationHubId: string;
   relayHubIds?: string[];
   legs?: MissionLeg[];
+  /** Planned hub-to-hub segments from the assigned Mission route (not recorded GPS). */
+  plannedRouteLegs?: RouteLegSnapshot[];
   routeId: string;
   route: string;
   status: MissionStatus;

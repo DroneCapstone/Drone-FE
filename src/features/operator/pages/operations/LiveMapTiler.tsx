@@ -5,6 +5,7 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Map as MapLibreMap, Marker, Popup } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { LiveTrackingDrone, MissionHubSummary, MissionTelemetryPoint } from '../../api/missionApi';
+import type { RouteLegSnapshot } from '../../types/operator';
 import './live-maptiler.css';
 
 // Must be set before constructing the first Map (including React Strict Mode remounts).
@@ -25,6 +26,8 @@ type Props = {
   hubs: MissionHubSummary[];
   drones: LiveTrackingDrone[];
   histories: Record<string, MissionTelemetryPoint[]>;
+  /** Planned hub-to-hub Mission route, separate from recorded GPS. */
+  plannedRoutes: Record<string, RouteLegSnapshot[] | undefined>;
   mapStyle: LiveMapStyle;
   selectedMissionId?: string;
   onSelectMission: (missionId: string) => void;
@@ -95,6 +98,58 @@ function emptyCollection() {
   };
 }
 
+function drawPlannedRoutes(
+  map: MapLibreMap,
+  routes: Props['plannedRoutes'],
+  hubs: Props['hubs'],
+  selectedMissionId?: string,
+) {
+  const data = emptyCollection();
+  const hubPoint = (id: number | undefined, code: string | undefined, name: string | undefined): Point | null => {
+    const found = hubs.find(h =>
+      (id !== undefined && h.id === String(id)) ||
+      (code && h.code?.toUpperCase() === code.toUpperCase()) ||
+      (name && h.name.toLocaleLowerCase() === name.toLocaleLowerCase()),
+    );
+    return found ? asPoint(found.longitude, found.latitude) : null;
+  };
+  for (const [missionId, legs] of Object.entries(routes)) {
+    if (!legs?.length) continue;
+    for (const leg of [...legs].sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0))) {
+      const from = asPoint(leg.from_longitude, leg.from_latitude) ??
+        hubPoint(leg.from_hub_id, leg.from_hub_code, leg.from_hub_name);
+      const to = asPoint(leg.to_longitude, leg.to_latitude) ??
+        hubPoint(leg.to_hub_id, leg.to_hub_code, leg.to_hub_name);
+      // A missing coordinate is unknown, never invent a straight line to 0,0
+      // or connect non-adjacent legs across an unrecorded segment.
+      if (!from || !to || (from[0] === to[0] && from[1] === to[1])) continue;
+      if ((from[0] === 0 && from[1] === 0) || (to[0] === 0 && to[1] === 0)) continue;
+      data.features.push({
+        type: 'Feature',
+        properties: { selected: String(missionId === selectedMissionId) },
+        geometry: { type: 'LineString', coordinates: [from, to] },
+      });
+    }
+  }
+  if (!map.getSource('droneoptai-planned-routes')) {
+    map.addSource('droneoptai-planned-routes', { type: 'geojson', data });
+  } else {
+    (map.getSource('droneoptai-planned-routes') as maplibregl.GeoJSONSource).setData(data);
+  }
+  if (!map.getLayer('droneoptai-planned-routes')) {
+    map.addLayer({
+      id: 'droneoptai-planned-routes', type: 'line', source: 'droneoptai-planned-routes',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#f97316', '#64748b'],
+        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.85, 0.55],
+        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 3.2, 2],
+        'line-dasharray': [3, 2],
+      },
+    });
+  }
+}
+
 function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMissionId?: string) {
   const data = emptyCollection();
   for (const [missionId, history] of Object.entries(histories)) {
@@ -120,13 +175,13 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   }
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, mapStyle, selectedMissionId, onSelectMission }, ref) {
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, mapStyle, selectedMissionId, onSelectMission }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
   const dronesRef = useRef(new Map<string, MovingMarker>());
-  const stateRef = useRef({ hubs, drones, histories, selectedMissionId, onSelectMission });
-  stateRef.current = { hubs, drones, histories, selectedMissionId, onSelectMission };
+  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission });
+  stateRef.current = { hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission };
   const followRef = useRef<string | null>(null);
   // Changing the basemap must never reconstruct the map or its DOM markers.
   const mapStyleRef = useRef<LiveMapStyle>(mapStyle);
@@ -260,9 +315,10 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       // style.load fires after the new style can accept custom layers.
       // No isStyleLoaded() gate: that check can still be false while tiles load.
       try {
+        drawPlannedRoutes(map, stateRef.current.plannedRoutes, stateRef.current.hubs, stateRef.current.selectedMissionId);
         drawTrails(map, stateRef.current.histories, stateRef.current.selectedMissionId);
-        if (map.getLayer('droneoptai-trails')) {
-          map.setLayoutProperty('droneoptai-trails', 'visibility', showTrails ? 'visible' : 'none');
+        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails']) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showTrails ? 'visible' : 'none');
         }
       } catch (error) {
         console.warn('Unable to update flight trails:', error);
@@ -273,7 +329,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     return () => {
       map.off('style.load', sync);
     };
-  }, [ready, histories, selectedMissionId, showTrails]);
+  }, [ready, hubs, histories, plannedRoutes, selectedMissionId, showTrails]);
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const map = mapRef.current;
@@ -460,9 +516,14 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     </div>}
     <div className="live-geo-layers" role="group" aria-label="Map layers">
       <button type="button" aria-pressed={showHubs} onClick={() => setShowHubs(v => !v)} className={showHubs ? 'active' : ''}>Hubs</button>
-      <button type="button" aria-pressed={showTrails} onClick={() => setShowTrails(v => !v)} className={showTrails ? 'active' : ''}>Flight trails</button>
+      <button type="button" aria-pressed={showTrails} onClick={() => setShowTrails(v => !v)} className={showTrails ? 'active' : ''}>Flight paths</button>
       <button type="button" aria-pressed={showWeather} onClick={() => setShowWeather(v => !v)} className={showWeather ? 'active' : ''}>Weather</button>
     </div>
+
+    {showTrails && <div className="live-geo-route-legend" aria-label="Flight path legend">
+      <span><i className="live-geo-route-dash" aria-hidden="true" />Planned route</span>
+      <span><i className="live-geo-route-solid" aria-hidden="true" />Recorded GPS</span>
+    </div>}
     {/* <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div> */}
   </div>;
 });

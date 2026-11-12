@@ -442,6 +442,9 @@ function mapMission(raw: unknown): Mission {
 
   const rawLegs = pickArray(record, ['legs_detail', 'legs', 'mission_legs']);
   const plannedLegs = pickArray(routeRecord, ['legs_detail', 'legs']);
+  const plannedLegSnapshots = (plannedLegs.length ? plannedLegs : rawLegs)
+    .map(mapRouteLegSnapshot)
+    .filter((leg): leg is RouteLegSnapshot => leg !== null);
   const legsRecords = rawLegs.length > 0 ? rawLegs : plannedLegs;
   // MissionLeg can hold the operational status while scheduled_route holds the
   // exact assigned battery snapshot. Merge by sequence, never fabricate an ID.
@@ -477,7 +480,7 @@ function mapMission(raw: unknown): Mission {
     droneId, batteryId: pickString(record, ['battery_id', 'batteryId', 'assignedBatteryId']) || undefined, drone: droneName,
     originHubId: pickString(record, ['origin_hub_id', 'originHubId']),
     destinationHubId: pickString(record, ['destination_hub_id', 'destinationHubId']),
-    relayHubIds, legs, routeId, route: routeName,
+    relayHubIds, legs, plannedRouteLegs: plannedLegSnapshots, routeId, route: routeName,
     status, tone: missionTone(status), eta,
     // NaN is a missing-metric sentinel; UI must display —, never invented 0%/0 Wh.
     battery: batteryRemaining ?? Number.NaN,

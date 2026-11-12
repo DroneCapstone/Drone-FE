@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
-import { getMissionTelemetryApi, type LiveTrackingDrone, type MissionTelemetryPoint } from '../../api/missionApi';
+import { getMissionApi, getMissionTelemetryApi, type LiveTrackingDrone, type MissionTelemetryPoint } from '../../api/missionApi';
 import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuery } from '../../hooks/useMissionQueries';
 import { operatorQueryKeys } from '../../query/queryKeys';
 import { LiveMapTiler, type LiveMapTilerHandle, type LiveMapStyle } from './LiveMapTiler';
@@ -103,6 +103,28 @@ export function LiveTrackingPage() {
       queryFn: () => getMissionTelemetryApi(id, { limit: 200 }), refetchInterval: 8000, staleTime: 3000,
     }))
   });
+  // Load assigned route geometry independently from GPS telemetry. A planned
+  // line must remain visible before the drone records its second GPS point.
+  // Keep a moderate refresh interval so an updated mission route can be shown.
+  const routesQuery = useQueries({
+    queries: missionIds.map(id => ({
+      queryKey: operatorQueryKeys.missionDetail(id),
+      queryFn: () => getMissionApi(id),
+      staleTime: 15_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const routesKey = routesQuery.map(item => item.dataUpdatedAt).join(':');
+  const plannedRoutes = useMemo(() => {
+    const result: Record<string, NonNullable<(typeof routesQuery)[number]['data']>['plannedRouteLegs']> = {};
+    missionIds.forEach((id, index) => {
+      const legs = routesQuery[index]?.data?.plannedRouteLegs;
+      if (legs?.length) result[id] = legs;
+    });
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missionIds, routesKey]);
   const trailsKey = trailsQuery.map(item => item.dataUpdatedAt).join(':');
   const checkpointQuery = useMissionHubCheckpointsQuery(selectedDrone?.missionId ?? '');
   useEffect(() => {
@@ -209,6 +231,7 @@ export function LiveTrackingPage() {
               hubs={hubsQuery.data ?? []}
               drones={liveDrone}
               histories={mapHistories}
+              plannedRoutes={plannedRoutes}
               mapStyle={mapStyle}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
