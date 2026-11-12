@@ -3,13 +3,11 @@ import { Check, Clock3 } from "lucide-react";
 import type { CustomerOrderSummary } from "../services/customerDeliveryService";
 
 export type TrackingEvent = {
-
   key: string;
-
   label: string;
-
   occurredAt: string | null;
-
+  /** Explicit truth from tracking timeline; forecast events must never confirm a step. */
+  completed?: boolean;
 };
 
 type MilestoneKey =
@@ -82,150 +80,173 @@ const scheduledStatuses = new Set(["SCHEDULED", "MISSION_SCHEDULED", "ASSIGNED",
 
  */
 
+/**
+ * Use the BE tracking timeline as the source of truth when it supplies
+ * `completed` flags. A future step with completed:false is NOT finished,
+ * even if it has a label, a forecast, or the current date passes its ETA.
+ */
 export function getConfirmedMilestones(
-
   order: CustomerOrderSummary,
-
   events: TrackingEvent[] = [],
-
 ): Set<MilestoneKey> {
-
   const status = statusKey(order.orderStatus);
-
   const customerStatus = statusKey(order.customerStatus);
+  const rawStatuses = [status, customerStatus];
+  const has = (set: Set<string>) => rawStatuses.some((key) => set.has(key));
+  const authoritative = events.some((event) => typeof event.completed === "boolean");
+  const confirmedEvents = new Set(
+    events.filter((event) => event.completed !== false && !event.key.startsWith("forecast_")).map((event) => event.key),
+  );
 
-  const raw = [status, customerStatus];
+  const collected = confirmedEvents.has("collected") || has(collectedStatuses);
+  const arrived = collected || confirmedEvents.has("destination_arrived") ||
+    (!authoritative && has(arrivalStatuses));
+  const departed = arrived || confirmedEvents.has("departed") ||
+    (!authoritative && has(inFlightStatuses));
+  const scheduled = departed || confirmedEvents.has("scheduled") ||
+    (!authoritative && has(scheduledStatuses));
+  const received = scheduled || confirmedEvents.has("origin_received") ||
+    (!authoritative && (has(receivedStatuses) || customerStatus === "PREPARING_DELIVERY"));
+  const paid = confirmedEvents.has("paid") ||
+    (!authoritative && order.paymentStatus === "paid");
 
-  const has = (set: Set<string>) => raw.some((key) => set.has(key));
-
-  const eventKeys = new Set(events.map((event) => event.key));
-
-  const collected = has(collectedStatuses) || eventKeys.has("collected");
-
-  const arrived = collected || has(arrivalStatuses) || eventKeys.has("destination_arrived");
-
-  const departed = arrived || has(inFlightStatuses) || eventKeys.has("departed");
-
-  const scheduled = departed || has(scheduledStatuses) || eventKeys.has("scheduled");
-
-  const received = scheduled || has(receivedStatuses) ||
-
-    ["PACKAGE_RECEIVED_AT_ORIGIN", "PREPARING_DELIVERY"].includes(customerStatus) ||
-
-    eventKeys.has("origin_received");
-
-  const paid = order.paymentStatus === "paid" || eventKeys.has("paid");
-
+  // The order exists, so its creation is known even when tracking is offline.
   const completed = new Set<MilestoneKey>(["created"]);
-
   if (paid) completed.add("paid");
-
   if (received) completed.add("origin_received");
-
   if (scheduled) completed.add("scheduled");
-
   if (departed) completed.add("departed");
-
   if (arrived) completed.add("destination_arrived");
-
   if (collected) completed.add("collected");
-
   return completed;
-
 }
 
-/** Only read recognizable events from the backend tracking response. */
-
+/**
+ * Parse current GET /customer/orders/{id}/tracking format:
+ * timeline[].step_key, completed, timestamp; and the top-level ETA fields.
+ * The existing Detail page already passes this result to this function.
+ */
 export function parseTrackingEvents(value: unknown): TrackingEvent[] {
-
-  const record = (value && typeof value === "object" && !Array.isArray(value))
-
-    ? value as Record<string, unknown> : null;
-
-  const nested = record?.data && typeof record.data === "object" && !Array.isArray(record.data)
-
-    ? record.data as Record<string, unknown> : null;
-
-  const tracking = record?.tracking && typeof record.tracking === "object" && !Array.isArray(record.tracking)
-
-    ? record.tracking as Record<string, unknown> : null;
-
-  const candidates = [record, nested, tracking];
-
-  const events = candidates.map((item) => item?.events ?? item?.timeline ?? item?.history ?? item?.tracking_history)
-
-    .find(Array.isArray);
-
-  if (!Array.isArray(events)) return [];
+  const asRecord = (input: unknown): Record<string, unknown> | null =>
+    input && typeof input === "object" && !Array.isArray(input)
+      ? input as Record<string, unknown> : null;
+  const root = asRecord(value);
+  const candidates = [root, asRecord(root?.data), asRecord(root?.tracking)];
+  const payload = candidates.find((item) => item && (
+    Array.isArray(item.timeline) || Array.isArray(item.events) ||
+    typeof item.order_created_at === "string" || typeof item.eta === "string"
+  )) ?? root;
+  if (!payload) return [];
 
   const aliases: Record<string, MilestoneKey> = {
-
     ORDER_CREATED: "created", CREATED: "created",
-
     PAYMENT_CONFIRMED: "paid", PAYMENT_PAID: "paid", PAID: "paid",
-
-    PACKAGE_RECEIVED_AT_ORIGIN: "origin_received", RECEIVED_AT_ORIGIN: "origin_received",
-
-    ORIGIN_HUB_RECEIVED: "origin_received", AT_HUB: "origin_received",
-
-    MISSION_SCHEDULED: "scheduled", SCHEDULED: "scheduled",
-
-    FLIGHT_STARTED: "departed", DRONE_DEPARTED: "departed",
-
-    IN_DELIVERY: "departed", IN_FLIGHT: "departed",
-
-    DELIVERED_TO_HUB: "destination_arrived", ARRIVED_AT_DESTINATION: "destination_arrived",
-
-    DESTINATION_HUB_ARRIVED: "destination_arrived", READY_FOR_PICKUP: "destination_arrived",
-
-    PICKED_UP: "collected", COLLECTED: "collected",
-
-    RECEIVED_BY_RECIPIENT: "collected", HANDED_OVER_TO_RECIPIENT: "collected",
-
-    PACKAGE_COLLECTED: "collected", PACKAGE_PICKED_UP: "collected",
-
+    PACKAGE_RECEIVED: "origin_received", PACKAGE_RECEIVED_AT_ORIGIN: "origin_received",
+    RECEIVED_AT_ORIGIN: "origin_received", ORIGIN_HUB_RECEIVED: "origin_received",
+    AT_HUB: "origin_received",
+    MISSION_SCHEDULED: "scheduled", FLIGHT_SCHEDULED: "scheduled", SCHEDULED: "scheduled",
+    FLIGHT_STARTED: "departed", DRONE_DEPARTED: "departed", IN_DELIVERY: "departed",
+    IN_FLIGHT: "departed", IN_TRANSIT: "departed",
+    ARRIVED_AT_HUB: "destination_arrived", ARRIVED_AT_DESTINATION: "destination_arrived",
+    DESTINATION_HUB_ARRIVED: "destination_arrived", DELIVERED_TO_HUB: "destination_arrived",
+    AT_DESTINATION_HUB: "destination_arrived", READY_FOR_PICKUP: "destination_arrived",
+    // BE 'DELIVERED' means delivered AT HUB (ready for pickup), not recipient collection.
+    DELIVERED: "destination_arrived",
+    PICKED_UP: "collected", COLLECTED: "collected", RECIPIENT_PICKUP: "collected",
+    RECIPIENT_COLLECTED: "collected", PACKAGE_COLLECTED: "collected",
+    PACKAGE_PICKED_UP: "collected", RECEIVED_BY_RECIPIENT: "collected",
+    HANDED_OVER_TO_RECIPIENT: "collected",
   };
+  const timelineCandidates = [payload.timeline, payload.events, payload.history, payload.tracking_history];
+  const list = timelineCandidates.find(Array.isArray) as unknown[] | undefined;
+  const events: TrackingEvent[] = [];
 
-  return events.flatMap((raw): TrackingEvent[] => {
-
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-
-    const item = raw as Record<string, unknown>;
-
-    const type = [item.event_type, item.event, item.type, item.status, item.code]
-
+  for (const raw of list ?? []) {
+    const item = asRecord(raw);
+    if (!item) continue;
+    const type = [item.step_key, item.event_type, item.event, item.type, item.status, item.code]
       .find((candidate) => typeof candidate === "string");
-
     const key = aliases[statusKey(typeof type === "string" ? type : "")];
-
-    if (!key) return [];
-
-    const time = [item.occurred_at, item.timestamp, item.created_at, item.event_at]
-
-      .find((candidate) => typeof candidate === "string" && !Number.isNaN(Date.parse(candidate)));
-
+    if (!key) continue;
+    const completed = typeof item.completed === "boolean" ? item.completed : undefined;
+    const time = [item.timestamp, item.occurred_at, item.created_at, item.event_at]
+      .find((candidate) => typeof candidate === "string" && validTimestamp(candidate));
+    // No timestamp for an unfinished step, even if the server sends a future date.
+    const occurredAt = completed === false ? null : typeof time === "string" ? time : null;
     const label = milestones.find((step) => step.key === key)?.label ?? key;
+    const existing = events.find((event) => event.key === key);
+    if (existing) {
+      // The hub-delivered event may repeat ARRIVED_AT_HUB. Keep the actual
+      // landing timestamp if present, rather than overwriting it.
+      if (existing.completed !== true && completed === true) existing.completed = true;
+      if (!existing.occurredAt && occurredAt) existing.occurredAt = occurredAt;
+    } else {
+      events.push({ key, label, occurredAt, completed });
+    }
+  }
 
-    return [{ key, label, occurredAt: typeof time === "string" ? time : null }];
+  // Top-level actual timestamps as fallback for older/incomplete timeline arrays.
+  // Do not overwrite an explicit completed:false step from the BE.
+  const actualFields: Array<[MilestoneKey, string]> = [
+    ["created", "order_created_at"], ["paid", "paid_at"],
+    ["origin_received", "package_received_at"], ["departed", "departed_at"],
+    ["destination_arrived", "arrived_at"],
+  ];
+  for (const [key, field] of actualFields) {
+    const time = payload[field];
+    if (typeof time !== "string" || !validTimestamp(time)) continue;
+    const existing = events.find((event) => event.key === key);
+    if (existing) {
+      if (!existing.occurredAt && existing.completed !== false) existing.occurredAt = time;
+    } else {
+      events.push({ key, label: milestones.find((m) => m.key === key)?.label ?? key,
+        occurredAt: time, completed: true });
+    }
+  }
 
-  });
+  // `estimated_window_start` is an estimated window START, not an actual
+  // takeoff timestamp. `eta` is the estimated destination arrival time.
+  // These synthetic keys are never used to confirm a milestone.
+  for (const [field, key] of [
+    ["estimated_window_start", "forecast_departed"],
+    ["eta", "forecast_destination_arrived"],
+  ] as const) {
+    const time = payload[field];
+    if (typeof time === "string" && validTimestamp(time)) {
+      events.push({ key, label: field, occurredAt: time, completed: false });
+    }
+  }
 
+  return events;
 }
 
-/** Display only a compact local date/time; never treat a forecast as an event. */
+/** Validate ISO timestamps with or without an offset. */
+function validTimestamp(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(value.trim()) &&
+    !Number.isNaN(Date.parse(value));
+}
+
+/**
+ * Tracking API sends time-zone-free local timestamps, e.g. 11:46:25.
+ * Preserve that wall-clock value (11:46), do NOT add 7 hours.
+ * Explicit Z / +offset timestamps are converted to Asia/Ho_Chi_Minh.
+ */
 function compactMilestoneTime(value: string | null | undefined): string | null {
-  if (!value) return null;
+  if (!value || !validTimestamp(value)) return null;
   const trimmed = value.trim();
-  if (!trimmed) return null;
-  const withOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
-  // Timezone-free backend strings are ambiguous: show the supplied wall time,
-  // rather than silently assuming UTC or converting it twice.
-  const date = new Date(withOffset ? trimmed : `${trimmed}Z`);
-  if (Number.isNaN(date.getTime())) return null;
+  const offsetProvided = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+  if (!offsetProvided) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(trimmed);
+    if (!match) return null;
+    const [, year, month, day, hour, minute] = match;
+    const monthName = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month) - 1];
+    return `${day} ${monthName} · ${hour}:${minute}`;
+  }
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-    hourCycle: "h23", timeZone: withOffset ? "Asia/Ho_Chi_Minh" : "UTC",
-  }).format(date).replace(", ", " · ");
+    hourCycle: "h23", timeZone: "Asia/Ho_Chi_Minh",
+  }).format(new Date(trimmed)).replace(", ", " · ");
 }
 
 function getMilestoneTime(
@@ -233,26 +254,29 @@ function getMilestoneTime(
   order: CustomerOrderSummary,
   confirmed: boolean,
   events: Map<string, TrackingEvent>,
-): { value: string; estimated: boolean } | null {
+): { value: string; estimated: boolean; windowStart?: boolean } | null {
   const actualFromOrder: Partial<Record<MilestoneKey, string | null>> = {
-    created: order.createdAt,
-    paid: order.paidAt,
-    origin_received: order.originReceivedAt,
-    scheduled: order.scheduledAt,
-    departed: order.departedAt,
-    destination_arrived: order.destinationReceivedAt,
-    collected: order.collectedAt,
+    created: order.createdAt, paid: order.paidAt, origin_received: order.originReceivedAt,
+    scheduled: order.scheduledAt, departed: order.departedAt,
+    destination_arrived: order.destinationReceivedAt, collected: order.collectedAt,
   };
   if (confirmed) {
+    // Use the Tracking timestamp before any Order Detail timestamp.
     const actual = events.get(key)?.occurredAt ?? actualFromOrder[key];
     const formatted = compactMilestoneTime(actual);
     return formatted ? { value: formatted, estimated: false } : null;
   }
-  // Only these two future milestones correspond to known backend forecasts.
-  const forecast = key === "departed" ? order.estimatedDepartureAt
+
+  // Do not show future forecasts as confirmed events. Forecasts from the
+  // tracking endpoint are preferred to potentially stale order-detail ETAs.
+  const trackingForecast = key === "departed"
+    ? events.get("forecast_departed")?.occurredAt
+    : key === "destination_arrived"
+      ? events.get("forecast_destination_arrived")?.occurredAt : null;
+  const fallbackForecast = key === "departed" ? order.estimatedDepartureAt
     : key === "destination_arrived" ? order.estimatedArrivalAt : null;
-  const formatted = compactMilestoneTime(forecast);
-  return formatted ? { value: formatted, estimated: true } : null;
+  const formatted = compactMilestoneTime(trackingForecast ?? fallbackForecast);
+  return formatted ? { value: formatted, estimated: true, windowStart: key === "departed" && Boolean(trackingForecast) } : null;
 }
 
 export function DeliveryProgressTimeline({
@@ -529,7 +553,7 @@ export function DeliveryProgressTimeline({
 
                 {time && (
                   <p className={`mt-0.5 text-[11px] leading-4 ${time.estimated ? "text-orange-300/65" : "text-white/45"}`}>
-                    {time.estimated ? "Est. " : ""}{time.value}
+                    {time.estimated ? (time.windowStart ? "Est. " : "Est. ") : ""}{time.value}
                   </p>
                 )}
 
