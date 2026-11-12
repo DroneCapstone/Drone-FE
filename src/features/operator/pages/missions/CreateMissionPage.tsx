@@ -269,6 +269,28 @@ export function CreateMissionPage() {
   }
 
   const planningState = getOrderPlanningBadge(order, []);
+  const isPlanningAllowedByBE = canCreateMissionForOrder(order);
+  // If BE omitted the state, avoid the misleading legacy "Closed" badge.
+  // An explicit permission flag can confirm eligibility but cannot identify
+  // READY_FOR_PLANNING vs NEEDS_REPLANNING; do not guess either state.
+  const planningBadgeLabel = planningState ?? (isPlanningAllowedByBE ? 'Eligible to Plan' : 'Status Unavailable');
+  const planningMessage = planningState === 'Ready for Planning'
+    ? (isPlanningAllowedByBE
+      ? 'Package received. You can plan this Mission.'
+      : 'Waiting for BE confirmation that Mission planning is allowed.')
+    : planningState === 'Needs Replanning'
+      ? (isPlanningAllowedByBE
+        ? 'This Order needs replanning. You can plan the next Mission.'
+        : 'This Order needs replanning. Waiting for BE planning eligibility.')
+      : planningState === 'Waiting for package'
+        ? 'Waiting for Technician confirmation of package receipt.'
+        : planningState === 'Future'
+          ? (order.planningAt ? `Planning opens ${formatMissionTime(order.planningAt)}.` : 'Planning window has not opened yet.')
+          : planningState === 'Planned'
+            ? 'A Mission has already been planned for this Order.'
+            : isPlanningAllowedByBE
+              ? 'BE confirms this Order is eligible for Mission planning.'
+              : 'Planning status is unavailable. Refresh the Order to check eligibility.';
   const networkHubs = apiHubs ?? [];
   const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
   const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
@@ -526,8 +548,8 @@ export function CreateMissionPage() {
           <OperatorPanel
             title="Order information"
             action={
-              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
-                {planningState ?? 'Closed'}
+              <StatusBadge tone={planningState === 'Ready for Planning' || (!planningState && isPlanningAllowedByBE) ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
+                {planningBadgeLabel}
               </StatusBadge>
             }
           >
@@ -549,11 +571,7 @@ export function CreateMissionPage() {
             </div>
             <div className="mission-planning-note">
               <span>
-                {planningState === 'Ready for Planning'
-                  ? canCreateMissionForOrder(order) ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
-                  : planningState === 'Needs Replanning'
-                    ? 'This order requires replanning. Create a new Mission when it becomes eligible.'
-                    : `Planning opens ${formatMissionTime(order.planningAt)}.`}
+                {planningMessage}
               </span>
             </div>
             {!hasOrderHubs && (

@@ -61,8 +61,11 @@ export interface BackendOperatorOrder {
   delivery_mode: BackendDeliveryMode;
   status: BackendOrderStatus;
   planningState?: BackendPlanningState | null;
+  planning_state?: BackendPlanningState | null;
   planning_state_label?: string | null;
+  planningStateLabel?: string | null;
   can_create_mission?: boolean | null;
+  canCreateMission?: boolean | null;
   originPackage?: BackendOriginPackage | null;
   requested_delivery_at?: string | null;
   estimated_window_start?: string | null;
@@ -304,6 +307,11 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
   const createdAt = validIso(raw.created_at) ?? planningAt;
   const originHubId = raw.origin_hub?.id ?? raw.origin_hub_id;
   const destinationHubId = raw.destination_hub?.id ?? raw.destination_hub_id;
+  // BE deployments use both camelCase and snake_case. Do not treat missing
+  // planning data as Closed or invent permission to create a Mission.
+  const rawPlanningState = raw.planningState ?? raw.planning_state;
+  const planningLabel = raw.planning_state_label ?? raw.planningStateLabel;
+  const rawCanCreate = raw.can_create_mission ?? raw.canCreateMission;
 
   return {
     id: String(raw.id),
@@ -328,9 +336,9 @@ function toOperatorOrder(raw: BackendOperatorOrder): Order {
       end: estimatedEnd,
     },
     planningAt,
-    planningState: mapPlanningState(raw.planningState),
-    planningStateLabel: raw.planning_state_label?.trim() || undefined,
-    canCreateMission: raw.can_create_mission === true,
+    planningState: mapPlanningState(rawPlanningState) ?? mapPlanningState(planningLabel),
+    planningStateLabel: planningLabel?.trim() || undefined,
+    canCreateMission: typeof rawCanCreate === 'boolean' ? rawCanCreate : undefined,
     priorityLevel: mapPriorityLevel(raw.priority_level),
     priorityScore: finiteNumber(raw.priority_score),
     slackMinutes: finiteNumber(raw.slack_minutes),
@@ -362,7 +370,28 @@ export async function getOperatorOrderApi(orderId: string): Promise<Order> {
     `/operator/orders/${encodeURIComponent(normalizedOrderId)}`,
   );
 
-  return toOperatorOrder(payload);
+  const detail = toOperatorOrder(payload);
+  if (detail.planningState !== undefined && detail.canCreateMission !== undefined) {
+    return detail;
+  }
+
+  // The detail endpoint may omit planningState/can_create_mission although the
+  // Order list endpoint provides them. Reuse only BE-confirmed fields for the
+  // exact same Order; never infer permission from timestamps or Order status.
+  try {
+    const matchingListOrder = (await listOperatorOrdersApi({ search: normalizedOrderId }))
+      .find((item) => item.id === normalizedOrderId);
+    if (!matchingListOrder) return detail;
+    return {
+      ...detail,
+      planningState: detail.planningState ?? matchingListOrder.planningState,
+      planningStateLabel: detail.planningStateLabel ?? matchingListOrder.planningStateLabel,
+      canCreateMission: detail.canCreateMission ?? matchingListOrder.canCreateMission,
+    };
+  } catch {
+    // Detail remains usable if the optional list cross-check is unavailable.
+    return detail;
+  }
 }
 
 export async function listOperatorOrdersApi(
