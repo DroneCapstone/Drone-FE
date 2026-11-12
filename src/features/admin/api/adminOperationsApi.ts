@@ -68,6 +68,17 @@ export interface HubDetailApi extends HubApi {
   assigned_batteries?: { id: string; serial_number?: string; battery_model?: string; status?: string; charge_level_pct?: number | null }[];
   assigned_drones?: { id: string; name: string; model: string; status: string; serial_number?: string; battery_level_pct?: number | null }[];
 }
+/** POST /admin/system/hubs expects the fields documented in the Admin Hub creation guide. */
+export interface HubCreateApi {
+  code: string;
+  name: string;
+  address: string;
+  area: string;
+  capacity: number;
+  latitude: number;
+  longitude: number;
+  status: 'Active' | 'Inactive';
+}
 export type HubUpdateApi = Partial<Pick<HubApi, 'name' | 'code' | 'area' | 'address' | 'capacity' | 'latitude' | 'longitude' | 'status'>>;
 export interface HubSummaryApi { total_hubs: number; active_hubs: number; total_drones: number; total_batteries: number; }
 
@@ -121,6 +132,7 @@ export const adminOperationsApi = {
   hubs: async () => apiList<HubApi>(await get<unknown>('/admin/system/hubs'), 'Hubs'),
   hub: (id: number | string) => get<HubDetailApi>(`/admin/system/hubs/${encodeURIComponent(String(id))}`),
   hubSummary: () => get<HubSummaryApi>('/admin/system/hubs/summary'),
+  createHub: (data: HubCreateApi) => send<HubApi>('/admin/system/hubs', 'POST', data),
   updateHub: (id: number, data: HubUpdateApi) => send<HubApi>(`/admin/system/hubs/${id}`, 'PUT', data),
   drones: async () => apiList<DroneApi>(await get<unknown>('/admin/fleet/drones'), 'Drones'),
   drone: (id: string) => get<DroneOverviewApi>(`/admin/fleet/drones/${encodeURIComponent(id)}`),
