@@ -30,3 +30,17 @@
 .order-table .order-action-heading,
 .order-table .order-action-cell { min-width: 120px; width: 120px; }
 .order-table .order-package-cell { min-width: 185px; }
+
+/* Orders sequence number: presentation only; follows the current filter/sort and pagination. */
+.order-table { min-width: 1200px; }
+.order-table .order-number-heading,
+.order-table .order-number-cell {
+  width: 52px;
+  min-width: 52px;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

@@ -135,12 +135,17 @@ export function RouteOptionCard({
                   {leg.isDispatch && <small>Dispatch flight · 0 kg (no package)</small>}
                   <strong>{leg.from}</strong>
                   <span><Icon name="arrow" size={13} />{leg.to}</span>
+                  {/* Legacy UI kept for reference (do not remove):
+                      <small>{displayEnergy(leg.energyWh)} · Battery after {displayPct(leg.batteryAfter)}</small>
+                      <small>Battery {leg.batteryId} · {leg.batteryModel} · {displayPct(leg.batteryChargePct)} · {displayEnergy(leg.batteryEnergyWh)}</small>
+                      Only the labels/order below change; energy and SoC still come from BE.
+                  */}
                   {(leg.energyWh !== undefined || leg.batteryAfter !== undefined) && (
-                    <small>{leg.energyWh !== undefined ? displayEnergy(leg.energyWh) : ''}{leg.energyWh !== undefined && leg.batteryAfter !== undefined ? ' · ' : ''}{leg.batteryAfter !== undefined ? `Battery after ${displayPct(leg.batteryAfter)}` : ''}</small>
+                    <small>{leg.energyWh !== undefined ? `Energy: ${displayEnergy(leg.energyWh)}` : ''}{leg.energyWh !== undefined && leg.batteryAfter !== undefined ? ' · ' : ''}{leg.batteryAfter !== undefined ? `Remaining: ${displayPct(leg.batteryAfter)}` : ''}</small>
                   )}
                   <small className="mission-route-leg-battery">
                     {leg.batteryId
-                      ? <>Battery <strong>{leg.batteryId}</strong>{leg.batteryModel ? ` · ${leg.batteryModel}` : ''}{leg.batteryChargePct !== undefined ? ` · ${displayPct(leg.batteryChargePct)}` : ''}{leg.batteryEnergyWh !== undefined ? ` · ${displayEnergy(leg.batteryEnergyWh)}` : ''}</>
+                      ? <>Battery: <strong>{leg.batteryId}</strong>{leg.batteryEnergyWh !== undefined ? ` · ${displayEnergy(leg.batteryEnergyWh)}` : ''}{leg.batteryChargePct !== undefined ? ` · Start: ${displayPct(leg.batteryChargePct)}` : ''}</>
                       : leg.isDispatch ? 'Dispatch battery not provided' : hasRelay && index > 0 ? 'Relay battery not assigned' : 'Battery not provided'}
                   </small>
                 </div>
