@@ -5,7 +5,7 @@ export type FlightStatusTone = 'success' | 'warning' | 'danger' | 'neutral';
 export type FlightStatusKey =
   | 'completed' | 'failed' | 'disconnected' | 'relay' | 'awaiting-swap'
   | 'swapping' | 'ready-to-depart' | 'destination' | 'continuing'
-  | 'in-flight' | 'scheduled' | 'in-progress' | 'unknown';
+  | 'in-flight' | 'scheduled' | 'flying' | 'unknown';
 
 export interface LiveFlightStatus {
   key: FlightStatusKey;
@@ -44,7 +44,7 @@ export function resolveLiveFlightStatus(
     return { key: 'scheduled', label: 'Scheduled', tone: 'neutral' };
   }
 
-  if (mission?.status === 'In Progress') {
+  if (mission?.status === 'Flying') {
     // DISPATCH is a positioning leg, not a relay at which Technician swaps a battery.
     const legs = (mission.legs ?? []).filter(leg => !leg.isDispatch);
     const inProgressIndex = legs.findIndex(leg => leg.status === 'In Progress');
@@ -84,14 +84,14 @@ export function resolveLiveFlightStatus(
         return { key: 'relay', label: 'At Relay Hub', tone: 'warning', detail };
       }
     }
-    // Mission IN_PROGRESS by itself does not prove an actual takeoff.
-    return { key: 'in-progress', label: 'In Progress', tone: 'neutral' };
+    // Preserve the backend Mission's Flying label, but do not invent a leg state.
+    return { key: 'flying', label: 'Flying', tone: 'neutral' };
   }
   if (rawMissionStatus === 'FLYING' || rawMissionStatus === 'IN_FLIGHT') {
     return { key: 'in-flight', label: 'In Flight', tone: 'success' };
   }
   if (rawMissionStatus === 'IN_PROGRESS') {
-    return { key: 'in-progress', label: 'In Progress', tone: 'neutral' };
+    return { key: 'flying', label: 'Flying', tone: 'neutral' };
   }
   return { key: 'unknown', label: 'Checking Status', tone: 'neutral' };
 }

@@ -6,7 +6,7 @@ const STORAGE_KEY = 'droneoptai.operator.missions.v6';
 export function getMissionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
   if (status === 'Failed') return 'danger';
-  if (status === 'In Progress') return 'success';
+  if (status === 'Flying') return 'success';
   return 'info';
 }
 
@@ -24,7 +24,7 @@ function buildMissionLegs(
     status:
       status === 'Completed'
         ? 'Completed'
-        : status === 'In Progress' && index === 0
+        : status === 'Flying' && index === 0
           ? 'In Progress'
           : 'Pending',
   }));
@@ -36,11 +36,12 @@ function normalizeMission(item: Partial<Mission>): Mission | null {
   let status: MissionStatus = 'Scheduled';
   let scheduleState: Mission['scheduleState'];
 
-  if (rawStatus === 'In flight' || rawStatus === 'In Flight' || rawStatus === 'In Progress') status = 'In Progress';
+  // Migrate older cached Mission labels without changing the Backend's status values.
+  if (['Flying', 'FLYING', 'In flight', 'In Flight', 'In Progress', 'IN_PROGRESS'].includes(rawStatus)) status = 'Flying';
   else if (rawStatus === 'Completed') status = 'Completed';
   else if (rawStatus === 'Failed') status = 'Failed';
   else if (rawStatus === 'Delayed') {
-    status = 'In Progress';
+    status = 'Flying';
     scheduleState = 'Delayed';
   } else if (rawStatus === 'Review') status = 'Scheduled';
   else if (rawStatus !== 'Scheduled') return null; // Do not reinterpret unsupported cached statuses.
@@ -94,7 +95,7 @@ function normalizeMission(item: Partial<Mission>): Mission | null {
 }
 
 function isActive(mission: Mission) {
-  return mission.status === 'Scheduled' || mission.status === 'In Progress';
+  return mission.status === 'Scheduled' || mission.status === 'Flying';
 }
 
 // Mission transitions (including preflight failure/replanning) are BE-owned.
