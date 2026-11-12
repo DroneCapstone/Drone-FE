@@ -37,6 +37,13 @@ import './create-mission-compact.css';
 
 const STEPS = ['Order info', 'Select drone & battery', 'Route & energy', 'Review & assign'] as const;
 
+// TEMPORARILY DISABLED: Post-Analyze Order Consolidation is not production-ready.
+// Keep the original UI, state and API wiring below (DO NOT DELETE) for later integration.
+// Re-enable only after BE supports route-aware validation of per-leg pickup/drop-off,
+// payload and energy; until then Create Mission handles the primary Order only.
+const ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION = false;
+
+
 // Capture the Review data at the moment Assign is clicked. React Query is free
 // to update its cache during final checks, but the reviewed card must not blink
 // or disappear until validation finishes and the Operator is redirected.
@@ -184,6 +191,8 @@ export function CreateMissionPage() {
     : [];
   const selectedRouteIsFeasible = Boolean(postAnalyzeRoute && getEnergyFeasibility(postAnalyzeRoute).feasible);
   const canLookForPostAnalyzeCandidates = Boolean(
+    // Feature disabled -> do not call candidates-post-analyze in the background.
+    ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION &&
     step === 3 && routeSelectionConfirmed && order?.id && selectedDroneId && selectedRouteIsFeasible && swapRelayHubIds.length > 0 &&
     !isPlanningAnalysisFetching && !planningAnalysisError,
   );
@@ -745,7 +754,10 @@ export function CreateMissionPage() {
                 </p>
               )}
             </OperatorPanel>
-            {selectedRoute && (
+            {/* TEMPORARILY HIDDEN: Combine eligible orders is unfinished.
+                The complete panel is intentionally preserved below behind the disabled
+                feature flag, rather than deleted or redesigned. */}
+            {ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION && selectedRoute && (
               <OperatorPanel title="Combine eligible orders" eyebrow="OPTIONAL · AFTER ROUTE ANALYSIS">
                 {!routeSelectionConfirmed ? (
                   <div className="mission-bundle-availability" role="status">
