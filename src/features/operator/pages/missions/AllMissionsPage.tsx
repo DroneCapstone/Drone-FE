@@ -47,7 +47,7 @@ export function AllMissionsPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={['All mission statuses', 'Scheduled', 'In Progress', 'Completed', 'Failed']}
+            options={['All mission statuses', 'Scheduled', 'Flying', 'Completed', 'Failed']}
             onChange={(value) => { setStatus(value); setPage(1); }}
             ariaLabel="Mission status"
           />
@@ -69,7 +69,11 @@ export function AllMissionsPage() {
           <div className="operator-empty-state">No Missions match the current filters.</div>
         ) : (
           <>
-            <MissionTable items={paginatedMissions} />
+            <MissionTable
+              items={paginatedMissions}
+              showNumbers
+              startIndex={(currentPage - 1) * OPERATOR_PAGE_SIZE}
+            />
             <OperatorPagination
               currentPage={currentPage}
               totalItems={filtered.length}

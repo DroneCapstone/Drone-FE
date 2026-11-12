@@ -973,3 +973,48 @@
   .live-selection-metrics { flex: 1 1 100%; }
   .live-view-telemetry { width: 100%; }
 }
+
+/* V6 live flight-progress additions. Preserve the existing card grid, health
+   badge, palette and filters; the Flight row reports Mission/Leg progress. */
+.live-aircraft-card-main {
+  grid-template-rows: none;
+}
+
+.live-aircraft-flight-status {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 650;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.live-aircraft-flight-status.status-success { color: var(--green); }
+.live-aircraft-flight-status.status-warning { color: var(--orange); }
+.live-aircraft-flight-status.status-danger { color: var(--red); }
+
+.live-aircraft-flight-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.live-recently-completed-heading {
+  padding: 8px 2px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.live-aircraft-card.is-recently-completed {
+  border-style: dashed;
+}
+
+.live-aircraft-card.is-recently-completed .live-aircraft-card-icon { color: var(--green); }
+.live-aircraft-card.is-recently-completed .live-aircraft-card-metrics { display: flex; justify-content: flex-end; }

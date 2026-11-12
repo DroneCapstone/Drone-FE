@@ -1,16 +1,46 @@
-/* Compact operational priority: plain text, no icons, colored cards or extra columns. */
+/* Operator Orders table: separated delivery time and planning status, using the existing table design. */
 .order-table td .operator-order-priority {
   display: block;
-  margin-top: 5px;
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.45;
   font-weight: 500;
   color: var(--muted-foreground, #778092);
 }
-.order-table td .operator-order-priority--critical {
+.order-table td .operator-order-priority--overdue {
   color: var(--danger, #c94239);
   font-weight: 600;
 }
-.order-table td .operator-order-priority--high {
-  color: #d27422;
+/* Previous priority-level styling, retained as a reference rather than deleted:
+.order-table td .operator-order-priority--critical { color: var(--danger, #c94239); font-weight: 600; }
+.order-table td .operator-order-priority--high { color: #d27422; }
+*/
+.order-table .order-delivery-time-heading,
+.order-table .order-delivery-time-cell {
+  min-width: 174px;
+  width: 174px;
+}
+.order-table .order-delivery-time-cell strong { line-height: 1.55; }
+.order-table .order-planning-heading,
+.order-table .order-planning-cell {
+  min-width: 195px;
+  width: 195px;
+}
+.order-table .order-planning-cell .order-delivery-meta { margin-top: 0; }
+.order-table .order-action-heading,
+.order-table .order-action-cell { min-width: 120px; width: 120px; }
+.order-table .order-package-cell { min-width: 185px; }
+
+/* Orders sequence number: presentation only; follows the current filter/sort and pagination. */
+.order-table { min-width: 1200px; }
+.order-table .order-number-heading,
+.order-table .order-number-cell {
+  width: 52px;
+  min-width: 52px;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

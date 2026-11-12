@@ -2,10 +2,10 @@ import type { Mission } from '../types/operator';
 
 /**
  * Operator flight-history rules:
- * - Scheduled / In Progress: not historical flights (use Live Tracking for flying).
+ * - Scheduled / Flying: not historical flights (use Live Tracking for flying).
  * - Completed: retain the mission in history, even if its telemetry is missing.
  * - Failed: retain only if the drone physically departed.
- * - Only four Mission statuses exist: Scheduled, In Progress, Completed, Failed.
+ * - Only four Mission statuses exist: Scheduled, Flying, Completed, Failed.
  *
  * start_time/end_time belong to the mission lifecycle and must not be treated
  * as physical departure/arrival events. Otherwise Scheduled/pre-flight

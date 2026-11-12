@@ -18,6 +18,11 @@ export interface LiveTrackingDrone {
   orderId: string;
   route: string;
   health: 'Normal' | 'Attention' | 'Critical';
+  /** Explicit BE status only; never infer the Mission status from GPS metrics. */
+  missionStatusRaw?: string;
+  /** Optional status fields if BE exposes these in live-tracking. */
+  failsafeStatus?: string;
+  batterySwapStatus?: string;
   alertId?: string;
   anomaly?: string;
   anomalyDuration?: string;
@@ -309,7 +314,7 @@ function normalizeIso(value: string | undefined) {
 }
 
 function normalizeMissionStatus(value: unknown): MissionStatus {
-  // Four Operator-facing Mission statuses. The BE may still return legacy or
+  // Operator uses 'Flying' for active missions. The BE may still return legacy or
   // operational aliases; normalize those at the API boundary, not in the UI.
   // A completed destination arrival is treated as Completed here. The BE
   // should eventually return the canonical value `Completed` consistently.
@@ -324,7 +329,7 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
     case 'FLYING':
     case 'ACTIVE':
     case 'ACTIVE_MISSION':
-      return 'In Progress';
+      return 'Flying';
     case 'COMPLETED':
     case 'MISSION_COMPLETED':
     case 'ARRIVAL_COMPLETED':
@@ -341,7 +346,7 @@ function normalizeMissionStatus(value: unknown): MissionStatus {
 
 function missionTone(status: MissionStatus): Tone {
   if (status === 'Completed') return 'success';
-  if (status === 'In Progress') return 'warning';
+  if (status === 'Flying') return 'warning';
   if (status === 'Failed') return 'danger';
   return 'info';
 }
@@ -519,6 +524,9 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     orderId: pickString(record, ['order_id', 'orderId']),
     route: pickString(record, ['route', 'route_name', 'routeName', 'route_id', 'routeId'], 'Active route'),
     health,
+    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus']) || undefined,
+    failsafeStatus: pickString(record, ['failsafe_status', 'failsafeStatus']) || undefined,
+    batterySwapStatus: pickString(record, ['battery_swap_status', 'batterySwapStatus']) || undefined,
     alertId: pickString(record, ['alert_id', 'alertId']) || undefined,
     anomaly: pickString(record, ['anomaly', 'alert', 'issue']) || undefined,
     anomalyDuration: pickString(record, ['anomaly_duration', 'anomalyDuration', 'duration']) || undefined,
@@ -789,7 +797,7 @@ function mapMissionDashboardKpi(payload: unknown): MissionDashboardKpi {
   const record = rows.length > 0 ? asRecord(rows[0]) : unwrapObject(payload);
   return {
     totalMissions: pickOptionalNumber(record, ['total_missions', 'totalMissions', 'total']),
-    activeMissions: pickOptionalNumber(record, ['active_missions', 'activeMissions', 'active', 'in_progress', 'inProgress']),
+    activeMissions: pickOptionalNumber(record, ['active_missions', 'activeMissions', 'active', 'flying_missions', 'flying', 'FLYING', 'in_progress', 'inProgress']),
     scheduledMissions: pickOptionalNumber(record, ['scheduled_missions', 'scheduledMissions', 'scheduled']),
     completedMissions: pickOptionalNumber(record, ['completed_missions', 'completedMissions', 'completed']),
     cancelledMissions: pickOptionalNumber(record, ['cancelled_missions', 'canceled_missions', 'cancelledMissions', 'canceledMissions', 'cancelled', 'canceled']),
@@ -809,7 +817,7 @@ function mapMissionDashboardStatus(payload: unknown): MissionDashboardStatus {
   const rows = unwrapArray(payload, ['statuses', 'status_counts', 'statusCounts']);
   const result: MissionDashboardStatus = {
     scheduled: pickOptionalNumber(record, ['scheduled', 'SCHEDULED']),
-    inProgress: pickOptionalNumber(record, ['in_progress', 'inProgress', 'IN_PROGRESS', 'active']),
+    inProgress: pickOptionalNumber(record, ['flying', 'FLYING', 'in_progress', 'inProgress', 'IN_PROGRESS', 'active']),
     completed: pickOptionalNumber(record, ['completed', 'COMPLETED']),
     cancelled: pickOptionalNumber(record, ['cancelled', 'canceled', 'CANCELLED', 'CANCELED']),
     failed: pickOptionalNumber(record, ['failed', 'FAILED']),

@@ -22,7 +22,7 @@ export function getMissionPreflight(
     (item) =>
       item.id !== mission.id &&
       item.droneId === mission.droneId &&
-      (item.status === 'Scheduled' || item.status === 'In Progress'),
+      (item.status === 'Scheduled' || item.status === 'Flying'),
   );
 
   const droneReady = Boolean(

@@ -37,6 +37,13 @@ import './create-mission-compact.css';
 
 const STEPS = ['Order info', 'Select drone & battery', 'Route & energy', 'Review & assign'] as const;
 
+// TEMPORARILY DISABLED: Post-Analyze Order Consolidation is not production-ready.
+// Keep the original UI, state and API wiring below (DO NOT DELETE) for later integration.
+// Re-enable only after BE supports route-aware validation of per-leg pickup/drop-off,
+// payload and energy; until then Create Mission handles the primary Order only.
+const ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION = false;
+
+
 // Capture the Review data at the moment Assign is clicked. React Query is free
 // to update its cache during final checks, but the reviewed card must not blink
 // or disappear until validation finishes and the Operator is redirected.
@@ -184,6 +191,8 @@ export function CreateMissionPage() {
     : [];
   const selectedRouteIsFeasible = Boolean(postAnalyzeRoute && getEnergyFeasibility(postAnalyzeRoute).feasible);
   const canLookForPostAnalyzeCandidates = Boolean(
+    // Feature disabled -> do not call candidates-post-analyze in the background.
+    ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION &&
     step === 3 && routeSelectionConfirmed && order?.id && selectedDroneId && selectedRouteIsFeasible && swapRelayHubIds.length > 0 &&
     !isPlanningAnalysisFetching && !planningAnalysisError,
   );
@@ -269,6 +278,28 @@ export function CreateMissionPage() {
   }
 
   const planningState = getOrderPlanningBadge(order, []);
+  const isPlanningAllowedByBE = canCreateMissionForOrder(order);
+  // If BE omitted the state, avoid the misleading legacy "Closed" badge.
+  // An explicit permission flag can confirm eligibility but cannot identify
+  // READY_FOR_PLANNING vs NEEDS_REPLANNING; do not guess either state.
+  const planningBadgeLabel = planningState ?? (isPlanningAllowedByBE ? 'Eligible to Plan' : 'Status Unavailable');
+  const planningMessage = planningState === 'Ready for Planning'
+    ? (isPlanningAllowedByBE
+      ? 'Package received. You can plan this Mission.'
+      : 'Waiting for BE confirmation that Mission planning is allowed.')
+    : planningState === 'Needs Replanning'
+      ? (isPlanningAllowedByBE
+        ? 'This Order needs replanning. You can plan the next Mission.'
+        : 'This Order needs replanning. Waiting for BE planning eligibility.')
+      : planningState === 'Waiting for package'
+        ? 'Waiting for Technician confirmation of package receipt.'
+        : planningState === 'Future'
+          ? (order.planningAt ? `Planning opens ${formatMissionTime(order.planningAt)}.` : 'Planning window has not opened yet.')
+          : planningState === 'Planned'
+            ? 'A Mission has already been planned for this Order.'
+            : isPlanningAllowedByBE
+              ? 'BE confirms this Order is eligible for Mission planning.'
+              : 'Planning status is unavailable. Refresh the Order to check eligibility.';
   const networkHubs = apiHubs ?? [];
   const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
   const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
@@ -298,6 +329,12 @@ export function CreateMissionPage() {
   const bundleSelectionAvailable = bundledOrderIds.every((id) => availableBundleCandidateIds.has(id));
   const hasUnverifiedBundle = bundledOrderIds.length > 0;
   const routeOptions = planningAnalysis?.routes ?? [];
+  // UI order only: show every BE AI-recommended route first. Keep the original
+  // relative order of all other routes; never mutate the React Query/API data.
+  // Selection, feasibility, relay handling and Assign still use route IDs.
+  const displayedRouteOptions = [...routeOptions].sort(
+    (a, b) => Number(b.recommended === true) - Number(a.recommended === true),
+  );
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
   const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
   const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
@@ -520,8 +557,8 @@ export function CreateMissionPage() {
           <OperatorPanel
             title="Order information"
             action={
-              <StatusBadge tone={planningState === 'Ready for Planning' ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
-                {planningState ?? 'Closed'}
+              <StatusBadge tone={planningState === 'Ready for Planning' || (!planningState && isPlanningAllowedByBE) ? 'warning' : planningState === 'Needs Replanning' ? 'danger' : 'info'}>
+                {planningBadgeLabel}
               </StatusBadge>
             }
           >
@@ -543,11 +580,7 @@ export function CreateMissionPage() {
             </div>
             <div className="mission-planning-note">
               <span>
-                {planningState === 'Ready for Planning'
-                  ? canCreateMissionForOrder(order) ? 'Package received. You can plan this Mission.' : 'Awaiting Technician confirmation of package receipt before planning this Mission.'
-                  : planningState === 'Needs Replanning'
-                    ? 'This order requires replanning. Create a new Mission when it becomes eligible.'
-                    : `Planning opens ${formatMissionTime(order.planningAt)}.`}
+                {planningMessage}
               </span>
             </div>
             {!hasOrderHubs && (
@@ -676,7 +709,7 @@ export function CreateMissionPage() {
                 <div className="operator-empty-state">No route options available.</div>
               )}
               <div className="mission-route-option-list">
-                {routeOptions.map((route) => {
+                {displayedRouteOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
                   const timing = calculateRouteTiming(order, route);
                   // Relay Battery IDs are allocated by BE Analyze, not inferred
@@ -721,7 +754,10 @@ export function CreateMissionPage() {
                 </p>
               )}
             </OperatorPanel>
-            {selectedRoute && (
+            {/* TEMPORARILY HIDDEN: Combine eligible orders is unfinished.
+                The complete panel is intentionally preserved below behind the disabled
+                feature flag, rather than deleted or redesigned. */}
+            {ENABLE_POST_ANALYZE_ORDER_CONSOLIDATION && selectedRoute && (
               <OperatorPanel title="Combine eligible orders" eyebrow="OPTIONAL · AFTER ROUTE ANALYSIS">
                 {!routeSelectionConfirmed ? (
                   <div className="mission-bundle-availability" role="status">

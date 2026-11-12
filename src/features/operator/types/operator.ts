@@ -2,10 +2,10 @@ export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 export type TechnicalStatus = 'Available' | 'In Flight' | 'Maintenance' | 'Unknown';
 
-/** The four authoritative Mission statuses returned by Backend. */
+// Canonical Operator Mission labels. Keep legacy BE aliases in missionApi.ts.
 export type MissionStatus =
   | 'Scheduled'
-  | 'In Progress'
+  | 'Flying'
   | 'Completed'
   | 'Failed';
 

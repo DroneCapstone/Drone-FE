@@ -110,11 +110,13 @@ export function useMissionTelemetryQuery(missionId: string) {
   });
 }
 
-export function useMissionHubCheckpointsQuery(missionId: string) {
+export function useMissionHubCheckpointsQuery(missionId: string, refetchIntervalMs?: number) {
   return useQuery({
     queryKey: operatorQueryKeys.missionHubCheckpoints(missionId),
     queryFn: () => getMissionHubCheckpointsApi(missionId),
     enabled: Boolean(missionId.trim()),
+    // Live Tracking opts into polling; detail/history callers keep old behavior.
+    refetchInterval: refetchIntervalMs ?? false,
   });
 }
 

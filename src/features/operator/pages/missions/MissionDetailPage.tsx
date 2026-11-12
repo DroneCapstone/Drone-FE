@@ -18,7 +18,7 @@ import { formatMissionTime } from '../../utils/missionTiming';
 import { MissionPageShell } from './MissionPageShell';
 import './mission-detail-refined.css';
 
-const progressOrder: MissionStatus[] = ['Scheduled', 'In Progress', 'Completed'];
+const progressOrder: MissionStatus[] = ['Scheduled', 'Flying', 'Completed'];
 
 export function MissionDetailPage() {
   const navigate = useNavigate();
@@ -105,7 +105,7 @@ export function MissionDetailPage() {
                 <p>{mission.id}</p>
               </div>
               <div className="mission-hero-actions">
-                {mission.status === 'In Progress' && (
+                {mission.status === 'Flying' && (
                   <ActionButton variant="secondary" onClick={() => navigate('/operator/operations/live')}>
                     Track live
                   </ActionButton>
@@ -145,7 +145,7 @@ export function MissionDetailPage() {
                       <small>
                         {status === 'Scheduled'
                           ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                          : status === 'In Progress'
+                          : status === 'Flying'
                             ? mission.actualStartedAt
                               ? `Started ${new Date(mission.actualStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                               : 'Awaiting start'
@@ -216,7 +216,7 @@ export function MissionDetailPage() {
                       </small>
                     </span>
                     <StatusBadge tone={leg.status === 'Completed' ? 'success' : leg.status === 'In Progress' ? 'warning' : 'neutral'}>
-                      {leg.status}
+                      {leg.status === 'In Progress' ? 'Flying' : leg.status}
                     </StatusBadge>
                   </div>
                 ))}

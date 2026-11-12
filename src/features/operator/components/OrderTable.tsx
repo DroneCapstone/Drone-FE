@@ -26,25 +26,54 @@ function receivedTime(value: string) {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatUrgency(order: Order): string | undefined {
-  if (!order.priorityLevel) return undefined;
-  const label = order.priorityLevel.charAt(0) + order.priorityLevel.slice(1).toLowerCase();
-  const slack = order.slackMinutes;
-  if (order.isOverdue === true || (slack !== undefined && slack <= 0)) {
-    const overdue = order.overdueMinutes && order.overdueMinutes > 0
-      ? order.overdueMinutes
-      : slack !== undefined ? Math.max(0, -slack) : undefined;
-    return overdue !== undefined && overdue > 0
-      ? `${label} · Assign overdue by ${Math.ceil(overdue)} min`
-      : `${label} · Coordination deadline reached`;
+/**
+ * Format BE-provided planning deadline offsets for the compact Orders table.
+ * Keep planning/deadline business rules on BE: this function changes text only.
+ */
+function formatCompactMinutes(value: number): string {
+  const total = Math.max(0, Math.ceil(value));
+  if (total >= 1440) {
+    // At day-scale, round the remainder up to hours to avoid a long 3-unit label.
+    const roundedHours = Math.ceil(total / 60);
+    const days = Math.floor(roundedHours / 24);
+    const hours = roundedHours % 24;
+    return `${days}d${hours ? ` ${hours}h` : ''}`;
   }
-  if (slack === undefined) return `${label} priority`;
-  const minutes = Math.ceil(slack);
-  if (minutes >= 120) return `${label} · ${Math.floor(minutes / 60)}h ${minutes % 60}m left to assign`;
-  return `${label} · ${minutes} min left to assign`;
+  if (total >= 60) {
+    const hours = Math.floor(total / 60);
+    const minutes = total % 60;
+    return `${hours}h${minutes ? ` ${minutes}m` : ''}`;
+  }
+  return `${total}m`;
 }
 
-export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mission[] }) {
+type PlanningTime = { label: string; overdue: boolean };
+
+function formatPlanningTime(order: Order): PlanningTime | undefined {
+  const slack = order.slackMinutes;
+  if (order.isOverdue === true || (slack !== undefined && slack <= 0)) {
+    const overdue = order.overdueMinutes !== undefined && order.overdueMinutes > 0
+      ? order.overdueMinutes
+      : slack !== undefined ? Math.max(0, -slack) : 0;
+    return {
+      label: overdue > 0 ? `Overdue by ${formatCompactMinutes(overdue)}` : 'Deadline reached',
+      overdue: true,
+    };
+  }
+  // Don't invent a deadline when BE has not returned planning slack.
+  if (slack === undefined || !Number.isFinite(slack)) return undefined;
+  return { label: `${formatCompactMinutes(slack)} left`, overdue: false };
+}
+
+export function OrderTable({
+  orders,
+  missions,
+  startIndex = 0,
+}: {
+  orders: Order[];
+  missions: Mission[];
+  startIndex?: number;
+}) {
   const navigate = useNavigate();
 
   return (
@@ -52,19 +81,21 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
       <table className="order-table">
         <thead>
           <tr>
+            <th scope="col" className="order-number-heading">No.</th>
             <th>Order</th>
             <th className="order-route-heading">Hub Point</th>
             <th>Package</th>
-            <th>Estimated delivery</th>
-            <th />
+            <th className="order-delivery-time-heading">Delivery Time</th>
+            <th className="order-planning-heading">Planning Status</th>
+            <th className="order-action-heading" />
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => {
+          {orders.map((order, index) => {
             const planning = getOrderPlanningBadge(order, missions);
             const deliveryMission = getDeliveryMission(order.id, missions);
             const canCreate = canCreateMissionForOrder(order, missions);
-            const urgency = canCreate ? formatUrgency(order) : undefined;
+            const planningTime = canCreate ? formatPlanningTime(order) : undefined;
 
             let action = 'Open';
             let target = `/operator/orders/${order.id}`;
@@ -81,6 +112,7 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
 
             return (
               <tr key={order.id} onClick={() => navigate(`/operator/orders/${order.id}`)}>
+                <td className="order-number-cell">{startIndex + index + 1}</td>
                 <td>
                   <strong>{order.id}</strong>
                   <small>{order.deliveryMode} · {order.status}</small>
@@ -92,26 +124,28 @@ export function OrderTable({ orders, missions }: { orders: Order[]; missions: Mi
                       : 'Hub data unavailable'}
                   </strong>
                 </td>
-                <td>
+                <td className="order-package-cell">
                   {order.packageLabel}
                   <small>{order.payloadKg} kg · {order.packageType}</small>
                   <small className={(order.originPackageReceived || order.originHubReceivedAt) ? 'package-received-text' : 'package-awaiting-text'}>
                     {(order.originPackageReceived || order.originHubReceivedAt) ? `Received at Drop-off Point${order.originHubReceivedAt ? ` · ${receivedTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package at Drop-off Point'}
                   </small>
                 </td>
-                <td>
+                <td className="order-delivery-time-cell">
                   <strong>{formatDeliveryWindow(order)}</strong>
+                </td>
+                <td className="order-planning-cell">
                   <div className="order-delivery-meta">
                     {planning && <StatusBadge tone={planningTone(planning)}>{planning}</StatusBadge>}
                     {!planning && order.status !== 'Pending' && <small>{order.status}</small>}
                   </div>
-                  {urgency && (
-                    <small className={`operator-order-priority operator-order-priority--${order.priorityLevel?.toLowerCase()}`}>
-                      {urgency}
+                  {planningTime && (
+                    <small className={`operator-order-priority${planningTime.overdue ? ' operator-order-priority--overdue' : ''}`}>
+                      {planningTime.label}
                     </small>
                   )}
                 </td>
-                <td>
+                <td className="order-action-cell">
                   <button
                     type="button"
                     className="row-action"
