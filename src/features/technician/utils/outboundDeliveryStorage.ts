@@ -144,7 +144,7 @@ export type OutboundDeliveryHistory = {
 
   departedAt: string;
 
-  result: "Departed";
+  result: string;
 
 };
 
