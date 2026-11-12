@@ -298,6 +298,12 @@ export function CreateMissionPage() {
   const bundleSelectionAvailable = bundledOrderIds.every((id) => availableBundleCandidateIds.has(id));
   const hasUnverifiedBundle = bundledOrderIds.length > 0;
   const routeOptions = planningAnalysis?.routes ?? [];
+  // UI order only: show every BE AI-recommended route first. Keep the original
+  // relative order of all other routes; never mutate the React Query/API data.
+  // Selection, feasibility, relay handling and Assign still use route IDs.
+  const displayedRouteOptions = [...routeOptions].sort(
+    (a, b) => Number(b.recommended === true) - Number(a.recommended === true),
+  );
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
   const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
   const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
@@ -676,7 +682,7 @@ export function CreateMissionPage() {
                 <div className="operator-empty-state">No route options available.</div>
               )}
               <div className="mission-route-option-list">
-                {routeOptions.map((route) => {
+                {displayedRouteOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
                   const timing = calculateRouteTiming(order, route);
                   // Relay Battery IDs are allocated by BE Analyze, not inferred
