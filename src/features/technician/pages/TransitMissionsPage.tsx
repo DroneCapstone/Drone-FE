@@ -231,12 +231,12 @@ export function TransitMissionsPage() {
   const [confirmedArrivalIds, setConfirmedArrivalIds] = useState<string[]>([]);
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
-  // BE /fleet/history returns both arrival-completed and mission-completed records.
-  // Arrival confirmation and destination receipt timestamps are informational, not a filter.
-  const missionHistory = (historyQuery.data ?? []).filter((item) => {
-    const state = (item.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
-    return ["COMPLETED", "MISSION_COMPLETED", "ARRIVAL_COMPLETED"].includes(state);
-  });
+  // GET /fleet/history is the Backend's arrival/mission history source.
+  // Do not filter by mission_state: a drone may land at a relay hub for a
+  // battery swap, return after an incident, or reach the destination without
+  // the mission being marked Completed. All records returned by Backend must
+  // remain visible, even when destination_received_at is null.
+  const missionHistory = historyQuery.data ?? [];
 
   const [
     searchQuery,
@@ -974,8 +974,8 @@ export function TransitMissionsPage() {
                   </div>
                 ) : (
                   <div className="px-6 py-14 text-center">
-                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No recorded arrivals or completed missions yet</p>
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Arrival-completed and mission-completed records appear here when returned by Backend, including when destination receipt has not been recorded.</p>
+                    <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No recorded hub arrivals yet</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Hub arrivals appear here when returned by Backend, including relay stops and incident returns, even if destination receipt is not recorded.</p>
                   </div>
                 )}
               </div>
