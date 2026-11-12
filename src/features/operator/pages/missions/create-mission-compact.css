@@ -637,3 +637,32 @@
     flex-wrap: wrap;
   }
 }
+
+/* Assign: preserve Step 4 review while revalidating and acknowledge the first click. */
+.mission-builder .mission-assign-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.mission-builder .mission-assign-button[aria-busy="true"] {
+  opacity: .50;
+  cursor: wait;
+}
+.mission-builder .mission-assign-spinner {
+  flex: none;
+  animation: mission-assign-spin .8s linear infinite;
+}
+.mission-builder .mission-assign-progress {
+  max-width: 300px;
+  color: var(--muted, #8893a7);
+  font-size: 12px;
+  text-align: right;
+  line-height: 1.4;
+}
+@keyframes mission-assign-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mission-builder .mission-assign-spinner { animation: none; }
+}

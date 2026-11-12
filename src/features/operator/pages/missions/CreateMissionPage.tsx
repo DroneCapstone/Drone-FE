@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, Zap } from 'lucide-react';
-import { validateMissionBundleApi } from '../../api/missionBundleApi';
+import { BarChart3, Loader2, Zap } from 'lucide-react';
 
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
@@ -18,8 +17,7 @@ import {
   useEligibleMissionBatteriesQuery,
   useMissionHubsQuery,
   useMissionPlanningAnalysisQuery,
-  usePreAnalyzeBundleCandidatesQuery,
-  useValidateMissionBundleQuery,
+  usePostAnalyzeBundleCandidatesQuery,
 } from '../../hooks/useMissionQueries';
 import type { OperatorDrone, RouteOption } from '../../types/operator';
 
@@ -37,12 +35,17 @@ import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTimi
 import { MissionPageShell } from './MissionPageShell';
 import './create-mission-compact.css';
 
-// const assignLockRef = useRef(false);
-
-// const [isAssigning, setIsAssigning] = useState(false);
-// const [needsMissionCheck, setNeedsMissionCheck] = useState(false);
-
 const STEPS = ['Order info', 'Select drone & battery', 'Route & energy', 'Review & assign'] as const;
+
+// Capture the Review data at the moment Assign is clicked. React Query is free
+// to update its cache during final checks, but the reviewed card must not blink
+// or disappear until validation finishes and the Operator is redirected.
+type AssignReviewSnapshot = {
+  order: NonNullable<ReturnType<typeof useOperatorOrderQuery>['data']>;
+  eligibleDronesData: NonNullable<ReturnType<typeof useOperatorEligibleDronesQuery>['data']>;
+  eligibleBatteries: NonNullable<ReturnType<typeof useEligibleMissionBatteriesQuery>['data']>;
+  planningAnalysis: NonNullable<ReturnType<typeof useMissionPlanningAnalysisQuery>['data']>;
+};
 
 // Keep current local-drone spare battery selection unchanged.
 // A cross-hub drone instead takes a BE-eligible battery from its current Hub,
@@ -70,24 +73,43 @@ function getRouteRelayHubIds(
   );
 }
 
+/** A stop alone is not a swap. Require evidence from BE's route battery plan
+ * or a confirmed change of battery on the outbound delivery leg. */
+function getBatterySwapRelayHubIds(route: RouteOption, originHubId: string, destinationHubId: string): string[] {
+  const relayIds = getRouteRelayHubIds(route, originHubId, destinationHubId);
+  return relayIds.filter((hubId) => {
+    const plan = route.relayBatteryPlan?.find((item) => item.hubId === hubId);
+    if (plan?.swapBatteryId || (plan?.requiredBatteryCount ?? 0) > 0) return true;
+    const deliveryLegs = (route.legs ?? []).filter((leg) => leg.fromHubId && leg.toHubId);
+    const arrivingLeg = deliveryLegs.find((leg) => leg.toHubId === hubId);
+    const departingLeg = deliveryLegs.find((leg) => leg.fromHubId === hubId);
+    return Boolean(arrivingLeg?.batteryId && departingLeg?.batteryId &&
+      arrivingLeg.batteryId !== departingLeg.batteryId);
+  });
+}
+
 export function CreateMissionPage() {
   const navigate = useNavigate();
   const assignLockRef = useRef(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const assignReviewSnapshotRef = useRef<AssignReviewSnapshot | null>(null);
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId') ?? '';
 
   const {
-    data: order,
+    data: queriedOrder,
     error: orderError,
     isLoading: isOrderLoading,
     refetch: refetchOrder,
   } = useOperatorOrderQuery(orderId);
   const {
-    data: eligibleDronesData,
+    data: queriedEligibleDronesData,
     error: eligibleDronesError,
     isLoading: isEligibleDronesLoading,
     refetch: refetchEligibleDrones,
   } = useOperatorEligibleDronesQuery(orderId);
+  const order = (isAssigning && assignReviewSnapshotRef.current?.order) || queriedOrder;
+  const eligibleDronesData = (isAssigning && assignReviewSnapshotRef.current?.eligibleDronesData) || queriedEligibleDronesData;
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
 
   // Do not restore directly into Review: availability and planning may have changed.
@@ -104,86 +126,26 @@ export function CreateMissionPage() {
   const [selectedBatteryId, setSelectedBatteryId] = useState(restoredDraft?.selectedBatteryId || '');
   const [selectedRouteId, setSelectedRouteId] = useState(restoredDraft?.selectedRouteId || '');
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
-  const [bundledOrderIds, setBundledOrderIds] = useState<string[]>(restoredDraft?.bundledOrderIds ?? []);
-  const [bundleEnabled, setBundleEnabled] = useState(Boolean(restoredDraft?.bundledOrderIds?.length));
-  const [bundleResetNotice, setBundleResetNotice] = useState(false);
+  const [routeSelectionConfirmed, setRouteSelectionConfirmed] = useState(false);
+  // Legacy Step-1 bundles in saved drafts are never restored into the new post-analyze flow.
+  // These choices are previews until Backend supports route-aware leg validation.
+  const [bundledOrderIds, setBundledOrderIds] = useState<string[]>([]);
+  const [bundleEnabled, setBundleEnabled] = useState(false);
   const currentOrderRef = useRef(orderId);
   // A new order in the URL must not inherit another order's consolidation or route.
   useEffect(() => {
     if (currentOrderRef.current === orderId) return;
     currentOrderRef.current = orderId;
-    const draft = orderId ? loadMissionDraft(orderId) : undefined;
-    setBundledOrderIds(draft?.bundledOrderIds ?? []);
-    setBundleEnabled(Boolean(draft?.bundledOrderIds?.length));
-    setBundleResetNotice(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
     setStep(1);
     setSelectedDroneId('');
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
+    setRouteSelectionConfirmed(false);
   }, [orderId]);
 
-  const bundleOrderIds = [orderId, ...bundledOrderIds];
-  // Display only; the original mission bundle used for validation/submission stays unchanged.
-  const additionalReviewOrderIds = [...new Set(bundledOrderIds.filter((id) => id && id !== orderId))];
-  const {
-    data: bundleCandidates,
-    error: bundleCandidatesError,
-    isLoading: isBundleCandidatesLoading,
-    isFetching: isBundleCandidatesFetching,
-    refetch: refetchBundleCandidates,
-  } = usePreAnalyzeBundleCandidatesQuery(
-    orderId,
-    Boolean(order && canCreateMissionForOrder(order) && (step === 1 || bundledOrderIds.length > 0)),
-  );
-  const {
-    data: preBundleValidation,
-    error: preBundleValidationError,
-    isFetching: isPreBundleValidating,
-  } = useValidateMissionBundleQuery(bundleOrderIds, '', bundleEnabled && bundledOrderIds.length > 0);
-  const {
-    data: droneBundleValidation,
-    error: droneBundleValidationError,
-    isFetching: isDroneBundleValidating,
-  } = useValidateMissionBundleQuery(bundleOrderIds, selectedDroneId, bundleEnabled && bundledOrderIds.length > 0 && Boolean(selectedDroneId));
-  const hasEligibleBundleCandidates = (bundleCandidates?.candidates.length ?? 0) > 0;
-  const availableBundleCandidateIds = new Set((bundleCandidates?.candidates ?? []).map((item) => item.orderId));
-
-  // A saved selection can become invalid after the Backend changes eligibility.
-  // Clear stale consolidation data before it can reach Analyze/Create, and return
-  // to Step 1 if the user had actually selected additional orders.
-  useEffect(() => {
-    if (!bundleCandidates || isBundleCandidatesFetching || hasEligibleBundleCandidates ||
-        (!bundleEnabled && bundledOrderIds.length === 0)) return;
-    const hadAdditionalOrders = bundledOrderIds.length > 0;
-    setBundleEnabled(false);
-    setBundledOrderIds([]);
-    if (!hadAdditionalOrders) return;
-    setBundleResetNotice(true);
-    setStep(1);
-    setSelectedDroneId('');
-    setSelectedBatteryId('');
-    setSelectedRouteId('');
-    setExpandedRouteId(null);
-    if (orderId) {
-      saveMissionDraft({
-        orderId,
-        step: 1,
-        selectedDroneId: '',
-        selectedBatteryId: '',
-        selectedRouteId: '',
-        bundledOrderIds: [],
-        relayBatterySelections: [],
-      });
-    }
-  }, [bundleCandidates, isBundleCandidatesFetching, hasEligibleBundleCandidates, bundleEnabled, bundledOrderIds, orderId]);
-  const bundleSelectionAvailable = Boolean(bundleCandidates && bundledOrderIds.every((id) => availableBundleCandidateIds.has(id)));
-  const canAnalyzeBundle = bundledOrderIds.length === 0 || (
-    bundleEnabled && bundleSelectionAvailable && preBundleValidation?.isValid === true &&
-    droneBundleValidation?.isValid === true && !isBundleCandidatesFetching &&
-    !isPreBundleValidating && !isDroneBundleValidating &&
-    !bundleCandidatesError && !preBundleValidationError && !droneBundleValidationError
-  );
   const { data: apiHubs } = useMissionHubsQuery();
   // Fleet records may provide batteryModel when eligible-drones omits it.
   // Only the battery MODEL is shown; Available already implies full batteries.
@@ -193,7 +155,7 @@ export function CreateMissionPage() {
   } = useFleetBatteriesQuery();
   const crossHubDroneForQuery = eligibleDronesData?.drones.find((drone) => drone.id === selectedDroneId);
   const {
-    data: eligibleBatteries,
+    data: queriedEligibleBatteries,
     isLoading: eligibleBatteriesLoading,
     isFetching: eligibleBatteriesFetching,
     error: eligibleBatteriesError,
@@ -202,20 +164,37 @@ export function CreateMissionPage() {
     orderId, selectedDroneId,
     crossHubDroneForQuery?.isCrossHub ? crossHubDroneForQuery.hubId : undefined,
   );
+  const eligibleBatteries = (isAssigning && assignReviewSnapshotRef.current?.eligibleBatteries) || queriedEligibleBatteries;
   const {
-    data: planningAnalysis,
+    data: queriedPlanningAnalysis,
     error: planningAnalysisError,
     isFetching: isPlanningAnalysisFetching,
     refetch: refetchPlanningAnalysis,
   } = useMissionPlanningAnalysisQuery(
-    order?.id && selectedDroneId && selectedBatteryId && canAnalyzeBundle
-      ? {
-        orderId: order.id,
-        droneId: selectedDroneId,
-        batteryId: selectedBatteryId,
-        ...(bundledOrderIds.length ? { bundledOrderIds } : {}),
-      }
+    order?.id && selectedDroneId && selectedBatteryId
+      ? { orderId: order.id, droneId: selectedDroneId, batteryId: selectedBatteryId }
       : null,
+  );
+  const planningAnalysis = (isAssigning && assignReviewSnapshotRef.current?.planningAnalysis) || queriedPlanningAnalysis;
+  // Discover candidates only AFTER selecting a BE-analyzed route with a confirmed
+  // relay battery swap. The order/drone/route tuple isolates each query cache entry.
+  const postAnalyzeRoute = planningAnalysis?.routes.find((route) => route.id === selectedRouteId);
+  const swapRelayHubIds = postAnalyzeRoute && order
+    ? getBatterySwapRelayHubIds(postAnalyzeRoute, order.originHubId, order.destinationHubId)
+    : [];
+  const selectedRouteIsFeasible = Boolean(postAnalyzeRoute && getEnergyFeasibility(postAnalyzeRoute).feasible);
+  const canLookForPostAnalyzeCandidates = Boolean(
+    step === 3 && routeSelectionConfirmed && order?.id && selectedDroneId && selectedRouteIsFeasible && swapRelayHubIds.length > 0 &&
+    !isPlanningAnalysisFetching && !planningAnalysisError,
+  );
+  const {
+    data: bundleCandidates,
+    error: bundleCandidatesError,
+    isLoading: isBundleCandidatesLoading,
+    isFetching: isBundleCandidatesFetching,
+    refetch: refetchBundleCandidates,
+  } = usePostAnalyzeBundleCandidatesQuery(
+    order?.id ?? '', selectedDroneId, postAnalyzeRoute?.id ?? '', canLookForPostAnalyzeCandidates,
   );
   const createMissionMutation = useCreateMissionMutation();
 
@@ -223,17 +202,23 @@ export function CreateMissionPage() {
   // Default to AI Recommended for convenience, not as an assignment/approval decision.
   // This effect must stay above early returns (React hooks rule).
   useEffect(() => {
-    if (isPlanningAnalysisFetching || !planningAnalysis) return;
+    // Do not let a background revalidation replace the route during submission.
+    if (isAssigning || isPlanningAnalysisFetching || !planningAnalysis) return;
     if (planningAnalysis.routes.some((route) => route.id === selectedRouteId)) return;
     const recommended = planningAnalysis.routes.find((route) => route.recommended);
     const nextRouteId = (recommended ?? planningAnalysis.routes[0])?.id ?? '';
     if (nextRouteId === selectedRouteId) return;
     setSelectedRouteId(nextRouteId);
     setExpandedRouteId(null);
-  }, [planningAnalysis, isPlanningAnalysisFetching, selectedRouteId]);
+    setRouteSelectionConfirmed(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
+  }, [planningAnalysis, isPlanningAnalysisFetching, selectedRouteId, isAssigning]);
 
   useEffect(() => {
-    if (!selectedBatteryId || !eligibleBatteries || !order) return;
+    // The Assign handler owns final validation while submitting; avoid clearing
+    // the selected battery (and hiding Review) mid-request.
+    if (isAssigning || !selectedBatteryId || !eligibleBatteries || !order) return;
     const drone = eligibleDronesData?.drones.find((item) => item.id === selectedDroneId);
     if (drone?.isSelectable !== false && drone && eligibleBatteries.some((battery) =>
       battery.id === selectedBatteryId && isSelectableMissionBattery(battery, drone, order.originHubId)
@@ -241,7 +226,10 @@ export function CreateMissionPage() {
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
-  }, [selectedBatteryId, selectedDroneId, eligibleBatteries, eligibleDronesData, order]);
+    setRouteSelectionConfirmed(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
+  }, [selectedBatteryId, selectedDroneId, eligibleBatteries, eligibleDronesData, order, isAssigning]);
 
   if (isOrderLoading) {
     return (
@@ -253,7 +241,7 @@ export function CreateMissionPage() {
     );
   }
 
-  if (orderError) {
+  if (orderError && !isAssigning) {
     return (
       <MissionPageShell active="/operator/missions/all">
         <OperatorPanel title="Create a mission from an order" eyebrow="DELIVERY OPERATIONS">
@@ -303,21 +291,13 @@ export function CreateMissionPage() {
     selectedDrone && isSelectableMissionBattery(battery, selectedDrone, order.originHubId),
   );
   const selectedBattery = availableOriginBatteries.find((battery) => battery.id === selectedBatteryId);
-  const estimatedBundlePayloadKg = order.payloadKg + bundledOrderIds.reduce((sum, id) =>
-    sum + (bundleCandidates?.candidates.find((candidate) => candidate.orderId === id)?.payloadKg ?? 0), 0);
-  const totalPayloadKg = bundledOrderIds.length
-    ? preBundleValidation?.totalPayloadKg ?? estimatedBundlePayloadKg
-    : order.payloadKg;
-  const selectedDroneHasCapacity = Boolean(selectedDrone && (bundledOrderIds.length === 0 || totalPayloadKg <= selectedDrone.maxPayloadKg + 0.0001));
-  const analyzedBundleIds = planningAnalysis?.bundledOrderIds;
-  const analyzedPayloadKg = planningAnalysis?.totalPayloadKg;
-  const analysisMatchesBundle = bundledOrderIds.length === 0 || Boolean(
-    analyzedBundleIds && analyzedBundleIds.length === bundledOrderIds.length &&
-    new Set(analyzedBundleIds).size === bundledOrderIds.length &&
-    bundledOrderIds.every((id) => analyzedBundleIds.includes(id)) &&
-    analyzedPayloadKg !== undefined && Math.abs(analyzedPayloadKg - totalPayloadKg) <= 0.02
-  );
-  const routeOptions = analysisMatchesBundle ? planningAnalysis?.routes ?? [] : [];
+  const totalPayloadKg = order.payloadKg; // Initial Analyze and capacity checks use ONLY the primary Order.
+  const selectedDroneHasCapacity = Boolean(selectedDrone && totalPayloadKg <= selectedDrone.maxPayloadKg + 0.0001);
+  const availableBundleCandidateIds = new Set((bundleCandidates?.candidates ?? []).map((item) => item.orderId));
+  const hasEligibleBundleCandidates = (bundleCandidates?.candidates.length ?? 0) > 0;
+  const bundleSelectionAvailable = bundledOrderIds.every((id) => availableBundleCandidateIds.has(id));
+  const hasUnverifiedBundle = bundledOrderIds.length > 0;
+  const routeOptions = planningAnalysis?.routes ?? [];
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
   const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
   const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
@@ -331,26 +311,16 @@ export function CreateMissionPage() {
     ? getRouteRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)
     : [];
   const hasOrderHubs = Boolean(order.originHubId && order.destinationHubId);
-  const canContinueStep1 = Boolean(
-    canCreateMissionForOrder(order) &&
-    hasOrderHubs &&
-    (bundledOrderIds.length === 0 || (
-      bundleEnabled && bundleSelectionAvailable && !isBundleCandidatesFetching && !bundleCandidatesError &&
-      preBundleValidation?.isValid === true && !isPreBundleValidating && !preBundleValidationError
-    ))
-  );
-  // The combined selection is complete only when both a drone and its origin battery
-  // have been explicitly chosen; a previously selected battery may be invalidated by BE.
+  const canContinueStep1 = Boolean(canCreateMissionForOrder(order) && hasOrderHubs);
   const canContinueStep2 = Boolean(
     canContinueStep1 && selectedDrone && selectedDrone.isSelectable !== false && selectedBattery &&
-    selectedDroneHasCapacity && canAnalyzeBundle &&
-    !eligibleBatteriesLoading && !eligibleBatteriesFetching && !eligibleBatteriesError
+    selectedDroneHasCapacity && !eligibleBatteriesLoading && !eligibleBatteriesFetching && !eligibleBatteriesError
   );
-  // Step 3 -> Step 4 is a review/navigation action, not a flight safety approval.
-  // Reviewing is allowed for any chosen route, including one with warnings.
+  // Without a BE route-aware per-leg validation contract, an additional Order is a
+  // preview ONLY. Never Review/Assign a route analyzed for the primary Order alone.
   const canReviewMission = Boolean(
-    canContinueStep1 && canContinueStep2 && selectedRoute && selectedDrone && selectedTiming &&
-    !isPlanningAnalysisFetching && !planningAnalysisError && analysisMatchesBundle
+    canContinueStep2 && selectedRoute && selectedTiming && !hasUnverifiedBundle &&
+    !isPlanningAnalysisFetching && !planningAnalysisError
   );
   // Only final Assign is guarded by the authoritative Analyze feasibility result.
   const hasDispatchLeg = selectedRoute?.legDetails?.some((leg) =>
@@ -360,11 +330,14 @@ export function CreateMissionPage() {
     (!selectedDrone?.isCrossHub || hasDispatchLeg);
 
   const handleDroneSelect = (drone: OperatorDrone) => {
-    if (drone.isSelectable === false || (bundledOrderIds.length > 0 && drone.maxPayloadKg + 0.0001 < totalPayloadKg) || drone.id === selectedDroneId) return;
+    if (drone.isSelectable === false || drone.maxPayloadKg + 0.0001 < totalPayloadKg || drone.id === selectedDroneId) return;
     setSelectedDroneId(drone.id);
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
+    setRouteSelectionConfirmed(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
   };
 
   const handleChangeDrone = () => {
@@ -372,6 +345,9 @@ export function CreateMissionPage() {
     setSelectedBatteryId('');
     setSelectedRouteId('');
     setExpandedRouteId(null);
+    setRouteSelectionConfirmed(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
     // Discard old selection so it cannot return on refresh.
     saveMissionDraft({
       orderId: order.id,
@@ -379,29 +355,15 @@ export function CreateMissionPage() {
       selectedDroneId: '',
       selectedBatteryId: '',
       selectedRouteId: '',
-      bundledOrderIds,
+      bundledOrderIds: [],
       relayBatterySelections: [],
     });
   };
 
   const updateBundledOrders = (nextIds: string[], enabled: boolean) => {
-    setBundleResetNotice(false);
+    // A Post-Analyze preview must not invalidate the chosen Drone, Battery, or Route.
     setBundleEnabled(enabled);
-    setBundledOrderIds(nextIds);
-    // A different payload invalidates the old Drone, battery, Analyze and route selection.
-    setSelectedDroneId('');
-    setSelectedBatteryId('');
-    setSelectedRouteId('');
-    setExpandedRouteId(null);
-    saveMissionDraft({
-      orderId: order.id,
-      step: 1,
-      selectedDroneId: '',
-      selectedBatteryId: '',
-      selectedRouteId: '',
-      bundledOrderIds: nextIds,
-      relayBatterySelections: [],
-    });
+    setBundledOrderIds(enabled ? nextIds.filter((id) => availableBundleCandidateIds.has(id)) : []);
   };
 
   const handleBatterySelect = (batteryId: string) => {
@@ -409,6 +371,9 @@ export function CreateMissionPage() {
     setSelectedBatteryId(batteryId);
     setSelectedRouteId('');
     setExpandedRouteId(null);
+    setRouteSelectionConfirmed(false);
+    setBundledOrderIds([]);
+    setBundleEnabled(false);
   };
 
   const showToast = (message: string) => {
@@ -423,7 +388,7 @@ export function CreateMissionPage() {
       selectedDroneId,
       selectedBatteryId,
       selectedRouteId: routeId,
-      bundledOrderIds,
+      bundledOrderIds: [],
       relayBatterySelections: [],
     });
   };
@@ -437,8 +402,12 @@ export function CreateMissionPage() {
 
   const handleAssignMission = async () => {
     console.count('[CreateMission] Assign clicked');
-    if (assignLockRef.current || !canAssignMission || !selectedDrone || !selectedBattery || !selectedRoute) return;
+    if (assignLockRef.current || hasUnverifiedBundle || !canAssignMission || !selectedDrone || !selectedBattery || !selectedRoute ||
+      !eligibleDronesData || !eligibleBatteries || !planningAnalysis) return;
     assignLockRef.current = true;
+    assignReviewSnapshotRef.current = { order, eligibleDronesData, eligibleBatteries, planningAnalysis };
+    setIsAssigning(true); // Show spinner and disable repeated clicks from the first recheck.
+    let assignedSuccessfully = false;
 
     // Re-check drone eligibility and planning. A previously available drone may
     // have been assigned elsewhere while the Operator was reviewing the route.
@@ -471,38 +440,10 @@ export function CreateMissionPage() {
         return;
       }
 
-      // Revalidate the complete bundle with the actual Drone immediately before Assign.
-      if (bundledOrderIds.length > 0) {
-        const latestBundle = await validateMissionBundleApi({
-          orderIds: [order.id, ...bundledOrderIds],
-          droneId: selectedDrone.id,
-        });
-        if (!latestBundle.isValid || (latestBundle.totalPayloadKg !== undefined &&
-          (latestBundle.totalPayloadKg > selectedDrone.maxPayloadKg + 0.0001 ||
-            Math.abs(latestBundle.totalPayloadKg - totalPayloadKg) > 0.02))) {
-          setStep(2);
-          showToast(latestBundle.message || 'Selected orders can no longer share this mission. Review the bundle.');
-          return;
-        }
-      }
-
       const current = await refetchPlanningAnalysis();
       if (current.error || !current.data) {
         showToast('Unable to revalidate route. Please try again.');
         return;
-      }
-      // A route analyzed for the primary order alone must never be assigned to a bundle.
-      if (bundledOrderIds.length > 0) {
-        const replyIds = current.data.bundledOrderIds;
-        if (!replyIds || replyIds.length !== bundledOrderIds.length ||
-          new Set(replyIds).size !== bundledOrderIds.length ||
-          bundledOrderIds.some((id) => !replyIds.includes(id)) ||
-          current.data.totalPayloadKg === undefined ||
-          Math.abs(current.data.totalPayloadKg - totalPayloadKg) > 0.02) {
-          setStep(3);
-          showToast('Bundle/payload changed during Analyze. Please review the route again.');
-          return;
-        }
       }
       const currentRoute = current.data.routes.find((route) => route.id === selectedRoute.id);
       if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible ||
@@ -525,7 +466,6 @@ export function CreateMissionPage() {
 
       const mission = await createMissionMutation.mutateAsync({
         orderId: order.id,
-        ...(bundledOrderIds.length ? { bundledOrderIds } : {}),
         droneId: selectedDrone.id,
         batteryId: selectedBattery.id,
         routeId: currentRoute.id,
@@ -536,13 +476,20 @@ export function CreateMissionPage() {
         predictedDurationMin: currentRoute.predictedDurationMin,
       });
 
+      assignedSuccessfully = true;
       clearMissionDraft(order.id);
       showToast('Mission assigned successfully');
       window.setTimeout(() => navigate(`/operator/missions/${mission.id}`), 500);
     } catch (reason) {
       showToast(reason instanceof Error ? reason.message : 'Unable to create Mission.');
     } finally {
-      assignLockRef.current = false;
+      // Keep spinner/disabled state through the existing success navigation delay.
+      // On validation/API failure, restore the button so Operator can retry.
+      if (!assignedSuccessfully) {
+        assignLockRef.current = false;
+        assignReviewSnapshotRef.current = null;
+        setIsAssigning(false);
+      }
     }
   };
 
@@ -559,8 +506,8 @@ export function CreateMissionPage() {
                 key={label}
                 type="button"
                 className={`${active ? 'active' : ''} ${done ? 'done' : ''}`}
-                onClick={() => done && setStep(number)}
-                disabled={!done && !active}
+                onClick={() => done && !isAssigning && setStep(number)}
+                disabled={isAssigning || (!done && !active)}
               >
                 <i>{done ? <Icon name="check" size={12} /> : number}</i><span>{label}</span>
               </button>
@@ -609,98 +556,6 @@ export function CreateMissionPage() {
               </div>
             )}
           </OperatorPanel>
-          {canCreateMissionForOrder(order) && (
-            <OperatorPanel title="Combine eligible orders" eyebrow="ORDER CONSOLIDATION">
-              {isBundleCandidatesLoading || (isBundleCandidatesFetching && !bundleCandidates) ? (
-                <OperatorLoadingState label="Checking eligible orders…" compact />
-              ) : bundleCandidatesError ? (
-                <div className="operator-empty-state mission-create-gate">
-                  <strong>Unable to load orders eligible for consolidation</strong>
-                  <span>{bundleCandidatesError instanceof Error ? bundleCandidatesError.message : 'Candidate API unavailable.'}</span>
-                  <ActionButton variant="secondary" onClick={() => void refetchBundleCandidates()}>Retry</ActionButton>
-                  {(bundleEnabled || bundledOrderIds.length > 0) && (
-                    <ActionButton variant="secondary" onClick={() => updateBundledOrders([], false)}>Use single order</ActionButton>
-                  )}
-                </div>
-              ) : !hasEligibleBundleCandidates ? (
-                <div className="mission-bundle-availability" role="status">
-                  {bundleResetNotice
-                    ? 'Previously selected additional orders are no longer eligible. The selection has been cleared; continue with this order only.'
-                    : 'No other orders are eligible for consolidation. Continue with this order only.'}
-                </div>
-              ) : (
-                <>
-                  <label className="mission-bundle-toggle">
-                    <input
-                      type="checkbox"
-                      checked={bundleEnabled}
-                      onChange={(event) => updateBundledOrders(event.target.checked ? bundledOrderIds : [], event.target.checked)}
-                    />
-                    <span>
-                      <strong>Combine with other eligible orders</strong>
-                      <small>{bundleCandidates?.candidates.length} additional {bundleCandidates?.candidates.length === 1 ? 'order is' : 'orders are'} eligible for this route.</small>
-                    </span>
-                  </label>
-
-                  {bundleEnabled && (
-                    <div className="mission-bundle-section">
-                      {bundledOrderIds.length > 0 && (
-                        <div className="mission-bundle-primary">
-                          <span><small>Primary order</small><strong>{order.id}</strong></span>
-                          <strong>{order.payloadKg.toFixed(2)} kg</strong>
-                        </div>
-                      )}
-                      <div className="mission-bundle-candidates" role="group" aria-label="Eligible orders to combine">
-                        {bundleCandidates?.candidates.map((candidate) => (
-                          <label key={candidate.orderId} className="mission-bundle-candidate">
-                            <input
-                              type="checkbox"
-                              checked={bundledOrderIds.includes(candidate.orderId)}
-                              onChange={(event) => updateBundledOrders(
-                                event.target.checked
-                                  ? [...bundledOrderIds, candidate.orderId]
-                                  : bundledOrderIds.filter((id) => id !== candidate.orderId),
-                                true,
-                              )}
-                            />
-                            <span className="mission-bundle-candidate-copy">
-                              <strong>{candidate.orderId}</strong>
-                              <small>{candidate.deliveryMode || 'Eligible for the selected route'}</small>
-                            </span>
-                            <strong>{candidate.payloadKg.toFixed(2)} kg</strong>
-                          </label>
-                        ))}
-                      </div>
-                      {bundledOrderIds.some((id) => !availableBundleCandidateIds.has(id)) && !isBundleCandidatesFetching && (
-                        <div className="mission-bundle-alert" role="alert">
-                          <span>Some previously selected orders are no longer eligible.</span>
-                          <ActionButton variant="secondary" onClick={() => updateBundledOrders(
-                            bundledOrderIds.filter((id) => availableBundleCandidateIds.has(id)), true,
-                          )}>Remove unavailable orders</ActionButton>
-                        </div>
-                      )}
-                      {bundledOrderIds.length > 0 ? (
-                        <>
-                          <div className="mission-bundle-total">
-                            <span>{bundleOrderIds.length} orders in this mission ({bundledOrderIds.length} additional)</span>
-                            <strong>{totalPayloadKg.toFixed(2)} kg total payload</strong>
-                          </div>
-                          <div className={`mission-bundle-feedback${preBundleValidationError || preBundleValidation?.isValid === false ? ' is-error' : ''}`} role="status">
-                            {isPreBundleValidating || (!preBundleValidation && !preBundleValidationError) ? 'Validating selected orders…' :
-                              preBundleValidationError ? (preBundleValidationError instanceof Error ? preBundleValidationError.message : 'Bundle validation failed.') :
-                              preBundleValidation?.isValid ? (preBundleValidation.message || 'Selected orders are eligible for consolidation.') :
-                              (preBundleValidation?.message || 'Selected orders cannot be combined.')}
-                          </div>
-                        </>
-                      ) : (
-                        <small className="mission-bundle-hint">Select at least one additional order to combine. Otherwise, continue with a single order.</small>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </OperatorPanel>
-          )}
           </div>
         )}
 
@@ -726,16 +581,6 @@ export function CreateMissionPage() {
                 <ActionButton variant="secondary" onClick={handleChangeDrone}>Change drone</ActionButton>
               ) : undefined}
             >
-              {bundledOrderIds.length > 0 && (
-                <div className="mission-bundle-summary">
-                  <strong>{bundleOrderIds.length} orders · {totalPayloadKg.toFixed(2)} kg</strong>
-                  <span>Select a Drone with enough payload capacity. The full order group will be validated before assignment.</span>
-                  {selectedDroneId && (isDroneBundleValidating ? <small>Checking Drone capacity and route compatibility…</small> :
-                    droneBundleValidationError ? <small className="mission-bundle-error">{droneBundleValidationError instanceof Error ? droneBundleValidationError.message : 'Validation unavailable.'}</small> :
-                      droneBundleValidation && !droneBundleValidation.isValid ? <small className="mission-bundle-error">{droneBundleValidation.message || 'This Drone cannot carry the selected orders.'}</small> :
-                        droneBundleValidation?.isValid ? <small>{droneBundleValidation.message || 'Bundle validated for this Drone.'}</small> : null)}
-                </div>
-              )}
               {isEligibleDronesLoading ? (
                 <OperatorLoadingState label="Loading available drones…" />
               ) : eligibleDronesError ? (
@@ -752,10 +597,8 @@ export function CreateMissionPage() {
                         key={drone.id}
                         drone={drone}
                         eligibility={{
-                          eligible: drone.isSelectable !== false && (bundledOrderIds.length === 0 || drone.maxPayloadKg + 0.0001 >= totalPayloadKg),
-                          reasons: bundledOrderIds.length > 0 && drone.maxPayloadKg + 0.0001 < totalPayloadKg
-                            ? [`Capacity ${drone.maxPayloadKg} kg is below the selected ${totalPayloadKg.toFixed(2)} kg bundle.`]
-                            : drone.unavailableReason ? [drone.unavailableReason] : [],
+                          eligible: drone.isSelectable !== false && drone.maxPayloadKg + 0.0001 >= totalPayloadKg,
+                          reasons: drone.unavailableReason ? [drone.unavailableReason] : [],
                         }}
                         selected={drone.id === selectedDroneId}
                         onSelect={() => handleDroneSelect(drone)}
@@ -821,15 +664,6 @@ export function CreateMissionPage() {
         {step === 3 && selectedDrone && (
           <div className="mission-step-stack">
             <OperatorPanel title="Choose flight route">
-              {bundledOrderIds.length > 0 && (
-                <div className="mission-bundle-summary">
-                  <strong>{bundleOrderIds.length} orders · {totalPayloadKg.toFixed(2)} kg</strong>
-                  <span>Route energy analysis uses the entire validated bundle.</span>
-                </div>
-              )}
-              {!analysisMatchesBundle && (
-                <p className="mission-bundle-error" role="alert">Analyze returned a different order group or total payload. Route assignment is blocked.</p>
-              )}
               {isPlanningAnalysisFetching && (
                 <OperatorLoadingState label="Analyzing routes…" />
               )}
@@ -864,6 +698,11 @@ export function CreateMissionPage() {
                       expanded={route.id === expandedRouteId}
                       onSelect={() => {
                         // Selection and expansion are Operator choices, independent of AI feasibility.
+                        if (route.id !== selectedRouteId) {
+                          setBundledOrderIds([]);
+                          setBundleEnabled(false);
+                        }
+                        setRouteSelectionConfirmed(true);
                         setSelectedRouteId(route.id);
                         setExpandedRouteId((current) => current === route.id ? null : route.id);
                       }}
@@ -872,7 +711,7 @@ export function CreateMissionPage() {
                   );
                 })}
               </div>
-              {selectedRoute && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
+              {selectedRoute && !hasUnverifiedBundle && !canAssignMission && !isPlanningAnalysisFetching && !planningAnalysisError && (
                 <p className="mission-route-unavailable" role="status">
                   {selectedRoute.isSelectable === false
                     ? `Route unavailable: ${selectedRoute.unselectableReason || selectedRoute.infeasibleReason || 'This route cannot be assigned.'}`
@@ -882,6 +721,109 @@ export function CreateMissionPage() {
                 </p>
               )}
             </OperatorPanel>
+            {selectedRoute && (
+              <OperatorPanel title="Combine eligible orders" eyebrow="OPTIONAL · AFTER ROUTE ANALYSIS">
+                {!routeSelectionConfirmed ? (
+                  <div className="mission-bundle-availability" role="status">
+                    Select a route above to check for optional consolidation. The AI-recommended route is highlighted by default, but must be confirmed by the Operator for this step.
+                  </div>
+                ) : swapRelayHubIds.length === 0 || !selectedRouteIsFeasible ? (
+                  <div className="mission-bundle-availability" role="status">
+                    {!selectedRouteIsFeasible
+                      ? 'The selected route has not passed BE energy and availability checks. Consolidation is not offered.'
+                      : selectedRelayHubIds.length === 0
+                        ? 'The selected route has no Relay Hub. Continue with this Order only.'
+                        : 'This route has a Relay Hub, but BE has not confirmed a battery swap here. Consolidation is not offered.'}
+                    {hasUnverifiedBundle && (
+                      <ActionButton variant="secondary" onClick={() => updateBundledOrders([], false)}>Use single order</ActionButton>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mission-bundle-summary">
+                      <strong>Selected route: {selectedRoute.id}</strong>
+                      <span>Battery-swap Relay Hub: {swapRelayHubIds.map(hubName).join(', ')}</span>
+                      <span>Additional Orders are suggested by BE for this route, not from the general Order list.</span>
+                    </div>
+                    {isBundleCandidatesLoading || (isBundleCandidatesFetching && !bundleCandidates) ? (
+                      <OperatorLoadingState label="Checking orders for the selected route…" compact />
+                    ) : bundleCandidatesError ? (
+                      <div className="operator-empty-state mission-create-gate">
+                        <strong>Unable to load route-compatible orders</strong>
+                        <span>{bundleCandidatesError instanceof Error ? bundleCandidatesError.message : 'Post-Analyze candidate API is unavailable.'}</span>
+                        <ActionButton variant="secondary" onClick={() => void refetchBundleCandidates()}>Retry</ActionButton>
+                        {hasUnverifiedBundle && (
+                          <ActionButton variant="secondary" onClick={() => updateBundledOrders([], false)}>Use single order</ActionButton>
+                        )}
+                      </div>
+                    ) : !hasEligibleBundleCandidates ? (
+                      <div className="mission-bundle-availability" role="status">
+                        No eligible additional Orders returned for this route. Continue with this Order only.
+                        {hasUnverifiedBundle && (
+                          <ActionButton variant="secondary" onClick={() => updateBundledOrders([], false)}>Use single order</ActionButton>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <label className="mission-bundle-toggle">
+                          <input
+                            type="checkbox"
+                            checked={bundleEnabled}
+                            onChange={(event) => updateBundledOrders(event.target.checked ? bundledOrderIds : [], event.target.checked)}
+                          />
+                          <span>
+                            <strong>Combine with other eligible orders</strong>
+                            <small>{bundleCandidates?.candidates.length} route-compatible candidate(s) found. Optional preview; BE validation is still required before assigning.</small>
+                          </span>
+                        </label>
+                        {bundleEnabled && (
+                          <div className="mission-bundle-section">
+                            <div className="mission-bundle-primary">
+                              <span><small>Primary Order</small><strong>{order.id}</strong></span>
+                              <strong>{order.payloadKg.toFixed(2)} kg</strong>
+                            </div>
+                            <div className="mission-bundle-candidates" role="group" aria-label="Eligible route orders to combine">
+                              {bundleCandidates?.candidates.map((candidate) => (
+                                <label className="mission-bundle-candidate" key={candidate.orderId}>
+                                  <input
+                                    type="checkbox"
+                                    checked={bundledOrderIds.includes(candidate.orderId)}
+                                    onChange={(event) => updateBundledOrders(
+                                      event.target.checked
+                                        ? [...bundledOrderIds, candidate.orderId]
+                                        : bundledOrderIds.filter((id) => id !== candidate.orderId), true,
+                                    )}
+                                  />
+                                  <span className="mission-bundle-candidate-copy">
+                                    <strong>{candidate.orderId}</strong>
+                                    <small>{candidate.originHubId && candidate.destinationHubId
+                                      ? `${hubName(candidate.originHubId)} → ${hubName(candidate.destinationHubId)}`
+                                      : candidate.deliveryMode || 'BE route candidate'}</small>
+                                  </span>
+                                  <strong>{candidate.payloadKg !== undefined ? `${candidate.payloadKg.toFixed(2)} kg` : '— kg'}</strong>
+                                </label>
+                              ))}
+                            </div>
+                            {hasUnverifiedBundle && (
+                              <div className="mission-bundle-feedback is-error" role="alert">
+                                <strong>{bundledOrderIds.length} additional Order(s) selected – preview only.</strong>
+                                <span>BE has not provided route-aware validation of pickup/drop-off, payload and energy on each leg. Review and Assign are disabled for this bundle. No combined payload or energy estimate is assumed.</span>
+                                <ActionButton variant="secondary" onClick={() => updateBundledOrders([], false)}>
+                                  Continue with single order
+                                </ActionButton>
+                              </div>
+                            )}
+                            {!bundleSelectionAvailable && (
+                              <div className="mission-bundle-alert" role="alert">Candidate availability changed. Please reselect Orders for this route.</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </OperatorPanel>
+            )}
           </div>
         )}
 
@@ -891,7 +833,10 @@ export function CreateMissionPage() {
           </OperatorPanel>
         )}
 
-        {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && canReviewMission && (
+        {/* Keep the already-reviewed details visible while safety queries refetch.
+            isFetching temporarily makes canReviewMission false, but that should
+            never unmount the review panel during an Assign request. */}
+        {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && (canReviewMission || isAssigning) && (
           <OperatorPanel title="Review & Assign">
             {/* One unified review card. Display-only change: mission submission logic is unchanged. */}
             <div className="mission-review-unified">
@@ -912,19 +857,10 @@ export function CreateMissionPage() {
                   </dl>
                 </div>
 
-                {/* Primary Order is shown above; show only additional orders when bundling. */}
-                {additionalReviewOrderIds.length > 0 && (
-                  <div className="mission-review-info-row mission-review-info-row--full">
-                    <dl className="mission-review-field">
-                      <dt>Additional orders ({additionalReviewOrderIds.length})</dt>
-                      <dd className="mission-review-order-code">{additionalReviewOrderIds.join(', ')}</dd>
-                    </dl>
-                  </div>
-                )}
                 <div className="mission-review-info-row mission-review-info-row--full">
                   <dl className="mission-review-field">
-                    <dt>Total payload</dt>
-                    <dd>{totalPayloadKg.toFixed(2)} kg</dd>
+                    <dt>Order payload</dt>
+                    <dd>{order.payloadKg.toFixed(2)} kg</dd>
                   </dl>
                 </div>
                 <div className="mission-review-info-row mission-review-info-row--full">
@@ -1053,11 +989,29 @@ export function CreateMissionPage() {
         )}
 
         <div className="form-actions mission-builder-actions">
-          {step > 1 && <ActionButton variant="secondary" onClick={() => { const next = Math.max(1, step - 1); setStep(next); persistDraft(next); }}>Back</ActionButton>}
+          {step > 1 && <ActionButton variant="secondary" disabled={isAssigning} onClick={() => { const next = Math.max(1, step - 1); setStep(next); persistDraft(next); }}>Back</ActionButton>}
           {step === 1 && <ActionButton disabled={!canContinueStep1} onClick={() => { setStep(2); persistDraft(2); }}>Continue</ActionButton>}
           {step === 2 && <ActionButton disabled={!canContinueStep2} onClick={() => { setStep(3); persistDraft(3); }}>Continue</ActionButton>}
           {step === 3 && <ActionButton disabled={!canReviewMission} onClick={() => { setStep(4); persistDraft(4); }}>Review mission</ActionButton>}
-          {step === 4 && <ActionButton icon="check" disabled={createMissionMutation.isPending || isPlanningAnalysisFetching || !canAssignMission} onClick={() => void handleAssignMission()}>{createMissionMutation.isPending ? 'Assigning…' : 'Assign mission'}</ActionButton>}
+          {step === 4 && (
+            <div className="mission-assign-action">
+              <ActionButton
+                className="mission-assign-button"
+                icon={isAssigning ? undefined : 'check'}
+                disabled={isAssigning || createMissionMutation.isPending || isPlanningAnalysisFetching || !canAssignMission}
+                aria-busy={isAssigning}
+                onClick={() => void handleAssignMission()}
+              >
+                {isAssigning && <Loader2 size={17} className="mission-assign-spinner" aria-hidden="true" />}
+                {isAssigning ? 'Assigning mission…' : 'Assign mission'}
+              </ActionButton>
+              {isAssigning && (
+                <span className="mission-assign-progress" role="status" aria-live="polite">
+                  Checking availability and creating your mission…
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
       {toast && <div className="operator-toast">{toast}</div>}

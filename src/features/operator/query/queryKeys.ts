@@ -63,6 +63,9 @@ export const operatorQueryKeys = {
   missionBundleCandidates: (orderId: string) =>
     [...operatorQueryKeys.missions(), 'bundle', 'candidates-pre-analyze', orderId] as const,
 
+  missionPostAnalyzeBundleCandidates: (orderId: string, droneId: string, routeId: string) =>
+    [...operatorQueryKeys.missions(), 'bundle', 'candidates-post-analyze', orderId, droneId, routeId] as const,
+
   missionBundleValidation: (orderIds: string[], droneId?: string) =>
     [...operatorQueryKeys.missions(), 'bundle', 'validate-pre-analyze', ...orderIds, droneId || null] as const,
 
