@@ -10,7 +10,7 @@ import {
 } from "../../../components/ui/DropdownMenu";
 import { Icon } from "../../../components/ui/Icon";
 import { useAuth } from "../../auth/hooks/useAuth";
-import { adminBackend } from "../api/adminBackend";
+import { adminOperationsApi } from "../api/adminOperationsApi";
 import { useEffect, useState } from "react";
 
 function getInitials(name?: string) {
@@ -44,9 +44,16 @@ export function AdminHeader({
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
     let alive = true;
-    const refresh = () => { adminBackend.notifications().then(items => {
-      if (alive) setUnreadCount(items.filter(item => !item.is_read).length);
-    }).catch(() => { if (alive) setUnreadCount(0); }); };
+    const refresh = () => {
+      adminOperationsApi.notificationUnreadCount().then(count => {
+        if (alive) setUnreadCount(count);
+      }).catch(() => {
+        // The OpenAPI response schema is unspecified; fall back to the visible notification page.
+        adminOperationsApi.notifications().then(items => {
+          if (alive) setUnreadCount(items.filter(item => !item.is_read).length);
+        }).catch(() => { if (alive) setUnreadCount(0); });
+      });
+    };
     refresh();
     window.addEventListener('admin-notifications-updated', refresh);
     return () => { alive = false; window.removeEventListener('admin-notifications-updated', refresh); };

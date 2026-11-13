@@ -37,7 +37,7 @@ export function BatteriesPage() {
   const operationalValues = [...new Set(batteries.map(operationalOf))].sort();
   const lifecycleValues = [...new Set(batteries.map(lifecycleOf))].sort();
 
-  return <AdminPageShell title="Batteries" description="Batteries currently assigned to Hubs. Read-only operational status from Backend." actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries (demo)</Link>}>
+  return <AdminPageShell title="Batteries" description="Batteries currently assigned to Hubs. Read-only operational status from Backend." actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries</Link>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
     {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Batteries from Backend…</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

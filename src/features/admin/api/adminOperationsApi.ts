@@ -107,15 +107,32 @@ export interface BatteryApi {
   id: string; serial_number: string; capacity_wh: number; status: string; drone_id?: string | number | null;
   current_hub_id?: number | null; charge_level_pct?: number | null; battery_model?: string | null;
   last_charged_at?: string | null; available_status?: string | null; lifecycle_status?: string | null;
-  days_until_expiry?: number | null;
+  days_until_expiry?: number | null; unit_cost?: number | null; acquisition_cost?: number | null; compatible_drone_models?: string[]; quantity?: number; battery_ids?: string[];
 }
 export interface PartCategoryApi { id: number; name: string; category_type: string; compatible_drone_models?: string[] | null; unit_cost?: number | null; description?: string | null; is_active?: boolean; }
-export interface StockApi { id: number; hub_id: number; part_category_id: number; part_name: string; category_type: string; quantity: number; min_stock_threshold: number; is_low_stock: boolean; unit_cost?: number | null; compatible_drone_models?: string[] | null; }
+export interface StockApi { id?: number; hub_id: number; part_category_id: number; part_name: string; category_type: string; quantity: number; min_stock_threshold: number; is_low_stock: boolean; unit_cost?: number | null; compatible_drone_models?: string[] | null; }
 export interface AuditApi { id: number; user_id: string | number | null; action: string; resource_table: string | null; details_json: Record<string, unknown> | null; created_at: string; }
 export interface AuditPageApi { total: number; page: number; page_size: number; items: AuditApi[]; }
-export interface NotificationApi { id: number; title: string; message: string; notifications_type: string; is_read: boolean; created_at: string; reference_id?: string | null; }
+export interface NotificationApi { id: number; title: string; message: string; notifications_type: string; is_read: boolean; created_at: string; reference_id?: string | null; drone_id?: string | number | null; mission_id?: string | null; work_order_id?: number | null; }
+export interface DroneCreateApi { name?: string; model: string; serial_number: string; payload_capacity_kg: number; max_speed: number; status?: string; current_hub_id?: number | null; acquisition_cost?: number | null }
+export type DroneUpdateApi = Partial<DroneCreateApi>;
+export interface BatteryCreateApi { quantity: number; serial_number?: string; serial_numbers?: string[]; battery_model: string; capacity_wh?: number; unit_cost_override?: number; acquisition_cost?: number; current_hub_id?: number | null; status?: string; charge_level_pct?: number }
+export type BatteryUpdateApi = Partial<Pick<BatteryApi, 'serial_number' | 'battery_model' | 'capacity_wh' | 'status' | 'current_hub_id' | 'charge_level_pct' | 'last_charged_at'>>;
+export interface BatteryModelApi { id: number; name: string; capacity_wh: number; unit_cost: number | null; compatible_drone_models?: string[] | null; description?: string | null; is_active: boolean }
+export type BatteryModelCreateApi = Pick<BatteryModelApi, 'name' | 'capacity_wh'> & Partial<Pick<BatteryModelApi, 'unit_cost' | 'compatible_drone_models' | 'description'>>;
+export interface BatterySupplyApi { hub_id: number; battery_ids: string[]; note?: string }
+export interface BatterySupplyResultApi { message: string; hub_id: number; hub_name: string; supplied_count: number; battery_ids: string[]; notified_technician_count: number }
+export interface UnassignedTechnicianApi { id: string; full_name: string; email: string; is_active: boolean; created_at: string }
+export interface HubTechnicianActionApi { message: string; technician_id: string; full_name: string; hub_id: number | null; hub_name?: string | null; previous_hub_id?: number | null }
+export interface StockTransactionApi { id: number; hub_id: number; part_category_id: number; part_name?: string; quantity_delta: number; reason: string; performed_by?: string; reference_id?: string; note?: string; created_at: string }
+export interface PartsRequestApi { id: number; requested_by: string; hub_id: number; drone_id: string; part_category_id: number; part_name: string; quantity_needed: number; description: string; status: string; admin_note?: string; hub_stock_available?: number; created_at: string }
+export interface ReplacementRequestApi { request_id: number; type: 'BATTERY' | 'PART'; damaged_item_id?: string | null; part_category_id?: number | null; part_name?: string | null; quantity: number; reason: string; status: string; hub_id: number; requested_by: string; photo_urls?: string[] | null; supplied_item_id?: string | null; supplied_at?: string | null; rejection_reason?: string | null; hub_stock_available?: number | null; created_at: string; reviewed_at?: string | null }
+export interface RefundResultApi { message: string; order_id: string; refund_amount: number; refund_reason: string; refund_at: string }
+export interface SimulatorConfigApi { incident_enabled: boolean; incident_probability: number; incident_min_step: number; incident_severity: string; interval_sec: number; steps_per_leg: number; next_flight_incident: boolean; next_flight_incident_step?: number | null; next_flight_incident_severity?: string | null; next_flight_incident_type: string; next_flight_incident_armed_at?: string | null }
+export interface SimulatorIncidentApi { enabled: boolean; incident_type?: 'FAILSAFE_RTH' | 'SIGNAL_LOSS' | 'DISCONNECT_CRASH'; severity?: string; trigger_step?: number | null }
+export interface SimulatorTriggerResultApi { message: string; config: SimulatorConfigApi }
 export interface AdminDashboardApi {
-  revenue: { total: number; today: number; this_month: number; paid_orders: number; pending_payments: number; refunds: number };
+  revenue: { gross_revenue?: number | null; total_expenses?: number | null; total: number; today: number; this_month: number; paid_orders: number; pending_payments: number; refunds: number };
   users: { total: number; by_role: Record<string, number>; active: number; inactive: number };
   missions: { total: number; by_status: Record<string, number>; success_rate: number };
   fleet: { total_drones: number; by_status: Record<string, number>; avg_utilization_pct: number };
@@ -137,22 +154,84 @@ export const adminOperationsApi = {
   drones: async () => apiList<DroneApi>(await get<unknown>('/admin/fleet/drones'), 'Drones'),
   drone: (id: string) => get<DroneOverviewApi>(`/admin/fleet/drones/${encodeURIComponent(id)}`),
   droneSummary: () => get<DroneSummaryApi>('/admin/fleet/drones/summary'),
-  updateDrone: (id: string, data: { name?: string; model?: string; payload_capacity_kg?: number; max_speed?: number; current_hub_id?: number | null }) => send<unknown>(`/admin/fleet/drones/${encodeURIComponent(id)}`, 'PUT', data),
+  updateDrone: (id: string, data: DroneUpdateApi) => send<unknown>(`/admin/fleet/drones/${encodeURIComponent(id)}`, 'PUT', data),
   setDroneActive: (id: string, isActive: boolean) => send<unknown>(`/admin/fleet/drones/${encodeURIComponent(id)}/admin-state`, 'PATCH', { admin_state: isActive ? 'ACTIVE' : 'INACTIVE' }),
   droneMaintenance: (id: string) => get<DroneMaintenanceApi>(`/admin/fleet/drones/${encodeURIComponent(id)}/maintenance`),
   droneWorkOrders: async (id: string) => apiList<WorkOrderApi>(await get<unknown>(`/admin/fleet/drones/${encodeURIComponent(id)}/work-orders`), 'Work orders'),
   droneFlights: (id: string) => get<FlightHistoryApi>(`/admin/fleet/drones/${encodeURIComponent(id)}/flight-history`),
+  createDrone: (data: DroneCreateApi) => send<DroneApi>('/admin/fleet/drones', 'POST', data),
+  deleteDrone: (id: string) => send<unknown>(`/admin/fleet/drones/${encodeURIComponent(id)}`, 'DELETE'),
+  workOrderDetail: (id: string) => get<WorkOrderApi>(`/admin/fleet/work-orders/${encodeURIComponent(id)}`),
+  flightDetail: (id: string) => get<FlightApi>(`/admin/fleet/flights/${encodeURIComponent(id)}`),
   batteries: async () => apiList<BatteryApi>(await get<unknown>('/admin/fleet/batteries'), 'Batteries'),
   battery: (id: string) => get<BatteryApi>(`/admin/fleet/batteries/${encodeURIComponent(id)}`),
-  categories: async () => apiList<PartCategoryApi>(await get<unknown>('/admin/inventory/categories'), 'Part categories'),
-  stocks: async () => apiList<StockApi>(await get<unknown>('/admin/inventory'), 'Inventory'),
-  createCategory: (data: { name: string; category_type: string; compatible_drone_models?: string[]; unit_cost?: number; description?: string }) => send<unknown>('/admin/inventory/categories', 'POST', data),
-  updateCategory: (id: number, data: { name?: string; compatible_drone_models?: string[]; unit_cost?: number; description?: string; is_active?: boolean }) => send<unknown>(`/admin/inventory/categories/${id}`, 'PATCH', data),
-  receiveStock: (data: { hub_id: number; part_category_id: number; quantity: number; unit_cost_override?: number; note?: string }) => send<unknown>('/admin/inventory/receive', 'POST', data),
+  createBattery: (data: BatteryCreateApi) => send<BatteryApi>('/admin/fleet/batteries', 'POST', data),
+  updateBattery: (id: string, data: BatteryUpdateApi) => send<BatteryApi>(`/admin/fleet/batteries/${encodeURIComponent(id)}`, 'PUT', data),
+  deleteBattery: (id: string) => send<unknown>(`/admin/fleet/batteries/${encodeURIComponent(id)}`, 'DELETE'),
+  batteryModels: async () => apiList<BatteryModelApi>(await get<unknown>('/admin/fleet/battery-models'), 'Battery models'),
+  createBatteryModel: (data: BatteryModelCreateApi) => send<BatteryModelApi>('/admin/fleet/battery-models', 'POST', data),
+  updateBatteryModel: (id: number, data: Partial<BatteryModelCreateApi> & { is_active?: boolean }) => send<BatteryModelApi>(`/admin/fleet/battery-models/${id}`, 'PATCH', data),
+  supplyBatteries: (data: BatterySupplyApi) => send<BatterySupplyResultApi>('/admin/fleet/batteries/supply', 'POST', data),
+  techniciansUnassigned: async () => apiList<UnassignedTechnicianApi>(await get<unknown>('/admin/fleet/technicians/unassigned'), 'Unassigned technicians'),
+  assignTechnician: (hubId: number, technicianId: string) => send<HubTechnicianActionApi>(`/admin/fleet/hubs/${hubId}/technicians`, 'POST', { technician_id: technicianId }),
+  unassignTechnician: (hubId: number, technicianId: string) => send<HubTechnicianActionApi>(`/admin/fleet/hubs/${hubId}/technicians/${encodeURIComponent(technicianId)}`, 'DELETE'),
+  transferTechnician: (hubId: number, technicianId: string, newHubId: number) => send<HubTechnicianActionApi>(`/admin/fleet/hubs/${hubId}/technicians/${encodeURIComponent(technicianId)}/transfer`, 'PUT', { new_hub_id: newHubId }),
+
+  // Read-only Admin inventory endpoints (available to existing/future views without altering layout).
+  suppliesSummary: () => get<unknown>('/admin/supplies/summary'),
+  hubSupplies: (hubId: number, query?: { low_stock_only?: boolean; category_type?: string }) =>
+    get<unknown>(`/admin/supplies/hubs/${hubId}${query ? '?' + new URLSearchParams({
+      ...(query.low_stock_only !== undefined ? { low_stock_only: String(query.low_stock_only) } : {}),
+      ...(query.category_type ? { category_type: query.category_type } : {}),
+    }).toString() : ''}`),
+  partsRequestDetail: (id: number) => get<PartsRequestApi>(`/admin/supplies/parts-requests/${id}`),
+  stockFinanceReport: (month?: number, year?: number) => get<unknown>(`/admin/supplies/finance-report${month || year ? '?' + new URLSearchParams({ ...(month ? { month: String(month) } : {}), ...(year ? { year: String(year) } : {}) }).toString() : ''}`),
+  // Administrative stock actions included for typed API parity with the supplied OpenAPI.
+  // They are not exposed outside approved UI flows without separate confirmation.
+  categories: async () => apiList<PartCategoryApi>(await get<unknown>('/admin/supplies/categories'), 'Part categories'),
+  stocks: async () => apiList<StockApi>(await get<unknown>('/admin/supplies'), 'Inventory'), // OpenAPI: no stock row ID; use (hub_id, part_category_id) as row key.
+  createCategory: (data: { name: string; category_type: string; compatible_drone_models?: string[]; unit_cost?: number; description?: string }) => send<unknown>('/admin/supplies/categories', 'POST', data),
+  updateCategory: (id: number, data: { name?: string; compatible_drone_models?: string[]; unit_cost?: number; description?: string; is_active?: boolean }) => send<unknown>(`/admin/supplies/categories/${id}`, 'PATCH', data),
+  receiveStock: (data: { hub_id: number; part_category_id: number; quantity: number; unit_cost_override?: number; note?: string }) => send<unknown>('/admin/supplies/receive', 'POST', data),
+  transferStock: (data: { from_hub_id: number; to_hub_id: number; part_category_id: number; quantity: number; note?: string }) => send<unknown>('/admin/supplies/transfer', 'POST', data),
+  stockTransactions: async () => apiList<StockTransactionApi>(await get<unknown>('/admin/supplies/transactions'), 'Stock transactions'),
+  stockTransactionsFiltered: async (query: { hub_id?: number; part_category_id?: number; reason?: string; limit?: number }) =>
+    apiList<StockTransactionApi>(await get<unknown>(`/admin/supplies/transactions?${new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]))}`), 'Stock transactions'),
+  setStockThreshold: (hubId: number, data: { part_category_id: number; min_stock_threshold: number }) => send<unknown>(`/admin/supplies/hubs/${hubId}/threshold`, 'PATCH', data),
+  adjustStock: (hubId: number, data: { part_category_id: number; quantity_delta: number; reason?: string; note?: string }) => send<unknown>(`/admin/supplies/hubs/${hubId}/adjust`, 'POST', data),
+  discardStock: (hubId: number, data: { part_category_id: number; quantity: number; note?: string }) => send<unknown>(`/admin/supplies/hubs/${hubId}/discard`, 'POST', data),
+  bulkReceive: (hubId: number, items: Array<{ part_category_id: number; quantity: number; unit_cost_override?: number; note?: string }>) => send<unknown>(`/admin/supplies/hubs/${hubId}/bulk-receive`, 'POST', {hub_id: hubId, items}),
+  partsRequests: async () => apiList<PartsRequestApi>(await get<unknown>('/admin/supplies/parts-requests'), 'Parts requests'),
+  approvePartsRequest: (id: number, note: string) => send<unknown>(`/admin/supplies/parts-requests/${id}/approve`, 'PATCH', {admin_note: note}),
+  rejectPartsRequest: (id: number, note: string) => send<unknown>(`/admin/supplies/parts-requests/${id}/reject`, 'PATCH', {admin_note: note}),
+  replacementRequests: async () => apiList<ReplacementRequestApi>(await get<unknown>('/admin/supplies/replacement-requests'), 'Replacement requests'),
+  replacementRequest: (id: number) => get<ReplacementRequestApi>(`/admin/supplies/replacement-requests/${id}`),
+  supplyReplacement: (id: number, supplied_item_id?: string, admin_note?: string) => send<unknown>(`/admin/supplies/replacement-requests/${id}/supply`, 'PATCH', { ...(supplied_item_id ? { supplied_item_id } : {}), ...(admin_note ? { admin_note } : {}) }),
+  rejectReplacement: (id: number, rejection_reason: string) => send<unknown>(`/admin/supplies/replacement-requests/${id}/reject`, 'PATCH', { rejection_reason }),
+  transactions: () => get<unknown>('/payments/transactions'), // No structured response schema published by BE.
+  refunds: () => get<unknown>('/payments/refunds'), // No structured response schema published by BE.
+  refundOrder: (orderId: string, data: { reason: string; amount?: number }) => send<RefundResultApi>(`/payments/orders/${encodeURIComponent(orderId)}/refund`, 'POST', data),
+  financialOverview: (month?: number, year?: number) => get<unknown>(`/admin/supplies/financial-overview${month || year ? '?' + new URLSearchParams({...(month ? {month: String(month)} : {}), ...(year ? {year: String(year)} : {})}).toString() : ''}`),
+  simulatorConfig: () => get<SimulatorConfigApi>('/system/simulator-config'),
+  patchSimulatorConfig: (data: Partial<Pick<SimulatorConfigApi, 'incident_enabled' | 'incident_probability' | 'incident_min_step' | 'incident_severity' | 'interval_sec' | 'steps_per_leg' | 'next_flight_incident'>>) => send<SimulatorConfigApi>('/system/simulator-config', 'PATCH', data),
+  triggerNextIncident: (data: SimulatorIncidentApi) => send<SimulatorTriggerResultApi>('/system/simulator-config/trigger-next-incident', 'POST', data),
   audit: (page: number, pageSize = 30) => get<AuditPageApi>(`/system/audit-logs?page=${page}&page_size=${pageSize}`),
-  notifications: async () => apiList<NotificationApi>(await get<unknown>('/notifications/'), 'Notifications'),
+  notifications: async () => apiList<NotificationApi>(await get<unknown>('/notifications'), 'Notifications'),
+  notificationUnreadCount: async (): Promise<number> => {
+    const payload = await get<unknown>('/notifications/unread-count');
+    if (typeof payload === 'number' && Number.isFinite(payload)) return payload;
+    if (object(payload)) {
+      for (const key of ['unread_count', 'count', 'unread']) {
+        const value = payload[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+      }
+    }
+    throw new Error('Unread notification count: unknown response schema.');
+  },
   markNotification: (id: number) => send<unknown>(`/notifications/${id}/read`, 'PATCH'),
   markNotificationsRead: () => send<unknown>('/notifications/read-all', 'PATCH'),
+  clearReadNotifications: () => send<unknown>('/notifications/clear-read', 'DELETE'),
+  deleteNotification: (id: number) => send<unknown>(`/notifications/${id}`, 'DELETE'),
   kpi: () => get<KpiApi>('/admin/dashboard/kpi'),
   dashboard: () => get<AdminDashboardApi>('/admin/dashboard'),
 };

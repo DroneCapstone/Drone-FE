@@ -42,9 +42,9 @@ export function AdminDashboardPage() {
     finally { setLoading(false); }
   }
   useEffect(() => { void refresh(); }, []);
-  return <AdminPageShell title="Dashboard" description="System-wide overview powered by Backend data.">
+  return <AdminPageShell title="Dashboard" description="">
     {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard from Backend…</p>}
+    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard…</p>}
     {data && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminSummaryCard label="Revenue today" value={money(data.revenue.today)} note="Backend recorded revenue" icon={Wallet} />

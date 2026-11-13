@@ -167,15 +167,15 @@ export const adminBackend = {
   setDroneActive: (id: string, active: boolean) => adminRequest(`/admin/fleet/drones/${encodeURIComponent(id)}/admin-state`, json('PATCH', { admin_state: active ? 'ACTIVE' : 'INACTIVE' })),
   batteries: async () => arrayOf(await adminRequest('/admin/fleet/batteries')).map(mapBattery),
   battery: async (id: string) => mapBattery(objectOf(await adminRequest(`/admin/fleet/batteries/${encodeURIComponent(id)}`))),
-  categories: async () => arrayOf(await adminRequest('/admin/inventory/categories'), ['categories', 'items', 'data', 'results']).map(mapCategory),
-  inventory: async () => arrayOf(await adminRequest('/admin/inventory'), ['inventory', 'items', 'data', 'results']).map(mapStock),
-  createCategory: (input: Record<string, unknown>) => adminRequest('/admin/inventory/categories', json('POST', input)),
-  updateCategory: (id: number, input: Record<string, unknown>) => adminRequest(`/admin/inventory/categories/${id}`, json('PATCH', input)),
-  receiveStock: (input: {hub_id: number; part_category_id: number; quantity: number; unit_cost_override?: number; note?: string}) => adminRequest('/admin/inventory/receive', json('POST', input)),
-  transferStock: (input: {from_hub_id: number; to_hub_id: number; part_category_id: number; quantity: number; note?: string}) => adminRequest('/admin/inventory/transfer', json('POST', input)),
-  stockTransactions: async () => arrayOf(await adminRequest('/admin/inventory/transactions')),
-  partRequests: async () => arrayOf(await adminRequest('/admin/inventory/parts-requests')).map(mapPartRequest),
-  reviewPartRequest: (id: number, approve: boolean, note: string) => adminRequest(`/admin/inventory/parts-requests/${id}/${approve ? 'approve' : 'reject'}`, json('PATCH', { admin_note: note })),
+  categories: async () => arrayOf(await adminRequest('/admin/supplies/categories'), ['categories', 'items', 'data', 'results']).map(mapCategory),
+  inventory: async () => arrayOf(await adminRequest('/admin/supplies'), ['inventory', 'items', 'data', 'results']).map(mapStock),
+  createCategory: (input: Record<string, unknown>) => adminRequest('/admin/supplies/categories', json('POST', input)),
+  updateCategory: (id: number, input: Record<string, unknown>) => adminRequest(`/admin/supplies/categories/${id}`, json('PATCH', input)),
+  receiveStock: (input: {hub_id: number; part_category_id: number; quantity: number; unit_cost_override?: number; note?: string}) => adminRequest('/admin/supplies/receive', json('POST', input)),
+  transferStock: (input: {from_hub_id: number; to_hub_id: number; part_category_id: number; quantity: number; note?: string}) => adminRequest('/admin/supplies/transfer', json('POST', input)),
+  stockTransactions: async () => arrayOf(await adminRequest('/admin/supplies/transactions')),
+  partRequests: async () => arrayOf(await adminRequest('/admin/supplies/parts-requests')).map(mapPartRequest),
+  reviewPartRequest: (id: number, approve: boolean, note: string) => adminRequest(`/admin/supplies/parts-requests/${id}/${approve ? 'approve' : 'reject'}`, json('PATCH', { admin_note: note })),
   dashboard: () => adminRequest<Record<string, unknown>>('/admin/dashboard'),
   dashboardKpi: () => adminRequest<Record<string, unknown>>('/admin/dashboard/kpi'),
   audit: async (page = 1, pageSize = 20) => {
@@ -185,7 +185,7 @@ export const adminBackend = {
     return { total: num(payload.total), items: items.map((v): LiveAuditLog => ({ id: num(v.id), user_id: str(v.user_id), action: str(v.action),
       resource_table: str(v.resource_table), details_json: objectOf(v.details_json), created_at: date(v.created_at) })) };
   },
-  notifications: async () => arrayOf(await adminRequest('/notifications/')).map((v): LiveNotification => ({
+  notifications: async () => arrayOf(await adminRequest('/notifications')).map((v): LiveNotification => ({
     id: num(v.id), title: str(v.title), message: str(v.message), notifications_type: str(v.notifications_type),
     is_read: bool(v.is_read), created_at: date(v.created_at), reference_id: v.reference_id == null ? null : str(v.reference_id),
   })),
