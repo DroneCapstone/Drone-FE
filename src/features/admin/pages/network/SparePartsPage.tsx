@@ -3,12 +3,14 @@ import { ReceiptText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../../components/ui/DropdownMenu';
 import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 import { adminOperationsApi, apiError, type HubApi, type PartCategoryApi, type StockApi } from '../../api/adminOperationsApi';
 import { formatVnd } from '../../utils/adminDisplay';
+import { SparePartActionDialog, SparePartsBulkReceiveDialog, type StockAction } from '../../components/SparePartsStockDialogs';
 import '../../components/AdminInventoryDialog.css';
 import './SparePartsQuantityDialog.css';
 
@@ -33,6 +35,8 @@ export function SparePartsPage() {
   const [restocking, setRestocking] = useState<PartCategoryApi | null>(null);
   const [restockHub, setRestockHub] = useState('');
   const [added, setAdded] = useState(1);
+  const [stockAction, setStockAction] = useState<{ action: StockAction; part: PartCategoryApi } | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -103,6 +107,7 @@ export function SparePartsPage() {
 
   return <AdminPageShell title="Spare Parts" description="Backend inventory: category definitions and physical stock by Hub." actions={<>
     <Link className="button button-secondary" to="/admin/replacement/requests?type=PART">Replacement records (demo)</Link>
+    <ActionButton variant="secondary" onClick={() => setBulkOpen(true)}>Bulk Receive</ActionButton>
     <ActionButton icon="plus" onClick={() => openEdit()}>Add spare part</ActionButton>
   </>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
@@ -119,7 +124,12 @@ export function SparePartsPage() {
           <td><strong>{part.name}</strong><small>Reference unit cost: {part.unit_cost == null ? 'Not configured' : formatVnd(part.unit_cost)}</small></td>
           <td>{(part.compatible_drone_models ?? []).join(', ') || '—'}</td>
           <td><strong className={partQuantity(part) === 0 ? 'text-red-500' : low(part) ? 'text-orange-500' : ''}>{partQuantity(part)}</strong></td>
-          <td><div className="flex flex-wrap items-center gap-2"><ActionButton variant="ghost" onClick={() => openEdit(part)}>Edit</ActionButton><ActionButton variant="secondary" disabled={part.is_active === false} onClick={() => openRestock(part)}>Add quantity</ActionButton></div></td>
+          <td><div className="flex flex-wrap items-center gap-2"><ActionButton variant="ghost" onClick={() => openEdit(part)}>Edit</ActionButton><ActionButton variant="secondary" disabled={part.is_active === false} onClick={() => openRestock(part)}>Add quantity</ActionButton>
+            <DropdownMenu><DropdownMenuTrigger className="button button-ghost" type="button">More ▾</DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {([['TRANSFER', 'Transfer'], ['ADJUST', 'Adjust Stock'], ['DISCARD', 'Discard'], ['THRESHOLD', 'Set Threshold']] as const).map(([action, label]) =>
+                  <DropdownMenuItem key={action} onClick={() => setStockAction({ action, part })}>{label}</DropdownMenuItem>)}
+              </DropdownMenuContent></DropdownMenu></div></td>
         </tr>)}
         {!loading && visible.length === 0 && <tr><td colSpan={5}>No spare part categories found.</td></tr>}
       </tbody></table></div>
@@ -157,5 +167,7 @@ export function SparePartsPage() {
       </div>
       <div className="admin-inventory-dialog__footer spare-quantity-footer"><ActionButton variant="secondary" onClick={() => setRestocking(null)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving || !validQuantity}>{saving ? 'Saving…' : 'Confirm Addition'}</ActionButton></div>
     </form></DialogContent>}</Dialog>
+    <SparePartActionDialog part={stockAction?.part ?? null} action={stockAction?.action ?? null} defaultHub={selectedHub} hubs={hubs} stocks={stocks} onClose={() => setStockAction(null)} onSaved={refresh}/>
+    <SparePartsBulkReceiveDialog open={bulkOpen} hubs={hubs} parts={parts} defaultHub={selectedHub} onClose={() => setBulkOpen(false)} onSaved={refresh}/>
   </AdminPageShell>;
 }
