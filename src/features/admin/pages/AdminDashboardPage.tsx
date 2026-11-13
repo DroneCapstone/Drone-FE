@@ -96,7 +96,7 @@ function RevenueBars({ today, month }: { today: number; month: number }) {
           <div className="h-3 overflow-hidden rounded-full bg-[#F0F2F5]"><div className="h-full rounded-full" style={{ width: `${(item.value / max) * 100}%`, background: index === 0 ? '#FDBA74' : '#F97316' }} /></div>
         </div>
       ))}
-      <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Backend recorded revenue · Values shown by their respective periods</p>
+      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Backend recorded revenue · Values shown by their respective periods</p> */}
     </div>
   );
 }
@@ -184,7 +184,7 @@ export function AdminDashboardPage() {
           </ChartPanel>
         </div>
 
-        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2><p className="mt-1 text-xs text-[#8791A2]">Distribution of hubs and drones across the network</p></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
+        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2><p className="mt-1 text-xs text-[#8791A2]"></p></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
         <HubDroneMap hubs={hubs} drones={drones} />
       </>}
     </AdminPageShell>
