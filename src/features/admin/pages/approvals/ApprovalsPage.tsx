@@ -18,19 +18,43 @@ import { AdminToolbar } from '../../components/AdminToolbar';
 
 import './ReplacementRecordsDialog.css';
 
-import { getAdminHubs, getAdminBatteries } from '../../services/adminStore';
-
-import { getReplacementRequests, getSpareParts, type ReplacementRequest } from '../../services/prototypeWorkflow';
-
 import {
+  adminOperationsApi, apiError,
+  type BatteryApi, type HubApi, type PartCategoryApi,
+  type ReplacementRequestApi, type StockApi,
+} from '../../api/adminOperationsApi';
+// Legacy getReplacementRequests(), getAdminSupplyRecords() and localStorage demo stock
+// are intentionally not imported. Replacement Records reads/writes Backend only.
+type AdminEffectiveStatus = 'AWAITING_SUPPLY' | 'SUPPLIED' | 'RECEIVED' | 'REJECTED';
+type ReplacementRequest = {
+  id: string; type: 'PART' | 'BATTERY'; hubId: string; droneId?: string;
+  batteryId?: string; partId?: string; approvedPartId?: string; quantity: number;
+  reason: string; technician: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'FULFILLED';
+  createdAt: string; reviewedAt?: string; reviewedBy?: string;
+  adminNote?: string; fulfilledAt?: string;
+};
 
-  getAdminEffectiveStatus, getAdminSupplyRecord, getMatchingBatteryOptions,
-
-  getMatchingPartOptions, getRequestDroneModel, rejectReplacementRequest, supplyApprovedReplacement,
-
-  type AdminEffectiveStatus,
-
-} from '../../services/adminReplacementSupply';
+// Map Backend data to the original Replacement Records view model; do not persist prototype stock.
+function viewRequest(item: ReplacementRequestApi): ReplacementRequest {
+  const current = item.status.toUpperCase();
+  return {
+    id: String(item.request_id), type: item.type.toUpperCase() === 'BATTERY' ? 'BATTERY' : 'PART', hubId: String(item.hub_id),
+    batteryId: item.type === 'BATTERY' ? item.damaged_item_id ?? undefined : undefined,
+    partId: item.type === 'PART' && item.part_category_id != null ? `PART-${item.part_category_id}` : undefined,
+    quantity: item.quantity, reason: item.reason, technician: item.requested_by,
+    status: current === 'REJECTED' ? 'REJECTED' : current === 'RECEIVED' || current === 'FULFILLED' ? 'FULFILLED' : current === 'SUPPLIED' || current === 'APPROVED' ? 'APPROVED' : 'PENDING',
+    createdAt: item.created_at, reviewedAt: item.reviewed_at ?? undefined,
+    adminNote: item.rejection_reason ?? undefined, fulfilledAt: undefined, // ReplacementRequestOut has no received_at; do not invent it.
+    approvedPartId: item.supplied_item_id ?? undefined,
+  };
+}
+function effectiveStatus(item: ReplacementRequest): AdminEffectiveStatus {
+  if (item.status === 'REJECTED') return 'REJECTED';
+  if (item.status === 'FULFILLED') return 'RECEIVED';
+  if (item.status === 'APPROVED') return 'SUPPLIED';
+  return 'AWAITING_SUPPLY';
+}
 
 // Three supply stages plus Rejected as a terminal exception before supply.
 
@@ -128,173 +152,131 @@ export function ApprovalsPage() {
 
   const [params, setParams] = useSearchParams();
 
-  const [version, setVersion] = useState(0);
-
+  const [raw, setRaw] = useState<ReplacementRequestApi[]>([]);
+  const [requestDetail, setRequestDetail] = useState<ReplacementRequestApi | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [categoryRows, setCategoryRows] = useState<PartCategoryApi[]>([]);
+  const [stockRows, setStockRows] = useState<StockApi[]>([]);
+  const [hubs, setHubs] = useState<HubApi[]>([]);
+  const [batteries, setBatteries] = useState<BatteryApi[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
-
   const [type, setType] = useState(params.get('type') ?? 'ALL');
-
   const [filter, setFilter] = useState('ALL');
-
   const [selectedItemId, setSelectedItemId] = useState('');
-
   const [rejectMode, setRejectMode] = useState(false);
-
   const [rejectionReason, setRejectionReason] = useState('');
-
   const [error, setError] = useState('');
-
   const [notice, setNotice] = useState('');
 
-  useEffect(() => {
-
-    const refresh = () => setVersion((value) => value + 1);
-
-    window.addEventListener('admin-data-updated', refresh);
-
-    return () => window.removeEventListener('admin-data-updated', refresh);
-
-  }, []);
-
-  const requests = useMemo(() => getReplacementRequests(), [version]);
-
-  const parts = useMemo(() => getSpareParts(), [version]);
-
-  const hubs = getAdminHubs();
-
-  const batteries = getAdminBatteries();
-
+  async function refresh() {
+    setLoading(true);
+    // The replacement list is independent of inventory/model lookups. A failed lookup must
+    // not make all requests disappear; supply stays unavailable when required stock is unknown.
+    const [rr, cc, ss, hh, bb] = await Promise.allSettled([
+      adminOperationsApi.replacementRequests(), adminOperationsApi.categories(),
+      adminOperationsApi.stocks(), adminOperationsApi.hubs(), adminOperationsApi.batteries(),
+    ]);
+    if (rr.status === 'fulfilled') setRaw(rr.value);
+    else setRaw([]);
+    setCategoryRows(cc.status === 'fulfilled' ? cc.value : []);
+    setStockRows(ss.status === 'fulfilled' ? ss.value : []);
+    setHubs(hh.status === 'fulfilled' ? hh.value : []);
+    setBatteries(bb.status === 'fulfilled' ? bb.value : []);
+    const failures = [
+      rr.status === 'rejected' ? `Replacement requests: ${apiError(rr.reason)}` : null,
+      cc.status === 'rejected' ? `Spare part catalog: ${apiError(cc.reason)}` : null,
+      ss.status === 'rejected' ? `Hub stock: ${apiError(ss.reason)}` : null,
+      hh.status === 'rejected' ? `Hubs: ${apiError(hh.reason)}` : null,
+      bb.status === 'rejected' ? `Batteries: ${apiError(bb.reason)}` : null,
+    ].filter(Boolean);
+    setError(failures.join(' · ')); setLoading(false);
+  }
+  useEffect(() => { void refresh(); }, []);
+  const requests = useMemo(() => raw.map(viewRequest), [raw]);
   const requestId = params.get('request');
-
-  const request = requests.find((item) => item.id === requestId);
-
-  const status = request ? getAdminEffectiveStatus(request) : undefined;
-
-  const supply = request ? getAdminSupplyRecord(request.id) : undefined;
-
-  const matchedParts = request?.type === 'PART' ? getMatchingPartOptions(request) : [];
-
-  const matchedBatteries = request?.type === 'BATTERY' ? getMatchingBatteryOptions(request) : [];
-
-  const damagedBattery = request?.type === 'BATTERY' ? batteries.find((battery) => battery.id === request.batteryId) : undefined;
-
-  const droneModel = request ? getRequestDroneModel(request) : undefined;
-
-  const suggestedId = request?.type === 'PART'
-
-    ? (matchedParts.find((part) => part.id === request.partId)?.id ?? (matchedParts.length === 1 ? matchedParts[0].id : ''))
-
+  useEffect(() => {
+    setRequestDetail(null);
+    if (!requestId) return;
+    let current = true;
+    setDetailLoading(true);
+    void adminOperationsApi.replacementRequest(Number(requestId))
+      .then(detail => { if (current) { setRequestDetail(detail); setError(''); } })
+      .catch(cause => { if (current) setError(`Replacement detail: ${apiError(cause)}`); })
+      .finally(() => { if (current) setDetailLoading(false); });
+    return () => { current = false; };
+  }, [requestId]);
+  const rawRequest = requestDetail && String(requestDetail.request_id) === requestId
+    ? requestDetail : raw.find(item => String(item.request_id) === requestId);
+  const request = rawRequest ? viewRequest(rawRequest) : requests.find(item => item.id === requestId);
+  const status = request ? effectiveStatus(request) : undefined;
+  const supply = rawRequest?.supplied_item_id ? { selectedBatteryId: rawRequest.supplied_item_id, selectedPartId: undefined as string | undefined, suppliedAt: rawRequest.supplied_at ?? undefined } : undefined;
+  const partId = rawRequest?.part_category_id ?? null;
+  const partCategory = categoryRows.find(p => p.id === partId);
+  const partStock = stockRows.find(s => s.part_category_id === partId && s.hub_id === rawRequest?.hub_id);
+  const matchedParts = request?.type === 'PART' && partCategory && rawRequest ? [{
+    id: `PART-${partCategory.id}`, name: partCategory.name, quantity: partStock?.quantity ?? 0,
+    active: partCategory.is_active !== false,
+  }] : [];
+  const damagedBattery = request?.type === 'BATTERY' ? batteries.find(b => b.id === request.batteryId) : undefined;
+  const matchedBatteries = request?.type === 'BATTERY' && rawRequest?.quantity === 1 ? batteries
+    .filter(b => b.status.toUpperCase() === 'ACTIVE' && b.drone_id == null && b.current_hub_id == null
+      && (!damagedBattery || b.battery_model === damagedBattery.battery_model)
+      && b.id !== damagedBattery?.id)
+    .map(b => ({ id: b.id, model: b.battery_model ?? '—', serialNumber: b.serial_number })) : [];
+  const droneModel = undefined; // ReplacementRequestOut does not expose Drone model.
+  const suggestedId = request?.type === 'PART' ? matchedParts[0]?.id ?? ''
     : matchedBatteries.length === 1 ? matchedBatteries[0].id : '';
-
   const chosenId = selectedItemId || suggestedId;
-
-  const chosenPart = matchedParts.find((part) => part.id === chosenId);
-
-  const canSupply = request?.type === 'BATTERY'
-
-    ? matchedBatteries.some((battery) => battery.id === chosenId)
-
-    : Boolean(chosenPart?.active && chosenPart.quantity >= (request?.quantity ?? 0));
-
+  const chosenPart = matchedParts.find(part => part.id === chosenId);
+  // Only AWAITING_SUPPLY may be changed. Backend validates inventory and atomic deductions.
+  const actionable = !detailLoading && rawRequest?.status.toUpperCase() === 'AWAITING_SUPPLY';
+  const canSupply = Boolean(actionable) && (request?.type === 'BATTERY'
+    ? matchedBatteries.some(battery => battery.id === chosenId)
+    : Boolean(chosenPart?.active && chosenPart.quantity >= (request?.quantity ?? 0)));
   const item = (entry: ReplacementRequest) => entry.type === 'PART'
-
-    ? parts.find((part) => part.id === entry.partId)?.name ?? entry.partId ?? 'Spare part'
-
+    ? categoryRows.find(p => `PART-${p.id}` === entry.partId)?.name ?? raw.find(r => String(r.request_id) === entry.id)?.part_name ?? entry.partId ?? 'Spare part'
     : `Battery ${entry.batteryId ?? '—'}`;
-
-  const hubName = (id: string) => hubs.find((hub) => hub.id === id)?.name ?? id;
-
-  const visible = requests.filter((entry) => {
-
-    const state = getAdminEffectiveStatus(entry);
-
-    return (type === 'ALL' || type === entry.type)
-
-      && (filter === 'ALL' || filter === state)
-
-      && `${entry.id} ${entry.technician} ${entry.droneId} ${entry.batteryId} ${entry.reason} ${item(entry)}`
-
-        .toLowerCase().includes(query.trim().toLowerCase());
-
-  });
-
-  const count = (state: AdminEffectiveStatus) => requests.filter((entry) => getAdminEffectiveStatus(entry) === state).length;
-
+  const hubName = (id: string) => hubs.find(h => String(h.id) === id)?.name ?? `Hub ${id}`;
+  const visible = requests.filter(entry => (type === 'ALL' || type === entry.type)
+    && (filter === 'ALL' || filter === effectiveStatus(entry))
+    && `${entry.id} ${entry.technician} ${entry.droneId} ${entry.batteryId} ${entry.reason} ${item(entry)}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const count = (state: AdminEffectiveStatus) => requests.filter(entry => effectiveStatus(entry) === state).length;
   function openRequest(entry: ReplacementRequest) {
-
-    const next = new URLSearchParams(params);
-
-    next.set('request', entry.id);
-
-    setParams(next);
-
-    setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError(''); setNotice('');
-
+    const next = new URLSearchParams(params); next.set('request', entry.id); setParams(next);
+    setRequestDetail(null); setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError(''); setNotice('');
   }
-
   function closeRequest() {
-
-    const next = new URLSearchParams(params);
-
-    next.delete('request');
-
-    setParams(next);
-
-    setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError('');
-
+    const next = new URLSearchParams(params); next.delete('request'); setParams(next);
+    setRequestDetail(null); setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError('');
   }
-
-  function confirmSupply() {
-
-    if (!request || status !== 'AWAITING_SUPPLY' || !canSupply) return;
-
+  async function confirmSupply() {
+    if (!request || !rawRequest || !actionable || !canSupply || saving) return;
+    if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Backend supports one supplied battery ID per request; batch replacement needs Backend changes.'); return; }
+    if (!window.confirm(`Confirm supply for replacement ${request.id}? Backend will update stock and notify Technician.`)) return;
+    setSaving(true); setError('');
     try {
-
-      supplyApprovedReplacement(request.id, chosenId);
-
-      const message = `${request.id}: ${chosenId} supplied. Awaiting Technician receipt.`;
-
-      closeRequest();
-
-      setNotice(message);
-
-    } catch (cause) {
-
-      setError(cause instanceof Error ? cause.message : 'Unable to supply the replacement item.');
-
-    }
-
+      await adminOperationsApi.supplyReplacement(rawRequest.request_id, request.type === 'BATTERY' ? chosenId : undefined);
+      closeRequest(); setNotice(`Replacement ${request.id} supplied by Backend.`); await refresh();
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setSaving(false); }
   }
-
-  function confirmReject() {
-
-    if (!request || status !== 'AWAITING_SUPPLY' || !rejectMode) return;
-
-    const reason = rejectionReason.trim();
-
-    if (!reason) { setError('Enter a reason for rejection.'); return; }
-
+  async function confirmReject() {
+    if (!request || !rawRequest || !actionable || !rejectMode || saving) return;
+    const reason = rejectionReason.trim(); if (!reason) { setError('Enter a reason for rejection.'); return; }
+    if (!window.confirm(`Reject replacement ${request.id}?`)) return;
+    setSaving(true); setError('');
     try {
-
-      rejectReplacementRequest(request.id, reason);
-
-      const message = `${request.id} rejected. No replacement item was supplied.`;
-
-      closeRequest();
-
-      setNotice(message);
-
-    } catch (cause) {
-
-      setError(cause instanceof Error ? cause.message : 'Unable to reject this replacement.');
-
-    }
-
+      await adminOperationsApi.rejectReplacement(rawRequest.request_id, reason);
+      closeRequest(); setNotice(`Replacement ${request.id} rejected by Backend.`); await refresh();
+    } catch (cause) { setError(apiError(cause)); }
+    finally { setSaving(false); }
   }
 
-  const suppliedId = supply?.selectedPartId ?? supply?.selectedBatteryId ?? request?.approvedPartId ?? '—';
+  const suppliedId = supply?.selectedPartId ?? supply?.selectedBatteryId ?? request?.approvedPartId ?? request?.partId ?? '—';
 
-  const workOrderId = (request as (ReplacementRequest & { workOrderId?: string }) | undefined)?.workOrderId;
+  const workOrderId = undefined; // Backend does not expose work_order_id on ReplacementRequestOut.
 
   return <AdminPageShell title="Replacement Records" description="Review reported replacement needs and confirm supply in one step.">
 
@@ -309,6 +291,9 @@ export function ApprovalsPage() {
 
     </div>
 
+    {loading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement records…</p>}
+    {detailLoading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement detail…</p>}
+    {error && !request && <div role="alert" className="mb-3 text-sm text-red-500">{error}</div>}
     {notice && <div role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">{notice}</div>}
 
     <OperatorPanel className="flush-panel">
@@ -347,7 +332,7 @@ export function ApprovalsPage() {
 
           {visible.map((entry) => {
 
-            const entryStatus = getAdminEffectiveStatus(entry);
+            const entryStatus = effectiveStatus(entry);
 
             return <tr key={entry.id}>
 
@@ -479,7 +464,7 @@ export function ApprovalsPage() {
 
                 <ReadOnlyFact label="Receiving Hub" value={hubName(request.hubId)} />
 
-                <ReadOnlyFact label="Replacement item" value={request.type === 'PART' ? `${item(request)} · ${request.partId ?? '—'}` : damagedBattery?.model ?? 'Unknown battery model'} />
+                <ReadOnlyFact label="Replacement item" value={request.type === 'PART' ? `${item(request)} · ${request.partId ?? '—'}` : damagedBattery?.battery_model ?? 'Unknown battery model'} />
 
                 <ReadOnlyFact label="Quantity" value={request.quantity} />
 
@@ -555,7 +540,7 @@ export function ApprovalsPage() {
 
                     to={request.type === 'PART' ? '/admin/replacement/spare-parts'
 
-                      : `/admin/replacement/new-batteries?model=${encodeURIComponent(damagedBattery?.model ?? '')}&returnTo=${encodeURIComponent(`/admin/replacement/requests?request=${request.id}`)}`}>
+                      : `/admin/replacement/new-batteries?model=${encodeURIComponent(damagedBattery?.battery_model ?? '')}&returnTo=${encodeURIComponent(`/admin/replacement/requests?request=${request.id}`)}`}>
 
                     {request.type === 'PART' ? 'Manage spare parts' : 'Manage new batteries'}
 
@@ -625,13 +610,13 @@ export function ApprovalsPage() {
 
               <ActionButton variant="secondary" onClick={() => { setRejectMode(false); setRejectionReason(''); setError(''); }}>Cancel</ActionButton>
 
-              <ActionButton variant="danger" disabled={!rejectionReason.trim()} onClick={confirmReject}>Confirm Reject</ActionButton>
+              <ActionButton variant="danger" disabled={!rejectionReason.trim() || saving || !actionable} onClick={() => void confirmReject()}>Confirm Reject</ActionButton>
 
             </> : <>
 
               <ActionButton variant="secondary" onClick={closeRequest}>Close</ActionButton>
 
-              {request && status === 'AWAITING_SUPPLY' && <ActionButton disabled={!canSupply} onClick={confirmSupply}>Confirm Supply</ActionButton>}
+              {request && status === 'AWAITING_SUPPLY' && <ActionButton disabled={!canSupply || saving} onClick={() => void confirmSupply()}>Confirm Supply</ActionButton>}
 
             </>}
 
