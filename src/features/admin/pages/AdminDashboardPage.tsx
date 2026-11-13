@@ -136,7 +136,7 @@ export function AdminDashboardPage() {
   useEffect(() => { void refresh(); }, []);
 
   return (
-    <AdminPageShell title="Dashboard" description="System performance and operational overview">
+    <AdminPageShell title="Dashboard" description="">
       {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
       {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard…</p>}
       {data && <>

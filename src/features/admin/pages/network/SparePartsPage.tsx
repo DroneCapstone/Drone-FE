@@ -112,7 +112,7 @@ export function SparePartsPage() {
   </>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Spare Parts from Backend…</p>}
+    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Spare Parts...</p>}
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search part, component or drone model…" filters={<>
         <select value={selectedHub} onChange={(event) => setSelectedHub(event.target.value)} aria-label="Inventory Hub"><option value="all">All hubs (total stock)</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>

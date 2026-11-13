@@ -154,8 +154,8 @@ export function NewBatteriesPage() {
     finally { setSaving(false); }
   }
   const expandedUnits = available.filter(b => b.battery_model === expandedModel).sort((a, b) => a.id.localeCompare(b.id));
-
-  return <AdminPageShell title="New Batteries" actions={<ActionButton icon="plus" onClick={() => openCreate()}>Add batteries</ActionButton>}>
+  // return <AdminPageShell title="New Batteries" actions={<ActionButton icon="plus" onClick={() => openCreate()}>Add batteries</ActionButton>}></AdminPageShell>
+  return <AdminPageShell title="New Batteries">
     {validReturn && <div className="mb-3"><Link className="text-button" to={validReturn}>Back to replacement request</Link></div>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <CompactMetric label="Total new batteries" value={available.length} note="Unassigned · available for supply" icon={BatteryCharging} />
@@ -163,7 +163,7 @@ export function NewBatteriesPage() {
       <CompactMetric label="Added this week" value="—" note="Backend does not expose registration dates" icon={CalendarDays} />
     </div>
     {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
-    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading batteries and catalog from Backend…</p>}
+    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading batteries and catalog...</p>}
     {error && !creating && !editing && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {/* Browser-only demo stock is intentionally disabled. This table reads the Backend catalog and physical battery units. */}
     <OperatorPanel className="flush-panel">
@@ -181,10 +181,10 @@ export function NewBatteriesPage() {
           <td><strong className={item.quantity === 0 ? 'text-orange-500' : undefined}>{item.quantity}</strong><small>Unassigned units</small></td>
           <td>{item.referencePrice != null ? formatVnd(item.referencePrice) : 'Not configured'}</td>
           <td><div className="flex flex-wrap items-center gap-2">
-            <ActionButton variant="ghost" onClick={() => setExpandedModel(expandedModel === item.name ? null : item.name)}>
+            {/* <ActionButton variant="ghost" onClick={() => setExpandedModel(expandedModel === item.name ? null : item.name)}>
               {expandedModel === item.name ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               View units
-            </ActionButton>
+            </ActionButton> */}
             <ActionButton variant="secondary" onClick={() => openCreate(item.name)}>Add Quantity</ActionButton>
           </div></td>
         </tr>)}
