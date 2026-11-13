@@ -63,7 +63,7 @@ export function TransactionsPage() {
     {error && !selected && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <AdminSummaryCard label="Gross collected" value={knownAmount ? money(collected) : '—'} note="Backend paid/refunded transactions with known amounts" icon={CreditCard} />
+      <AdminSummaryCard label="Gross collected" value={knownAmount ? money(collected) : '—'} note="Transactions with known amounts" icon={CreditCard} />
       <AdminSummaryCard label="Paid" value={items.filter(row => statusOf(row) === 'PAID').length} note="Successful transactions" icon={CircleCheck} />
       <AdminSummaryCard label="Pending" value={items.filter(row => statusOf(row) === 'PENDING').length} note="Awaiting confirmation" icon={Clock3} />
       <AdminSummaryCard label="Failed / refunded" value={items.filter(row => ['FAILED', 'REFUNDED'].includes(statusOf(row))).length} note="No new capture" icon={CircleX} />
