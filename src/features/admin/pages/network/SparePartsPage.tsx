@@ -161,7 +161,7 @@ export function SparePartsPage() {
           <div className="spare-quantity-cost-row"><span>Reference Unit Price</span><strong>{unitPrice > 0 ? formatVnd(unitPrice) : 'Not configured'}</strong></div>
           <div className="spare-quantity-cost-row"><span>Quantity</span><strong>{added}</strong></div>
           <div className="spare-quantity-cost-row spare-quantity-cost-total"><span>Estimated Total</span><strong>{validQuantity && unitPrice > 0 ? formatVnd(cost) : '—'}</strong></div>
-          <p className="spare-quantity-hint">Confirm only units physically received at the selected Hub. Backend records inventory intake; this is not a PayOS or bank transfer.</p>
+          {/* <p className="spare-quantity-hint">Confirm only units physically received at the selected Hub. Backend records inventory intake; this is not a PayOS or bank transfer.</p> */}
         </div>
         {error && <p role="alert" className="spare-quantity-error">{error}</p>}
       </div>
