@@ -3,69 +3,75 @@ import { CreditCard, RotateCcw, ReceiptText, TrendingUp } from 'lucide-react';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminSummaryCard } from '../../components/AdminSummaryCard';
 import { AdminPageShell } from '../../components/AdminPageShell';
-import { getPrototypeExpenses, getPrototypePayments, getPrototypeRefunds } from '../../services/prototypeWorkflow';
-import { formatVnd } from '../../utils/adminDisplay';
+import { adminOperationsApi, apiError } from '../../api/adminOperationsApi';
+import { record, extractRows, field, amount, money, timestamp, type JsonRow } from '../../api/adminFinanceAdapter';
 
-/** Browser-local financial illustration; NOT a bank ledger or live PayOS reconciliation. */
+// Financial Overview is read from Backend only. Missing numeric fields are shown as '—', not 0.
+// OpenAPI publishes an empty financial-overview response schema: never substitute browser figures.
 export function ExpensesPage() {
-  const [, setVersion] = useState(0);
-  useEffect(() => {
-    const refresh = () => setVersion((value) => value + 1);
-    window.addEventListener('admin-data-updated', refresh);
-    return () => window.removeEventListener('admin-data-updated', refresh);
-  }, []);
+  const [report, setReport] = useState<JsonRow | null>(null);
+  const [stockReport, setStockReport] = useState<JsonRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  async function refresh() {
+    setLoading(true);
+    const [finance, stock] = await Promise.allSettled([
+      adminOperationsApi.financialOverview(), adminOperationsApi.stockFinanceReport(),
+    ]);
+    setReport(finance.status === 'fulfilled' ? record(record(finance.value).data ?? finance.value) : null);
+    setStockReport(stock.status === 'fulfilled' ? record(record(stock.value).data ?? stock.value) : null);
+    setError([
+      finance.status === 'rejected' ? `Financial overview: ${apiError(finance.reason)}` : '',
+      stock.status === 'rejected' ? `Stock finance report: ${apiError(stock.reason)}` : '',
+    ].filter(Boolean).join(' · '));
+    setLoading(false);
+  }
+  useEffect(() => { void refresh(); }, []);
+  const reportValue = (...names: string[]) => report ? amount(report, ...names) : null;
+  const gross = reportValue('gross_collected', 'gross_revenue', 'paid_revenue', 'total_revenue');
+  const refunds = reportValue('completed_refunds', 'total_refunds', 'refunded_amount');
+  const costs = reportValue('total_acquisition_cost', 'recorded_acquisition_cost', 'total_expenses');
+  const directNet = reportValue('net_revenue', 'net_after_costs', 'net_amount');
+  // Only compute if ALL source values are present; Backend's 'total_expenses' may include refunds,
+  // so prefer explicit net from Backend and never double-subtract unknown categories.
+  const net = directNet;
+  const expenseBreakdown = record(report?.expenses_by_category ?? stockReport?.expenses_by_category);
+  const rowsFrom = (payload: JsonRow | null) => {
+    if (!payload) return [] as JsonRow[];
+    try { return extractRows(payload, ['transaction_history', 'history', 'transactions', 'expenses', 'records']); }
+    catch { return [] as JsonRow[]; }
+  };
+  const entries = rowsFrom(stockReport).length ? rowsFrom(stockReport) : rowsFrom(report);
+  const breakdownEntries = Object.entries(expenseBreakdown).filter(([, value]) => typeof value === 'number' && Number.isFinite(value));
 
-  const records = getPrototypeExpenses();
-  const payments = getPrototypePayments();
-  const refunds = getPrototypeRefunds();
-  // A refunded payment was originally captured too: count it in gross once.
-  const grossPaid = payments.filter((payment) => payment.status === 'PAID' || payment.status === 'REFUNDED')
-    .reduce((sum, payment) => sum + payment.amountVnd, 0);
-  const refundsCompleted = refunds.filter((refund) => refund.status === 'COMPLETED')
-    .reduce((sum, refund) => sum + refund.amountVnd, 0);
-  const recordedCosts = records.reduce((sum, record) => sum + record.amountVnd, 0);
-  const netRecorded = grossPaid - refundsCompleted - recordedCosts;
-  const categories = [
-    { key: 'DRONE', name: 'Drones' },
-    { key: 'BATTERY', name: 'New batteries' },
-    { key: 'SPARE_PART', name: 'Spare parts' },
-    { key: 'OTHER', name: 'Other / legacy' },
-  ] as const;
-  return <AdminPageShell
-    title="Financial Overview"
-    description="Demo financial records: customer payments and refunds are samples; acquisition costs are internal estimates, not cash transfers."
-  >
+  return <AdminPageShell title="Financial Overview" description="Backend financial and inventory acquisition records; these are not bank account balances.">
+    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading financial reports from Backend…</p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <AdminSummaryCard label="Gross Collected (demo)" value={formatVnd(grossPaid)} note="Paid + later refunded payments counted once" icon={CreditCard} />
-      <AdminSummaryCard label="Completed Refunds (demo)" value={formatVnd(refundsCompleted)} note="Simulated refunds, not confirmed bank payouts" icon={RotateCcw} />
-      <AdminSummaryCard label="Recorded Acquisition Cost" value={formatVnd(recordedCosts)} note="Internal reference costs; legacy records included" icon={ReceiptText} />
-      <AdminSummaryCard label="Net After Recorded Costs" value={formatVnd(netRecorded)} note="Illustrative calculation; NOT bank balance or profit" icon={TrendingUp} />
+      <AdminSummaryCard label="Gross Collected" value={money(gross)} note="Backend-reported payment revenue" icon={CreditCard} />
+      <AdminSummaryCard label="Completed Refunds" value={money(refunds)} note="Backend-reported refunds" icon={RotateCcw} />
+      <AdminSummaryCard label="Recorded Acquisition Cost" value={money(costs)} note="Backend-reported expenses" icon={ReceiptText} />
+      <AdminSummaryCard label="Net After Recorded Costs" value={money(net)} note="Only when Backend returns a net figure" icon={TrendingUp} />
     </div>
-    {/* <div className="mb-4 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4 text-sm text-[var(--admin-muted)]">
-      <strong className="text-[var(--admin-text)]">Demo only.</strong>{' '}
-      Gross collected − completed simulated refunds − recorded acquisition costs = illustrative net.
-      The system neither transfers supplier money nor reads a bank account balance.
-      Stock distribution or replacement approval must not record the purchase expense a second time.
-    </div> */}
-    <OperatorPanel title="Acquisition costs by category" eyebrow="INTERNAL RECORDS · NOT BANK PAYMENTS">
-      <div className="table-wrap"><table><thead><tr><th>Category</th><th>Recorded amount</th></tr></thead>
-        <tbody>{categories.map(({ key, name }) => <tr key={key}><td>{name}</td><td><strong>{formatVnd(records.filter((record) => record.category === key).reduce((sum, record) => sum + record.amountVnd, 0))}</strong></td></tr>)}</tbody>
-      </table></div>
+    <OperatorPanel title="Acquisition costs by category" eyebrow="BACKEND REPORT">
+      <div className="table-wrap"><table><thead><tr><th>Category</th><th>Recorded amount</th></tr></thead><tbody>
+        {breakdownEntries.map(([category, value]) => <tr key={category}><td>{category.replace(/_/g, ' ')}</td><td><strong>{money(value as number)}</strong></td></tr>)}
+        {!loading && !breakdownEntries.length && <tr><td colSpan={2}>Backend did not return a per-category cost breakdown.</td></tr>}
+      </tbody></table></div>
     </OperatorPanel>
-    <div className="mt-4">
-      <OperatorPanel title="Recorded cost history" eyebrow="ONE RECORD PER INVENTORY RECEIPT / BATCH">
-        <div className="table-wrap"><table><thead><tr><th>Date</th><th>Source</th><th>Category</th><th>Description</th><th>Recorded cost</th></tr></thead>
-          <tbody>{records.map((record) => <tr key={record.id}>
-            <td>{new Date(record.date).toLocaleString('en-GB')}</td>
-            <td>{record.sourceId ?? 'Legacy manual record'}</td>
-            <td>{record.category.replace('_', ' ')}</td>
-            <td>{record.description}<small>{record.recordType === 'RECORDED' ? 'Internal acquisition · not paid via bank' : 'Legacy prototype record · payment not verified here'}</small></td>
-            <td><strong>{formatVnd(record.amountVnd)}</strong></td>
-          </tr>)}
-            {records.length === 0 && <tr><td colSpan={5} className="text-center">No recorded acquisition cost. Adding received spare parts or new batteries will create a cost record automatically.</td></tr>}
-          </tbody>
-        </table></div>
-      </OperatorPanel>
-    </div>
+    <div className="mt-4"><OperatorPanel title="Recorded cost history" eyebrow="BACKEND ACQUISITION / FINANCIAL EVENTS">
+      <div className="table-wrap"><table><thead><tr><th>Date</th><th>Source</th><th>Category</th><th>Description</th><th>Recorded cost</th></tr></thead><tbody>
+        {entries.map((item, i) => <tr key={`${field(item, 'id', 'reference_id')}-${i}`}>
+          <td>{timestamp(item, 'date', 'created_at', 'timestamp')}</td><td>{field(item, 'source_id', 'reference_id', 'order_id')}</td>
+          <td>{field(item, 'category', 'type', 'reason')}</td><td>{field(item, 'description', 'message')}</td>
+          <td><strong>{money(amount(item, 'amount_vnd', 'amount', 'total'))}</strong></td>
+        </tr>)}
+        {!loading && !entries.length && <tr><td colSpan={5}>Backend has not returned cost-history rows.</td></tr>}
+      </tbody></table></div>
+    </OperatorPanel></div>
+    {(report || stockReport) && <details className="mt-3 rounded-lg border border-[var(--admin-border)] p-3 text-xs">
+      <summary className="cursor-pointer">Inspect original Backend financial reports</summary>
+      <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify({ financial_overview: report, stock_finance_report: stockReport }, null, 2)}</pre>
+    </details>}
   </AdminPageShell>;
 }

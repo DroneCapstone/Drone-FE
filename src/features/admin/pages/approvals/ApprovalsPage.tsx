@@ -23,20 +23,29 @@ import {
   type BatteryApi, type HubApi, type PartCategoryApi,
   type ReplacementRequestApi, type StockApi,
 } from '../../api/adminOperationsApi';
-import type { ReplacementRequest } from '../../services/prototypeWorkflow';
-import type { AdminEffectiveStatus } from '../../services/adminReplacementSupply';
+// Legacy getReplacementRequests(), getAdminSupplyRecords() and localStorage demo stock
+// are intentionally not imported. Replacement Records reads/writes Backend only.
+type AdminEffectiveStatus = 'AWAITING_SUPPLY' | 'SUPPLIED' | 'RECEIVED' | 'REJECTED';
+type ReplacementRequest = {
+  id: string; type: 'PART' | 'BATTERY'; hubId: string; droneId?: string;
+  batteryId?: string; partId?: string; approvedPartId?: string; quantity: number;
+  reason: string; technician: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'FULFILLED';
+  createdAt: string; reviewedAt?: string; reviewedBy?: string;
+  adminNote?: string; fulfilledAt?: string;
+};
 
 // Map Backend data to the original Replacement Records view model; do not persist prototype stock.
 function viewRequest(item: ReplacementRequestApi): ReplacementRequest {
   const current = item.status.toUpperCase();
   return {
-    id: String(item.request_id), type: item.type, hubId: String(item.hub_id),
+    id: String(item.request_id), type: item.type.toUpperCase() === 'BATTERY' ? 'BATTERY' : 'PART', hubId: String(item.hub_id),
     batteryId: item.type === 'BATTERY' ? item.damaged_item_id ?? undefined : undefined,
     partId: item.type === 'PART' && item.part_category_id != null ? `PART-${item.part_category_id}` : undefined,
     quantity: item.quantity, reason: item.reason, technician: item.requested_by,
     status: current === 'REJECTED' ? 'REJECTED' : current === 'RECEIVED' || current === 'FULFILLED' ? 'FULFILLED' : current === 'SUPPLIED' || current === 'APPROVED' ? 'APPROVED' : 'PENDING',
     createdAt: item.created_at, reviewedAt: item.reviewed_at ?? undefined,
-    adminNote: item.rejection_reason ?? undefined, fulfilledAt: current === 'RECEIVED' ? item.reviewed_at ?? undefined : undefined,
+    adminNote: item.rejection_reason ?? undefined, fulfilledAt: undefined, // ReplacementRequestOut has no received_at; do not invent it.
     approvedPartId: item.supplied_item_id ?? undefined,
   };
 }
@@ -144,6 +153,8 @@ export function ApprovalsPage() {
   const [params, setParams] = useSearchParams();
 
   const [raw, setRaw] = useState<ReplacementRequestApi[]>([]);
+  const [requestDetail, setRequestDetail] = useState<ReplacementRequestApi | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [categoryRows, setCategoryRows] = useState<PartCategoryApi[]>([]);
   const [stockRows, setStockRows] = useState<StockApi[]>([]);
   const [hubs, setHubs] = useState<HubApi[]>([]);
@@ -185,8 +196,20 @@ export function ApprovalsPage() {
   useEffect(() => { void refresh(); }, []);
   const requests = useMemo(() => raw.map(viewRequest), [raw]);
   const requestId = params.get('request');
-  const request = requests.find(item => item.id === requestId);
-  const rawRequest = raw.find(item => String(item.request_id) === requestId);
+  useEffect(() => {
+    setRequestDetail(null);
+    if (!requestId) return;
+    let current = true;
+    setDetailLoading(true);
+    void adminOperationsApi.replacementRequest(Number(requestId))
+      .then(detail => { if (current) { setRequestDetail(detail); setError(''); } })
+      .catch(cause => { if (current) setError(`Replacement detail: ${apiError(cause)}`); })
+      .finally(() => { if (current) setDetailLoading(false); });
+    return () => { current = false; };
+  }, [requestId]);
+  const rawRequest = requestDetail && String(requestDetail.request_id) === requestId
+    ? requestDetail : raw.find(item => String(item.request_id) === requestId);
+  const request = rawRequest ? viewRequest(rawRequest) : requests.find(item => item.id === requestId);
   const status = request ? effectiveStatus(request) : undefined;
   const supply = rawRequest?.supplied_item_id ? { selectedBatteryId: rawRequest.supplied_item_id, selectedPartId: undefined as string | undefined, suppliedAt: rawRequest.supplied_at ?? undefined } : undefined;
   const partId = rawRequest?.part_category_id ?? null;
@@ -208,12 +231,12 @@ export function ApprovalsPage() {
   const chosenId = selectedItemId || suggestedId;
   const chosenPart = matchedParts.find(part => part.id === chosenId);
   // Only AWAITING_SUPPLY may be changed. Backend validates inventory and atomic deductions.
-  const actionable = rawRequest?.status.toUpperCase() === 'AWAITING_SUPPLY';
+  const actionable = !detailLoading && rawRequest?.status.toUpperCase() === 'AWAITING_SUPPLY';
   const canSupply = Boolean(actionable) && (request?.type === 'BATTERY'
     ? matchedBatteries.some(battery => battery.id === chosenId)
     : Boolean(chosenPart?.active && chosenPart.quantity >= (request?.quantity ?? 0)));
   const item = (entry: ReplacementRequest) => entry.type === 'PART'
-    ? categoryRows.find(p => `PART-${p.id}` === entry.partId)?.name ?? entry.partId ?? 'Spare part'
+    ? categoryRows.find(p => `PART-${p.id}` === entry.partId)?.name ?? raw.find(r => String(r.request_id) === entry.id)?.part_name ?? entry.partId ?? 'Spare part'
     : `Battery ${entry.batteryId ?? '—'}`;
   const hubName = (id: string) => hubs.find(h => String(h.id) === id)?.name ?? `Hub ${id}`;
   const visible = requests.filter(entry => (type === 'ALL' || type === entry.type)
@@ -222,11 +245,11 @@ export function ApprovalsPage() {
   const count = (state: AdminEffectiveStatus) => requests.filter(entry => effectiveStatus(entry) === state).length;
   function openRequest(entry: ReplacementRequest) {
     const next = new URLSearchParams(params); next.set('request', entry.id); setParams(next);
-    setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError(''); setNotice('');
+    setRequestDetail(null); setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError(''); setNotice('');
   }
   function closeRequest() {
     const next = new URLSearchParams(params); next.delete('request'); setParams(next);
-    setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError('');
+    setRequestDetail(null); setSelectedItemId(''); setRejectMode(false); setRejectionReason(''); setError('');
   }
   async function confirmSupply() {
     if (!request || !rawRequest || !actionable || !canSupply || saving) return;
@@ -268,7 +291,8 @@ export function ApprovalsPage() {
 
     </div>
 
-    {loading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement records from Backend…</p>}
+    {loading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement records…</p>}
+    {detailLoading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement detail…</p>}
     {error && !request && <div role="alert" className="mb-3 text-sm text-red-500">{error}</div>}
     {notice && <div role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">{notice}</div>}
 

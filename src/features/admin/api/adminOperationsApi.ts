@@ -167,6 +167,7 @@ export const adminOperationsApi = {
   battery: (id: string) => get<BatteryApi>(`/admin/fleet/batteries/${encodeURIComponent(id)}`),
   createBattery: (data: BatteryCreateApi) => send<BatteryApi>('/admin/fleet/batteries', 'POST', data),
   updateBattery: (id: string, data: BatteryUpdateApi) => send<BatteryApi>(`/admin/fleet/batteries/${encodeURIComponent(id)}`, 'PUT', data),
+  deleteBattery: (id: string) => send<unknown>(`/admin/fleet/batteries/${encodeURIComponent(id)}`, 'DELETE'),
   batteryModels: async () => apiList<BatteryModelApi>(await get<unknown>('/admin/fleet/battery-models'), 'Battery models'),
   createBatteryModel: (data: BatteryModelCreateApi) => send<BatteryModelApi>('/admin/fleet/battery-models', 'POST', data),
   updateBatteryModel: (id: number, data: Partial<BatteryModelCreateApi> & { is_active?: boolean }) => send<BatteryModelApi>(`/admin/fleet/battery-models/${id}`, 'PATCH', data),
