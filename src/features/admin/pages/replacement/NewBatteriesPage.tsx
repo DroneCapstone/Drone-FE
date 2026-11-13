@@ -188,7 +188,7 @@ export function NewBatteriesPage() {
             <ActionButton variant="secondary" onClick={() => openCreate(item.name)}>Add Quantity</ActionButton>
           </div></td>
         </tr>)}
-        {!shown.length && <tr><td colSpan={4} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
+          {!shown.length && <tr><td colSpan={4} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
         </tbody></table></div>
     </OperatorPanel>
     {expandedModel && <OperatorPanel className="flush-panel mt-4">
@@ -202,8 +202,8 @@ export function NewBatteriesPage() {
           <td>{battery.serial_number}</td>
           <td>{'—'}</td>
           <td><div className="flex items-center gap-2">
-            <button type="button" aria-label={`Edit ${battery.id}`} title="Edit serial" onClick={() => openEdit(battery)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-[var(--admin-text-secondary)] hover:border-[#FF6B00] hover:text-[#FF6B00]"><Pencil size={15}/></button>
-            <button type="button" aria-label={`Remove ${battery.id}`} title="Remove new battery" onClick={() => { setError(''); setNotice(''); setRemovalReason(''); setRemoving(battery); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-red-500 hover:border-red-400"><Trash2 size={15}/></button>
+            <button type="button" aria-label={`Edit ${battery.id}`} title="Edit serial" onClick={() => openEdit(battery)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-[var(--admin-text-secondary)] hover:border-[#FF6B00] hover:text-[#FF6B00]"><Pencil size={15} /></button>
+            <button type="button" aria-label={`Remove ${battery.id}`} title="Remove new battery" onClick={() => { setError(''); setNotice(''); setRemovalReason(''); setRemoving(battery); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-red-500 hover:border-red-400"><Trash2 size={15} /></button>
           </div></td>
         </tr>)}
         {expandedUnits.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
@@ -223,8 +223,8 @@ export function NewBatteriesPage() {
             </select>
           </label>
           <div className="new-batteries-quantity-fields">
-            <label><span>Current Quantity</span><input className="new-batteries-quantity-input is-readonly" type="text" readOnly tabIndex={-1} value={existingQuantity}/></label>
-            <label><span>Quantity to Add <span className="text-red-500">*</span></span><input className="new-batteries-quantity-input" type="number" required min={1} max={30} step={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}/></label>
+            <label><span>Current Quantity</span><input className="new-batteries-quantity-input is-readonly" type="text" readOnly tabIndex={-1} value={existingQuantity} /></label>
+            <label><span>Quantity to Add <span className="text-red-500">*</span></span><input className="new-batteries-quantity-input" type="number" required min={1} max={30} step={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
           </div>
           <div className="new-batteries-quantity-result"><span>Quantity after addition</span><strong>{validQuantity ? `${existingQuantity + quantity} units` : '—'}</strong></div>
           <label className="block text-sm"><span>Serial Numbers <span className="text-red-500">*</span></span>
@@ -233,11 +233,11 @@ export function NewBatteriesPage() {
           <p className="new-batteries-quantity-hint">{serialCount} serial(s) entered for {validQuantity ? quantity : '—'} new unit(s). Battery IDs are generated automatically. All serials must be unique across all registered batteries.</p>
           {!validSerials && <p role="alert" className="new-batteries-quantity-error">Enter exactly {quantity} unique serial number(s); none may already exist.</p>}
           <div className="new-batteries-quantity-cost">
-            <div className="new-batteries-quantity-cost-title"><span><ReceiptText size={17} aria-hidden="true"/>Acquisition Cost</span><small>Reference pricing from Backend catalog</small></div>
+            <div className="new-batteries-quantity-cost-title"><span><ReceiptText size={17} aria-hidden="true" />Acquisition Cost</span></div>
             <div className="new-batteries-quantity-cost-row"><span>Reference Unit Price</span><strong>{referencePrice != null ? formatVnd(referencePrice) : 'Not configured'}</strong></div>
             <div className="new-batteries-quantity-cost-row"><span>Quantity</span><strong>{validQuantity ? quantity : '—'}</strong></div>
             <div className="new-batteries-quantity-cost-row is-total"><span>Total Recorded Cost</span><strong>{validCost ? formatVnd((referencePrice ?? 0) * quantity) : '—'}</strong></div>
-            <p className="new-batteries-quantity-hint">Reference cost only. Backend registers the physical batteries in Admin warehouse; no bank payment is initiated.</p>
+            {/* <p className="new-batteries-quantity-hint">Reference cost only. Backend registers the physical batteries in Admin warehouse; no bank payment is initiated.</p> */}
           </div>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
@@ -248,8 +248,8 @@ export function NewBatteriesPage() {
     <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
       {editing && <DialogContent className="new-batteries-quantity-dialog"><form onSubmit={saveEdit}>
         <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle><p>Update the physical battery serial in Backend.</p></div>
-        <div className="new-batteries-quantity-body space-y-4"><label className="block text-sm"><span>Battery Model</span><input readOnly className={`${field} mt-2`} value={editing.battery_model ?? '—'}/></label>
-          <label className="block text-sm"><span>Serial Number *</span><input className={`${field} mt-2`} value={editSerial} onChange={(event) => setEditSerial(event.target.value)} placeholder="Required" required/></label>
+        <div className="new-batteries-quantity-body space-y-4"><label className="block text-sm"><span>Battery Model</span><input readOnly className={`${field} mt-2`} value={editing.battery_model ?? '—'} /></label>
+          <label className="block text-sm"><span>Serial Number *</span><input className={`${field} mt-2`} value={editSerial} onChange={(event) => setEditSerial(event.target.value)} placeholder="Required" required /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
         <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save Changes</ActionButton></div>
@@ -259,7 +259,7 @@ export function NewBatteriesPage() {
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open) { setRemoving(null); setRemovalReason(''); setError(''); } }}>
       {removing && <DialogContent className="new-batteries-quantity-dialog"><div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Remove {removing.id}?</DialogTitle><p>Only warehouse units are shown here. Backend DELETE is permanent; its API does not store the removal reason.</p></div>
         <div className="new-batteries-quantity-body"><label className="block text-sm" htmlFor="new-battery-removal-reason"><span>Reason for removal <span className="text-red-500">*</span></span>
-          <textarea id="new-battery-removal-reason" className={`${field} mt-2 !h-auto resize-none py-2`} rows={3} maxLength={500} required placeholder="Enter reason…" value={removalReason} onChange={(event) => setRemovalReason(event.target.value)}/></label>
+          <textarea id="new-battery-removal-reason" className={`${field} mt-2 !h-auto resize-none py-2`} rows={3} maxLength={500} required placeholder="Enter reason…" value={removalReason} onChange={(event) => setRemovalReason(event.target.value)} /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
         <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => { setRemoving(null); setRemovalReason(''); setError(''); }}>Cancel</ActionButton><ActionButton variant="danger" disabled={!removalReason.trim() || saving} onClick={() => void remove()}>Remove Battery</ActionButton></div>

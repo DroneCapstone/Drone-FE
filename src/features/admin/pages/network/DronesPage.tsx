@@ -57,7 +57,7 @@ export function DronesPage() {
     const cost = addDraft.acquisitionCost.trim() === '' ? null : Number(addDraft.acquisitionCost);
     const hubId = addDraft.hubId === '' ? null : Number(addDraft.hubId);
     if (!model || !serial || !addDraft.payloadKg.trim() || !Number.isFinite(payload) || payload <= 0 ||
-        !addDraft.maxSpeed.trim() || !Number.isFinite(speed) || speed <= 0) {
+      !addDraft.maxSpeed.trim() || !Number.isFinite(speed) || speed <= 0) {
       setAddError('Model, serial number, payload and max speed are required. Payload and speed must be positive.');
       return;
     }
@@ -114,7 +114,7 @@ export function DronesPage() {
   return <AdminPageShell title="Drones" description="Registered physical drones and their administrative availability."
     actions={<ActionButton icon="plus" onClick={openAddDrone}>Add Drone</ActionButton>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drones from Backend…</p>}
+    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drones...</p>}
     {notice && <p role="status" className="mb-4 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Total drones" value={summary?.total_drones ?? drones.length} note="Registered drones" icon={Plane} />

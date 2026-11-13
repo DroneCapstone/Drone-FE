@@ -124,7 +124,7 @@ export function HubsPage() {
       return;
     }
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
-        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
       setCreateError('Latitude must be between -90 and 90; longitude must be between -180 and 180.');
       return;
     }
@@ -185,7 +185,7 @@ export function HubsPage() {
 
       {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
       {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs from Backend…</p>}
+      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs…</p>}
       <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">
