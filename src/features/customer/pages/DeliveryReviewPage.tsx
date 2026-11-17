@@ -211,11 +211,7 @@ export function DeliveryReviewPage() {
 
           </h1>
 
-          <p className="mt-2 max-w-[560px] text-[13px] leading-5 text-white/[0.48] sm:mt-3 sm:text-[15px] sm:leading-6 sm:text-white/[0.58]">
-
-            Confirm the route, contacts, package, schedule and final amount before payment.
-
-          </p>
+         
 
         </header>
 
