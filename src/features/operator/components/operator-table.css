@@ -134,12 +134,47 @@
   font-weight: 400;
 }
 
-.operator-ui-table .order-package-cell .package-received-text {
-  color: var(--green);
+/* Keep the receipt beside its physical handover point, not inside Package or
+   Delivery Time. The shortened label stays legible without another column. */
+.operator-ui-table.order-table .order-route-cell > .order-dropoff-received {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
-.operator-ui-table .order-package-cell .package-awaiting-text {
+.operator-ui-table.order-table .order-delivery-time-cell > strong {
+  font-size: 13px;
+}
+
+.operator-ui-table.order-table .order-delivery-time-cell > small {
   color: var(--muted);
+  font-size: 12px;
+}
+
+/* Only the overdue text is highlighted. The entire row keeps normal hover,
+   background and click effects; no special urgency row styling is applied. */
+
+/* Pin the action at the right edge of the scrollable table, including on narrow
+   screens. Scope to Orders so other Operator tables are unaffected. */
+.operator-ui-table.order-table thead .order-action-heading,
+.operator-ui-table.order-table tbody .order-action-cell {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+  box-shadow: -10px 0 14px -15px rgba(0, 0, 0, .35);
+}
+
+.operator-ui-table.order-table thead .order-action-heading { z-index: 3; }
+.operator-ui-table.order-table tbody .order-action-cell { z-index: 2; }
+.operator-ui-table.order-table tbody tr:hover .order-action-cell {
+  background: var(--surface-2);
+}
+.operator-ui-table.order-table .order-action-cell .row-action {
+  white-space: nowrap;
 }
 
 .operator-ui-table .order-planning-cell .operator-order-priority {
