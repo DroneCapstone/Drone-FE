@@ -10,15 +10,11 @@ import {
   DropdownMenuTrigger,
 } from "../../ui/DropdownMenu";
 import { Icon } from "../../ui/Icon";
-import { CommandSearch } from "../CommandSearch/CommandSearch";
 
 interface OperatorHeaderProps {
   isDark: boolean;
-  searchOpen: boolean;
   onToggleTheme: () => void;
   onOpenMobile: () => void;
-  onOpenSearch: () => void;
-  onCloseSearch: () => void;
 }
 
 function getInitials(name?: string) {
@@ -34,11 +30,8 @@ function getInitials(name?: string) {
 
 export function OperatorHeader({
   isDark,
-  searchOpen,
   onToggleTheme,
   onOpenMobile,
-  onOpenSearch,
-  onCloseSearch,
 }: OperatorHeaderProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -58,12 +51,6 @@ export function OperatorHeader({
       >
         <Icon name="menu" />
       </button>
-
-      <CommandSearch
-        open={searchOpen}
-        onOpen={onOpenSearch}
-        onClose={onCloseSearch}
-      />
 
       <div className="topbar-actions">
         <button

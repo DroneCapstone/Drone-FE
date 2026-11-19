@@ -1,24 +1,22 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Outlet, useLocation } from "react-router-dom";
 import { OperatorHeader } from "../components/common/Header/OperatorHeader";
 import { OperatorSidebar } from "../components/common/Sidebar/OperatorSidebar";
 import { useOperatorTheme } from "../hooks/useOperatorTheme";
 import { OperatorQueryProvider } from "../features/operator/query/OperatorQueryProvider";
+import "../features/operator/styles/operator-shell.css";
 
 export function OperatorLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const { isDark, toggleTheme } = useOperatorTheme();
   const { pathname } = useLocation();
   const reduceMotion = useReducedMotion();
-  const openSearch = useCallback(() => setSearchOpen(true), []);
-  const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   return (
     <OperatorQueryProvider>
-      <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+      <div className={`app-shell operator-app ${collapsed ? "sidebar-collapsed" : ""}`}>
         <OperatorSidebar
           collapsed={collapsed}
           mobileOpen={mobileOpen}
@@ -28,11 +26,8 @@ export function OperatorLayout() {
         <div className="main-column min-w-0 overflow-x-hidden">
           <OperatorHeader
             isDark={isDark}
-            searchOpen={searchOpen}
             onToggleTheme={toggleTheme}
             onOpenMobile={() => setMobileOpen(true)}
-            onOpenSearch={openSearch}
-            onCloseSearch={closeSearch}
           />
           <main className="page-content min-w-0 overflow-x-hidden">
             <AnimatePresence mode="wait" initial={false}>
