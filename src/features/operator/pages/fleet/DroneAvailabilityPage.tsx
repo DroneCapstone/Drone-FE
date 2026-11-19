@@ -1,3 +1,4 @@
+import { formatHubName } from '../../utils/displayEnglish';
 import { useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
@@ -127,7 +128,7 @@ export function DroneAvailabilityPage() {
               { value: ALL_HUBS, label: ALL_HUBS },
               ...hubs.map((hub) => ({
                 value: hub.id,
-                label: hub.name,
+                label: formatHubName(hub.name),
               })),
             ]}
             onChange={handleHubChange}
@@ -150,7 +151,7 @@ export function DroneAvailabilityPage() {
 
           <span className="toolbar-spacer" />
           <small>
-            {fleetFetching ? 'Refreshing…' : `${selectedHub ? `${selectedHub.name} · ` : ''}${filtered.length} drones`}
+            {fleetFetching ? 'Refreshing…' : `${selectedHub ? `${formatHubName(selectedHub.name)} · ` : ''}${filtered.length} drones`}
           </small>
         </div>
 

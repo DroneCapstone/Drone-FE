@@ -1,3 +1,4 @@
+import { formatHubName, formatBackendLabel } from '../../utils/displayEnglish';
 import { useNavigate, useParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -16,7 +17,7 @@ import { formatMissionTime } from '../../utils/missionTiming';
 import { OrderPageShell } from './OrderPageShell';
 
 function hubName(hubId: string, apiName?: string) {
-  return apiName || hubId || 'Hub data unavailable';
+  return formatHubName(apiName) || hubId || 'Hub data unavailable';
 }
 
 function orderTone(status: string): Tone {
@@ -86,7 +87,7 @@ export function OrderDetailPage() {
               <div>
                 <StatusBadge tone={orderTone(order.status)}>{order.status}</StatusBadge>
                 <h2>{order.id}</h2>
-                <p>{order.customerName} · {order.packageLabel} · {order.deliveryMode}</p>
+                <p>{order.customerName} · {formatBackendLabel(order.packageLabel)} · {order.deliveryMode}</p>
               </div>
               <div className="mission-hero-actions">
                 {deliveryMission && <ActionButton onClick={() => navigate(`/operator/missions/${deliveryMission.id}`)}>View delivery mission</ActionButton>}
@@ -108,8 +109,8 @@ export function OrderDetailPage() {
                 <dt>Origin package</dt>
                 <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
               </div>
-              <div><dt>Package</dt><dd>{order.packageLabel}</dd></div>
-              <div><dt>Package type</dt><dd>{order.packageType}</dd></div>
+              <div><dt>Package</dt><dd>{formatBackendLabel(order.packageLabel)}</dd></div>
+              <div><dt>Package type</dt><dd>{formatBackendLabel(order.packageType)}</dd></div>
               <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div><dt>Estimated delivery</dt><dd>{formatDeliveryWindow(order)}</dd></div>
               <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>

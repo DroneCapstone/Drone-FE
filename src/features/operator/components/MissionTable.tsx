@@ -1,3 +1,4 @@
+import { formatRouteName } from '../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -53,7 +54,7 @@ export function MissionTable({
                 </button>
               </TableCell>
               <TableCell><span className="drone-id">{mission.drone}</span></TableCell>
-              <TableCell>{mission.route}</TableCell>
+              <TableCell>{formatRouteName(mission.route)}</TableCell>
               <TableCell>
                 <StatusBadge tone={mission.tone}>{mission.status}</StatusBadge>
                 {mission.scheduleState === 'Delayed' && <small className="table-substatus">Delayed</small>}

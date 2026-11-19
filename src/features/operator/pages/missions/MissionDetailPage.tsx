@@ -1,3 +1,4 @@
+import { formatHubName, formatRouteName } from '../../utils/displayEnglish';
 import { Fragment } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { Clock, Info } from 'lucide-react';
@@ -58,12 +59,12 @@ export function MissionDetailPage() {
   const relayHubs = (mission.relayHubIds ?? [])
     .map((hubId) => hubs.find((hub) => hub.id === hubId))
     .filter((hub): hub is NonNullable<typeof hub> => Boolean(hub));
-  const hubName = (hubId: string) => hubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+  const hubName = (hubId: string) => formatHubName(hubs.find((hub) => hub.id === hubId)?.name) || hubId;
   const currentIndex = progressOrder.indexOf(mission.status);
   const isTerminalException = mission.status === 'Failed';
   const hasFlightHistory = isFlightHistoryRecord(mission);
-  const originName = originHub?.name || mission.originHubId || '—';
-  const destinationName = destinationHub?.name || mission.destinationHubId || '—';
+  const originName = formatHubName(originHub?.name) || mission.originHubId || '—';
+  const destinationName = formatHubName(destinationHub?.name) || mission.destinationHubId || '—';
   const originBatteryId = mission.legs?.[0]?.batteryId || mission.batteryId || '—';
   const orderCodeStart = mission.orderId ? mission.name.indexOf(mission.orderId) : -1;
 
@@ -181,13 +182,13 @@ export function MissionDetailPage() {
                       {status}
                       <small>
                         {status === 'Scheduled'
-                          ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                          ? `Plan ${new Date(mission.plannedStartAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                           : status === 'Flying'
                             ? mission.actualStartedAt
-                              ? `Started ${new Date(mission.actualStartedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                              ? `Started ${new Date(mission.actualStartedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                               : 'Awaiting start'
                             : mission.actualCompletedAt
-                              ? `Done ${new Date(mission.actualCompletedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                              ? `Done ${new Date(mission.actualCompletedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                               : `ETA ${mission.eta}`}
                       </small>
                     </span>
@@ -223,7 +224,7 @@ export function MissionDetailPage() {
                     <span className="mission-detail-location-mark relay"><Icon name="pin" size={19} /></span>
                     <span className="mission-detail-route-label">
                       <small>Relay Hub</small>
-                      <strong>{hub.name}</strong>
+                      <strong>{formatHubName(hub.name)}</strong>
                       {/* <small>Technical stop</small> */}
                     </span>
                   </div>
@@ -265,7 +266,7 @@ export function MissionDetailPage() {
                   <div key={checkpoint.id}>
                     <span>
                       <small>Hub checkpoint {checkpoint.sequence}</small>
-                      <strong>{checkpoint.hubName || checkpoint.hubId}</strong>
+                      <strong>{formatHubName(checkpoint.hubName) || checkpoint.hubId}</strong>
                     </span>
                     <StatusBadge tone="success">Reached</StatusBadge>
                   </div>
@@ -297,9 +298,9 @@ export function MissionDetailPage() {
               ) : null}
               <div><dt>Drop-off Point</dt><dd>{originName}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
-              {relayHubs.length > 0 && <div><dt>Relay Hub</dt><dd>{relayHubs.map((hub) => hub.name).join(' → ')}</dd></div>}
+              {relayHubs.length > 0 && <div><dt>Relay Hub</dt><dd>{relayHubs.map((hub) => formatHubName(hub.name)).join(' → ')}</dd></div>}
               <div><dt>Pick-up Point</dt><dd>{destinationName}</dd></div>
-              <div><dt>Route</dt><dd>{mission.routeId || '—'}{mission.route ? ` · ${mission.route}` : ''}</dd></div>
+              <div><dt>Route</dt><dd>{mission.routeId || '—'}{mission.route ? ` · ${formatRouteName(mission.route)}` : ''}</dd></div>
             </dl>
           </OperatorPanel>
 

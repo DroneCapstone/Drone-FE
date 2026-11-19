@@ -1,3 +1,4 @@
+import { formatRouteName, formatBackendLabel } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
@@ -128,13 +129,13 @@ export function IncidentsPage() {
     () =>
       (incidentsData ?? []).map((incident) => ({
         id: incident.id,
-        title: incident.title,
+        title: formatBackendLabel(incident.title),
         aircraft: incident.droneId || '—',
         missionId: incident.missionId || '—',
         severity: incident.severity,
         tone: incidentTone(incident.severity),
         age: formatIncidentAge(incident.createdAt ?? incident.detectedAt),
-        state: incident.status || 'Open',
+        state: formatBackendLabel(incident.status) || 'Open',
       })),
     [incidentsData],
   );
@@ -290,7 +291,7 @@ export function IncidentsPage() {
         <div className="incident-create-stack">
           <OperatorPanel className="incident-source-panel">
             <div className="incident-source-grid">
-              <div><small>Drone</small><strong>{selectedCandidate.id}</strong><span>{selectedCandidate.route}</span></div>
+              <div><small>Drone</small><strong>{selectedCandidate.id}</strong><span>{formatRouteName(selectedCandidate.route)}</span></div>
               <div><small>Mission</small><strong>{selectedCandidate.missionId}</strong><span>Delivery {selectedCandidate.orderId}</span></div>
               <div><small>Detected anomaly</small><strong>{selectedCandidate.anomaly ?? 'Telemetry anomaly'}</strong><span>{selectedCandidate.anomalyDuration ?? '—'}</span></div>
               <div><small>AI assessment</small><strong>{selectedSeverity}</strong><span>Technician inspection recommended</span></div>
@@ -369,7 +370,7 @@ export function IncidentsPage() {
                 <div className="incident-detail-title">
                   <div>
                     <StatusBadge tone={incidentTone(detailSeverity)}>{detailSeverity}</StatusBadge>
-                    <h2>{detailTitle}</h2>
+                    <h2>{formatBackendLabel(detailTitle)}</h2>
                     <p>{selectedIncidentId} · {detailDroneId} · {formatIncidentAge(selectedIncident?.createdAt ?? selectedIncident?.detectedAt)}</p>
                   </div>
                   <ActionButton
@@ -389,12 +390,12 @@ export function IncidentsPage() {
                     <div>
                       <strong>Anomaly detected</strong>
                       <small>{selectedIncident?.detectedAt ?? 'Event recorded'}</small>
-                      <p>{detailDescription}</p>
+                      <p>{formatBackendLabel(detailDescription)}</p>
                     </div>
                   </span>
                   <span className="current">
                     <i />
-                    <div><strong>{detailStatus}</strong><small>Current incident status</small></div>
+                    <div><strong>{formatBackendLabel(detailStatus)}</strong><small>Current incident status</small></div>
                   </span>
                 </div>
               </>
@@ -406,7 +407,7 @@ export function IncidentsPage() {
               <div><dt>Flight</dt><dd>{detailMissionId}</dd></div>
               <div><dt>Drone</dt><dd>{detailDroneId}</dd></div>
               <div><dt>Severity</dt><dd>{detailSeverity}</dd></div>
-              <div><dt>Status</dt><dd>{detailStatus}</dd></div>
+              <div><dt>Status</dt><dd>{formatBackendLabel(detailStatus)}</dd></div>
             </dl>
           </OperatorPanel>
         </div>

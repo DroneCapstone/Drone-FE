@@ -1,3 +1,5 @@
+import { formatRouteName } from '../../utils/displayEnglish';
+import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -336,10 +338,10 @@ export function CreateMissionPage() {
     (a, b) => Number(b.recommended === true) - Number(a.recommended === true),
   );
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
-  const originHubLabel = originHub?.name || order.originHubName || eligibleDronesData?.hub.name || order.originHubId || 'Origin hub';
-  const destinationHubLabel = destinationHub?.name || order.destinationHubName || order.destinationHubId || 'Destination hub';
+  const originHubLabel = formatHubName(originHub?.name || order.originHubName || eligibleDronesData?.hub.name) || order.originHubId || 'Origin hub';
+  const destinationHubLabel = formatHubName(destinationHub?.name || order.destinationHubName) || order.destinationHubId || 'Destination hub';
   const hubName = (hubId: string) =>
-    networkHubs.find((hub) => hub.id === hubId)?.name ?? hubId;
+    formatHubName(networkHubs.find((hub) => hub.id === hubId)?.name) || hubId;
   const selectedRouteEnergy = selectedRoute
     ? getEnergyFeasibility(selectedRoute, DEFAULT_BATTERY_RESERVE_PCT)
     : undefined;
@@ -902,7 +904,7 @@ export function CreateMissionPage() {
                 <div className="mission-review-info-row mission-review-info-row--full">
                   <dl className="mission-review-field">
                     <dt>Route</dt>
-                    <dd>{selectedRoute.id} · {selectedRoute.name}</dd>
+                    <dd>{selectedRoute.id} · {formatRouteName(selectedRoute.name)}</dd>
                   </dl>
                 </div>
 
@@ -911,7 +913,7 @@ export function CreateMissionPage() {
                   <div className="mission-review-info-row mission-review-info-row--full">
                     <dl className="mission-review-field">
                       <dt>Dispatch flight</dt>
-                      <dd>{selectedDrone.hubName || `Hub ${selectedDrone.hubId}`} → {originHubLabel} · 0 kg (no package)</dd>
+                      <dd>{formatHubName(selectedDrone.hubName || `Hub ${selectedDrone.hubId}`)} → {originHubLabel} · 0 kg (no package)</dd>
                     </dl>
                   </div>
                 )}

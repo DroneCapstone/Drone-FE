@@ -1,3 +1,4 @@
+import { formatHubName, formatBackendLabel } from '../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { useNavigate } from 'react-router-dom';
 import './order-priority.css';
@@ -17,7 +18,7 @@ function planningTone(state: PlanningState): Tone {
 }
 
 function hubName(hubId: string, apiName?: string) {
-  if (apiName) return apiName;
+  if (apiName) return formatHubName(apiName);
   if (!hubId) return 'Hub data unavailable';
   return hubId;
 }
@@ -168,7 +169,7 @@ export function OrderTable({
                   )}
                 </TableCell>
                 <TableCell className="order-package-cell">
-                  {order.packageLabel}
+                  {formatBackendLabel(order.packageLabel)}
                   <small>{order.payloadKg} kg</small>
                 </TableCell>
                 <TableCell className="order-delivery-time-cell">

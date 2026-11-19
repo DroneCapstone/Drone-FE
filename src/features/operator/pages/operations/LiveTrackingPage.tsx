@@ -1,3 +1,5 @@
+import { formatRouteName, formatBackendLabel } from '../../utils/displayEnglish';
+import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useQueries } from '@tanstack/react-query';
@@ -218,7 +220,7 @@ export function LiveTrackingPage() {
     });
     const id = selectedDrone?.missionId;
     if (id) (checkpointQuery.data ?? []).forEach(c => {
-      if (c.reachedAt) events.push({ key: `${id}:checkpoint:${c.id}`, time: c.reachedAt, missionId: id, droneId: selectedDrone.id, level: 'Normal', message: `Checkpoint ${c.sequence} passed · ${c.hubName}` });
+      if (c.reachedAt) events.push({ key: `${id}:checkpoint:${c.id}`, time: c.reachedAt, missionId: id, droneId: selectedDrone.id, level: 'Normal', message: `Checkpoint ${c.sequence} passed · ${formatHubName(c.hubName)}` });
     });
     return events.sort((a, b) => Date.parse(b.time) - Date.parse(a.time)).slice(0, 70);
   }, [liveDrone, histories, checkpointQuery.data, selectedDrone]);
@@ -306,7 +308,7 @@ export function LiveTrackingPage() {
         <div ref={detailRef}>
           {selectedDrone ? <OperatorPanel className="live-selection-panel">
             <div className="live-selection-head">
-              <div className="live-selection-id"><span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span><div><div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div><small>{selectedDrone.orderId ? `Delivery ${selectedDrone.orderId} · ` : ''}{selectedDrone.route}</small></div></div>
+              <div className="live-selection-id"><span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span><div><div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div><small>{selectedDrone.orderId ? `Delivery ${selectedDrone.orderId} · ` : ''}{formatRouteName(selectedDrone.route)}</small></div></div>
               <div className="live-selection-tools">
                 <div className="live-selection-metrics">
                   <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
@@ -384,14 +386,14 @@ export function LiveTrackingPage() {
                     <StatusBadge tone={healthTone[aircraft.health]}>{aircraft.health}</StatusBadge>
                   </span>
                   <small>{aircraft.orderId ? `Delivery ${aircraft.orderId}` : `Mission ${aircraft.missionId || '—'}`}</small>
-                  <small>{aircraft.route}</small>
+                  <small>{formatRouteName(aircraft.route)}</small>
                   <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
                     <span className="live-aircraft-flight-dot" aria-hidden="true" />
                     <span>Flight: {flightStatus.label}</span>
                   </span>
                   {flightStatus.detail && <small title={flightStatus.detail}>{flightStatus.detail}</small>}
                   <em className="live-aircraft-state">
-                    {aircraft.anomaly ? `${aircraft.anomaly}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
+                    {aircraft.anomaly ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
                   </em>
                 </span>
                 <span className="live-aircraft-card-metrics">
@@ -417,7 +419,7 @@ export function LiveTrackingPage() {
                   <StatusBadge tone="success">Completed</StatusBadge>
                 </span>
                 <small>Mission {mission.id}</small>
-                <small>{mission.route || drone.route}</small>
+                <small>{formatRouteName(mission.route || drone.route)}</small>
                 <span className="live-aircraft-flight-status status-success">
                   <span className="live-aircraft-flight-dot" aria-hidden="true" />
                   <span>Flight: Completed</span>

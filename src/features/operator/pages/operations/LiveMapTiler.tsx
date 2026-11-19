@@ -1,3 +1,4 @@
+import { formatHubName } from '../../utils/displayEnglish';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 // Vite bundles the MapLibre v6 worker as a self-contained asset.
@@ -365,8 +366,8 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       const element = marker.getElement();
       element.style.display = showHubs ? '' : 'none';
       const label = element.querySelector('.live-geo-hub-label');
-      if (label) label.textContent = hub.code || hub.name;
-      marker.getPopup()?.setDOMContent(createPopup(hub.name, [
+      if (label) label.textContent = hub.code || formatHubName(hub.name);
+      marker.getPopup()?.setDOMContent(createPopup(formatHubName(hub.name), [
         ['Hub', hub.code || hub.id],
         ['Position', `${point[1].toFixed(5)}, ${point[0].toFixed(5)}`],
       ]));
