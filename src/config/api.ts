@@ -1,5 +1,5 @@
 export const DEFAULT_API_BASE_URL =
-  "https://collectibles-anderson-fits-portfolio.trycloudflare.com/api/v1";
+  "https://droneoptai.id.vn/api/v1";
 
 function normalizeApiBaseUrl(value: string) {
   const url = value.trim().replace(/\/+$/, "");
