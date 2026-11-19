@@ -530,7 +530,9 @@ export const updateDroneStatusApi = (
     },
   );
 
-/** Exact Backend ID is used for per-drone flight history. */
+/** Per-drone flight history endpoint provided by Backend.
+ * Keep the drone's full identifier (for example DRN-0009) unchanged.
+ */
 export const getDroneFlightHistoryApi = (droneId: string | number) =>
   technicianApiRequest(
     `/technician/fleet/drones/${encodeURIComponent(String(droneId).trim())}/flight-history`,

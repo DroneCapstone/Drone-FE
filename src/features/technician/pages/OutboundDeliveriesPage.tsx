@@ -416,7 +416,7 @@ export function OutboundDeliveriesPage() {
                       {display(delivery.packageName)}
                     </p>
                     <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]">
-                      {[delivery.packageType, delivery.weightProvided ? `${delivery.weightKg} kg` : undefined].filter(Boolean).join(" · ") || "—"}
+                      {delivery.weightProvided ? `${delivery.weightKg} kg` : "—"}
                     </p>
                   </div>
                   <p className="truncate text-[12px] text-[var(--tech-text-secondary)]" title={delivery.destination}>
@@ -612,7 +612,7 @@ export function OutboundDeliveriesPage() {
                 <h3 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.07em] text-[var(--tech-text)]">Package &amp; hub</h3>
                 <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
                   <DetailField label="Package label" value={display(selectedDelivery.packageName)} />
-                  <DetailField label="Package type / weight" value={[selectedDelivery.packageType, selectedDelivery.weightProvided ? `${selectedDelivery.weightKg} kg` : undefined].filter(Boolean).join(" · ") || "—"} />
+                  <DetailField label="Package weight" value={selectedDelivery.weightProvided ? `${selectedDelivery.weightKg} kg` : "—"} />
                   <DetailField label="Origin hub" value={display(selectedDelivery.hub)} />
                   <DetailField label="Destination hub" value={display(selectedDelivery.destination)} />
                   <DetailField label="Receiver phone" value={maskedPhone(selectedDelivery.receiverPhone)} />
@@ -654,7 +654,7 @@ export function OutboundDeliveriesPage() {
             <div className="flex items-start justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
               <div>
                 <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Outbound history</h2>
-                <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Flight missions from {hubLabel}.</p>
+              
               </div>
               <button type="button" aria-label="Close outbound history" onClick={() => setHistoryOpen(false)} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
             </div>
@@ -665,12 +665,12 @@ export function OutboundDeliveriesPage() {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1500px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_150px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
-                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Origin Hub</Header><Header>Destination Hub</Header><Header>Customer Drop-off</Header><Header>Drone Departed</Header><Header>Status</Header>
+              <div className="min-w-[1400px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
+                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Origin Hub</Header><Header>Destination Hub</Header><Header>Customer Drop-off</Header><Header>Drone Departed</Header>
                 </div>
                 {history.length ? history.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_150px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
+                  <div key={item.id} className="grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
                     <div className="min-w-0">
                       <p className="break-all font-semibold">{display(item.orderId)}</p>
                       {item.receiverName && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.receiverName}>Receiver: {item.receiverName}</p>}
@@ -682,13 +682,11 @@ export function OutboundDeliveriesPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-orange-500" title={item.batteryId}>{display(item.batteryId)}</p>
-                      {item.batteryCode && item.batteryCode !== item.batteryId && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.batteryCode}>{item.batteryCode}</p>}
                     </div>
                     <span className="truncate" title={item.hub}>{display(item.hub)}</span>
                     <span className="truncate" title={item.destination}>{display(item.destination)}</span>
                     <span>{formatDate(item.customerDropoffAt)}</span>
                     <span>{formatDate(item.departedAt)}</span>
-                    <span className="font-medium text-[var(--tech-text-secondary)]">{display(item.result)}</span>
                   </div>
                 )) : (
                   <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">

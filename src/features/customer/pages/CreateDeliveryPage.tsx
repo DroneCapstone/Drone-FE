@@ -1026,11 +1026,7 @@ export function CreateDeliveryPage() {
 
           </h1>
 
-          <p className="mt-2 max-w-[680px] text-[13px] leading-5 text-white/[0.48] sm:hidden">
-
-            Enter package details, choose your route and select a hub-to-hub delivery service.
-
-          </p>
+          
 
         </header>
 
@@ -1720,7 +1716,7 @@ function ContactStep({
 
         title="Sender and recipient"
 
-        description="Confirm the sender information and enter the details of the person receiving the package."
+        description=""
 
       />
 
@@ -1850,7 +1846,7 @@ function PackageStep({
 
         title="Package information"
 
-        description="Provide the package category, weight and physical size so the system can validate aircraft capacity."
+        description=""
 
       />
 
@@ -2385,7 +2381,7 @@ function RouteStep({
 
         title="Delivery route"
 
-        description="Choose the origin and destination hubs loaded from the DroneOptAI backend."
+        description=""
 
       />
 
