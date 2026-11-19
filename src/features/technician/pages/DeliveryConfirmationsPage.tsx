@@ -128,7 +128,7 @@ export function DeliveryConfirmationsPage() {
             <div className="min-w-[1050px]">
               <div className="grid grid-cols-[minmax(160px,1.1fr)_minmax(155px,1fr)_minmax(150px,1fr)_minmax(145px,1fr)_minmax(180px,1.2fr)_minmax(180px,1.2fr)_minmax(175px,1fr)] items-center gap-3 border-b border-[var(--tech-border)] px-5 py-3">
                 <Header>Order</Header>
-                <Header>Mission / Drone</Header>
+                <Header>Mission</Header>
                 <Header>Destination hub</Header>
                 <Header>Arrived at hub</Header>
                 <Header>Pickup countdown</Header>
@@ -152,7 +152,6 @@ export function DeliveryConfirmationsPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.missionCode || "—"}</p>
-                        <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.droneCode}>{delivery.droneCode || "—"}</p>
                       </div>
                       <span className="min-w-0 break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.destination}</span>
                       <span className="text-[12px] text-[var(--tech-text-secondary)]">{delivery.deliveredAt}</span>

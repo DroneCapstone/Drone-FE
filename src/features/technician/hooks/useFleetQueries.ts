@@ -23,27 +23,39 @@ import {
 } from "./queryKeys";
 
 export type DroneFlightHistoryRow = {
-  id: string;
+  missionId: string;
   orderId: string;
-  route: string;
-  departedAt: string;
-  arrivedAt: string;
+  destinationHub: string;
+  distanceKm?: number;
+  flightTimeMin?: number;
+  batteryStartPct?: number;
+  batteryEndPct?: number;
   status: string;
+  completedAt?: string;
 };
+
+// Missing numeric fields are unknown, not zero. Do not invent flight metrics.
+function optionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 
 function mapFlightHistory(value: unknown): DroneFlightHistoryRow | null {
   if (!isRecord(value)) return null;
-  const id = pickString(value, ["mission_id", "mission_code", "flight_id", "id"], "");
-  if (!id) return null;
-  const origin = pickString(value, ["origin_hub_name", "origin_hub_id", "from_hub_id"], "");
-  const destination = pickString(value, ["destination_hub_name", "destination_hub_id", "to_hub_id"], "");
+  const missionId = pickString(value, ["mission_id"], "").trim();
+  if (!missionId) return null;
+
   return {
-    id,
+    missionId,
     orderId: pickString(value, ["order_id"], "—"),
-    route: origin || destination ? `${origin || "—"} → ${destination || "—"}` : "—",
-    departedAt: pickString(value, ["departed_at", "departure_time", "started_at", "start_time"], ""),
-    arrivedAt: pickString(value, ["arrived_at", "arrival_confirmed_at", "end_time", "completed_at"], ""),
-    status: pickString(value, ["mission_state", "status", "flight_status"], "—"),
+    destinationHub: pickString(value, ["destination_hub"], "—"),
+    distanceKm: optionalNumber(value.distance_km),
+    flightTimeMin: optionalNumber(value.flight_time_min),
+    batteryStartPct: optionalNumber(value.battery_start_pct),
+    batteryEndPct: optionalNumber(value.battery_end_pct),
+    status: pickString(value, ["status"], "—"),
+    completedAt: pickString(value, ["completed_at"], "") || undefined,
   };
 }
 

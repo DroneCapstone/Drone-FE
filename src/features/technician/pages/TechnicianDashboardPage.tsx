@@ -52,14 +52,14 @@ function OverviewPanel({
 }: OverviewPanelProps) {
   return (
     <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-      <div className="flex items-start justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400">
+      <div className="flex min-h-[84px] items-center justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-400">
             <Icon size={18} strokeWidth={1.7} />
           </span>
           <div>
-            <h2 className="text-[16px] font-semibold text-[var(--tech-text)]">{title}</h2>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">{description}</p>
+            <h2 className="text-[16px] font-semibold leading-5 text-[var(--tech-text)]">{title}</h2>
+            {description && <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">{description}</p>}
           </div>
         </div>
         <Link
@@ -306,7 +306,7 @@ export function TechnicianDashboardPage() {
             </div>
             <div className="mx-2 mb-2 h-2 overflow-hidden rounded-full bg-zinc-700/50">
               {fleetQuery.data !== undefined && (
-                <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${availablePercent}%` }} />
+                <div className="h-full rounded-full bg-orange-500 transition-[width]" style={{ width: `${availablePercent}%` }} />
               )}
             </div>
             <OverviewRow label="Total drones" value={countWhenLoaded(fleetQuery.data, fleet.length)} to="/technician/fleet" />

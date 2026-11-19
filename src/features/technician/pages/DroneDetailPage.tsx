@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/shadcn/ui/card";
 import { type FleetDrone } from "../utils/fleetStorage";
 import {
   useDroneDetailQuery,
+  useDroneFlightHistoryQuery,
   useDroneMaintenanceHistoryQuery,
   useFleetQuery,
 } from "../hooks/useFleetQueries";
@@ -117,6 +118,8 @@ export function DroneDetailPage() {
 
   const droneQuery = useDroneDetailQuery(droneId);
   const fleetQuery = useFleetQuery();
+  // Load the full history only when Technician opens the Flight history tab.
+  const flightHistoryQuery = useDroneFlightHistoryQuery(droneId, tab === "flight");
   const historyQuery = useDroneMaintenanceHistoryQuery(droneId);
   const recordsQuery = useMaintenanceRecordsQuery(droneId);
   const scheduleQuery = useDroneMaintenanceSchedulesQuery(droneId);
@@ -137,6 +140,15 @@ export function DroneDetailPage() {
     }
     return [...found.values()];
   }, [historyQuery.data, recordsQuery.data, droneId]);
+
+  const flightRows = useMemo(() =>
+    [...(flightHistoryQuery.data ?? [])].sort((a, b) => {
+      const aTime = a.completedAt ? Date.parse(a.completedAt) : NaN;
+      const bTime = b.completedAt ? Date.parse(b.completedAt) : NaN;
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    }),
+    [flightHistoryQuery.data],
+  );
 
   const backendSchedule = useMemo(() => parseSchedule(scheduleQuery.data), [scheduleQuery.data]);
   const lastMaintenance = backendSchedule.last ??
@@ -247,12 +259,79 @@ export function DroneDetailPage() {
       </div>}
 
       {tab === "flight" && <Card className={PANEL}><CardContent className="p-6">
-        <h2 className={`text-[18px] font-semibold ${TEXT}`}>Flight history</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
-          <InfoItem label="Last flight time" value={formatDate(parseApiDate(drone.lastFlightAt))} />
-          <InfoItem label="Last flight / mission reference" value={display(drone.lastFlight)} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className={`text-[18px] font-semibold ${TEXT}`}>Flight history</h2>
+          {flightHistoryQuery.isSuccess && (
+            <span className={`text-[12px] ${MUTED}`}>
+              {flightRows.length} mission{flightRows.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
-       
+
+        {flightHistoryQuery.isError && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-500/30 px-4 py-3">
+            <p className="text-[12px] text-red-400">
+              Could not load flight history: {flightHistoryQuery.error instanceof Error
+                ? flightHistoryQuery.error.message
+                : "Backend request failed."}
+            </p>
+            <Button type="button" onClick={() => void flightHistoryQuery.refetch()}
+              className="h-8 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {flightHistoryQuery.isPending ? (
+          <p className={`py-10 text-center text-[13px] ${MUTED}`}>
+            Loading flight history from Backend...
+          </p>
+        ) : flightRows.length === 0 ? (
+          !flightHistoryQuery.isError && (
+            <p className={`mt-5 rounded-md border border-dashed border-[var(--tech-border)] px-4 py-10 text-center text-[13px] ${MUTED}`}>
+              No flight missions returned for this drone.
+            </p>
+          )
+        ) : (
+          <div className="mt-5 overflow-x-auto rounded-lg border border-[var(--tech-border)]">
+            <table className="w-full min-w-[1080px] border-collapse text-left">
+              <thead className="bg-[var(--tech-surface-2)]">
+                <tr className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--tech-subtle)]">
+                  <th scope="col" className="px-4 py-3">Mission ID</th>
+                  <th scope="col" className="px-4 py-3">Order ID</th>
+                  <th scope="col" className="px-4 py-3">Destination hub</th>
+                  <th scope="col" className="px-4 py-3">Distance</th>
+                  <th scope="col" className="px-4 py-3">Flight time</th>
+                  <th scope="col" className="px-4 py-3">Battery (start → end)</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Completed at</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--tech-border)]">
+                {flightRows.map((flight, index) => (
+                  <tr key={`${flight.missionId}-${index}`} className="text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/[0.025]">
+                    <td className="whitespace-nowrap px-4 py-4 font-semibold text-[var(--tech-text)]">{flight.missionId}</td>
+                    <td className="whitespace-nowrap px-4 py-4">{display(flight.orderId)}</td>
+                    <td className="px-4 py-4">{display(flight.destinationHub)}</td>
+                    <td className="whitespace-nowrap px-4 py-4">{displayNumber(flight.distanceKm, " km")}</td>
+                    <td className="whitespace-nowrap px-4 py-4">{displayNumber(flight.flightTimeMin, " min")}</td>
+                    <td className="whitespace-nowrap px-4 py-4">
+                      {displayNumber(flight.batteryStartPct, "%")} → {displayNumber(flight.batteryEndPct, "%")}
+                    </td>
+                    <td className={`whitespace-nowrap px-4 py-4 font-medium ${
+                      flight.status.toUpperCase() === "COMPLETED" ? "text-emerald-500"
+                        : /FAIL|INCIDENT|EMERGENCY|ABORT/.test(flight.status.toUpperCase()) ? "text-red-400"
+                          : SECONDARY
+                    }`}>{display(flight.status).replace(/_/g, " ")}</td>
+                    <td className="whitespace-nowrap px-4 py-4">
+                      {formatDate(parseApiDate(flight.completedAt))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent></Card>}
 
       {tab === "maintenance" && <div className="space-y-5">
