@@ -47,6 +47,18 @@ const fallbackPalette: DropdownPalette = {
   muted: "#5f6368",
 };
 
+// Technician defines --tech-* on its shell, while Operator (and other roles)
+// use the global --surface/--text tokens. Radix renders the menu in a portal,
+// so resolve these tokens on the trigger first and then pass their colors to it.
+const dropdownThemeStyle = {
+  "--dropdown-surface": "var(--tech-surface, var(--surface, #ffffff))",
+  "--dropdown-surface-2": "var(--tech-surface-2, var(--surface-2, #f8f9fa))",
+  "--dropdown-border": "var(--tech-border, var(--border, #e2e5e9))",
+  "--dropdown-text": "var(--tech-text, var(--text, #202124))",
+  "--dropdown-text-secondary": "var(--tech-text-secondary, var(--text, #3c4043))",
+  "--dropdown-muted": "var(--tech-muted, var(--muted, #5f6368))",
+} as CSSProperties;
+
 function readCssVariable(
   styles: CSSStyleDeclaration,
   variable: string,
@@ -82,32 +94,32 @@ export function DropdownSelect({
     setPalette({
       surface: readCssVariable(
         styles,
-        "--tech-surface",
+        "--dropdown-surface",
         fallbackPalette.surface,
       ),
       surface2: readCssVariable(
         styles,
-        "--tech-surface-2",
+        "--dropdown-surface-2",
         fallbackPalette.surface2,
       ),
       border: readCssVariable(
         styles,
-        "--tech-border",
+        "--dropdown-border",
         fallbackPalette.border,
       ),
       text: readCssVariable(
         styles,
-        "--tech-text",
+        "--dropdown-text",
         fallbackPalette.text,
       ),
       textSecondary: readCssVariable(
         styles,
-        "--tech-text-secondary",
+        "--dropdown-text-secondary",
         fallbackPalette.textSecondary,
       ),
       muted: readCssVariable(
         styles,
-        "--tech-muted",
+        "--dropdown-muted",
         fallbackPalette.muted,
       ),
     });
@@ -134,7 +146,7 @@ export function DropdownSelect({
   } as CSSProperties;
 
   return (
-    <span ref={scopeRef} className="contents">
+    <span ref={scopeRef} className="contents" style={dropdownThemeStyle}>
       <Select
         value={value}
         onValueChange={onChange}
@@ -149,9 +161,9 @@ export function DropdownSelect({
               w-auto
               shrink-0
               rounded-md
-              !border-[var(--tech-border)]
-              !bg-[var(--tech-surface-2)]
-              !text-[var(--tech-text)]
+              !border-[var(--dropdown-border)]
+              !bg-[var(--dropdown-surface-2)]
+              !text-[var(--dropdown-text)]
               shadow-none
               outline-none
               transition-[border-color,background-color]
@@ -160,7 +172,7 @@ export function DropdownSelect({
               focus:!border-orange-500
               focus:ring-0
               data-[state=open]:!border-orange-500
-              data-[state=open]:!bg-[var(--tech-surface-2)]
+              data-[state=open]:!bg-[var(--dropdown-surface-2)]
               [&>svg]:hidden
             `,
             className,
@@ -176,7 +188,7 @@ export function DropdownSelect({
                 shrink-0
                 items-center
                 justify-center
-                text-[var(--tech-muted)]
+                text-[var(--dropdown-muted)]
                 transition-transform
                 duration-200
                 ease-out
@@ -234,8 +246,8 @@ export function DropdownSelect({
                   outline-none
                   transition-colors
                   duration-150
-                  focus:!bg-[var(--dropdown-surface-2)]
-                  focus:!text-orange-500
+                  data-[highlighted]:!bg-[var(--dropdown-surface-2)]
+                  data-[highlighted]:!text-orange-500
                   data-[state=checked]:!bg-transparent
                   data-[state=checked]:!text-orange-500
                 "

@@ -10,6 +10,7 @@ import { useMissionHubsQuery, useMissionListQuery, useMissionMiniHubsQuery } fro
 import type { Mission } from '../../types/operator';
 import { canReplayFlight, isFlightHistoryRecord, recordedFlightEnd, recordedFlightStart } from '../../api/flightHistoryEligibility';
 import { fetchFlightTelemetry, hasReplayableTelemetry, type HistoricalTelemetry } from '../../api/flightHistoryApi';
+import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { RouteTabs } from '../../../../components/ui/RouteTabs';
 import { operationTabs } from '../../constants/operatorRoutes';
 import './flight-history.css';
@@ -142,8 +143,26 @@ export function FlightHistoryPage() {
         <label className="fh-filter fh-search"><span>Search</span><input aria-label="Search history" value={search} onChange={e => setFilter('q', e.target.value)} placeholder="Mission ID, drone or route..." /></label>
         <label className="fh-filter"><span>Date</span><input type="date" aria-label="Filter flights by date" value={from} onChange={e => setFilter('date', e.target.value)} /></label>
 
-        <label className="fh-filter"><span>Status</span><select value={status} onChange={e => setFilter('status', e.target.value)}><option value="">All statuses</option><option>Completed</option><option>Failed</option></select></label>
-        <label className="fh-filter"><span>Hub</span><select value={hub} onChange={e => setFilter('hub', e.target.value)}><option value="">All hubs</option>{Array.from(hubs, ([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <div className="fh-filter">
+          <span>Status</span>
+          <DropdownSelect
+            value={status || '__all_statuses__'}
+            options={[{ value: '__all_statuses__', label: 'All statuses' }, 'Completed', 'Failed']}
+            onChange={value => setFilter('status', value === '__all_statuses__' ? '' : value)}
+            ariaLabel="Filter flights by status"
+            className="w-full min-w-0 !h-[34px] !text-[11px]"
+          />
+        </div>
+        <div className="fh-filter">
+          <span>Hub</span>
+          <DropdownSelect
+            value={hub || '__all_hubs__'}
+            options={[{ value: '__all_hubs__', label: 'All hubs' }, ...Array.from(hubs, ([id, name]) => ({ value: id, label: formatHubName(name) || name }))]}
+            onChange={value => setFilter('hub', value === '__all_hubs__' ? '' : value)}
+            ariaLabel="Filter flights by hub"
+            className="w-full min-w-0 !h-[34px] !text-[11px]"
+          />
+        </div>
         <button type="button" className="fh-button fh-reset" onClick={clearFilters}>Reset filters</button>
       </section>
       <div className="fh-columns">

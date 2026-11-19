@@ -177,7 +177,11 @@ export function DroneAvailabilityPage() {
           <div className="operator-empty-state">No drones match the current filters.</div>
         ) : (
           <>
-            <DroneAvailabilityTable drones={paginatedDrones} hubs={hubs} />
+            <DroneAvailabilityTable
+              drones={paginatedDrones}
+              hubs={hubs}
+              startIndex={(currentPage - 1) * OPERATOR_PAGE_SIZE}
+            />
             <OperatorPagination
               currentPage={currentPage}
               totalItems={filtered.length}

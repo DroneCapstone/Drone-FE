@@ -142,6 +142,7 @@ export function BatteryInventoryPage() {
             <div className="table-wrap battery-inventory-table-wrap">
               <OperatorTable className="battery-inventory-table">
                 <colgroup>
+                  <col /> {/* No. */}
                   <col /> {/* Battery ID */}
                   <col /> {/* Battery model */}
                   <col /> {/* Hub name */}
@@ -151,6 +152,7 @@ export function BatteryInventoryPage() {
                 </colgroup>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="operator-number-heading" scope="col">No.</TableHead>
                     <TableHead>Battery</TableHead>
                     <TableHead>Model</TableHead>
                     <TableHead>Hub</TableHead>
@@ -160,8 +162,9 @@ export function BatteryInventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visible.map((battery) => (
+                  {visible.map((battery, index) => (
                     <TableRow key={battery.id}>
+                      <TableCell className="operator-number-cell">{(currentPage - 1) * OPERATOR_PAGE_SIZE + index + 1}</TableCell>
                       <TableCell><strong>{battery.id}</strong></TableCell>
                       <TableCell>{battery.model || '—'}</TableCell>
                       <TableCell>{formatHubName(getBatteryHubName(battery, drones, hubNameById))}</TableCell>
