@@ -1,3 +1,4 @@
+import './operator-pagination.css';
 import type { MouseEvent } from 'react';
 import {
   Pagination,
@@ -50,6 +51,8 @@ export function OperatorPagination({
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const page = Math.min(Math.max(currentPage, 1), totalPages);
   const paginationEntries = getPaginationEntries(page, totalPages);
+  const rangeStart = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalItems);
 
   const goToPage = (event: MouseEvent<HTMLAnchorElement>, nextPage: number) => {
     event.preventDefault();
@@ -57,8 +60,11 @@ export function OperatorPagination({
   };
 
   return (
-    <div className={`operator-pagination ${className}`.trim()}>
-      <Pagination aria-label={`${itemLabel} pagination`} className="mx-0 w-auto justify-center">
+    <div className={`operator-pagination operator-pagination--technician ${className}`.trim()}>
+      <span className="operator-pagination__summary">
+        Showing {rangeStart}–{rangeEnd} of {totalItems} {itemLabel}
+      </span>
+      <Pagination aria-label={`${itemLabel} pagination`} className="operator-pagination__nav mx-0 w-auto justify-end">
         <PaginationContent className="gap-2">
           <PaginationItem>
             <PaginationPrevious
@@ -66,7 +72,7 @@ export function OperatorPagination({
               aria-disabled={page === 1}
               tabIndex={page === 1 ? -1 : undefined}
               className={cn(
-                'border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground dark:bg-transparent dark:hover:bg-transparent',
+                'operator-pagination__link',
                 page === 1 && 'pointer-events-none opacity-50',
               )}
               onClick={(event) => goToPage(event, page - 1)}
@@ -77,7 +83,7 @@ export function OperatorPagination({
             if (typeof entry !== 'number') {
               return (
                 <PaginationItem key={entry}>
-                  <PaginationEllipsis className="text-muted-foreground" />
+                  <PaginationEllipsis className="operator-pagination__ellipsis" />
                 </PaginationItem>
               );
             }
@@ -88,7 +94,7 @@ export function OperatorPagination({
               <PaginationItem key={entry}>
                 <PaginationLink
                   href={`#page-${entry}`}
-                  className="border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground dark:bg-transparent dark:hover:bg-transparent"
+                  className="operator-pagination__link"
                   isActive={isActive}
                   onClick={(event) => goToPage(event, entry)}
                 >
@@ -104,7 +110,7 @@ export function OperatorPagination({
               aria-disabled={page === totalPages}
               tabIndex={page === totalPages ? -1 : undefined}
               className={cn(
-                'border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-transparent hover:text-foreground dark:bg-transparent dark:hover:bg-transparent',
+                'operator-pagination__link',
                 page === totalPages && 'pointer-events-none opacity-50',
               )}
               onClick={(event) => goToPage(event, page + 1)}

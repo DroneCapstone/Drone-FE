@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useSearchParams } from 'react-router-dom';
@@ -138,7 +139,7 @@ export function BatteryInventoryPage() {
         ) : (
           <>
             <div className="table-wrap battery-inventory-table-wrap">
-              <table className="battery-inventory-table">
+              <OperatorTable className="battery-inventory-table">
                 <colgroup>
                   <col /> {/* Battery ID */}
                   <col /> {/* Battery model */}
@@ -147,33 +148,33 @@ export function BatteryInventoryPage() {
                   <col /> {/* Charge */}
                   <col /> {/* Status */}
                 </colgroup>
-                <thead>
-                  <tr>
-                    <th>Battery</th>
-                    <th>Model</th>
-                    <th>Hub</th>
-                    <th>Capacity</th>
-                    <th>Charge</th>
-                    <th>Availability</th>
-                  </tr>
-                </thead>
-                <tbody>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Battery</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Hub</TableHead>
+                    <TableHead>Capacity</TableHead>
+                    <TableHead>Charge</TableHead>
+                    <TableHead>Availability</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {visible.map((battery) => (
-                    <tr key={battery.id}>
-                      <td><strong>{battery.id}</strong></td>
-                      <td>{battery.model || '—'}</td>
-                      <td>{getBatteryHubName(battery, drones, hubNameById)}</td>
-                      <td>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString()} Wh` : '—'}</td>
-                      <td>{Number.isFinite(battery.chargeLevelPct) ? `${battery.chargeLevelPct}%` : '—'}</td>
-                      <td title={`Technical status: ${battery.status || 'Unknown'}`}>
+                    <TableRow key={battery.id}>
+                      <TableCell><strong>{battery.id}</strong></TableCell>
+                      <TableCell>{battery.model || '—'}</TableCell>
+                      <TableCell>{getBatteryHubName(battery, drones, hubNameById)}</TableCell>
+                      <TableCell>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString()} Wh` : '—'}</TableCell>
+                      <TableCell>{Number.isFinite(battery.chargeLevelPct) ? `${battery.chargeLevelPct}%` : '—'}</TableCell>
+                      <TableCell title={`Technical status: ${battery.status || 'Unknown'}`}>
                         {battery.availableStatus
                           ? <StatusBadge tone={batteryStatusTone(battery.availableStatus)}>{battery.availableStatus}</StatusBadge>
                           : '—'}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </OperatorTable>
             </div>
             <OperatorPagination
               currentPage={currentPage}

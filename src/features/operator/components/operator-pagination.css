@@ -1,0 +1,91 @@
+/* Pagination uses existing shared shadcn controls, restyled like Technician Hub Fleet.
+   Keep the same page-selection callbacks, disabled states and hover transitions. */
+.operator-pagination.operator-pagination--technician {
+  min-height: 62px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.operator-pagination--technician .operator-pagination__summary {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operator-pagination--technician .operator-pagination__nav {
+  flex: 0 1 auto;
+}
+
+.operator-pagination--technician [data-slot='pagination-content'] {
+  gap: 6px;
+}
+
+.operator-pagination--technician .operator-pagination__link {
+  display: inline-flex;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: border-color .16s ease, color .16s ease, background-color .16s ease;
+}
+
+.operator-pagination--technician .operator-pagination__link:hover:not([aria-disabled='true']) {
+  border-color: color-mix(in srgb, var(--orange) 50%, var(--border));
+  background: transparent;
+  color: var(--orange);
+}
+
+.operator-pagination.operator-pagination--technician [data-slot='pagination-link'][data-active='true'] {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #111111;
+}
+
+.operator-pagination.operator-pagination--technician [data-slot='pagination-link'][data-active='true']:hover {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #111111;
+}
+
+.operator-pagination--technician .operator-pagination__link[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+.operator-pagination--technician .operator-pagination__link svg {
+  width: 15px;
+  height: 15px;
+}
+
+.operator-pagination--technician .operator-pagination__link span {
+  display: none;
+}
+
+.operator-pagination--technician .operator-pagination__ellipsis {
+  width: 24px;
+  height: 32px;
+  color: var(--faint);
+}
+
+@media (max-width: 640px) {
+  .operator-pagination.operator-pagination--technician {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .operator-pagination--technician .operator-pagination__summary {
+    flex-basis: 100%;
+    text-align: center;
+  }
+}

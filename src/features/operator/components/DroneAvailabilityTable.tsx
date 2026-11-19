@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Hub, OperatorDrone } from '../types/operator';
 
@@ -12,7 +13,7 @@ export function DroneAvailabilityTable({ drones, hubs }: { drones: OperatorDrone
 
   return (
     <div className="table-wrap drone-availability-table-wrap">
-      <table className="drone-availability-table">
+      <OperatorTable className="drone-availability-table">
         <colgroup>
           <col />
           <col />
@@ -22,31 +23,31 @@ export function DroneAvailabilityTable({ drones, hubs }: { drones: OperatorDrone
           <col />
           <col />
         </colgroup>
-        <thead>
-          <tr>
-            <th>Drone</th>
-            <th>Model</th>
-            <th>Hub</th>
-            <th>Status</th>
-            <th>Battery</th>
-            <th>Max payload</th>
-            <th>Utilization</th>
-          </tr>
-        </thead>
-        <tbody>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Drone</TableHead>
+            <TableHead>Model</TableHead>
+            <TableHead>Hub</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Battery</TableHead>
+            <TableHead>Max payload</TableHead>
+            <TableHead>Utilization</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {drones.map((drone) => (
-            <tr key={drone.id}>
-              <td data-label="Drone"><strong>{`${drone.name}-${drone.displayId}`}</strong></td>
-              <td data-label="Model">{drone.model}</td>
-              <td data-label="Hub">{drone.hubName || hubNameById.get(drone.hubId) || drone.hubId || '—'}</td>
-              <td data-label="Status"><StatusBadge tone={statusTone(drone.technicalStatus)}>{drone.technicalStatus}</StatusBadge></td>
-              <td data-label="Battery">{drone.batteryLevelPct === undefined ? '—' : `${drone.batteryLevelPct}%`}</td>
-              <td data-label="Max payload">{drone.maxPayloadKg} kg</td>
-              <td data-label="Utilization">{drone.utilizationPct === undefined ? '—' : `${drone.utilizationPct}%`}</td>
-            </tr>
+            <TableRow key={drone.id}>
+              <TableCell data-label="Drone"><strong>{`${drone.name}-${drone.displayId}`}</strong></TableCell>
+              <TableCell data-label="Model">{drone.model}</TableCell>
+              <TableCell data-label="Hub">{drone.hubName || hubNameById.get(drone.hubId) || drone.hubId || '—'}</TableCell>
+              <TableCell data-label="Status"><StatusBadge tone={statusTone(drone.technicalStatus)}>{drone.technicalStatus}</StatusBadge></TableCell>
+              <TableCell data-label="Battery">{drone.batteryLevelPct === undefined ? '—' : `${drone.batteryLevelPct}%`}</TableCell>
+              <TableCell data-label="Max payload">{drone.maxPayloadKg} kg</TableCell>
+              <TableCell data-label="Utilization">{drone.utilizationPct === undefined ? '—' : `${drone.utilizationPct}%`}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </OperatorTable>
     </div>
   );
 }
