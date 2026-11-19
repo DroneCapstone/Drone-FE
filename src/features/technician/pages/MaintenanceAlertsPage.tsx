@@ -1,7 +1,6 @@
 import {
   History,
   Eye,
-  CheckCheck,
   RefreshCw,
   Plus,
   Search,
@@ -38,7 +37,6 @@ import {
   useMaintenanceAlertsQuery,
   useMaintenanceAlertsHistoryQuery,
   useMaintenanceAlertQuery,
-  useAcknowledgeMaintenanceAlertMutation,
   useSyncBatteryOverdueAlertsMutation,
 } from "../hooks/useMaintenanceQueries";
 
@@ -119,10 +117,8 @@ export function MaintenanceAlertsPage() {
   const [selectedAlertId, setSelectedAlertId] = useState<string | undefined>();
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
-  const [acknowledgedIds, setAcknowledgedIds] = useState<string[]>([]);
   const alertHistoryQuery = useMaintenanceAlertsHistoryQuery(historyOpen);
   const alertDetailQuery = useMaintenanceAlertQuery(selectedAlertId);
-  const acknowledgeMutation = useAcknowledgeMaintenanceAlertMutation();
   const batteryOverdueMutation = useSyncBatteryOverdueAlertsMutation();
   const alertLogs = useMemo(() => unwrapList(alertHistoryQuery.data)
     .map(mapAlertHistoryRow)
@@ -130,18 +126,6 @@ export function MaintenanceAlertsPage() {
   const selectedAlert = selectedAlertId
     ? mapApiMaintenanceAlert(unwrapObject(alertDetailQuery.data))
     : null;
-
-  const acknowledgeAlert = async (alertId: string) => {
-    try {
-      setActionError("");
-      setActionMessage("");
-      await acknowledgeMutation.mutateAsync(alertId);
-      setAcknowledgedIds((prev) => prev.includes(alertId) ? prev : [...prev, alertId]);
-      setActionMessage(`Alert ${alertId} acknowledged. Status refreshed from Backend.`);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to acknowledge alert.");
-    }
-  };
 
   const syncOverdueBatteries = async () => {
     if (!window.confirm("Run the Backend overdue-battery alert check now? This may generate notifications.")) return;
@@ -422,11 +406,6 @@ export function MaintenanceAlertsPage() {
                     <div className="flex items-center justify-center gap-3">
                       <button type="button" title="View details" onClick={() => setSelectedAlertId(alert.id)}
                         className="text-[var(--tech-muted)] hover:text-orange-500"><Eye size={15} /></button>
-                      <button type="button" disabled={acknowledgeMutation.isPending || acknowledgedIds.includes(alert.id)}
-                        title="Acknowledge this alert" onClick={() => void acknowledgeAlert(alert.id)}
-                        className="inline-flex items-center gap-1 text-[12px] text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-40">
-                        <CheckCheck size={14}/> {acknowledgedIds.includes(alert.id) ? "Acked" : "Ack"}
-                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -611,18 +590,12 @@ export function MaintenanceAlertsPage() {
                 <p><strong>Alert:</strong> {selectedAlert.id}</p>
                 <p><strong>Drone:</strong> {selectedAlert.droneId}</p>
                 <p><strong>Issue:</strong> {selectedAlert.title}</p>
+                <p className="whitespace-pre-wrap"><strong>Description:</strong> {pickString(unwrapObject(alertDetailQuery.data), ["description"], "—").trim() || "—"}</p>
                 <p><strong>Source:</strong> {selectedAlert.source}</p>
                 <p><strong>Status:</strong> {selectedAlert.status ?? "—"}</p>
                 <p><strong>Created:</strong> {selectedAlert.createdAt}</p>
                 {selectedAlert.missionId && <p><strong>Mission:</strong> {selectedAlert.missionId}</p>}
                 {selectedAlert.reason && <p className="whitespace-pre-wrap"><strong>Details:</strong> {selectedAlert.reason}</p>}
-                {selectedAlert.status !== "Handled" && (
-                  <button type="button" disabled={acknowledgeMutation.isPending || acknowledgedIds.includes(selectedAlertId)}
-                    onClick={() => void acknowledgeAlert(selectedAlertId)}
-                    className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black disabled:opacity-40">
-                    {acknowledgeMutation.isPending ? "Acknowledging..." : acknowledgedIds.includes(selectedAlertId) ? "Acknowledged" : "Acknowledge alert"}
-                  </button>
-                )}
               </div>
             ) : (
               <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Backend returned no valid alert details.</p>
