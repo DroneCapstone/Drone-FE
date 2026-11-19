@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useQueries } from '@tanstack/react-query';
@@ -151,8 +152,8 @@ export function FlightHistoryPage() {
             : isLoading ? <OperatorLoadingState label="Loading flight history…" />
               : filtered.length === 0 ? <div className="fh-empty"><strong>No recorded flights found</strong><p>Try different filters. Only completed missions and failed missions with a recorded take-off appear here. Scheduled and Flying missions are excluded.</p></div>
                 : <>
-                  <div className="fh-table-scroll"><table className="fh-table"><thead><tr><th>Date</th><th>Mission</th><th>Drone</th><th>Route</th><th title="First recorded GPS fix">Start</th><th title="Last recorded GPS fix">End</th><th title="Recorded GPS interval, not the Mission lifecycle duration">Duration</th><th>Status</th><th>Action</th></tr></thead><tbody>
-                    {paged.map((m, index) => <tr
+                  <div className="fh-table-scroll"><OperatorTable className="fh-table"><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Mission</TableHead><TableHead>Drone</TableHead><TableHead>Route</TableHead><TableHead title="First recorded GPS fix">Start</TableHead><TableHead title="Last recorded GPS fix">End</TableHead><TableHead title="Recorded GPS interval, not the Mission lifecycle duration">Duration</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+                    {paged.map((m, index) => <TableRow
                       key={m.id}
                       className="fh-clickable-row"
                       role="link"
@@ -170,16 +171,16 @@ export function FlightHistoryPage() {
                         }
                       }}
                     >
-                      <td className="fh-nowrap">{fmtDate(flightStart(m) || flightEnd(m))}</td>
-                      <td><span className="fh-link fh-strong">{m.id}</span><small>Delivery mission</small></td>
-                      <td><span className="fh-link">{m.drone || m.droneId || '—'}</span></td>
-                      <td className="fh-route" title={`${hubs.get(m.originHubId) ?? m.originHubId} → ${hubs.get(m.destinationHubId) ?? m.destinationHubId}`}>{hubs.get(m.originHubId) ?? m.originHubId ?? '—'} <span>→</span> {hubs.get(m.destinationHubId) ?? m.destinationHubId ?? '—'}</td>
-                      <td className="fh-nowrap" title="First valid recorded GPS timestamp (not Mission start_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.start)}</td><td className="fh-nowrap" title="Last valid recorded GPS timestamp (not Mission end_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.end)}</td>
-                      <td className="fh-nowrap fh-numbers" title="Elapsed time between first and last recorded GPS fix; partial telemetry may not cover the entire flight">{replayChecks[index]?.isLoading ? '…' : fmtDuration(gpsWindows[index]?.durationSeconds ?? null)}</td>
-                      <td><span className={`fh-status fh-status-${m.status.toLowerCase().replace(/\s+/g, '-')}`}>{m.status}</span></td>
-                      <td><div className="fh-row-actions">{canReplayFlight(m) && gpsWindows[index] ? <Link className="fh-button" onClick={event => event.stopPropagation()} to={`/operator/operations/history/${encodeURIComponent(m.id)}`}>▶ Replay</Link> : <span className="fh-muted-action" title={replayChecks[index]?.isError ? 'Telemetry API failed: ' + String(replayChecks[index]?.error ?? 'Unknown error') : replayChecks[index]?.isLoading ? 'Checking recorded GPS…' : 'No replayable GPS recording for this Mission'}>{replayChecks[index]?.isLoading ? '…' : '—'}</span>}</div></td>
-                    </tr>)}
-                  </tbody></table></div>
+                      <TableCell className="fh-nowrap">{fmtDate(flightStart(m) || flightEnd(m))}</TableCell>
+                      <TableCell><span className="fh-link fh-strong">{m.id}</span><small>Delivery mission</small></TableCell>
+                      <TableCell><span className="fh-link">{m.drone || m.droneId || '—'}</span></TableCell>
+                      <TableCell className="fh-route" title={`${hubs.get(m.originHubId) ?? m.originHubId} → ${hubs.get(m.destinationHubId) ?? m.destinationHubId}`}>{hubs.get(m.originHubId) ?? m.originHubId ?? '—'} <span>→</span> {hubs.get(m.destinationHubId) ?? m.destinationHubId ?? '—'}</TableCell>
+                      <TableCell className="fh-nowrap" title="First valid recorded GPS timestamp (not Mission start_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.start)}</TableCell><TableCell className="fh-nowrap" title="Last valid recorded GPS timestamp (not Mission end_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.end)}</TableCell>
+                      <TableCell className="fh-nowrap fh-numbers" title="Elapsed time between first and last recorded GPS fix; partial telemetry may not cover the entire flight">{replayChecks[index]?.isLoading ? '…' : fmtDuration(gpsWindows[index]?.durationSeconds ?? null)}</TableCell>
+                      <TableCell><span className={`fh-status fh-status-${m.status.toLowerCase().replace(/\s+/g, '-')}`}>{m.status}</span></TableCell>
+                      <TableCell><div className="fh-row-actions">{canReplayFlight(m) && gpsWindows[index] ? <Link className="fh-button" onClick={event => event.stopPropagation()} to={`/operator/operations/history/${encodeURIComponent(m.id)}`}>▶ Replay</Link> : <span className="fh-muted-action" title={replayChecks[index]?.isError ? 'Telemetry API failed: ' + String(replayChecks[index]?.error ?? 'Unknown error') : replayChecks[index]?.isLoading ? 'Checking recorded GPS…' : 'No replayable GPS recording for this Mission'}>{replayChecks[index]?.isLoading ? '…' : '—'}</span>}</div></TableCell>
+                    </TableRow>)}
+                  </TableBody></OperatorTable></div>
                   <OperatorPagination currentPage={Math.min(page, totalPages)} totalItems={filtered.length} itemLabel="recorded flights" onPageChange={setPage} />
                 </>}
         </section>
