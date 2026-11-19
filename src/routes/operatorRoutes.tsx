@@ -193,6 +193,36 @@ function MissionAnalysisEntry() {
   return hasDraftContext ? <MissionAnalysisPage /> : <Navigate to="/operator/missions/all" replace />;
 }
 
+
+/** Allow AI analysis from Create Mission and Flight Mission. */
+// function MissionAnalysisEntry() {
+//   const { search } = useLocation();
+//   const params = new URLSearchParams(search);
+
+//   const hasDraftContext =
+//     params.get('returnTo') === 'mission-create' &&
+//     Boolean(
+//       params.get('orderId') &&
+//       params.get('droneId') &&
+//       params.get('batteryId') &&
+//       params.get('routeId')
+//     );
+
+//   const hasFlightMissionContext =
+//     params.get('returnTo') !== 'mission-create' &&
+//     Boolean(
+//       params.get('orderId') &&
+//       params.get('droneId') &&
+//       params.get('batteryId') &&
+//       params.get('routeId')
+//     );
+
+//   return hasDraftContext || hasFlightMissionContext
+//     ? <MissionAnalysisPage />
+//     : <Navigate to="/operator/missions/all" replace />;
+// }
+
+
 /* =========================================================
    ROUTES
 ========================================================= */

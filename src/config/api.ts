@@ -23,7 +23,7 @@ function normalizeApiBaseUrl(value: string) {
  */
 export const API_BASE_URL = normalizeApiBaseUrl(
   import.meta.env.VITE_API_BASE_URL ||
-    DEFAULT_API_BASE_URL,
+  DEFAULT_API_BASE_URL,
 );
 
 export const API_WITH_CREDENTIALS =

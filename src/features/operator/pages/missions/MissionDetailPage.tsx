@@ -118,7 +118,7 @@ export function MissionDetailPage() {
                     Flight history
                   </ActionButton>
                 )}
-                {/* AI analysis is only offered while choosing a route in Create Mission.
+                {/* AI analysis is only offered while choosing a route in Create Mission. */}
                 <ActionButton
                   variant="secondary"
                   onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
@@ -131,7 +131,44 @@ export function MissionDetailPage() {
                 >
                   AI analysis
                 </ActionButton>
-                */}
+
+
+
+                {/* {mission.orderId &&
+                  mission.droneId &&
+                  mission.routeId &&
+                  (mission.legs?.[0]?.batteryId || mission.batteryId) && (
+                    <ActionButton
+                      variant="secondary"
+                      onClick={() => {
+                        const batteryId =
+                          mission.legs?.[0]?.batteryId ?? mission.batteryId;
+
+                        if (!batteryId) return;
+
+                        const params = new URLSearchParams({
+                          orderId: mission.orderId,
+                          droneId: mission.droneId,
+                          batteryId,
+                          routeId: mission.routeId,
+                          ...(mission.bundledOrderIds?.length
+                            ? {
+                              bundledOrderIds:
+                                mission.bundledOrderIds.join(','),
+                            }
+                            : {}),
+                        });
+
+                        navigate(
+                          `/operator/ai/mission-analysis?${params.toString()}`
+                        );
+                      }}
+                    >
+                      AI analysis
+                    </ActionButton>
+                  )}
+ */}
+
               </div>
             </div>
 
