@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { useNavigate } from 'react-router-dom';
 import './order-priority.css';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -78,19 +79,19 @@ export function OrderTable({
 
   return (
     <div className="table-wrap">
-      <table className="order-table">
-        <thead>
-          <tr>
-            <th scope="col" className="order-number-heading">No.</th>
-            <th>Order</th>
-            <th className="order-route-heading">Hub Point</th>
-            <th>Package</th>
-            <th className="order-delivery-time-heading">Delivery Time</th>
-            <th className="order-planning-heading">Planning Status</th>
-            <th className="order-action-heading" />
-          </tr>
-        </thead>
-        <tbody>
+      <OperatorTable className="order-table">
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col" className="order-number-heading">No.</TableHead>
+            <TableHead>Order</TableHead>
+            <TableHead className="order-route-heading">Hub Point</TableHead>
+            <TableHead>Package</TableHead>
+            <TableHead className="order-delivery-time-heading">Delivery Time</TableHead>
+            <TableHead className="order-planning-heading">Planning Status</TableHead>
+            <TableHead className="order-action-heading" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {orders.map((order, index) => {
             const planning = getOrderPlanningBadge(order, missions);
             const deliveryMission = getDeliveryMission(order.id, missions);
@@ -111,30 +112,30 @@ export function OrderTable({
             }
 
             return (
-              <tr key={order.id} onClick={() => navigate(`/operator/orders/${order.id}`)}>
-                <td className="order-number-cell">{startIndex + index + 1}</td>
-                <td>
+              <TableRow key={order.id} onClick={() => navigate(`/operator/orders/${order.id}`)}>
+                <TableCell className="order-number-cell">{startIndex + index + 1}</TableCell>
+                <TableCell>
                   <strong>{order.id}</strong>
                   <small>{order.deliveryMode} · {order.status}</small>
-                </td>
-                <td className="order-route-cell">
+                </TableCell>
+                <TableCell className="order-route-cell">
                   <strong>
                     {order.originHubId || order.destinationHubId
                       ? `${hubName(order.originHubId, order.originHubName)} → ${hubName(order.destinationHubId, order.destinationHubName)}`
                       : 'Hub data unavailable'}
                   </strong>
-                </td>
-                <td className="order-package-cell">
+                </TableCell>
+                <TableCell className="order-package-cell">
                   {order.packageLabel}
-                  <small>{order.payloadKg} kg · {order.packageType}</small>
+                  <small>{order.payloadKg} kg</small>
                   <small className={(order.originPackageReceived || order.originHubReceivedAt) ? 'package-received-text' : 'package-awaiting-text'}>
                     {(order.originPackageReceived || order.originHubReceivedAt) ? `Received at Drop-off Point${order.originHubReceivedAt ? ` · ${receivedTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package at Drop-off Point'}
                   </small>
-                </td>
-                <td className="order-delivery-time-cell">
+                </TableCell>
+                <TableCell className="order-delivery-time-cell">
                   <strong>{formatDeliveryWindow(order)}</strong>
-                </td>
-                <td className="order-planning-cell">
+                </TableCell>
+                <TableCell className="order-planning-cell">
                   <div className="order-delivery-meta">
                     {planning && <StatusBadge tone={planningTone(planning)}>{planning}</StatusBadge>}
                     {!planning && order.status !== 'Pending' && <small>{order.status}</small>}
@@ -144,8 +145,8 @@ export function OrderTable({
                       {planningTime.label}
                     </small>
                   )}
-                </td>
-                <td className="order-action-cell">
+                </TableCell>
+                <TableCell className="order-action-cell">
                   <button
                     type="button"
                     className="row-action"
@@ -153,12 +154,12 @@ export function OrderTable({
                   >
                     {action}
                   </button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </OperatorTable>
     </div>
   );
 }

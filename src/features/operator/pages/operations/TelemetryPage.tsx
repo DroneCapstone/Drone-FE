@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -203,24 +204,24 @@ export function TelemetryPage() {
               telemetryError ? <div className="telemetry-error" role="alert">{telemetryError instanceof Error ? telemetryError.message : 'Unable to load telemetry.'}</div> :
               points.length === 0 ? <div className="telemetry-hint">No telemetry points recorded for this Mission yet.</div> :
               <div className="telemetry-table-scroll" role="region" aria-label="Telemetry logs" tabIndex={0}>
-                <table className="telemetry-table">
-                  <thead><tr>
-                    <th>Recorded</th><th>Position</th><th>Altitude</th><th>Speed</th>
-                    <th>Battery</th><th>Energy</th><th>Wind</th><th>Failsafe</th>
-                    {extraColumns.map(key => <th key={key}>{columnLabel(key)}</th>)}
-                  </tr></thead>
-                  <tbody>{points.map((point, index) => <tr key={`${point.id}-${index}`}>
-                    <td>{recordedAt(point.recordedAt)}</td>
-                    <td className="telemetry-position">{point.latitude !== undefined && point.longitude !== undefined ? `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}` : '—'}</td>
-                    <td>{metric(point.altitudeM, 'm', 2)}</td>
-                    <td>{metric(point.speedKmh, 'km/h', 1)}</td>
-                    <td>{battery(point)}</td>
-                    <td>{metric(point.energyConsumedWh, 'Wh', 2)}</td>
-                    <td>{metric(point.windSpeed, 'm/s', 2)}</td>
-                    <td>{valueOrDash(point.raw.failsafe_status ?? point.raw.failsafeStatus)}</td>
-                    {extraColumns.map(key => <td key={key}>{valueOrDash(point.raw[key])}</td>)}
-                  </tr>)}</tbody>
-                </table>
+                <OperatorTable className="telemetry-table">
+                  <TableHeader><TableRow>
+                    <TableHead>Recorded</TableHead><TableHead>Position</TableHead><TableHead>Altitude</TableHead><TableHead>Speed</TableHead>
+                    <TableHead>Battery</TableHead><TableHead>Energy</TableHead><TableHead>Wind</TableHead><TableHead>Failsafe</TableHead>
+                    {extraColumns.map(key => <TableHead key={key}>{columnLabel(key)}</TableHead>)}
+                  </TableRow></TableHeader>
+                  <TableBody>{points.map((point, index) => <TableRow key={`${point.id}-${index}`}>
+                    <TableCell>{recordedAt(point.recordedAt)}</TableCell>
+                    <TableCell className="telemetry-position">{point.latitude !== undefined && point.longitude !== undefined ? `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}` : '—'}</TableCell>
+                    <TableCell>{metric(point.altitudeM, 'm', 2)}</TableCell>
+                    <TableCell>{metric(point.speedKmh, 'km/h', 1)}</TableCell>
+                    <TableCell>{battery(point)}</TableCell>
+                    <TableCell>{metric(point.energyConsumedWh, 'Wh', 2)}</TableCell>
+                    <TableCell>{metric(point.windSpeed, 'm/s', 2)}</TableCell>
+                    <TableCell>{valueOrDash(point.raw.failsafe_status ?? point.raw.failsafeStatus)}</TableCell>
+                    {extraColumns.map(key => <TableCell key={key}>{valueOrDash(point.raw[key])}</TableCell>)}
+                  </TableRow>)}</TableBody>
+                </OperatorTable>
               </div>}
           </OperatorPanel>}
         </div>

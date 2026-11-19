@@ -1,0 +1,250 @@
+/* Operator tables use the same shadcn Table primitives and density as Technician
+   Hub Fleet. Deliberately scoped: no Admin / Customer / Technician overrides. */
+.operator-ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.operator-ui-table thead {
+  background: var(--surface);
+}
+
+.operator-ui-table thead [data-slot='table-head'] {
+  box-sizing: border-box;
+  height: 56px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  line-height: 1.4;
+  text-align: left;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.operator-ui-table tbody [data-slot='table-row'] {
+  border: 0;
+  cursor: default;
+  transition: background-color .16s ease;
+}
+
+.operator-ui-table tbody [data-slot='table-row']:hover {
+  background: var(--surface-2);
+}
+
+.operator-ui-table tbody [data-slot='table-cell'] {
+  box-sizing: border-box;
+  height: 72px;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.operator-ui-table tbody [data-slot='table-row']:last-child [data-slot='table-cell'] {
+  border-bottom: 0;
+}
+
+.operator-ui-table [data-slot='table-cell'] > strong {
+  display: block;
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.operator-ui-table [data-slot='table-cell'] > small,
+.operator-ui-table [data-slot='table-cell'] small {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.operator-ui-table .badge {
+  max-width: 100%;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.operator-ui-table .row-action {
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+/* Preserve Operator's clickable rows, inline links and action hover states. */
+.operator-ui-table.order-table tbody [data-slot='table-row'],
+.operator-ui-table.mission-table tbody [data-slot='table-row'],
+.flight-history-screen .operator-ui-table.fh-table tbody [data-slot='table-row'] {
+  cursor: pointer;
+}
+
+/* Keep only a single horizontal scrollbar from shadcn's table container. */
+.table-wrap:has(> [data-slot='table-container']) {
+  overflow-x: visible;
+}
+
+/* A wider baseline prevents the mission/action cells from compressing at laptop widths. */
+.operator-ui-table.mission-table { min-width: 1100px; }
+.operator-ui-table.drone-availability-table { min-width: 900px; }
+
+/* Numbers and ID text follow the Hub Fleet hierarchy; original column widths stay. */
+.operator-ui-table .order-number-cell,
+.operator-ui-table .mission-number-cell {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operator-ui-table .order-route-cell > strong {
+  display: inline;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operator-ui-table .order-package-cell {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operator-ui-table .order-package-cell small {
+  font-weight: 400;
+}
+
+.operator-ui-table .order-package-cell .package-received-text {
+  color: var(--green);
+}
+
+.operator-ui-table .order-package-cell .package-awaiting-text {
+  color: var(--muted);
+}
+
+.operator-ui-table .order-planning-cell .operator-order-priority {
+  font-size: 11.5px;
+}
+
+.operator-ui-table.mission-table .drone-id {
+  font-size: 13px;
+}
+
+/* Flight History owns its own column widths and navigation; normalize typography
+   after the legacy high-specificity flight-history-overrides.css rules. */
+.flight-history-screen .fh-table-scroll {
+  overflow-x: visible;
+}
+
+.flight-history-screen .operator-ui-table.fh-table {
+  min-width: 1200px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.flight-history-screen .operator-ui-table.fh-table thead th {
+  height: 56px;
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+.flight-history-screen .operator-ui-table.fh-table tbody td {
+  height: 72px;
+  padding: 14px 10px;
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.flight-history-screen .operator-ui-table.fh-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.flight-history-screen .operator-ui-table.fh-table td small {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.flight-history-screen .operator-ui-table.fh-table .fh-link {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.flight-history-screen .operator-ui-table.fh-table .fh-strong {
+  font-size: 15px;
+}
+
+.flight-history-screen .operator-ui-table.fh-table .fh-route {
+  font-size: 12px;
+}
+
+.flight-history-screen .operator-ui-table.fh-table .fh-status {
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.flight-history-screen .operator-ui-table.fh-table .fh-row-actions .fh-button {
+  min-height: 32px;
+  height: 32px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+/* Dynamic Telemetry columns must remain nowrap and horizontally scrollable. */
+.telemetry-table-scroll {
+  overflow-x: visible;
+}
+
+.operator-ui-table.telemetry-table {
+  min-width: 980px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operator-ui-table.telemetry-table thead th {
+  height: 56px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.operator-ui-table.telemetry-table tbody td {
+  height: 64px;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 72px is the base: longer Orders / Missions may grow, not clip their text. */
