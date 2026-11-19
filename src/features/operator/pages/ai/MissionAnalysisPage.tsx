@@ -1,3 +1,4 @@
+import { formatHubName, formatRouteName, formatBackendLabel } from '../../utils/displayEnglish';
 import { useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -62,10 +63,10 @@ function getRoutePath(route: NonNullable<ReturnType<typeof useMissionPlanningAna
   const legs = route.legDetails ?? [];
   if (legs.length) {
     const names = [legs[0].from_hub_name || legs[0].from_hub_code, ...legs.map(leg => leg.to_hub_name || leg.to_hub_code)].filter(Boolean);
-    if (names.length > 1) return names.join(' → ');
+    if (names.length > 1) return names.map(formatHubName).join(' → ');
   }
   const fromRoute = route.routeString?.split('(')[0]?.trim();
-  return fromRoute || undefined;
+  return fromRoute ? formatRouteName(fromRoute) : undefined;
 }
 
 function shortRouteName(name: string, profile?: string): string {
@@ -88,8 +89,8 @@ function FeatureInsights({ contributions }: { contributions: unknown[] }) {
     <h3>Feature insights</h3>
     <div className="mission-ai-insight-list">
       {rows.map(row => <div className="mission-ai-insight" key={row.key}>
-        <div className="mission-ai-insight-header"><strong>{row.name}</strong>{row.value !== undefined && <span>{displayAiValue(row.value)}</span>}</div>
-        {row.impact && <p>{row.impact}</p>}
+        <div className="mission-ai-insight-header"><strong>{formatBackendLabel(row.name)}</strong>{row.value !== undefined && <span>{displayAiValue(row.value)}</span>}</div>
+        {row.impact && <p>{formatBackendLabel(row.impact)}</p>}
       </div>)}
     </div>
   </section>;
@@ -110,9 +111,9 @@ function LegEnergySummary({ breakdown }: { breakdown: unknown[] }) {
     const sequence = readAiField(item, 'leg', 'sequence_no', 'sequenceNo');
     return <div className="mission-ai-leg" key={`leg-${index}`}>
       <div className="mission-ai-leg-header"><strong>Leg {sequence === undefined ? index + 1 : displayAiValue(sequence)}</strong>{energy !== undefined && <span>{displayAiValue(energy)} Wh</span>}</div>
-      {(from || to) && <p className="mission-ai-leg-route">{[from, to].filter(Boolean).join(' → ')}</p>}
+      {(from || to) && <p className="mission-ai-leg-route">{[from, to].filter(Boolean).map(formatHubName).join(' → ')}</p>}
       {distance !== undefined && <small>{displayAiValue(distance)} km</small>}
-      {action && <p className="mission-ai-leg-note">{action}</p>}
+      {action && <p className="mission-ai-leg-note">{formatBackendLabel(action)}</p>}
     </div>;
   }).filter(Boolean);
   if (!rows.length) return null;
@@ -256,13 +257,13 @@ export function MissionAnalysisPage() {
             className={`selectable-card mission-ai-route-option ${active ? 'active' : ''}`}
             aria-pressed={active} onClick={() => changeRoute(item.id)}>
             <span className="mission-ai-route-top">
-              <strong>{shortRouteName(item.name, item.speedProfileLabel)}</strong>
+              <strong>{formatRouteName(shortRouteName(item.name, item.speedProfileLabel))}</strong>
               <span className="mission-ai-route-flags">
                 {item.recommended && <span className="mission-ai-route-recommended">AI Recommended</span>}
                 {active && <span className="mission-ai-route-selected">Selected</span>}
               </span>
             </span>
-            {path && <span className="mission-ai-route-path" title={path}>{path}</span>}
+            {path && <span className="mission-ai-route-path" title={formatRouteName(path)}>{formatRouteName(path)}</span>}
             <span className="mission-ai-route-metrics">
               <span><small>Energy</small><b>{displayAiValue(item.predictedEnergyWh)} Wh</b></span>
               <span><small>Duration</small><b>{displayAiValue(item.predictedDurationMin)} min</b></span>
@@ -275,7 +276,7 @@ export function MissionAnalysisPage() {
       {SHOW_LEGACY_ANALYSIS_TABS && (
         <div className="ai-grid">
           {/* eyebrow="PREDICTED OUTCOME" hidden by request. */}
-          <OperatorPanel title={`${route.id} ${route.name}`}>
+          <OperatorPanel title={`${route.id} ${formatRouteName(route.name)}`}>
             {drone && timing ? (
               <EnergyPredictionSummary route={route} plannedStartAt={timing.plannedStartAt} estimatedArrivalAt={timing.estimatedArrivalAt} />
             ) : (
@@ -317,7 +318,7 @@ export function MissionAnalysisPage() {
                 return (
                   <button className={candidate.recommended ? 'best' : ''} key={candidate.id} type="button" onClick={() => changeRoute(candidate.id)}>
                     <b>{String(index + 1).padStart(2, '0')}</b>
-                    <span><strong>{candidate.id} {candidate.name}</strong><small>{candidate.recommended ? 'AI recommended' : candidate.tradeOff}</small></span>
+                    <span><strong>{candidate.id} {formatRouteName(candidate.name)}</strong><small>{candidate.recommended ? 'AI recommended' : formatBackendLabel(candidate.tradeOff)}</small></span>
                     <span><small>Duration</small><strong>{candidate.predictedDurationMin} min</strong></span>
                     <span><small>Energy</small><strong>{candidate.predictedEnergyWh.toFixed(1)} Wh</strong></span>
                     <span><small>Battery after</small><strong>{candidateEnergy && Number.isFinite(candidateEnergy.remainingBattery) ? `${candidateEnergy.remainingBattery}%` : '—'}</strong></span>
@@ -330,11 +331,11 @@ export function MissionAnalysisPage() {
           <OperatorPanel title={`Why ${route.id}?`} eyebrow={route.recommended ? 'AI RECOMMENDED' : 'TRADE-OFF REVIEW'}>
             <div className="recommendation-copy">
               <StatusBadge tone={route.recommended ? 'success' : riskTone(route.risk)}>{route.recommended ? 'Recommended' : `${route.risk} risk`}</StatusBadge>
-              <h3>{route.id} {route.name}</h3>
-              {route.recommendationReasons.map((reason) => <p key={reason}>✓ {reason}</p>)}
-              <p><strong>Trade-off:</strong> {route.tradeOff}</p>
+              <h3>{route.id} {formatRouteName(route.name)}</h3>
+              {route.recommendationReasons.map((reason) => <p key={reason}>✓ {formatBackendLabel(reason)}</p>)}
+              <p><strong>Trade-off:</strong> {formatBackendLabel(route.tradeOff)}</p>
             </div>
-            {route.isSelectable === false && <p className="mission-ai-unavailable" role="status">Route unavailable: {route.unselectableReason || route.infeasibleReason || 'This route is not available.'}</p>}
+            {route.isSelectable === false && <p className="mission-ai-unavailable" role="status">Route unavailable: {formatBackendLabel(route.unselectableReason || route.infeasibleReason) || 'This route is not available.'}</p>}
             {returnToMission && <ActionButton onClick={useThisRoute} disabled={!routeAssignable}>Use {route.id} in mission draft</ActionButton>}
           </OperatorPanel>
         </div>
@@ -358,7 +359,7 @@ export function MissionAnalysisPage() {
           {!shapValues.length && !explanation?.featureContributions?.length && <p className="mission-ai-no-explanation">No feature explanation is available for this route.</p>}
         </OperatorPanel>
         <OperatorPanel title="Interpretation" eyebrow="AI EXPLANATION" className="mission-ai-interpretation-panel">
-          {explanation?.summary && <div className="mission-ai-summary"><p>{explanation.summary}</p></div>}
+          {explanation?.summary && <div className="mission-ai-summary"><p>{formatBackendLabel(explanation.summary)}</p></div>}
           {explanation?.legsBreakdown?.length ? <LegEnergySummary breakdown={explanation.legsBreakdown} /> : null}
           {!explanation?.summary && (explanation?.legsBreakdown?.length ?? 0) < 2 && <p className="mission-ai-no-explanation">No additional explanation is available for this route.</p>}
         </OperatorPanel>
@@ -371,7 +372,7 @@ export function MissionAnalysisPage() {
           </OperatorPanel>
           <OperatorPanel title="Operational risk" eyebrow="EXPLAINABLE RULE CHECKS">
             <div className="risk-list">
-              <div><span><strong>Route risk</strong><small>{route.weatherImpact}</small></span><StatusBadge tone={riskTone(route.risk)}>{route.risk}</StatusBadge></div>
+              <div><span><strong>Route risk</strong><small>{formatBackendLabel(route.weatherImpact)}</small></span><StatusBadge tone={riskTone(route.risk)}>{route.risk}</StatusBadge></div>
             </div>
           </OperatorPanel>
         </div>

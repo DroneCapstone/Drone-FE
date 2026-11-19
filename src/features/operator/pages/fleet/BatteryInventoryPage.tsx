@@ -1,3 +1,4 @@
+import { formatHubName, formatBackendLabel } from '../../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
@@ -104,7 +105,7 @@ export function BatteryInventoryPage() {
           </div>
           <DropdownSelect
             value={hubFilter}
-            options={[{ value: ALL_HUBS, label: ALL_HUBS }, ...hubs.map((hub) => ({ value: hub.id, label: hub.name }))]}
+            options={[{ value: ALL_HUBS, label: ALL_HUBS }, ...hubs.map((hub) => ({ value: hub.id, label: formatHubName(hub.name) }))]}
             onChange={changeHub}
             ariaLabel="Hub"
           />
@@ -116,7 +117,7 @@ export function BatteryInventoryPage() {
           />
           <DropdownSelect
             value={statusFilter}
-            options={[ALL_STATUSES, ...statuses]}
+            options={[{ value: ALL_STATUSES, label: ALL_STATUSES }, ...statuses.map((value) => ({ value, label: formatBackendLabel(value) }))]}
             onChange={(value) => { setStatusFilter(value); setPage(1); }}
             ariaLabel="Battery availability"
           />
@@ -163,12 +164,12 @@ export function BatteryInventoryPage() {
                     <TableRow key={battery.id}>
                       <TableCell><strong>{battery.id}</strong></TableCell>
                       <TableCell>{battery.model || '—'}</TableCell>
-                      <TableCell>{getBatteryHubName(battery, drones, hubNameById)}</TableCell>
-                      <TableCell>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString()} Wh` : '—'}</TableCell>
+                      <TableCell>{formatHubName(getBatteryHubName(battery, drones, hubNameById))}</TableCell>
+                      <TableCell>{Number.isFinite(battery.capacityWh) ? `${battery.capacityWh.toLocaleString('en-GB')} Wh` : '—'}</TableCell>
                       <TableCell>{Number.isFinite(battery.chargeLevelPct) ? `${battery.chargeLevelPct}%` : '—'}</TableCell>
-                      <TableCell title={`Technical status: ${battery.status || 'Unknown'}`}>
+                      <TableCell title={`Technical status: ${formatBackendLabel(battery.status || 'Unknown')}`}>
                         {battery.availableStatus
-                          ? <StatusBadge tone={batteryStatusTone(battery.availableStatus)}>{battery.availableStatus}</StatusBadge>
+                          ? <StatusBadge tone={batteryStatusTone(battery.availableStatus)}>{formatBackendLabel(battery.availableStatus)}</StatusBadge>
                           : '—'}
                       </TableCell>
                     </TableRow>

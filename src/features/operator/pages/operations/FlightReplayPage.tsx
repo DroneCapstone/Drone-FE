@@ -1,3 +1,4 @@
+import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { Link, useParams } from 'react-router-dom';
@@ -146,7 +147,7 @@ function FlightReplayMap({ points, checkpoints, elapsed, follow, onLeaveFollow }
       const el = document.createElement('div');
       el.className = 'fh-replay-checkpoint-pin';
       el.textContent = String(cp.sequence);
-      el.title = `${cp.hubName} · ${cp.reachedAt ? new Date(cp.reachedAt).toLocaleString('en-GB') : 'Recorded checkpoint'}`;
+      el.title = `${formatHubName(cp.hubName)} · ${cp.reachedAt ? new Date(cp.reachedAt).toLocaleString('en-GB') : 'Recorded checkpoint'}`;
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat([cp.longitude, cp.latitude]).addTo(map);
       checkpointMarkersRef.current.push(marker);
@@ -237,8 +238,8 @@ export function FlightReplayPage() {
 
   const m = mission.data;
   const hubNames = new Map((hubsQuery.data ?? []).map(h => [h.id, h.name]));
-  const fromName = m ? hubNames.get(m.originHubId) ?? m.originHubId : '—';
-  const toName = m ? hubNames.get(m.destinationHubId) ?? m.destinationHubId : '—';
+  const fromName = m ? formatHubName(hubNames.get(m.originHubId)) || m.originHubId : '—';
+  const toName = m ? formatHubName(hubNames.get(m.destinationHubId)) || m.destinationHubId : '—';
   return <div className="flight-history-screen">
     <PageHeader section="operations" title="Flight playback" subtitle="Review a recorded mission using its original GPS and telemetry timestamps." />
     <div className="fh-playback-top"><Link className="fh-button" to="/operator/operations/history">← Flight history</Link><span className="fh-historical-tag"></span></div>

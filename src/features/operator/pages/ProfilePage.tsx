@@ -53,7 +53,7 @@ export function ProfilePage() {
                 <DropdownSelect
                   className="w-full min-w-0"
                   value={language}
-                  options={["English", "Tiếng Việt"]}
+                  options={[{ value: "English", label: "English" }, { value: "Tiếng Việt", label: "Vietnamese" }]}
                   onChange={setLanguage}
                   ariaLabel="Language"
                 />

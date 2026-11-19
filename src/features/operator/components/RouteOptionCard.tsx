@@ -1,3 +1,4 @@
+import { formatHubName, formatRouteName, formatBackendLabel } from '../utils/displayEnglish';
 import { Icon } from '../../../components/ui/Icon';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { RouteOption } from '../types/operator';
@@ -105,11 +106,11 @@ export function RouteOptionCard({
           </span>
           <span className="mission-route-tags">
             {route.recommended && <StatusBadge tone="success">AI Recommended</StatusBadge>}
-            {route.isSelectable === false && <span title={route.unselectableReason || route.infeasibleReason || 'Route is not selectable'} className="mission-route-muted">Not selectable</span>}
+            {route.isSelectable === false && <span title={formatBackendLabel(route.unselectableReason || route.infeasibleReason) || 'Route is not selectable'} className="mission-route-muted">Not selectable</span>}
             <span className={`mission-route-chevron${expanded ? ' is-open' : ''}`}><Icon name="chevron" size={17} /></span>
           </span>
         </span>
-        <span className="mission-route-path">{routePath}</span>
+        <span className="mission-route-path">{formatRouteName(routePath)}</span>
         <span className="mission-route-key-metrics">
           <span><small>Distance</small><strong>{Number.isFinite(route.distanceKm) ? `${route.distanceKm.toFixed(2)} km` : '—'}</strong></span>
           <span><small>Duration</small><strong>{Number.isFinite(route.predictedDurationMin) ? `${route.predictedDurationMin} min` : '—'}</strong></span>
@@ -133,8 +134,8 @@ export function RouteOptionCard({
                 <span className="mission-route-leg-number">{index + 1}</span>
                 <div className="mission-route-leg-places">
                   {leg.isDispatch && <small>Dispatch flight · 0 kg (no package)</small>}
-                  <strong>{leg.from}</strong>
-                  <span><Icon name="arrow" size={13} />{leg.to}</span>
+                  <strong>{formatHubName(leg.from)}</strong>
+                  <span><Icon name="arrow" size={13} />{formatHubName(leg.to)}</span>
                   {/* Legacy UI kept for reference (do not remove):
                       <small>{displayEnergy(leg.energyWh)} · Battery after {displayPct(leg.batteryAfter)}</small>
                       <small>Battery {leg.batteryId} · {leg.batteryModel} · {displayPct(leg.batteryChargePct)} · {displayEnergy(leg.batteryEnergyWh)}</small>
@@ -171,7 +172,7 @@ export function RouteOptionCard({
                 return (
                   <div className="mission-route-battery-hub" key={hub.hubId}>
                     <div className="mission-route-battery-hub-head">
-                      <strong>{hub.hubName}</strong>
+                      <strong>{formatHubName(hub.hubName)}</strong>
                       <a
                         href={`/operator/fleet-hubs/batteries?hub=${encodeURIComponent(hub.hubId)}`}
                         className="text-button"

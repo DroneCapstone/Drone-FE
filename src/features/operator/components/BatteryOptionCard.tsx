@@ -1,3 +1,5 @@
+import { formatBackendLabel } from '../utils/displayEnglish';
+import { formatHubName } from '../utils/displayEnglish';
 import { Icon } from '../../../components/ui/Icon';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { OperatorBattery } from '../types/operator';
@@ -20,9 +22,9 @@ export function BatteryOptionCard({ battery, selected = false, onSelect }: Batte
         <span className="eligible-drone-icon"><Icon name="battery" size={18} /></span>
         <div>
           <strong>{battery.serialNumber}</strong>
-          <small>{battery.capacityWh} Wh · {battery.hubName || battery.currentHubId}</small>
+          <small>{battery.capacityWh} Wh · {formatHubName(battery.hubName || battery.currentHubId)}</small>
         </div>
-        <StatusBadge tone="success">{battery.status}</StatusBadge>
+        <StatusBadge tone="success">{formatBackendLabel(battery.status)}</StatusBadge>
       </div>
       <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <span><small>Charge</small><strong>{battery.chargeLevelPct}%</strong></span>

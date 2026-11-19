@@ -141,7 +141,7 @@ export function formatDeliveryWindow(order: Order) {
   const sameDay = start.toDateString() === new Date().toDateString();
   const day = sameDay
     ? 'Today'
-    : start.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    : start.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+  const formatTime = (date: Date) => date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
   return `${day} · ${formatTime(start)}–${formatTime(end)}`;
 }
