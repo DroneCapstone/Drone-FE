@@ -1,3 +1,4 @@
+import { formatRouteName, formatBackendLabel } from '../../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
@@ -28,7 +29,7 @@ function valueOrDash(value: unknown) {
   if (value === undefined || value === null || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') return Number.isFinite(value) ? String(Number(value.toFixed(3))) : '—';
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return formatBackendLabel(value);
   return JSON.stringify(value);
 }
 function metric(value: number | undefined, unit: string, decimals = 1) {
@@ -164,8 +165,8 @@ export function TelemetryPage() {
                   onClick={() => selectAircraft(drone)}>
                   <div className="telemetry-aircraft-top"><strong>{drone.id}</strong><StatusBadge tone={tones[drone.health]}>{drone.health}</StatusBadge></div>
                   <small title={drone.missionId}>{drone.missionId || 'Mission ID unavailable'}</small>
-                  {hasIncident && <span className="telemetry-incident-label" title={incidentByMission.get(drone.missionId)?.description || drone.incidentReason || undefined}><Icon name="alert" size={13} /> Incident · {incidentByMission.get(drone.missionId)?.title || drone.incidentReason || 'Active alert'}</span>}
-                  {!hasIncident && drone.anomaly && <span className="telemetry-aircraft-note" title={drone.anomaly}>{drone.anomaly}</span>}
+                  {hasIncident && <span className="telemetry-incident-label" title={formatBackendLabel(incidentByMission.get(drone.missionId)?.description || drone.incidentReason) || undefined}><Icon name="alert" size={13} /> Incident · {formatBackendLabel(incidentByMission.get(drone.missionId)?.title || drone.incidentReason) || 'Active alert'}</span>}
+                  {!hasIncident && drone.anomaly && <span className="telemetry-aircraft-note" title={formatBackendLabel(drone.anomaly)}>{formatBackendLabel(drone.anomaly)}</span>}
                   <span className="telemetry-open-log">View log <Icon name="chevron" size={13} /></span>
                 </button>;
               })}
@@ -186,7 +187,7 @@ export function TelemetryPage() {
           </OperatorPanel> : <OperatorPanel className="telemetry-log-panel">
             <div className="telemetry-log-heading">
               <div><small>MISSION TELEMETRY</small><h2>{missionId}</h2>
-                <p>{selectedDrone?.id || aircraftId || 'Aircraft'}{selectedDrone?.route ? ` · ${selectedDrone.route}` : ''}</p>
+                <p>{selectedDrone?.id || aircraftId || 'Aircraft'}{selectedDrone?.route ? ` · ${formatRouteName(selectedDrone.route)}` : ''}</p>
               </div>
               <div className="telemetry-log-actions">
                 <span className="telemetry-row-count">{points.length} records</span>

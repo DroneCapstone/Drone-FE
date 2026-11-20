@@ -37,7 +37,7 @@ export function getMissionPreflight(
       label: 'Package at Drop-off Point',
       passed: Boolean(order?.originPackageReceived || order?.originHubReceivedAt),
       detail: order?.originHubReceivedAt
-        ? `Received ${new Date(order.originHubReceivedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+        ? `Received ${new Date(order.originHubReceivedAt).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
         : order?.originPackageReceived ? 'Technician receipt confirmed.' : 'Waiting for Technician to confirm package receipt.',
     },
     {

@@ -44,7 +44,7 @@ export function calculatePackageReceiveDeadline(createdAt: string | Date = new D
 
 export function formatMissionTime(value: string | Date) {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return date.toLocaleString([], {
+  return date.toLocaleString('en-GB', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

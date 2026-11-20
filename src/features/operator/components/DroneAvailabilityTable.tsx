@@ -1,3 +1,4 @@
+import { formatHubName } from '../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Hub, OperatorDrone } from '../types/operator';
@@ -39,7 +40,7 @@ export function DroneAvailabilityTable({ drones, hubs }: { drones: OperatorDrone
             <TableRow key={drone.id}>
               <TableCell data-label="Drone"><strong>{`${drone.name}-${drone.displayId}`}</strong></TableCell>
               <TableCell data-label="Model">{drone.model}</TableCell>
-              <TableCell data-label="Hub">{drone.hubName || hubNameById.get(drone.hubId) || drone.hubId || '—'}</TableCell>
+              <TableCell data-label="Hub">{formatHubName(drone.hubName || hubNameById.get(drone.hubId)) || drone.hubId || '—'}</TableCell>
               <TableCell data-label="Status"><StatusBadge tone={statusTone(drone.technicalStatus)}>{drone.technicalStatus}</StatusBadge></TableCell>
               <TableCell data-label="Battery">{drone.batteryLevelPct === undefined ? '—' : `${drone.batteryLevelPct}%`}</TableCell>
               <TableCell data-label="Max payload">{drone.maxPayloadKg} kg</TableCell>

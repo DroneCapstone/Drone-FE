@@ -1,10 +1,10 @@
+import { formatHubName, formatBackendLabel } from '../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from './OperatorTable';
 import { useNavigate } from 'react-router-dom';
 import './order-priority.css';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Mission, Order, PlanningState, Tone } from '../types/operator';
 import {
-  formatDeliveryWindow,
   getDeliveryMission,
   getOrderPlanningBadge,
   canCreateMissionForOrder,
@@ -18,13 +18,45 @@ function planningTone(state: PlanningState): Tone {
 }
 
 function hubName(hubId: string, apiName?: string) {
-  if (apiName) return apiName;
+  if (apiName) return formatHubName(apiName);
   if (!hubId) return 'Hub data unavailable';
   return hubId;
 }
 
-function receivedTime(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// Operator Orders show English date labels without changing API timestamps.
+const dateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric', month: 'short', year: 'numeric',
+});
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric', month: 'short',
+});
+const timeFormat = new Intl.DateTimeFormat('en-GB', {
+  hour: '2-digit', minute: '2-digit', hour12: false,
+});
+
+function formatDropOffReceived(value?: string) {
+  if (!value) return undefined;
+  const receivedAt = new Date(value);
+  if (!Number.isFinite(receivedAt.getTime())) return undefined;
+  return {
+    short: `${shortDateFormat.format(receivedAt)}, ${timeFormat.format(receivedAt)}`,
+    full: `${dateFormat.format(receivedAt)}, ${timeFormat.format(receivedAt)}`,
+  };
+}
+
+function formatOrderDeliveryWindow(order: Order) {
+  const { start, end } = order.currentEstimatedWindow;
+  if (!start || !end) return undefined;
+  const from = new Date(start);
+  const to = new Date(end);
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return undefined;
+
+  const fromDate = dateFormat.format(from);
+  const toDate = dateFormat.format(to);
+  return {
+    date: fromDate === toDate ? fromDate : `${fromDate} – ${toDate}`,
+    hours: `${timeFormat.format(from)}–${timeFormat.format(to)}`,
+  };
 }
 
 /**
@@ -88,7 +120,7 @@ export function OrderTable({
             <TableHead>Package</TableHead>
             <TableHead className="order-delivery-time-heading">Delivery Time</TableHead>
             <TableHead className="order-planning-heading">Planning Status</TableHead>
-            <TableHead className="order-action-heading" />
+            <TableHead className="order-action-heading">Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -97,6 +129,9 @@ export function OrderTable({
             const deliveryMission = getDeliveryMission(order.id, missions);
             const canCreate = canCreateMissionForOrder(order, missions);
             const planningTime = canCreate ? formatPlanningTime(order) : undefined;
+            const received = formatDropOffReceived(order.originHubReceivedAt);
+            const hasDropOffReceipt = Boolean(order.originPackageReceived || order.originHubReceivedAt);
+            const deliveryWindow = formatOrderDeliveryWindow(order);
 
             let action = 'Open';
             let target = `/operator/orders/${order.id}`;
@@ -116,7 +151,7 @@ export function OrderTable({
                 <TableCell className="order-number-cell">{startIndex + index + 1}</TableCell>
                 <TableCell>
                   <strong>{order.id}</strong>
-                  <small>{order.deliveryMode} · {order.status}</small>
+                  <small>{order.deliveryMode}</small>
                 </TableCell>
                 <TableCell className="order-route-cell">
                   <strong>
@@ -124,21 +159,33 @@ export function OrderTable({
                       ? `${hubName(order.originHubId, order.originHubName)} → ${hubName(order.destinationHubId, order.destinationHubName)}`
                       : 'Hub data unavailable'}
                   </strong>
+                  {hasDropOffReceipt && (
+                    <small
+                      className="order-dropoff-received"
+                      title={received ? `Received at Drop-off Point: ${received.full}` : 'Received at Drop-off Point'}
+                    >
+                      Drop-off received{received ? ` · ${received.short}` : ''}
+                    </small>
+                  )}
                 </TableCell>
                 <TableCell className="order-package-cell">
-                  {order.packageLabel}
+                  {formatBackendLabel(order.packageLabel)}
                   <small>{order.payloadKg} kg</small>
-                  <small className={(order.originPackageReceived || order.originHubReceivedAt) ? 'package-received-text' : 'package-awaiting-text'}>
-                    {(order.originPackageReceived || order.originHubReceivedAt) ? `Received at Drop-off Point${order.originHubReceivedAt ? ` · ${receivedTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package at Drop-off Point'}
-                  </small>
                 </TableCell>
                 <TableCell className="order-delivery-time-cell">
-                  <strong>{formatDeliveryWindow(order)}</strong>
+                  {deliveryWindow ? (
+                    <>
+                      <strong>{deliveryWindow.date}</strong>
+                      <small>{deliveryWindow.hours}</small>
+                    </>
+                  ) : <span>—</span>}
                 </TableCell>
                 <TableCell className="order-planning-cell">
                   <div className="order-delivery-meta">
                     {planning && <StatusBadge tone={planningTone(planning)}>{planning}</StatusBadge>}
-                    {!planning && order.status !== 'Pending' && <small>{order.status}</small>}
+                    {!planning && (
+                      <small className={canCreate ? 'order-actionable-status' : undefined}>{order.status}</small>
+                    )}
                   </div>
                   {planningTime && (
                     <small className={`operator-order-priority${planningTime.overdue ? ' operator-order-priority--overdue' : ''}`}>

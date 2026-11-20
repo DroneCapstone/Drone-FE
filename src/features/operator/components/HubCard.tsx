@@ -1,3 +1,4 @@
+import { formatHubName, formatAddress } from '../utils/displayEnglish';
 import { Icon } from '../../../components/ui/Icon';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { Hub } from '../types/operator';
@@ -24,8 +25,8 @@ export function HubCard({
     <article className="hub-card hub-resource-card">
       <div className="hub-card-head">
         <div>
-          {showArea && hub.area && <span className="eyebrow">{hub.area}</span>}
-          <h3>{hub.name}</h3>
+          {showArea && hub.area && <span className="eyebrow">{formatAddress(hub.area)}</span>}
+          <h3>{formatHubName(hub.name)}</h3>
         </div>
         <StatusBadge tone={hub.status === 'Active' ? 'success' : 'neutral'}>
           {hub.status}
@@ -34,7 +35,7 @@ export function HubCard({
 
       <div className="hub-card-location">
         <Icon name="pin" size={16} />
-        <span>{hub.address || 'Address unavailable'}</span>
+        <span>{formatAddress(hub.address) || 'Address unavailable'}</span>
       </div>
 
       <div className="hub-resource-stats">
@@ -42,8 +43,8 @@ export function HubCard({
           type="button"
           className="hub-resource-stat"
           onClick={onSelectDrones}
-          aria-label={`View drones at ${hub.name}`}
-          title={`View drones at ${hub.name}`}
+          aria-label={`View drones at ${formatHubName(hub.name)}`}
+          title={`View drones at ${formatHubName(hub.name)}`}
         >
           <small>Total drones</small>
           <strong>{totalDrones ?? '—'}</strong>
@@ -52,8 +53,8 @@ export function HubCard({
           type="button"
           className="hub-resource-stat"
           onClick={onSelectBatteries}
-          aria-label={`View batteries at ${hub.name}`}
-          title={`View batteries at ${hub.name}`}
+          aria-label={`View batteries at ${formatHubName(hub.name)}`}
+          title={`View batteries at ${formatHubName(hub.name)}`}
         >
           <small>Total batteries</small>
           <strong>{totalBatteries ?? '—'}</strong>

@@ -1,5 +1,4 @@
-/* Flight Missions: add No. column without changing existing table styles or behavior. */
-.mission-table--numbered { min-width: 950px; }
+/* Flight Missions: the No. column follows the active filter and pagination. */
 .mission-table--numbered .mission-number-heading,
 .mission-table--numbered .mission-number-cell {
   width: 52px;
@@ -10,4 +9,69 @@
   text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* Let the shared Table's data-slot="table-container" provide the horizontal
+   scrollbar. Every value keeps its natural width; do not clip, ellipsize, or
+   wrap Mission/Order IDs, Drone, Route, status, ETA, or energy details. */
+.operator-ui-table.mission-table {
+  width: max-content;
+  min-width: max(1100px, 100%);
+  table-layout: auto;
+}
+
+.operator-ui-table.mission-table thead [data-slot='table-head'],
+.operator-ui-table.mission-table tbody [data-slot='table-cell'] {
+  white-space: nowrap;
+}
+
+/* Energy intentionally has two semantic lines, but its description must not
+   split into a third line (e.g. "87% battery" / "after"). */
+.operator-ui-table.mission-table tbody [data-slot='table-cell'] > small {
+  white-space: nowrap;
+}
+
+/* Match Orders: keep Open within reach when the mission table scrolls sideways. */
+.operator-ui-table.mission-table thead .mission-action-heading,
+.operator-ui-table.mission-table tbody .mission-action-cell {
+  position: sticky;
+  right: 0;
+  width: 112px;
+  min-width: 112px;
+  box-sizing: border-box;
+  background: var(--surface);
+  box-shadow: -10px 0 14px -15px rgba(0, 0, 0, .35);
+}
+
+.operator-ui-table.mission-table thead .mission-action-heading {
+  z-index: 3;
+}
+
+.operator-ui-table.mission-table tbody .mission-action-cell {
+  z-index: 2;
+}
+
+.operator-ui-table.mission-table tbody tr:hover .mission-action-cell {
+  background: var(--surface-2);
+}
+
+.operator-ui-table.mission-table .mission-action-cell .row-action {
+  white-space: nowrap;
+}
+
+/* Match the existing Orders action interaction; the row hover is unchanged. */
+.operator-ui-table.mission-table .mission-action-cell .row-action:hover,
+.operator-ui-table.mission-table .mission-action-cell .row-action:focus-visible {
+  background-color: var(--orange);
+  color: #fff;
+}
+
+.operator-ui-table.mission-table .mission-action-cell .row-action:focus-visible {
+  outline: 2px solid var(--orange-bright);
+  outline-offset: 2px;
+}
+
+.operator-ui-table.mission-table .mission-action-cell .row-action:active {
+  background-color: var(--orange-bright);
+  color: #fff;
 }

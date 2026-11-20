@@ -7,8 +7,8 @@
   font-weight: 500;
   color: var(--muted-foreground, #778092);
 }
-.order-table td .operator-order-priority--overdue {
-  color: var(--danger, #c94239);
+.operator-ui-table.order-table .order-planning-cell .operator-order-priority--overdue {
+  color: var(--red, #e74f4f);
   font-weight: 600;
 }
 /* Previous priority-level styling, retained as a reference rather than deleted:
@@ -28,8 +28,8 @@
 }
 .order-table .order-planning-cell .order-delivery-meta { margin-top: 0; }
 .order-table .order-action-heading,
-.order-table .order-action-cell { min-width: 120px; width: 120px; }
-.order-table .order-package-cell { min-width: 185px; }
+.order-table .order-action-cell { min-width: 148px; width: 148px; }
+.order-table .order-package-cell { min-width: 145px; }
 
 /* Orders sequence number: presentation only; follows the current filter/sort and pagination. */
 .order-table { min-width: 1200px; }
@@ -43,4 +43,29 @@
   text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* Orders: keep the Action label visible above the pinned right-hand column.
+   Only statuses confirmed actionable by BE receive the orange attention color. */
+.operator-ui-table.order-table .order-planning-cell .order-delivery-meta small.order-actionable-status {
+  color: var(--orange);
+  font-weight: 600;
+}
+
+/* Scope the orange interaction to Orders action buttons, preserving the
+   neutral default and all other Operator buttons/dropdowns unchanged. */
+.operator-ui-table.order-table .order-action-cell .row-action:hover,
+.operator-ui-table.order-table .order-action-cell .row-action:focus-visible {
+  background-color: var(--orange);
+  color: #fff;
+}
+
+.operator-ui-table.order-table .order-action-cell .row-action:focus-visible {
+  outline: 2px solid var(--orange-bright);
+  outline-offset: 2px;
+}
+
+.operator-ui-table.order-table .order-action-cell .row-action:active {
+  background-color: var(--orange-bright);
+  color: #fff;
 }

@@ -1,3 +1,4 @@
+import { formatHubName } from '../../utils/displayEnglish';
 import type { LiveTrackingDrone } from '../../api/missionApi';
 import type { Mission } from '../../types/operator';
 
@@ -15,7 +16,7 @@ export interface LiveFlightStatus {
 }
 
 function hubLabel(hubId: string, hubNames: ReadonlyMap<string, string>): string {
-  return hubNames.get(hubId) || (hubId ? `Hub ${hubId}` : 'Relay hub');
+  return formatHubName(hubNames.get(hubId)) || (hubId ? `Hub ${hubId}` : 'Relay hub');
 }
 
 /**

@@ -1,3 +1,4 @@
+import { formatHubName, formatBackendLabel } from '../utils/displayEnglish';
 import { Icon } from '../../../components/ui/Icon';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import type { DroneEligibilityResult, OperatorDrone } from '../types/operator';
@@ -35,10 +36,10 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
       </div>
 
       {drone.isCrossHub && (
-        <p className="eligible-drone-reason">Cross-hub dispatch · {drone.hubName || `Hub ${drone.hubId}`}</p>
+        <p className="eligible-drone-reason">Cross-hub dispatch · {formatHubName(drone.hubName || `Hub ${drone.hubId}`)}</p>
       )}
       {!eligibility.eligible && eligibility.reasons.length > 0 && (
-        <p className="eligible-drone-reason">{eligibility.reasons[0]}</p>
+        <p className="eligible-drone-reason">{formatBackendLabel(eligibility.reasons[0])}</p>
       )}
     </button>
   );
