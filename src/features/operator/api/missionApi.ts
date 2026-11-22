@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -113,6 +113,8 @@ export interface OperatorIncident {
 
 export interface MissionPlanningAnalysis {
   routes: RouteOption[];
+  /** BE Analyze response-level XAI recommendation details (v8.5). */
+  routeExplanation?: RoutePlanningExplanation;
   totalPayloadKg?: number;
   bundledOrderIds?: string[];
   raw: unknown;
@@ -735,6 +737,40 @@ function mapRouteAiExplanation(raw: unknown): RouteAiExplanation | undefined {
   };
 }
 
+/** BE v8.5 optional, snake_case and camelCase response compatibility. */
+function mapRouteComparison(raw: unknown): RouteComparisonVsRecommended | undefined {
+  if (!isRecord(raw)) return undefined;
+  return {
+    deltaDistanceKm: pickOptionalNumber(raw, ['delta_distance_km', 'deltaDistanceKm']),
+    deltaDurationMin: pickOptionalNumber(raw, ['delta_duration_min', 'deltaDurationMin']),
+    deltaEnergyWh: pickOptionalNumber(raw, ['delta_energy_wh', 'deltaEnergyWh']),
+    sameHubPath: pickOptionalBoolean(raw, ['same_hub_path', 'sameHubPath']),
+    differenceSummary: pickString(raw, ['difference_summary', 'differenceSummary']) || undefined,
+  };
+}
+
+function mapRoutePlanningExplanation(raw: unknown): RoutePlanningExplanation | undefined {
+  if (!isRecord(raw)) return undefined;
+  const alternatives: RouteAlternativeExplanation[] = pickArray(raw, ['why_not_others', 'whyNotOthers'])
+    .map(asRecord)
+    .map((item) => ({
+      id: pickString(item, ['id', 'route_id', 'routeId']),
+      label: pickString(item, ['label']) || undefined,
+      feasible: pickOptionalBoolean(item, ['feasible', 'is_feasible', 'isFeasible']),
+      reason: pickString(item, ['reason']) || undefined,
+    }))
+    .filter((item) => Boolean(item.id));
+  return {
+    selectedId: pickString(raw, ['selected_id', 'selectedId']) || undefined,
+    selectedLabel: pickString(raw, ['selected_label', 'selectedLabel']) || undefined,
+    summary: pickString(raw, ['summary']) || undefined,
+    reasonsSelected: pickArray(raw, ['reasons_selected', 'reasonsSelected'])
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+      .map((value) => value.trim()),
+    whyNotOthers: alternatives,
+  };
+}
+
 function mapRouteOption(raw: unknown, index: number): RouteOption {
   const record = asRecord(raw);
   const legRecords = pickArray(record, ['legs_detail', 'legsDetail', 'legs', 'route_legs', 'routeLegs']);
@@ -781,6 +817,11 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     shapValues: mapRouteShapValues(record.shap_values ?? record.shapValues),
     flightSpeedMps: pickOptionalNumber(record, ['flight_speed_mps', 'flightSpeedMps']),
     speedProfileLabel: pickString(record, ['speed_profile_label', 'speedProfileLabel']) || undefined,
+    strategyCode: pickString(record, ['strategy_code', 'strategyCode']) || undefined,
+    displayTitle: pickString(record, ['display_title', 'displayTitle']) || undefined,
+    corridorType: pickString(record, ['corridor_type', 'corridorType']) || undefined,
+    differentiatorTag: pickString(record, ['differentiator_tag', 'differentiatorTag']) || undefined,
+    comparisonVsRecommended: mapRouteComparison(record.comparison_vs_recommended ?? record.comparisonVsRecommended),
     aiExplanation: mapRouteAiExplanation(record.ai_explanation ?? record.aiExplanation),
     legs: legRecords.map(mapRouteLeg),
     relayBatteryPlan: (detailedPlan.length > 0 ? detailedPlan : relayBatteryStatus).map(mapRelayBattery),
@@ -1190,6 +1231,7 @@ export async function analyzeMissionPlanningApi(
   }
   return {
     routes,
+    routeExplanation: mapRoutePlanningExplanation(root.route_explanation ?? root.routeExplanation),
     totalPayloadKg: analyzedTotalPayloadKg,
     bundledOrderIds: analyzedBundleIds,
     raw: payload,

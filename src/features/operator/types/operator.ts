@@ -309,6 +309,32 @@ export interface RouteAiExplanation {
   legsBreakdown: unknown[];
 }
 
+/** Presentation metadata added to Analyze routes in BE v8.5 (all fields optional). */
+export interface RouteComparisonVsRecommended {
+  deltaDistanceKm?: number;
+  deltaDurationMin?: number;
+  deltaEnergyWh?: number;
+  sameHubPath?: boolean;
+  differenceSummary?: string;
+}
+
+/** BE's reason for preferring another route. */
+export interface RouteAlternativeExplanation {
+  id: string;
+  label?: string;
+  feasible?: boolean;
+  reason?: string;
+}
+
+/** Explanation shared by all route options in one Analyze response. */
+export interface RoutePlanningExplanation {
+  selectedId?: string;
+  selectedLabel?: string;
+  summary?: string;
+  reasonsSelected: string[];
+  whyNotOthers: RouteAlternativeExplanation[];
+}
+
 export interface RouteOption {
   id: string;
   name: string;
@@ -334,6 +360,16 @@ export interface RouteOption {
   shapValues?: Record<string, number>;
   flightSpeedMps?: number;
   speedProfileLabel?: string;
+  /** BE v8.5: strategy classification; do not derive from route ID. */
+  strategyCode?: string;
+  /** BE v8.5: e.g. Energy Saver Relay, Safe Low-Speed Relay. */
+  displayTitle?: string;
+  /** BE v8.5: e.g. DIRECT, RELAY_PRIMARY, RELAY_ALTERNATE. */
+  corridorType?: string;
+  /** BE v8.5: short differentiation supplied by backend. */
+  differentiatorTag?: string;
+  /** BE v8.5: comparison to recommended strategy; values may be zero. */
+  comparisonVsRecommended?: RouteComparisonVsRecommended;
   aiExplanation?: RouteAiExplanation;
   /** Optional FE display of the new BE relay_battery_status payload (schema not documented). */
   rawRelayBatteryStatus?: unknown[];

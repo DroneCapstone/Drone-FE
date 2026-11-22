@@ -32,13 +32,16 @@ const displayPct = (value?: number) =>
   typeof value === 'number' && Number.isFinite(value) ? `${value}%` : '—';
 
 function getRouteLabel(route: RouteOption) {
+  // BE v8.5 supplies presentation titles for ECO, FAST, SAFE and other strategies.
+  // Retain the old label as a fallback for earlier API responses.
+  const backendTitle = route.displayTitle?.trim();
+  if (backendTitle) return backendTitle;
   const relay = Boolean(route.relayHubIds?.length);
   return relay ? 'Relay route' : 'Direct route';
 }
 
 export function RouteOptionCard({
   route,
-  remainingBattery,
   selected = false,
   expanded = false,
   plannedStartAt,
@@ -49,39 +52,38 @@ export function RouteOptionCard({
   onViewDetails,
 }: RouteOptionCardProps) {
   const hasRelay = Boolean(route.relayHubIds?.length);
+  const legBatteryUse = getRouteLegBatteryUse(route);
   const hasDispatch = route.legDetails?.some(leg => leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH') === true;
   const legs = (route.legDetails ?? []).map((leg, index) => ({
     from: leg.from_hub_name || (leg.from_hub_id != null ? resolveHubName?.(String(leg.from_hub_id)) : null) || leg.from_hub_code,
     to: leg.to_hub_name || (leg.to_hub_id != null ? resolveHubName?.(String(leg.to_hub_id)) : null) || leg.to_hub_code,
     distanceKm: leg.distance_km,
-    energyWh: route.legs?.[index]?.predictedEnergyWh,
-    batteryAfter: route.legs?.[index]?.endingSocPct,
+    energyWh: leg.energy_wh ?? route.legs?.[index]?.predictedEnergyWh,
     batteryId: leg.battery_id ?? route.legs?.[index]?.batteryId,
-    batteryModel: leg.battery_model ?? route.legs?.[index]?.batteryModel,
+    energyConsumptionPct: legBatteryUse[index]?.batteryUsePct,
     batteryChargePct: leg.battery_charge_pct ?? route.legs?.[index]?.batteryChargePct,
-    batteryEnergyWh: leg.battery_energy_wh ?? route.legs?.[index]?.batteryEnergyWh,
     isDispatch: leg.is_dispatch === true || leg.leg_type?.toUpperCase() === 'DISPATCH',
-    payloadKg: leg.payload_kg,
   }));
   // Older API responses only provide leg IDs. Do not invent leg distances or energy.
   if (!legs.length && route.legs?.length) {
-    route.legs.forEach((leg) => legs.push({
+    route.legs.forEach((leg, index) => legs.push({
       from: resolveHubName?.(leg.fromHubId) ?? leg.fromHubId,
       to: resolveHubName?.(leg.toHubId) ?? leg.toHubId,
       distanceKm: Number.NaN,
       energyWh: leg.predictedEnergyWh,
-      batteryAfter: leg.endingSocPct,
       batteryId: leg.batteryId,
-      batteryModel: leg.batteryModel,
+      energyConsumptionPct: legBatteryUse[index]?.batteryUsePct,
       batteryChargePct: leg.batteryChargePct,
-      batteryEnergyWh: leg.batteryEnergyWh,
       isDispatch: false,
-      payloadKg: undefined,
     }));
   }
 
-  const routePath = route.routeString ||
-    (legs.length ? [legs[0].from, ...legs.map((leg) => leg.to)].join(' → ') : route.name);
+  // Prefer the leg geometry from BE for the visible hub-to-hub route.
+  // Hide parenthetical metadata (speed, altitude, algorithm tags) only in this UI;
+  // preserve route.routeString unchanged for BE and AI analysis.
+  const routePath = legs.length
+    ? [legs[0].from, ...legs.map((leg) => leg.to)].map((name) => formatHubName(name)).join(' → ')
+    : formatRouteName((route.routeString || route.name).split('(')[0].trim());
 
   return (
     <article className={`mission-route-card${selected ? ' is-selected' : ''}${expanded ? ' is-expanded' : ''}`}>
@@ -110,11 +112,11 @@ export function RouteOptionCard({
             <span className={`mission-route-chevron${expanded ? ' is-open' : ''}`}><Icon name="chevron" size={17} /></span>
           </span>
         </span>
-        <span className="mission-route-path">{formatRouteName(routePath)}</span>
+        <span className="mission-route-path">{routePath}</span>
         <span className="mission-route-key-metrics">
           <span><small>Distance</small><strong>{Number.isFinite(route.distanceKm) ? `${route.distanceKm.toFixed(2)} km` : '—'}</strong></span>
           <span><small>Duration</small><strong>{Number.isFinite(route.predictedDurationMin) ? `${route.predictedDurationMin} min` : '—'}</strong></span>
-          <span><small>Energy</small><strong>{displayEnergy(route.predictedEnergyWh)}</strong></span>
+          <span><small>Total estimated energy</small><strong>{displayEnergy(route.predictedEnergyWh)}</strong></span>
         </span>
       </button>
       <button type="button" className="text-button mission-route-ai-details" onClick={onViewDetails}>
@@ -131,26 +133,25 @@ export function RouteOptionCard({
           <div className="mission-route-legs">
             {legs.length ? legs.map((leg, index) => (
               <div className="mission-route-leg" key={`${route.id}-leg-${index}`}>
-                <span className="mission-route-leg-number">{index + 1}</span>
-                <div className="mission-route-leg-places">
-                  {leg.isDispatch && <small>Dispatch flight · 0 kg (no package)</small>}
-                  <strong>{formatHubName(leg.from)}</strong>
-                  <span><Icon name="arrow" size={13} />{formatHubName(leg.to)}</span>
-                  {/* Legacy UI kept for reference (do not remove):
-                      <small>{displayEnergy(leg.energyWh)} · Battery after {displayPct(leg.batteryAfter)}</small>
-                      <small>Battery {leg.batteryId} · {leg.batteryModel} · {displayPct(leg.batteryChargePct)} · {displayEnergy(leg.batteryEnergyWh)}</small>
-                      Only the labels/order below change; energy and SoC still come from BE.
-                  */}
-                  {(leg.energyWh !== undefined || leg.batteryAfter !== undefined) && (
-                    <small>{leg.energyWh !== undefined ? `Energy: ${displayEnergy(leg.energyWh)}` : ''}{leg.energyWh !== undefined && leg.batteryAfter !== undefined ? ' · ' : ''}{leg.batteryAfter !== undefined ? `Remaining: ${displayPct(leg.batteryAfter)}` : ''}</small>
+                <div className="mission-route-leg-heading">
+                  <span className="mission-route-leg-number">Leg {index + 1}</span>
+                  <div className="mission-route-leg-places">
+                    <strong>{formatHubName(leg.from)} → {formatHubName(leg.to)}</strong>
+                    {leg.isDispatch && <small>Dispatch flight · 0 kg (no package)</small>}
+                  </div>
+                  {Number.isFinite(leg.distanceKm) && (
+                    <span className="mission-route-leg-distance">{leg.distanceKm.toFixed(2)} km</span>
                   )}
-                  <small className="mission-route-leg-battery">
-                    {leg.batteryId
-                      ? <>Battery: <strong>{leg.batteryId}</strong>{leg.batteryEnergyWh !== undefined ? ` · ${displayEnergy(leg.batteryEnergyWh)}` : ''}{leg.batteryChargePct !== undefined ? ` · Start: ${displayPct(leg.batteryChargePct)}` : ''}</>
-                      : leg.isDispatch ? 'Dispatch battery not provided' : hasRelay && index > 0 ? 'Relay battery not assigned' : 'Battery not provided'}
-                  </small>
                 </div>
-                {Number.isFinite(leg.distanceKm) && <span className="mission-route-leg-distance">{leg.distanceKm.toFixed(2)} km</span>}
+                <div className="mission-route-leg-metrics">
+                  <span><small>Starting charge</small><strong>{displayPct(leg.batteryChargePct)}</strong></span>
+                  <span><small>Energy consumption</small><strong className="mission-route-leg-consumption">{displayPct(leg.energyConsumptionPct)}</strong></span>
+                  <span><small>Estimated energy required</small><strong>{displayEnergy(leg.energyWh)}</strong></span>
+                  <span>
+                    <small>{index === 0 ? 'Departure battery' : hasRelay ? 'Relay battery' : 'Assigned battery'}</small>
+                    <strong className="mission-route-leg-assigned-battery">{leg.batteryId || 'Not assigned'}</strong>
+                  </span>
+                </div>
               </div>
             )) : (
               <p className="mission-route-muted">Flight leg details are not available.</p>
@@ -160,15 +161,17 @@ export function RouteOptionCard({
           {hasRelay && (
             <section className="mission-route-battery-section">
               <div className="mission-route-section-head">
-                <strong>Assigned relay batteries</strong>
+                <strong>Relay battery details</strong>
               </div>
               {relayHubs.map((hub) => {
                 const allocation = route.relayBatteryPlan?.find((item) => item.hubId === hub.hubId);
                 const nextLegBattery = route.legs?.find((leg) => leg.fromHubId === hub.hubId);
                 const batteryId = allocation?.swapBatteryId ?? nextLegBattery?.batteryId;
                 const model = allocation?.selectedBatteryModel ?? nextLegBattery?.batteryModel ?? allocation?.batteryModel;
-                const charge = allocation?.selectedBatteryChargePct ?? nextLegBattery?.batteryChargePct;
                 const energy = allocation?.selectedBatteryEnergyWh ?? nextLegBattery?.batteryEnergyWh;
+                const detailedLegIndex = route.legDetails?.findIndex((leg) => String(leg.from_hub_id) === hub.hubId) ?? -1;
+                const mappedLegIndex = route.legs?.findIndex((leg) => leg.fromHubId === hub.hubId) ?? -1;
+                const outgoingLegIndex = detailedLegIndex >= 0 ? detailedLegIndex : mappedLegIndex;
                 return (
                   <div className="mission-route-battery-hub" key={hub.hubId}>
                     <div className="mission-route-battery-hub-head">
@@ -181,10 +184,13 @@ export function RouteOptionCard({
                         rel="noopener noreferrer"
                       >View Battery</a>
                     </div>
+                    <p className="mission-route-battery-context">
+                      {batteryId
+                        ? `Details of the battery automatically assigned to ${outgoingLegIndex >= 0 ? `Leg ${outgoingLegIndex + 1}` : 'the next flight leg'}`
+                        : 'Relay battery assignment is not available'}
+                    </p>
                     <div className="mission-route-battery-metrics">
-                      <div><small>Assigned battery</small><strong>{batteryId || 'Not assigned'}</strong></div>
                       <div><small>Battery model</small><strong>{model || '—'}</strong></div>
-                      <div><small>Charge</small><strong>{displayPct(charge)}</strong></div>
                       <div><small>Available energy</small><strong>{displayEnergy(energy)}</strong></div>
                     </div>
                     {!batteryId && <p className="mission-route-muted">No eligible relay battery has been assigned for this route.</p>}
@@ -195,23 +201,12 @@ export function RouteOptionCard({
           )}
 
           <section className="mission-route-energy-section">
-            <div className="mission-route-section-head"><strong>Energy & timing</strong></div>
-            <div className="mission-route-detail-grid">
-              <span>
-                <small>{hasRelay ? 'Battery use by leg' : 'Battery use'}</small>
-                <strong style={hasRelay ? { fontSize: 13, lineHeight: 1.6 } : undefined}>
-                  {hasRelay
-                    ? getRouteLegBatteryUse(route).map((leg) =>
-                        `Leg ${leg.legNumber}: ${displayPct(leg.batteryUsePct)}`,
-                      ).join(' · ') || '—'
-                    : displayPct(route.batteryConsumptionPct)}
-                </strong>
-              </span>
-              <span><small>{hasRelay ? 'Battery after final leg' : 'Battery after'}</small><strong>{displayPct(remainingBattery)}</strong></span>
-              <span><small>Minimum reserve</small><strong>{DEFAULT_BATTERY_RESERVE_PCT}%</strong></span>
-              <span><small>Risk</small><strong>{route.risk}</strong></span>
+            <div className="mission-route-section-head"><strong>Schedule & safety</strong></div>
+            <div className="mission-route-detail-grid mission-route-safety-grid">
               <span><small>Planned start</small><strong>{formatMissionTime(plannedStartAt)}</strong></span>
               <span><small>Estimated arrival</small><strong>{formatMissionTime(estimatedArrivalAt)}</strong></span>
+              <span><small>Minimum reserve</small><strong>{DEFAULT_BATTERY_RESERVE_PCT}%</strong></span>
+              <span><small>Risk</small><strong className={`mission-route-risk-${route.risk.toLowerCase()}`}>{route.risk}</strong></span>
             </div>
           </section>
         </div>
