@@ -1,4 +1,4 @@
-import { formatHubName, formatRouteName } from '../../utils/displayEnglish';
+import { formatHubName } from '../../utils/displayEnglish';
 import { Fragment } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { Clock, Info } from 'lucide-react';
@@ -65,8 +65,11 @@ export function MissionDetailPage() {
   const hasFlightHistory = isFlightHistoryRecord(mission);
   const originName = formatHubName(originHub?.name) || mission.originHubId || '—';
   const destinationName = formatHubName(destinationHub?.name) || mission.destinationHubId || '—';
-  const originBatteryId = mission.legs?.[0]?.batteryId || mission.batteryId || '—';
+  const firstLeg = mission.legs?.[0];
+  const originBatteryId = firstLeg?.batteryId || mission.batteryId || '—';
   const orderCodeStart = mission.orderId ? mission.name.indexOf(mission.orderId) : -1;
+  const totalOrders = mission.totalOrdersCount ?? (1 + (mission.bundledOrderIds?.length ?? 0));
+  const totalLegs = mission.legs?.length ?? 0;
 
   return (
     <MissionPageShell active="/operator/missions/all">
@@ -75,7 +78,6 @@ export function MissionDetailPage() {
           <OperatorPanel className="mission-detail-hero-panel">
             <div className="mission-hero">
               <div className="mission-detail-heading">
-                {/* Preserve the existing blue Scheduled badge and status tones. */}
                 <StatusBadge tone={mission.tone}>{mission.status}</StatusBadge>
                 <h2>
                   {orderCodeStart >= 0 ? (
@@ -119,7 +121,6 @@ export function MissionDetailPage() {
                     Flight history
                   </ActionButton>
                 )}
-                {/* AI analysis is only offered while choosing a route in Create Mission. */}
                 <ActionButton
                   variant="secondary"
                   onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
@@ -132,44 +133,6 @@ export function MissionDetailPage() {
                 >
                   AI analysis
                 </ActionButton>
-
-
-
-                {/* {mission.orderId &&
-                  mission.droneId &&
-                  mission.routeId &&
-                  (mission.legs?.[0]?.batteryId || mission.batteryId) && (
-                    <ActionButton
-                      variant="secondary"
-                      onClick={() => {
-                        const batteryId =
-                          mission.legs?.[0]?.batteryId ?? mission.batteryId;
-
-                        if (!batteryId) return;
-
-                        const params = new URLSearchParams({
-                          orderId: mission.orderId,
-                          droneId: mission.droneId,
-                          batteryId,
-                          routeId: mission.routeId,
-                          ...(mission.bundledOrderIds?.length
-                            ? {
-                              bundledOrderIds:
-                                mission.bundledOrderIds.join(','),
-                            }
-                            : {}),
-                        });
-
-                        navigate(
-                          `/operator/ai/mission-analysis?${params.toString()}`
-                        );
-                      }}
-                    >
-                      AI analysis
-                    </ActionButton>
-                  )}
- */}
-
               </div>
             </div>
 
@@ -201,19 +164,18 @@ export function MissionDetailPage() {
 
           <OperatorPanel className="mission-detail-plan-panel">
             <div className="mission-detail-section-title">
-              {/* Only this heading's map icon changes to orange. */}
               <svg className="mission-detail-map-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M3 6.5 9 3l6 3 6-3v14.5L15 21l-6-3-6 3V6.5Z" />
                 <path d="M9 3v15M15 6v15" />
               </svg>
               <h2>Mission plan</h2>
             </div>
-            {/* No duplicated “Mission route” subheading. */}
+
             <div className="mission-route-flow mission-detail-route-flow">
               <div className="mission-route-node mission-detail-route-node">
                 <span className="mission-detail-location-mark origin"><Icon name="pin" size={19} /></span>
                 <span className="mission-detail-route-label">
-                  <small>Drop-off Point</small>
+                  <small>Origin Hub</small>
                   <strong>{originName}</strong>
                 </span>
               </div>
@@ -225,7 +187,6 @@ export function MissionDetailPage() {
                     <span className="mission-detail-route-label">
                       <small>Relay Hub</small>
                       <strong>{formatHubName(hub.name)}</strong>
-                      {/* <small>Technical stop</small> */}
                     </span>
                   </div>
                 </Fragment>
@@ -234,7 +195,7 @@ export function MissionDetailPage() {
               <div className="mission-route-node mission-detail-route-node">
                 <span className="mission-detail-location-mark destination"><Icon name="pin" size={19} /></span>
                 <span className="mission-detail-route-label">
-                  <small>Pick-up Point</small>
+                  <small>Destination Hub</small>
                   <strong>{destinationName}</strong>
                 </span>
               </div>
@@ -260,6 +221,7 @@ export function MissionDetailPage() {
                 ))}
               </div>
             )}
+
             {hubCheckpoints && hubCheckpoints.length > 0 && (
               <div className="mission-leg-list mission-detail-leg-list">
                 {hubCheckpoints.map((checkpoint) => (
@@ -284,23 +246,28 @@ export function MissionDetailPage() {
             </div>
             <dl className="key-values mission-detail-facts">
               <div><dt>Drone</dt><dd>{mission.drone || mission.droneId || '—'}</dd></div>
-              <div><dt>{mission.legs?.[0]?.isDispatch ? 'Dispatch battery' : 'Origin battery'}</dt><dd>{originBatteryId}</dd></div>
+              <div>
+                <dt>{firstLeg?.isDispatch ? 'Dispatch battery' : 'Origin battery'}</dt>
+                <dd>
+                  {originBatteryId}
+                  {(firstLeg?.batteryModel || firstLeg?.batteryChargePct !== undefined || firstLeg?.batteryEnergyWh !== undefined) && (
+                    <small className="mission-detail-inline-note">
+                      {[
+                        firstLeg?.batteryModel,
+                        firstLeg?.batteryChargePct !== undefined ? `${firstLeg.batteryChargePct}%` : null,
+                        firstLeg?.batteryEnergyWh !== undefined ? `${firstLeg.batteryEnergyWh.toFixed(1)} Wh` : null,
+                      ].filter(Boolean).join(' · ')}
+                    </small>
+                  )}
+                </dd>
+              </div>
               <div><dt>Payload</dt><dd>{mission.payloadWeightKg !== undefined
                 ? `${mission.payloadWeightKg.toFixed(2)} kg`
                 : mission.bundledOrderIds?.length ? '—' : order ? `${order.payloadKg} kg` : '—'}</dd></div>
-              {(mission.bundledOrderIds?.length || (mission.totalOrdersCount ?? 1) > 1) ? (
-                <>
-                  <div><dt>Orders</dt><dd>{mission.totalOrdersCount ?? 1 + (mission.bundledOrderIds?.length ?? 0)}</dd></div>
-                  {mission.bundledOrderIds && mission.bundledOrderIds.length > 0 && (
-                    <div><dt>Bundled orders</dt><dd>{mission.bundledOrderIds.join(', ')}</dd></div>
-                  )}
-                </>
-              ) : null}
-              <div><dt>Drop-off Point</dt><dd>{originName}</dd></div>
               <div><dt>Origin package</dt><dd>{order?.originHubReceivedAt ? `Received · ${formatMissionTime(order.originHubReceivedAt)}` : 'Awaiting package'}</dd></div>
-              {relayHubs.length > 0 && <div><dt>Relay Hub</dt><dd>{relayHubs.map((hub) => formatHubName(hub.name)).join(' → ')}</dd></div>}
-              <div><dt>Pick-up Point</dt><dd>{destinationName}</dd></div>
-              <div><dt>Route</dt><dd>{mission.routeId || '—'}{mission.route ? ` · ${formatRouteName(mission.route)}` : ''}</dd></div>
+              <div><dt>Orders</dt><dd>{totalOrders} {totalOrders === 1 ? 'order' : 'orders'}</dd></div>
+              <div><dt>Flight legs</dt><dd>{totalLegs} {totalLegs === 1 ? 'leg' : 'legs'}</dd></div>
+              <div><dt>Route ID</dt><dd>{mission.routeId || '—'}</dd></div>
             </dl>
           </OperatorPanel>
 
@@ -314,8 +281,7 @@ export function MissionDetailPage() {
               <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>
               <div><dt>Predicted duration</dt><dd>{mission.predictedDurationMin} min</dd></div>
               <div><dt>Energy (predicted)</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
-              <div><dt>Battery use (predicted)</dt><dd>{mission.batteryConsumptionPct}%</dd></div>
-              <div><dt>Battery after</dt><dd>{mission.battery}%</dd></div>
+              <div><dt>Energy consumption</dt><dd>{mission.batteryConsumptionPct}% </dd></div>
             </dl>
           </OperatorPanel>
         </aside>

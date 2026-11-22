@@ -77,6 +77,9 @@ export function OrderDetailPage() {
   const deliveryMission = getDeliveryMission(order.id, missions);
   const planning = getOrderPlanningBadge(order, missions);
   const actionable = canCreateMissionForOrder(order, missions);
+  const customerFieldLabel = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.customerName)
+    ? 'Customer ID'
+    : 'Customer';
 
   return (
     <OrderPageShell active="/operator/orders/all">
@@ -86,8 +89,7 @@ export function OrderDetailPage() {
             <div className="mission-hero">
               <div>
                 <StatusBadge tone={orderTone(order.status)}>{order.status}</StatusBadge>
-                <h2>{order.id}</h2>
-                <p>{order.customerName} · {formatBackendLabel(order.packageLabel)} · {order.deliveryMode}</p>
+                <h2 style={{ color: 'var(--orange)' }}>{order.id}</h2>
               </div>
               <div className="mission-hero-actions">
                 {deliveryMission && <ActionButton onClick={() => navigate(`/operator/missions/${deliveryMission.id}`)}>View delivery mission</ActionButton>}
@@ -103,18 +105,21 @@ export function OrderDetailPage() {
           <OperatorPanel title="Delivery request" eyebrow="">
             <dl className="review-values">
               <div><dt>Delivery mode</dt><dd>{order.deliveryMode}</dd></div>
-              <div><dt>Drop-off Point</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
-              <div><dt>Pick-up Point</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
+              <div>
+                <dt>{customerFieldLabel}</dt>
+                <dd style={{ overflowWrap: 'anywhere' }}>{order.customerName}</dd>
+              </div>
+              <div><dt>Origin Hub</dt><dd>{hubName(order.originHubId, order.originHubName)}</dd></div>
+              <div><dt>Destination Hub</dt><dd>{hubName(order.destinationHubId, order.destinationHubName)}</dd></div>
+              <div><dt>Package</dt><dd>{formatBackendLabel(order.packageLabel)}</dd></div>
+              <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div>
                 <dt>Origin package</dt>
                 <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
               </div>
-              <div><dt>Package</dt><dd>{formatBackendLabel(order.packageLabel)}</dd></div>
-              <div><dt>Package type</dt><dd>{formatBackendLabel(order.packageType)}</dd></div>
-              <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div><dt>Estimated delivery</dt><dd>{formatDeliveryWindow(order)}</dd></div>
-              <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>
               <div><dt>Planning state</dt><dd>{planning ?? '—'}</dd></div>
+              <div><dt>Planning opens</dt><dd>{formatMissionTime(order.planningAt)}</dd></div>
               {order.destinationHubReceivedAt && (
                 <div><dt>Received at Pick-up Point</dt><dd>{formatMissionTime(order.destinationHubReceivedAt)}</dd></div>
               )}
