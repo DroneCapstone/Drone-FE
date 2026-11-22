@@ -6,7 +6,7 @@ import {
 
 import {
   analyzeMissionPlanningApi,
-  previewAutoDispatchApi,
+  recommendDispatchResourcesApi,
   collectMissionTelemetryApi,
   createIncidentApi,
   createMissionApi,
@@ -26,7 +26,7 @@ import {
   listMissionMiniHubsApi,
   updateIncidentStatusApi,
   type AnalyzeMissionPlanningInput,
-  type AutoDispatchPreviewInput,
+  type RecommendDispatchResourcesInput,
   type CreateIncidentInput,
   type CreateMissionInput,
   type UpdateIncidentStatusInput,
@@ -183,10 +183,10 @@ export function usePostAnalyzeBundleCandidatesQuery(
   });
 }
 
-/** Auto-select suggestions only; never creates a Mission. */
-export function useAutoDispatchPreviewMutation() {
+/** Read-only BE resource suggestions; never invokes the full auto-dispatch flow. */
+export function useRecommendDispatchResourcesMutation() {
   return useMutation({
-    mutationFn: (input: AutoDispatchPreviewInput) => previewAutoDispatchApi(input),
+    mutationFn: (input: RecommendDispatchResourcesInput) => recommendDispatchResourcesApi(input),
   });
 }
 

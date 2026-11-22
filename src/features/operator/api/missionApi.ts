@@ -169,17 +169,35 @@ export interface AnalyzeMissionPlanningInput {
   bundledOrderIds?: string[];
 }
 
-/** Safe preview: dry_run=true must never create a Mission. */
-export interface AutoDispatchPreviewInput {
+/** Resource recommendation is read-only: unlike /auto-dispatch, it never creates a Mission. */
+export interface RecommendDispatchResourcesInput {
   orderId: string;
   bundledOrderIds?: string[];
-  recommendMode?: string;
 }
 
-export interface AutoDispatchPreview {
+/** BE's descriptive, criteria-based resource selection explanation (not a numeric SHAP score). */
+export interface DispatchResourceAlternative {
+  id: string;
+  label: string;
+  reason: string;
+  feasible?: boolean;
+}
+
+export interface DispatchResourceExplanation {
+  selectedId?: string;
+  selectedLabel?: string;
+  summary?: string;
+  reasonsSelected: string[];
+  whyNotOthers: DispatchResourceAlternative[];
+}
+
+export interface DispatchResourceRecommendation {
   selectedDroneId: string;
   selectedBatteryId: string;
-  selectedRouteId: string;
+  droneExplanation: DispatchResourceExplanation;
+  batteryExplanation: DispatchResourceExplanation;
+  /** Preserve BE's per-drone eligible_batteries data without guessing its schema. */
+  availableDrones: unknown[];
 }
 
 /** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
@@ -1183,21 +1201,46 @@ export async function getEligibleMissionBatteriesApi(
   }).filter((item): item is EligibleMissionBattery => item !== null);
 }
 
-/** Suggest the entire plan, without writing a Mission. The Operator may override each choice. */
-export async function previewAutoDispatchApi(
-  input: AutoDispatchPreviewInput,
-): Promise<AutoDispatchPreview> {
+function mapDispatchResourceExplanation(value: unknown): DispatchResourceExplanation {
+  const record = asRecord(value);
+  return {
+    selectedId: pickString(record, ['selected_id', 'selectedId']) || undefined,
+    selectedLabel: pickString(record, ['selected_label', 'selectedLabel']) || undefined,
+    summary: pickString(record, ['summary']) || undefined,
+    reasonsSelected: pickArray(record, ['reasons_selected', 'reasonsSelected'])
+      .filter((reason): reason is string => typeof reason === 'string'),
+    whyNotOthers: pickArray(record, ['why_not_others', 'whyNotOthers'])
+      .map((item): DispatchResourceAlternative | null => {
+        const alternative = asRecord(item);
+        const id = pickString(alternative, ['id']);
+        const label = pickString(alternative, ['label']) || id;
+        const reason = pickString(alternative, ['reason']);
+        if (!id || !reason) return null;
+        return {
+          id,
+          label,
+          reason,
+          feasible: pickOptionalBoolean(alternative, ['feasible']),
+        };
+      })
+      .filter((item): item is DispatchResourceAlternative => item !== null),
+  };
+}
+
+/** Step 1 resource-only suggestion. No dry_run flag: this endpoint never creates a Mission.
+ * Route selection stays in /mission-planning/analyze using the final Operator choice. */
+export async function recommendDispatchResourcesApi(
+  input: RecommendDispatchResourcesInput,
+): Promise<DispatchResourceRecommendation> {
   if (!input.orderId.trim()) {
     throw new OperatorApiError('An Order is required for AI suggestions.', 400);
   }
 
-  const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch', {
+  const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch/recommend-resources', {
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
       bundledOrderIds: input.bundledOrderIds ?? [],
-      recommend_mode: input.recommendMode ?? 'AUTO',
-      dry_run: true, // NEVER create a Mission during Step 2.
     }),
   });
   const parsed = parseJsonString(payload);
@@ -1205,18 +1248,23 @@ export async function previewAutoDispatchApi(
   const wrapped = parseJsonString(wrapper.data ?? wrapper.result);
   const root = isRecord(wrapped) ? wrapped : wrapper;
 
-  // Fail closed if the server does not confirm preview semantics.
-  if (root.dry_run !== true || root.mission_created === true) {
-    throw new OperatorApiError('Auto-Dispatch did not confirm a safe dry-run preview.', 502, payload);
+  const returnedOrderId = pickString(root, ['order_id', 'orderId']);
+  if (returnedOrderId && returnedOrderId !== input.orderId) {
+    throw new OperatorApiError('Resource recommendation returned a different Order.', 502, payload);
   }
 
-  const selectedDroneId = pickString(root, ['selected_drone_id', 'selectedDroneId']);
-  const selectedBatteryId = pickString(root, ['selected_battery_id', 'selectedBatteryId']);
-  const selectedRouteId = pickString(root, ['selected_route_id', 'selectedRouteId']);
+  const selectedDroneId = pickString(root, ['recommended_drone_id', 'recommendedDroneId']);
+  const selectedBatteryId = pickString(root, ['recommended_battery_id', 'recommendedBatteryId']);
   if (!selectedDroneId || !selectedBatteryId) {
-    throw new OperatorApiError('AI did not return a Drone and Battery suggestion.', 502, payload);
+    throw new OperatorApiError('AI did not return an eligible Drone and Battery suggestion.', 502, payload);
   }
-  return { selectedDroneId, selectedBatteryId, selectedRouteId };
+  return {
+    selectedDroneId,
+    selectedBatteryId,
+    droneExplanation: mapDispatchResourceExplanation(root.drone_explanation ?? root.droneExplanation),
+    batteryExplanation: mapDispatchResourceExplanation(root.battery_explanation ?? root.batteryExplanation),
+    availableDrones: pickArray(root, ['available_drones', 'availableDrones']),
+  };
 }
 
 export async function analyzeMissionPlanningApi(
