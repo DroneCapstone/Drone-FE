@@ -89,8 +89,10 @@ export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 3_000, // BE GPS cadence: one new fix approximately every 3 s.
-    refetchIntervalInBackground: true,
+    // Faster snapshots help the map follow accelerated BE simulator flights.
+    refetchInterval: 2_000,
+    // Do not overload the API from a hidden tab; refocus fetches fresh telemetry.
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -44,7 +44,10 @@ type MovingMarker = {
   lastFixAt?: number;
   frame?: number;
 };
-const GPS_INTERVAL_MS = 3000;
+// Maximum on-screen interpolation time. Do not delay a new BE fix by a fixed
+// 3 seconds: accelerated simulator points can arrive sooner than that.
+const MAX_MARKER_TRANSITION_MS = 1_500;
+const MIN_MARKER_TRANSITION_MS = 250;
 const INITIAL_CENTER: Point = [106.78, 10.83];
 const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? '').trim();
 // MapTiler style IDs: grayscale current map, colorful Replay streets,
@@ -449,14 +452,22 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         // GPS jumps over 2 km in one refresh should not be visualized as a
         // normal 3-second flight, even if the BE timestamp appears up to date.
         const abnormalJump = jumpMeters > 2_000;
+        const previousFixAt = moving.lastFixAt;
         moving.position = pt;
         moving.lastFixAt = fixAt;
+        // BE simulator may emit points at interval_sec / speed_multiplier.
+        // Cap visual animation so the map catches up instead of lagging one or
+        // more telemetry points behind. Keep the GPS target authoritative.
+        const fixInterval = fixAt !== undefined && previousFixAt !== undefined
+          ? fixAt - previousFixAt : 2_000;
+        const animationMs = Math.max(MIN_MARKER_TRANSITION_MS,
+          Math.min(MAX_MARKER_TRANSITION_MS, fixInterval > 0 ? fixInterval * 0.85 : 1_200));
         if (import.meta.env.DEV) {
           console.info('[DroneOptAI GPS]', {
             missionId: id, drone: drone.id,
             previous: start, received: pt, lastUpdated: drone.lastUpdated,
             jumpMeters: Math.round(jumpMeters),
-            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : 'ANIMATE 3s'
+            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : `ANIMATE ${Math.round(animationMs)}ms`
           });
         }
         if (longGap || abnormalJump) {
@@ -468,8 +479,8 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         }
         const begin = performance.now();
         const animate = (now: number) => {
-          // Constant-speed interpolation between consecutive BE fixes (~3 s).
-          const t = Math.min(1, (now - begin) / GPS_INTERVAL_MS);
+          // Linear interpolation preserves the BE slowing/descending profile.
+          const t = Math.min(1, (now - begin) / animationMs);
           const next: Point = [
             start[0] + (pt[0] - start[0]) * t,
             start[1] + (pt[1] - start[1]) * t,

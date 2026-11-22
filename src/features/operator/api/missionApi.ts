@@ -566,8 +566,17 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     battery: pickOptionalNumber(telemetry, ['battery_pct', 'battery', 'battery_level', 'batteryLevel']),
     batteryVoltage: pickOptionalNumber(telemetry, ['latest_battery_voltage', 'latestBatteryVoltage', 'battery_voltage', 'batteryVoltage']),
     signal: pickOptionalNumber(telemetry, ['signal_pct', 'signal', 'signal_strength', 'signalStrength']),
-    altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
-    speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
+    altitudeM: pickOptionalNumber(telemetry, ['latest_altitude', 'latestAltitude', 'altitude_m', 'altitude', 'altitudeM']),
+    // LIVE_TRACKING_API.md: latest_speed is in m/s; show km/h in Operator.
+    speedKmh: (() => {
+      const explicitKmh = pickOptionalNumber(telemetry, ['speed_kmh', 'speedKmh']);
+      if (explicitKmh !== undefined) return explicitKmh;
+      const explicitMps = pickOptionalNumber(telemetry, ['latest_speed', 'latestSpeed', 'speed_mps', 'speedMps']);
+      if (explicitMps !== undefined) return explicitMps * 3.6;
+      const legacy = pickOptionalNumber(telemetry, ['speed']);
+      if (legacy === undefined) return undefined;
+      return import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? legacy : legacy * 3.6;
+    })(),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
     aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], ''),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
