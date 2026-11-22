@@ -283,3 +283,16 @@
 }
 
 /* 72px is the base: longer Orders / Missions may grow, not clip their text. */
+
+/* Fleet / Battery No. column matches the 52px centered Mission index column. */
+.operator-ui-table thead [data-slot='table-head'].operator-number-heading,
+.operator-ui-table tbody [data-slot='table-cell'].operator-number-cell {
+  width: 52px;
+  min-width: 52px;
+  box-sizing: border-box;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

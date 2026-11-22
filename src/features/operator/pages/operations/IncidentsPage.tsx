@@ -241,9 +241,9 @@ export function IncidentsPage() {
             <span><strong>{rows.length}</strong><small>Open incidents</small></span>
             <span><strong>{rows.filter((row) => row.severity === 'Critical').length}</strong><small>High priority</small></span>
             <span><strong>{incidentCandidates.length}</strong><small>Eligible alerts</small></span>
-            <ActionButton disabled={liveLoading || incidentCandidates.length === 0} onClick={() => openCreate()}>
+            {/* <ActionButton disabled={liveLoading || incidentCandidates.length === 0} onClick={() => openCreate()}>
               Create incident
-            </ActionButton>
+            </ActionButton> */}
           </div>
 
           <OperatorPanel className="flush-panel">

@@ -666,3 +666,239 @@
 @media (prefers-reduced-motion: reduce) {
   .mission-builder .mission-assign-spinner { animation: none; }
 }
+
+/* Operator Choose Flight Route: concise leg facts without duplicated battery data.
+   Keep the existing route-selection button, orange check and expand/hover effects. */
+.mission-builder .mission-route-card {
+  background: var(--surface, #fff);
+}
+.mission-builder .mission-route-heading-text > strong,
+.mission-builder .mission-route-key-metrics strong,
+.mission-builder .mission-route-detail-grid strong,
+.mission-builder .mission-route-battery-metrics strong,
+.mission-builder .mission-route-section-head > strong {
+  color: var(--text, #17212f);
+}
+.mission-builder .mission-route-heading-text > small,
+.mission-builder .mission-route-key-metrics small,
+.mission-builder .mission-route-detail-grid small,
+.mission-builder .mission-route-battery-metrics small,
+.mission-builder .mission-route-section-head > small {
+  color: var(--muted, #8a95a7);
+}
+.mission-builder .mission-route-path {
+  color: var(--orange, #ff6b00);
+  font-weight: 650;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.mission-builder .mission-route-detail {
+  border-top-color: var(--border, #eceef2);
+}
+.mission-builder .mission-route-legs {
+  background: var(--surface-2, #fafbfd);
+  border-color: var(--border, #e6e8ed);
+}
+.mission-builder .mission-route-leg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.mission-builder .mission-route-leg + .mission-route-leg {
+  border-top-color: var(--border, #e6e8ed);
+}
+.mission-builder .mission-route-leg-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mission-builder .mission-route-leg-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 43px;
+  height: auto;
+  min-height: 24px;
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong, #d4d7dc);
+  color: var(--orange, #ff6b00);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.mission-builder .mission-route-leg-places {
+  gap: 3px;
+  flex: 1;
+}
+.mission-builder .mission-route-leg-places > strong {
+  color: var(--text, #17212f);
+  font-size: 13px;
+  font-weight: 650;
+}
+.mission-builder .mission-route-leg-distance {
+  margin-left: auto;
+  color: var(--text, #3a4656);
+}
+.mission-builder .mission-route-leg-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding-left: 0;
+}
+.mission-builder .mission-route-leg-metrics > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mission-builder .mission-route-leg-metrics > span + span {
+  border-left: 1px solid var(--border, #e6e8ed);
+  padding-left: 12px;
+}
+.mission-builder .mission-route-leg-metrics small {
+  color: var(--muted, #808a9b);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.mission-builder .mission-route-leg-metrics strong {
+  color: var(--text, #17212f);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.mission-builder .mission-route-leg-metrics .mission-route-leg-consumption,
+.mission-builder .mission-route-leg-metrics .mission-route-leg-assigned-battery {
+  color: var(--orange, #ff6b00);
+}
+.mission-builder .mission-route-battery-hub {
+  border-color: var(--border, #e6e8ed);
+}
+.mission-builder .mission-route-battery-hub-head strong {
+  color: var(--text, #17212f);
+}
+.mission-builder .mission-route-battery-context {
+  margin: 7px 0 0;
+  color: var(--muted, #808a9b);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mission-builder .mission-route-battery-metrics > div {
+  background: var(--surface-2, #fafbfd);
+  border-color: var(--border, #e7e9ee);
+}
+/* Route summary visual rhythm: display all four safety facts on one row. */
+.mission-builder .mission-route-detail-grid.mission-route-safety-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  width: 100%;
+  align-items: stretch;
+}
+.mission-builder .mission-route-safety-grid > span {
+  min-width: 0;
+  padding: 7px 14px;
+}
+.mission-builder .mission-route-safety-grid > span:first-child {
+  padding-left: 0;
+}
+.mission-builder .mission-route-safety-grid > span:last-child {
+  padding-right: 0;
+}
+.mission-builder .mission-route-safety-grid > span + span {
+  border-left: 1px solid var(--border, #e6e8ed);
+}
+@media (max-width: 900px) {
+  .mission-builder .mission-route-detail-grid.mission-route-safety-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mission-builder .mission-route-safety-grid > span {
+    padding: 10px 12px;
+  }
+  .mission-builder .mission-route-safety-grid > span:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .mission-builder .mission-route-safety-grid > span:nth-child(n + 3) {
+    border-top: 1px solid var(--border, #e6e8ed);
+  }
+}
+@media (max-width: 490px) {
+  .mission-builder .mission-route-detail-grid.mission-route-safety-grid {
+    grid-template-columns: 1fr;
+  }
+  .mission-builder .mission-route-safety-grid > span {
+    padding: 10px 0;
+    border-left: 0;
+  }
+  .mission-builder .mission-route-safety-grid > span + span {
+    border-top: 1px solid var(--border, #e6e8ed);
+  }
+}
+.mission-builder .mission-route-safety-grid .mission-route-risk-low { color: var(--green, #20b26b); }
+.mission-builder .mission-route-safety-grid .mission-route-risk-medium { color: var(--orange, #ff6b00); }
+.mission-builder .mission-route-safety-grid .mission-route-risk-high { color: var(--red, #e74f4f); }
+@media (max-width: 830px) {
+  .mission-builder .mission-route-leg-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mission-builder .mission-route-leg-metrics > span:nth-child(3) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 490px) {
+  .mission-builder .mission-route-leg-heading { flex-wrap: wrap; }
+  .mission-builder .mission-route-leg-distance { margin-left: 0; }
+  .mission-builder .mission-route-battery-metrics { grid-template-columns: 1fr; }
+}
+
+/* Keep the full BE-backed leg content and anchor each distance to the far right.
+   This only fixes the layout; the route-selection logic remains untouched. */
+.mission-builder .mission-route-detail .mission-route-legs {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.mission-builder .mission-route-detail .mission-route-leg {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.mission-builder .mission-route-detail .mission-route-leg-heading {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.mission-builder .mission-route-detail .mission-route-leg-places {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mission-builder .mission-route-detail .mission-route-leg-distance {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  text-align: right;
+}
+.mission-builder .mission-route-detail .mission-route-leg-metrics {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  box-sizing: border-box;
+}
+@media (max-width: 830px) {
+  .mission-builder .mission-route-detail .mission-route-leg-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 490px) {
+  .mission-builder .mission-route-detail .mission-route-leg-heading {
+    align-items: flex-start;
+  }
+}

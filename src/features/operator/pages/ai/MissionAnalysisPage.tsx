@@ -167,6 +167,18 @@ export function MissionAnalysisPage() {
   const energy = drone && route ? getEnergyFeasibility(route) : undefined;
   const routeAssignable = route ? getEnergyFeasibility(route).feasible : false;
   const explanation = route?.aiExplanation;
+  const analysisExplanation = planningAnalysis?.routeExplanation;
+  const whyThisRouteWasNotRecommended = analysisExplanation?.whyNotOthers.find(
+    (candidate) => candidate.id === route?.id,
+  );
+  // Only show the recommended-route rationale in the recommended card.
+  // For alternatives, use the matching BE rationale instead of generating FE claims.
+  const rationale = route?.recommended
+    ? analysisExplanation?.summary
+    : whyThisRouteWasNotRecommended?.reason;
+  const comparisonNarrative = !route?.recommended
+    ? route?.comparisonVsRecommended?.differenceSummary
+    : undefined;
   const shapValues: Array<[string, number]> = route?.shapValues
     ? (Object.entries(route.shapValues) as Array<[string, number]>).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
     : [];
@@ -257,7 +269,7 @@ export function MissionAnalysisPage() {
             className={`selectable-card mission-ai-route-option ${active ? 'active' : ''}`}
             aria-pressed={active} onClick={() => changeRoute(item.id)}>
             <span className="mission-ai-route-top">
-              <strong>{formatRouteName(shortRouteName(item.name, item.speedProfileLabel))}</strong>
+              <strong>{formatBackendLabel(item.displayTitle) || formatRouteName(shortRouteName(item.name, item.speedProfileLabel))}</strong>
               <span className="mission-ai-route-flags">
                 {item.recommended && <span className="mission-ai-route-recommended">AI Recommended</span>}
                 {active && <span className="mission-ai-route-selected">Selected</span>}
@@ -359,9 +371,30 @@ export function MissionAnalysisPage() {
           {!shapValues.length && !explanation?.featureContributions?.length && <p className="mission-ai-no-explanation">No feature explanation is available for this route.</p>}
         </OperatorPanel>
         <OperatorPanel title="Interpretation" eyebrow="AI EXPLANATION" className="mission-ai-interpretation-panel">
-          {explanation?.summary && <div className="mission-ai-summary"><p>{formatBackendLabel(explanation.summary)}</p></div>}
+          {(explanation?.summary || rationale || comparisonNarrative) && (
+            <div className="mission-ai-summary">
+              {explanation?.summary && <p>{formatBackendLabel(explanation.summary)}</p>}
+              {rationale && rationale !== explanation?.summary && <p>{formatBackendLabel(rationale)}</p>}
+              {comparisonNarrative && comparisonNarrative !== rationale && <p>{formatBackendLabel(comparisonNarrative)}</p>}
+            </div>
+          )}
           {explanation?.legsBreakdown?.length ? <LegEnergySummary breakdown={explanation.legsBreakdown} /> : null}
-          {!explanation?.summary && (explanation?.legsBreakdown?.length ?? 0) < 2 && <p className="mission-ai-no-explanation">No additional explanation is available for this route.</p>}
+          {route.recommended && Boolean(analysisExplanation?.whyNotOthers.length) && (
+            <section className="mission-ai-insights">
+              <h3>Why not the alternatives?</h3>
+              <div className="mission-ai-insight-list">
+                {analysisExplanation?.whyNotOthers.map((candidate) => (
+                  <div className="mission-ai-insight" key={candidate.id}>
+                    <div className="mission-ai-insight-header">
+                      <strong>{routeOptions.find((item) => item.id === candidate.id)?.displayTitle || candidate.label || candidate.id}</strong>
+                    </div>
+                    {candidate.reason && <p>{formatBackendLabel(candidate.reason)}</p>}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+          {!explanation?.summary && !rationale && !comparisonNarrative && (explanation?.legsBreakdown?.length ?? 0) < 2 && <p className="mission-ai-no-explanation">No additional explanation is available for this route.</p>}
         </OperatorPanel>
       </div>
 

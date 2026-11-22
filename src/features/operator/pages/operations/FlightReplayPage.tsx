@@ -10,6 +10,7 @@ import { fetchFlightTelemetry, gpsDistanceKm, hasReplayableTelemetry, type Histo
 import { canReplayFlight } from '../../api/flightHistoryEligibility';
 import type { HubCheckpoint } from '../../api/missionApi';
 import { useMissionDetailQuery, useMissionHubCheckpointsQuery, useMissionHubsQuery } from '../../hooks/useMissionQueries';
+import { DropdownSelect } from '../../../../components/ui/DropdownSelect';
 import { PageHeader } from '../../components/PageHeader';
 import './flight-history.css';
 
@@ -258,7 +259,16 @@ export function FlightReplayPage() {
                   <button type="button" className={`fh-button ${follow ? 'fh-button-active' : ''}`} onClick={() => setFollow(v => !v)}>{follow ? '✓ Following' : 'Follow drone'}</button>
                 </div>
                   <div className="fh-player-timeline"><span>{clock(firstMs + elapsed)}</span><input type="range" aria-label="Flight playback timeline" min={0} max={Math.max(1, duration)} step={100} value={elapsed} onChange={e => { const v = Number(e.target.value); cursor.current = v; setElapsed(v); }} /><span>{clock(firstMs + duration)}</span></div>
-                  <label className="fh-speed-control">Speed <select value={speed} onChange={e => setSpeed(Number(e.target.value))}>{[1, 2, 4, 8, 16, 32].map(v => <option key={v} value={v}>{v}×</option>)}</select></label>
+                  <div className="fh-speed-control">
+                    <span>Speed</span>
+                    <DropdownSelect
+                      value={String(speed)}
+                      options={[1, 2, 4, 8, 16, 32].map(value => ({ value: String(value), label: `${value}×` }))}
+                      onChange={value => setSpeed(Number(value))}
+                      ariaLabel="Flight replay speed"
+                      className="w-[80px] !h-8 !text-xs"
+                    />
+                  </div>
                 </div>
                 {gapCount > 0 && <div className="fh-warning" role="status">{gapCount} telemetry gap{gapCount > 1 ? 's' : ''} detected (over 30 seconds). Playback does not invent movement across missing GPS intervals.</div>}
                 <div className="fh-replay-metrics"><div><small>Recorded points</small><strong>{points.length}</strong></div><div><small>GPS distance</small><strong>{distance.toFixed(2)} km</strong></div><div><small>Speed</small><strong>{format(selected?.row.speedKmh, ' km/h')}</strong></div><div><small>Altitude</small><strong>{format(selected?.row.altitudeM, ' m')}</strong></div><div><small>Battery</small><strong>{selected?.row.batteryPct != null ? format(selected.row.batteryPct, '%') : format(selected?.row.batteryVoltage, ' V')}</strong></div><div><small>Energy</small><strong>{format(selected?.row.energyConsumedWh, ' Wh')}</strong></div></div>
