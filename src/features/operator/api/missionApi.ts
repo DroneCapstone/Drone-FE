@@ -169,6 +169,37 @@ export interface AnalyzeMissionPlanningInput {
   bundledOrderIds?: string[];
 }
 
+/** Resource recommendation is read-only: unlike /auto-dispatch, it never creates a Mission. */
+export interface RecommendDispatchResourcesInput {
+  orderId: string;
+  bundledOrderIds?: string[];
+}
+
+/** BE's descriptive, criteria-based resource selection explanation (not a numeric SHAP score). */
+export interface DispatchResourceAlternative {
+  id: string;
+  label: string;
+  reason: string;
+  feasible?: boolean;
+}
+
+export interface DispatchResourceExplanation {
+  selectedId?: string;
+  selectedLabel?: string;
+  summary?: string;
+  reasonsSelected: string[];
+  whyNotOthers: DispatchResourceAlternative[];
+}
+
+export interface DispatchResourceRecommendation {
+  selectedDroneId: string;
+  selectedBatteryId: string;
+  droneExplanation: DispatchResourceExplanation;
+  batteryExplanation: DispatchResourceExplanation;
+  /** Preserve BE's per-drone eligible_batteries data without guessing its schema. */
+  availableDrones: unknown[];
+}
+
 /** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
 export interface EligibleMissionBattery {
   id: string;
@@ -535,8 +566,17 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     battery: pickOptionalNumber(telemetry, ['battery_pct', 'battery', 'battery_level', 'batteryLevel']),
     batteryVoltage: pickOptionalNumber(telemetry, ['latest_battery_voltage', 'latestBatteryVoltage', 'battery_voltage', 'batteryVoltage']),
     signal: pickOptionalNumber(telemetry, ['signal_pct', 'signal', 'signal_strength', 'signalStrength']),
-    altitudeM: pickOptionalNumber(telemetry, ['altitude_m', 'altitude', 'altitudeM', 'latest_altitude', 'latestAltitude']),
-    speedKmh: pickOptionalNumber(telemetry, ['speed_kmh', 'speed', 'speedKmh', 'latest_speed', 'latestSpeed']),
+    altitudeM: pickOptionalNumber(telemetry, ['latest_altitude', 'latestAltitude', 'altitude_m', 'altitude', 'altitudeM']),
+    // LIVE_TRACKING_API.md: latest_speed is in m/s; show km/h in Operator.
+    speedKmh: (() => {
+      const explicitKmh = pickOptionalNumber(telemetry, ['speed_kmh', 'speedKmh']);
+      if (explicitKmh !== undefined) return explicitKmh;
+      const explicitMps = pickOptionalNumber(telemetry, ['latest_speed', 'latestSpeed', 'speed_mps', 'speedMps']);
+      if (explicitMps !== undefined) return explicitMps * 3.6;
+      const legacy = pickOptionalNumber(telemetry, ['speed']);
+      if (legacy === undefined) return undefined;
+      return import.meta.env.VITE_OPERATOR_TELEMETRY_SPEED_UNIT === 'kmh' ? legacy : legacy * 3.6;
+    })(),
     detectedAt: pickString(record, ['detected_at', 'detectedAt', 'updated_at', 'updatedAt', 'last_updated', 'lastUpdated']) || undefined,
     aiAssessment: pickString(record, ['ai_assessment', 'aiAssessment', 'assessment'], ''),
     incidentPolicy: normalizeIncidentPolicy(record.incident_policy ?? record.incidentPolicy, health),
@@ -1168,6 +1208,72 @@ export async function getEligibleMissionBatteriesApi(
       isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']),
     } as EligibleMissionBattery;
   }).filter((item): item is EligibleMissionBattery => item !== null);
+}
+
+function mapDispatchResourceExplanation(value: unknown): DispatchResourceExplanation {
+  const record = asRecord(value);
+  return {
+    selectedId: pickString(record, ['selected_id', 'selectedId']) || undefined,
+    selectedLabel: pickString(record, ['selected_label', 'selectedLabel']) || undefined,
+    summary: pickString(record, ['summary']) || undefined,
+    reasonsSelected: pickArray(record, ['reasons_selected', 'reasonsSelected'])
+      .filter((reason): reason is string => typeof reason === 'string'),
+    whyNotOthers: pickArray(record, ['why_not_others', 'whyNotOthers'])
+      .map((item): DispatchResourceAlternative | null => {
+        const alternative = asRecord(item);
+        const id = pickString(alternative, ['id']);
+        const label = pickString(alternative, ['label']) || id;
+        const reason = pickString(alternative, ['reason']);
+        if (!id || !reason) return null;
+        return {
+          id,
+          label,
+          reason,
+          feasible: pickOptionalBoolean(alternative, ['feasible']),
+        };
+      })
+      .filter((item): item is DispatchResourceAlternative => item !== null),
+  };
+}
+
+/** Step 1 resource-only suggestion. No dry_run flag: this endpoint never creates a Mission.
+ * Route selection stays in /mission-planning/analyze using the final Operator choice. */
+export async function recommendDispatchResourcesApi(
+  input: RecommendDispatchResourcesInput,
+): Promise<DispatchResourceRecommendation> {
+  if (!input.orderId.trim()) {
+    throw new OperatorApiError('An Order is required for AI suggestions.', 400);
+  }
+
+  const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch/recommend-resources', {
+    method: 'POST',
+    body: JSON.stringify({
+      orderId: input.orderId,
+      bundledOrderIds: input.bundledOrderIds ?? [],
+    }),
+  });
+  const parsed = parseJsonString(payload);
+  const wrapper = asRecord(parsed);
+  const wrapped = parseJsonString(wrapper.data ?? wrapper.result);
+  const root = isRecord(wrapped) ? wrapped : wrapper;
+
+  const returnedOrderId = pickString(root, ['order_id', 'orderId']);
+  if (returnedOrderId && returnedOrderId !== input.orderId) {
+    throw new OperatorApiError('Resource recommendation returned a different Order.', 502, payload);
+  }
+
+  const selectedDroneId = pickString(root, ['recommended_drone_id', 'recommendedDroneId']);
+  const selectedBatteryId = pickString(root, ['recommended_battery_id', 'recommendedBatteryId']);
+  if (!selectedDroneId || !selectedBatteryId) {
+    throw new OperatorApiError('AI did not return an eligible Drone and Battery suggestion.', 502, payload);
+  }
+  return {
+    selectedDroneId,
+    selectedBatteryId,
+    droneExplanation: mapDispatchResourceExplanation(root.drone_explanation ?? root.droneExplanation),
+    batteryExplanation: mapDispatchResourceExplanation(root.battery_explanation ?? root.batteryExplanation),
+    availableDrones: pickArray(root, ['available_drones', 'availableDrones']),
+  };
 }
 
 export async function analyzeMissionPlanningApi(

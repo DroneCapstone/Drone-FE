@@ -686,11 +686,16 @@
 .mission-builder .mission-route-section-head > small {
   color: var(--muted, #8a95a7);
 }
+/* Keep the hub path neutral so the selected route title is the only orange text highlight. */
 .mission-builder .mission-route-path {
-  color: var(--orange, #ff6b00);
-  font-weight: 650;
+  color: var(--text, #17212f);
+  font-weight: 500;
   font-size: 13px;
   line-height: 1.55;
+}
+/* Highlight only the selected route title; unselected titles follow the theme text color. */
+.mission-builder .mission-route-card.is-selected .mission-route-heading-text > strong {
+  color: var(--orange, #ff6b00);
 }
 .mission-builder .mission-route-detail {
   border-top-color: var(--border, #eceef2);
@@ -810,9 +815,7 @@
 .mission-builder .mission-route-safety-grid > span:last-child {
   padding-right: 0;
 }
-.mission-builder .mission-route-safety-grid > span + span {
-  border-left: 1px solid var(--border, #e6e8ed);
-}
+/* No vertical dividers between Schedule & safety facts. */
 @media (max-width: 900px) {
   .mission-builder .mission-route-detail-grid.mission-route-safety-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -821,11 +824,7 @@
     padding: 10px 12px;
   }
   .mission-builder .mission-route-safety-grid > span:nth-child(odd) {
-    border-left: 0;
     padding-left: 0;
-  }
-  .mission-builder .mission-route-safety-grid > span:nth-child(n + 3) {
-    border-top: 1px solid var(--border, #e6e8ed);
   }
 }
 @media (max-width: 490px) {
@@ -834,10 +833,6 @@
   }
   .mission-builder .mission-route-safety-grid > span {
     padding: 10px 0;
-    border-left: 0;
-  }
-  .mission-builder .mission-route-safety-grid > span + span {
-    border-top: 1px solid var(--border, #e6e8ed);
   }
 }
 .mission-builder .mission-route-safety-grid .mission-route-risk-low { color: var(--green, #20b26b); }
@@ -901,4 +896,314 @@
   .mission-builder .mission-route-detail .mission-route-leg-heading {
     align-items: flex-start;
   }
+}
+
+
+/* Step 3: AI recommendation summary. Additive only; existing route UI is unchanged. */
+.page-content .mission-builder .mission-ai-plan-summary {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 11px;
+}
+.page-content .mission-builder .mission-ai-plan-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+}
+.page-content .mission-builder .mission-ai-plan-tile > small {
+  color: var(--muted, #8893a7);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+.page-content .mission-builder .mission-ai-plan-tile > strong,
+.page-content .mission-builder .mission-ai-plan-tile-head > strong {
+  color: var(--text, #1f2937);
+  font-size: 14px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-ai-plan-tile > span {
+  color: var(--muted, #8893a7);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-ai-plan-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.page-content .mission-builder .mission-ai-plan-change {
+  appearance: none;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--orange, #f97316);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.page-content .mission-builder .mission-ai-plan-change:hover { text-decoration: underline; }
+.page-content .mission-builder .mission-ai-plan-change:focus-visible {
+  outline: 2px solid var(--orange, #f97316);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.page-content .mission-builder .mission-ai-plan-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  margin: 12px 0 0;
+  color: var(--muted, #717f8f);
+  background: var(--surface-muted, #fafbfc);
+  border: 1px solid var(--border, #eff0f3);
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.page-content .mission-builder .mission-ai-plan-note-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ffd4b9;
+  border-radius: 6px;
+  background: #fff5ee;
+  color: #f8791d;
+  font-size: 10px;
+  font-weight: 800;
+}
+@media (max-width: 1000px) {
+  .page-content .mission-builder .mission-ai-plan-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .page-content .mission-builder .mission-ai-plan-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Step 3: concise BE resource-recommendation explanation, opened only on demand.
+   The existing Order/Drone/Battery tiles and Route cards remain unchanged. */
+.mission-builder .mission-resource-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--orange, #f97316);
+  padding: 5px 0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mission-builder .mission-resource-trigger:hover { text-decoration: underline; }
+.mission-builder .mission-resource-trigger:focus-visible,
+.mission-resource-popup button:focus-visible {
+  outline: 2px solid var(--orange, #f97316);
+  outline-offset: 3px;
+}
+
+/* Portal-based modal so it remains centered over the sidebar and on narrow windows. */
+.mission-resource-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(13, 20, 30, .5);
+  backdrop-filter: blur(2px);
+}
+.mission-resource-popup {
+  box-sizing: border-box;
+  /* Rendered via createPortal(document.body): inherit the same typeface as
+     .app-shell .main-column instead of browser defaults (serif headings). */
+  font-family: "Montserrat", "DM Sans", "Segoe UI", sans-serif;
+  width: min(100%, 560px);
+  max-height: min(85dvh, 750px);
+  overflow: auto;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 13px;
+  background: var(--surface, #fff);
+  color: var(--text, #202938);
+  padding: 20px 22px 17px;
+  box-shadow: 0 24px 65px rgba(0, 0, 0, .25);
+}
+/* All modal text and controls share the Operator font, including native
+   heading/button elements that would otherwise fall back to a serif face. */
+.mission-resource-popup :is(h2, h3, p, span, strong, li, button) {
+  font-family: inherit;
+}
+.mission-resource-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+/* Small dark title; no extra grey eyebrow or duplicate heading. */
+.mission-resource-popup-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -.015em;
+  color: var(--text, #202938);
+}
+.mission-resource-popup-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--muted, #748194);
+  cursor: pointer;
+}
+.mission-resource-popup-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 9px;
+  background: var(--surface-2, #f5f6f9);
+}
+.mission-resource-popup-tabs button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted, #7d8a9a);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.mission-resource-popup-tabs button.is-active {
+  background: var(--surface, #fff);
+  color: var(--orange, #f97316);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .08);
+}
+.mission-resource-popup-content { padding: 17px 0 0; }
+.mission-resource-popup-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px 12px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--border, #e2e5eb);
+}
+.mission-resource-popup-identity strong { font-size: 14px; }
+.mission-resource-popup-identity span { font-size: 11px; color: var(--muted, #7d8a9a); }
+.mission-resource-popup-subtitle { font-size: 12px; font-weight: 750; margin: 15px 0 10px; }
+.mission-resource-popup-reasons { list-style: none; padding: 0; margin: 0 0 15px; display: grid; gap: 9px; }
+.mission-resource-popup-reasons li { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; color: var(--text, #202938); line-height: 1.45; }
+.mission-resource-popup-reasons svg { flex: 0 0 auto; margin-top: 1px; color: var(--green, #17ab70); }
+.mission-resource-popup-manual {
+  margin: 11px 0 0;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--orange, #f97316) 28%, var(--border, #e2e5eb));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--orange, #f97316) 7%, var(--surface, #fff));
+  color: var(--text, #202938);
+  font-size: 11px;
+}
+.mission-resource-popup-alternatives {
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+.mission-resource-popup-alternatives-toggle {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 0;
+  background: var(--surface, #fff);
+  color: var(--text, #202938);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.mission-resource-popup-alternatives-toggle:hover { background: var(--surface-2, #f5f6f9); }
+.mission-resource-popup-alternatives-right { display: inline-flex; align-items: center; gap: 11px; color: var(--muted, #7d8a9a); }
+.mission-resource-popup-count {
+  min-width: 22px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--surface-2, #f5f6f9);
+  font-size: 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mission-resource-popup-alternatives-right svg { transition: transform .17s ease; }
+.mission-resource-popup-alternatives.is-open .mission-resource-popup-alternatives-right svg { transform: rotate(180deg); }
+.mission-resource-popup-alternative-list {
+  max-height: min(240px, 33vh);
+  overflow-y: auto;
+  padding: 3px 12px;
+  border-top: 1px solid var(--border, #e2e5eb);
+  scrollbar-width: thin;
+}
+.mission-resource-popup-alternative { padding: 10px 2px 11px; }
+.mission-resource-popup-alternative + .mission-resource-popup-alternative { border-top: 1px solid var(--border, #e2e5eb); }
+.mission-resource-popup-alternative strong { color: var(--text, #202938); font-size: 11px; font-weight: 750; }
+.mission-resource-popup-alternative p { margin: 3px 0 0; color: var(--muted, #687587); font-size: 11px; line-height: 1.5; }
+.mission-resource-popup-empty { color: var(--muted, #687587); font-size: 11px; }
+.mission-resource-popup-feedback {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--muted, #687587);
+  font-size: 12px;
+}
+.mission-resource-popup-spinner { animation: mission-resource-spin .8s linear infinite; color: var(--orange, #f97316); }
+@keyframes mission-resource-spin { to { transform: rotate(360deg); } }
+.mission-resource-popup-retry, .mission-resource-popup-done {
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--text, #202938);
+  padding: 8px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.mission-resource-popup-footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+@media (max-width: 600px) {
+  .mission-resource-popup { padding: 17px 15px 14px; max-height: 92dvh; }
+  .mission-resource-popup-backdrop { padding: 9px; }
+  .mission-resource-popup-identity { align-items: flex-start; flex-direction: column; }
 }

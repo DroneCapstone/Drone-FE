@@ -6,6 +6,7 @@ import {
 
 import {
   analyzeMissionPlanningApi,
+  recommendDispatchResourcesApi,
   collectMissionTelemetryApi,
   createIncidentApi,
   createMissionApi,
@@ -25,6 +26,7 @@ import {
   listMissionMiniHubsApi,
   updateIncidentStatusApi,
   type AnalyzeMissionPlanningInput,
+  type RecommendDispatchResourcesInput,
   type CreateIncidentInput,
   type CreateMissionInput,
   type UpdateIncidentStatusInput,
@@ -87,8 +89,10 @@ export function useLiveTrackingQuery() {
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    refetchInterval: 3_000, // BE GPS cadence: one new fix approximately every 3 s.
-    refetchIntervalInBackground: true,
+    // Faster snapshots help the map follow accelerated BE simulator flights.
+    refetchInterval: 2_000,
+    // Do not overload the API from a hidden tab; refocus fetches fresh telemetry.
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -140,7 +144,11 @@ export function useEligibleMissionBatteriesQuery(orderId: string, droneId: strin
     queryKey: operatorQueryKeys.eligibleMissionBatteries(orderId, droneId, crossHubCurrentHubId),
     queryFn: () => getEligibleMissionBatteriesApi(droneId, orderId, crossHubCurrentHubId),
     enabled: Boolean(orderId.trim() && droneId.trim()),
-    staleTime: 0,
+    // Keep the user's current Step-2/3 selection stable when switching windows.
+    // Final Assign explicitly refetches and validates battery eligibility.
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -177,6 +185,13 @@ export function usePostAnalyzeBundleCandidatesQuery(
   });
 }
 
+/** Read-only BE resource suggestions; never invokes the full auto-dispatch flow. */
+export function useRecommendDispatchResourcesMutation() {
+  return useMutation({
+    mutationFn: (input: RecommendDispatchResourcesInput) => recommendDispatchResourcesApi(input),
+  });
+}
+
 export function useMissionPlanningAnalysisQuery(
   input: AnalyzeMissionPlanningInput | null,
 ) {
@@ -189,7 +204,15 @@ export function useMissionPlanningAnalysisQuery(
     ),
     queryFn: () => analyzeMissionPlanningApi(input as AnalyzeMissionPlanningInput),
     enabled: Boolean(input?.orderId.trim() && input?.droneId.trim() && input?.batteryId.trim()),
-    staleTime: 15_000,
+    // AI Analyze can take several seconds. Keep successful results visible when
+    // the tab regains focus or this page is revisited, instead of re-running it.
+    // Changing Order/Drone/Battery still changes the query key and analyzes anew.
+    // The Assign handler explicitly refetches fresh analysis before submission.
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
   });
 }
 
