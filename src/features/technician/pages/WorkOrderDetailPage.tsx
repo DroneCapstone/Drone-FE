@@ -108,6 +108,8 @@ type WorkOrderResultingDroneStatus = "Ready" | "Maintenance" | "Retired";
 
 import { TechnicianApiError } from "../utils/technicianApi";
 
+import { TechnicianAiChat } from "../components/TechnicianAiChat";
+
 
 
 import {
@@ -1609,7 +1611,7 @@ export function WorkOrderDetailPage() {
 
                   label="Drone"
 
-                  value={`${order.drone} · ${order.droneId}`}
+                  value={order.droneId}
 
                 />
 
@@ -1841,6 +1843,20 @@ export function WorkOrderDetailPage() {
 
       </div>
 
+      {/* AI assistant is advice-only: it never changes Work Order state. */}
+      <TechnicianAiChat
+        key={order.id}
+        context={{
+          workOrderId: order.id,
+          droneId: order.droneId,
+          droneModel: workOrderDroneModel,
+          issue: order.title,
+          status: workOrderStatus,
+          diagnosis,
+          correctiveAction,
+          completedInspectionItems: checkedItems,
+        }}
+      />
     </TechnicianPageShell>
 
   );
