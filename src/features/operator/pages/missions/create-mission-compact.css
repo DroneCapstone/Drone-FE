@@ -810,9 +810,7 @@
 .mission-builder .mission-route-safety-grid > span:last-child {
   padding-right: 0;
 }
-.mission-builder .mission-route-safety-grid > span + span {
-  border-left: 1px solid var(--border, #e6e8ed);
-}
+/* No vertical dividers between Schedule & safety facts. */
 @media (max-width: 900px) {
   .mission-builder .mission-route-detail-grid.mission-route-safety-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -821,11 +819,7 @@
     padding: 10px 12px;
   }
   .mission-builder .mission-route-safety-grid > span:nth-child(odd) {
-    border-left: 0;
     padding-left: 0;
-  }
-  .mission-builder .mission-route-safety-grid > span:nth-child(n + 3) {
-    border-top: 1px solid var(--border, #e6e8ed);
   }
 }
 @media (max-width: 490px) {
@@ -834,10 +828,6 @@
   }
   .mission-builder .mission-route-safety-grid > span {
     padding: 10px 0;
-    border-left: 0;
-  }
-  .mission-builder .mission-route-safety-grid > span + span {
-    border-top: 1px solid var(--border, #e6e8ed);
   }
 }
 .mission-builder .mission-route-safety-grid .mission-route-risk-low { color: var(--green, #20b26b); }
@@ -900,5 +890,104 @@
 @media (max-width: 490px) {
   .mission-builder .mission-route-detail .mission-route-leg-heading {
     align-items: flex-start;
+  }
+}
+
+
+/* Step 3: AI recommendation summary. Additive only; existing route UI is unchanged. */
+.page-content .mission-builder .mission-ai-plan-summary {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 11px;
+}
+.page-content .mission-builder .mission-ai-plan-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 14px 15px;
+  border: 1px solid var(--border, #e2e5eb);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+}
+.page-content .mission-builder .mission-ai-plan-tile > small {
+  color: var(--muted, #8893a7);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+.page-content .mission-builder .mission-ai-plan-tile > strong,
+.page-content .mission-builder .mission-ai-plan-tile-head > strong {
+  color: var(--text, #1f2937);
+  font-size: 14px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-ai-plan-tile > span {
+  color: var(--muted, #8893a7);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-ai-plan-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.page-content .mission-builder .mission-ai-plan-change {
+  appearance: none;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--orange, #f97316);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.page-content .mission-builder .mission-ai-plan-change:hover { text-decoration: underline; }
+.page-content .mission-builder .mission-ai-plan-change:focus-visible {
+  outline: 2px solid var(--orange, #f97316);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.page-content .mission-builder .mission-ai-plan-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  margin: 12px 0 0;
+  color: var(--muted, #717f8f);
+  background: var(--surface-muted, #fafbfc);
+  border: 1px solid var(--border, #eff0f3);
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.page-content .mission-builder .mission-ai-plan-note-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid #ffd4b9;
+  border-radius: 6px;
+  background: #fff5ee;
+  color: #f8791d;
+  font-size: 10px;
+  font-weight: 800;
+}
+@media (max-width: 1000px) {
+  .page-content .mission-builder .mission-ai-plan-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  .page-content .mission-builder .mission-ai-plan-summary {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

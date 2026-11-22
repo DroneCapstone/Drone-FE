@@ -403,6 +403,8 @@ export interface MissionDraft {
   selectedDroneId: string;
   selectedBatteryId: string;
   selectedRouteId: string;
+  /** Set after any manual Drone/Battery choice so refresh does not re-apply AI. */
+  manualSelectionOverride?: boolean;
   relayBatterySelections?: RelayBatterySelection[];
   bundledOrderIds?: string[];
   updatedAt: string;

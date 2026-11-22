@@ -169,6 +169,19 @@ export interface AnalyzeMissionPlanningInput {
   bundledOrderIds?: string[];
 }
 
+/** Safe preview: dry_run=true must never create a Mission. */
+export interface AutoDispatchPreviewInput {
+  orderId: string;
+  bundledOrderIds?: string[];
+  recommendMode?: string;
+}
+
+export interface AutoDispatchPreview {
+  selectedDroneId: string;
+  selectedBatteryId: string;
+  selectedRouteId: string;
+}
+
 /** Eligible origin-hub battery for the selected drone. API eligibility is authoritative. */
 export interface EligibleMissionBattery {
   id: string;
@@ -1168,6 +1181,42 @@ export async function getEligibleMissionBatteriesApi(
       isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']),
     } as EligibleMissionBattery;
   }).filter((item): item is EligibleMissionBattery => item !== null);
+}
+
+/** Suggest the entire plan, without writing a Mission. The Operator may override each choice. */
+export async function previewAutoDispatchApi(
+  input: AutoDispatchPreviewInput,
+): Promise<AutoDispatchPreview> {
+  if (!input.orderId.trim()) {
+    throw new OperatorApiError('An Order is required for AI suggestions.', 400);
+  }
+
+  const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch', {
+    method: 'POST',
+    body: JSON.stringify({
+      orderId: input.orderId,
+      bundledOrderIds: input.bundledOrderIds ?? [],
+      recommend_mode: input.recommendMode ?? 'AUTO',
+      dry_run: true, // NEVER create a Mission during Step 2.
+    }),
+  });
+  const parsed = parseJsonString(payload);
+  const wrapper = asRecord(parsed);
+  const wrapped = parseJsonString(wrapper.data ?? wrapper.result);
+  const root = isRecord(wrapped) ? wrapped : wrapper;
+
+  // Fail closed if the server does not confirm preview semantics.
+  if (root.dry_run !== true || root.mission_created === true) {
+    throw new OperatorApiError('Auto-Dispatch did not confirm a safe dry-run preview.', 502, payload);
+  }
+
+  const selectedDroneId = pickString(root, ['selected_drone_id', 'selectedDroneId']);
+  const selectedBatteryId = pickString(root, ['selected_battery_id', 'selectedBatteryId']);
+  const selectedRouteId = pickString(root, ['selected_route_id', 'selectedRouteId']);
+  if (!selectedDroneId || !selectedBatteryId) {
+    throw new OperatorApiError('AI did not return a Drone and Battery suggestion.', 502, payload);
+  }
+  return { selectedDroneId, selectedBatteryId, selectedRouteId };
 }
 
 export async function analyzeMissionPlanningApi(

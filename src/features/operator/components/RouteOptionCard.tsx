@@ -186,7 +186,7 @@ export function RouteOptionCard({
                     </div>
                     <p className="mission-route-battery-context">
                       {batteryId
-                        ? `Details of the battery automatically assigned to ${outgoingLegIndex >= 0 ? `Leg ${outgoingLegIndex + 1}` : 'the next flight leg'}`
+                        ? `Battery assigned to ${outgoingLegIndex >= 0 ? `Leg ${outgoingLegIndex + 1}` : 'the next flight leg'}`
                         : 'Relay battery assignment is not available'}
                     </p>
                     <div className="mission-route-battery-metrics">
