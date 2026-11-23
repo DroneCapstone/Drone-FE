@@ -1,5 +1,6 @@
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, LoaderCircle, Send, X } from "lucide-react";
+import brandLogo from "../../../assets/images/home/logo.png";
 import mascotDirections from "../../../assets/mascot/delivery-drone-directions.webp";
 import mascotReactions from "../../../assets/mascot/delivery-drone-reactions.webp";
 import {
@@ -81,6 +82,7 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
   const [quickQuestionsStatus, setQuickQuestionsStatus] = useState<QuickQuestionsStatus>("idle");
+  const [showQuickQuestions, setShowQuickQuestions] = useState(true);
   const [look, setLook] = useState<LookDirection>({ row: 1, col: 1 });
 
   const nextId = useRef(1);
@@ -128,7 +130,7 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
       const rect = launcherRef.current?.getBoundingClientRect();
       if (!rect) return;
       const next = directionToPointer(
-        pointerX - (rect.left + 28),
+        pointerX - (rect.left + rect.width / 2),
         pointerY - (rect.top + rect.height / 2),
       );
       setLook((previous) =>
@@ -220,7 +222,7 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
           {/* Customer-inspired header: soft surfaces, spacious text, rounded corners. */}
           <div className="flex items-center justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4">
             <div className="flex min-w-0 items-center gap-3">
-              <Mascot look={look} size={52} />
+              <img src={brandLogo} alt="DroneOptAI logo" className="h-11 w-12 shrink-0 object-contain" />
               <div className="min-w-0">
                 <h2 className="truncate text-[17px] font-semibold text-[var(--tech-text)]">DroneOptAI Maintenance AI</h2>
                 <p className="truncate text-[12px] text-[var(--tech-muted)]">Maintenance support · {context.workOrderId}</p>
@@ -271,23 +273,39 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
           <div className="border-t border-[var(--tech-border)] px-4 pb-4 pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">Quick questions</span>
-              {quickQuestionsStatus === "loading" && <LoaderCircle size={13} className="animate-spin text-orange-500" aria-label="Loading questions" />}
-              {quickQuestionsStatus === "error" && (
-                <button type="button" onClick={() => void loadQuickQuestions()}
-                  className="text-[11px] font-medium text-orange-500 hover:underline" title="Retry loading questions from Backend">
-                  Retry suggestions
+              <div className="flex items-center gap-3">
+                {showQuickQuestions && quickQuestionsStatus === "loading" && (
+                  <LoaderCircle size={13} className="animate-spin text-orange-500" aria-label="Loading questions" />
+                )}
+                {showQuickQuestions && quickQuestionsStatus === "error" && (
+                  <button type="button" onClick={() => void loadQuickQuestions()}
+                    className="text-[11px] font-medium text-orange-500 hover:underline" title="Retry loading questions from Backend">
+                    Retry suggestions
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={showQuickQuestions ? "Hide quick questions" : "Show quick questions"}
+                  aria-expanded={showQuickQuestions}
+                  onClick={() => setShowQuickQuestions((value) => !value)}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--tech-muted)] transition-colors hover:bg-orange-500/10 hover:text-orange-500"
+                >
+                  {showQuickQuestions ? "Hide" : "Show"}
+                  <ChevronDown size={14} className={`transition-transform ${showQuickQuestions ? "" : "-rotate-90"}`} />
                 </button>
-              )}
+              </div>
             </div>
-            <div className="mb-3 flex max-h-[90px] flex-wrap content-start gap-2 overflow-y-auto">
-              {visibleSuggestions.map((question) => (
-                <button key={question} type="button" disabled={sending}
-                  onClick={() => void sendQuestion(question)}
-                  className="max-w-full rounded-full border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 py-1.5 text-left text-[11px] leading-4 text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500 disabled:opacity-40">
-                  {question}
-                </button>
-              ))}
-            </div>
+            {showQuickQuestions && (
+              <div id="technician-quick-questions" className="mb-3 flex max-h-[90px] flex-wrap content-start gap-2 overflow-y-auto">
+                {visibleSuggestions.map((question) => (
+                  <button key={question} type="button" disabled={sending}
+                    onClick={() => void sendQuestion(question)}
+                    className="max-w-full rounded-full border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 py-1.5 text-left text-[11px] leading-4 text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500 disabled:opacity-40">
+                    {question}
+                  </button>
+                ))}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
@@ -323,14 +341,10 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
         aria-label={open ? "Minimize maintenance assistant" : "Open maintenance assistant"}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="ml-auto flex min-h-[66px] items-center gap-2 rounded-full border border-orange-500/35 bg-[var(--tech-surface)] py-1.5 pl-2 pr-4 text-[var(--tech-text)] shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition-all hover:-translate-y-0.5 hover:border-orange-500"
+        title={open ? "Minimize maintenance assistant" : "Ask the maintenance assistant"}
+        className="ml-auto flex h-[88px] w-[88px] items-center justify-center rounded-full bg-transparent p-0 transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
       >
-        <Mascot look={look} size={55} />
-        <span className="flex flex-col items-start leading-tight">
-          <span className="text-[14px] font-semibold">Ask AI</span>
-          <span className="text-[11px] text-[var(--tech-muted)]">Maintenance assistant</span>
-        </span>
-        <ChevronDown size={16} className={`ml-1 text-orange-500 transition-transform ${open ? "" : "rotate-180"}`} />
+        <Mascot look={look} size={84} />
       </button>
     </div>
   );
