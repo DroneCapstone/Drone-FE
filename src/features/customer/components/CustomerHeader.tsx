@@ -44,6 +44,10 @@ const navigation = [
     to: "/customer/deliveries",
   },
   {
+    label: "Address book",
+    to: "/customer/addresses",
+  },
+  {
     label: "Pricing & services",
     to: "/customer/pricing",
   },

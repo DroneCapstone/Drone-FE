@@ -234,4 +234,10 @@ export const adminOperationsApi = {
   deleteNotification: (id: number) => send<unknown>(`/notifications/${id}`, 'DELETE'),
   kpi: () => get<KpiApi>('/admin/dashboard/kpi'),
   dashboard: () => get<AdminDashboardApi>('/admin/dashboard'),
+  // ── Reports & Charts ──────────────────────────────────────────────
+  revenueChart: (days = 30) => get<{ days: number; data: Array<{ date: string; revenue: number; mission_count: number }> }>(`/admin/reports/chart/revenue?days=${days}`),
+  missionsChart: (days = 30) => get<{ days: number; data: Array<{ date: string; total: number; completed: number; failed: number; cancelled: number }> }>(`/admin/reports/chart/missions?days=${days}`),
+  droneDailyStats: (days = 30, droneId?: string) => get<{ days: number; total_records: number; data: unknown[] }>(`/admin/fleet/drones/daily-stats?days=${days}${droneId ? `&drone_id=${encodeURIComponent(droneId)}` : ''}`),
+  maintenanceDue: () => get<{ total: number; overdue_count: number; warning_count: number; drones: unknown[] }>('/admin/fleet/drones/maintenance-due'),
+  cancellationStats: () => get<{ total_cancelled: number; distribution: Array<{ reason: string; count: number; pct: number }>; top_reason: string | null }>('/admin/reports/cancellation-stats'),
 };

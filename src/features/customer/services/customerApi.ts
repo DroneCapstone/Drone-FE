@@ -709,6 +709,50 @@ export const customerApi = {
       `/api/v1/customer/orders/${encodeURIComponent(orderId)}/live-position`,
     );
   },
+
+  // ── Cancel Order with Reason ─────────────────────────────────────
+  cancelOrderWithReason(orderId: string, reason: string, note?: string) {
+    return apiRequest<{ message: string; order_id: string; reason: string; cancelled_at: string }>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}/cancel`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ reason, note: note ?? null }),
+      },
+    );
+  },
+
+  // ── Address Book ─────────────────────────────────────────────────
+  getAddresses() {
+    return apiRequest<Array<{
+      id: number; label: string; recipient_name: string;
+      recipient_phone: string; recipient_email: string | null;
+      hub_id: number | null; is_default: boolean; created_at: string;
+    }>>("/api/v1/customer/addresses");
+  },
+
+  createAddress(body: {
+    label: string; recipient_name: string; recipient_phone: string;
+    recipient_email?: string; hub_id?: number; is_default?: boolean;
+  }) {
+    return apiRequest<{ id: number; label: string; recipient_name: string; recipient_phone: string; recipient_email: string | null; hub_id: number | null; is_default: boolean; created_at: string }>(
+      "/api/v1/customer/addresses",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+
+  updateAddress(id: number, body: {
+    label: string; recipient_name: string; recipient_phone: string;
+    recipient_email?: string; hub_id?: number; is_default?: boolean;
+  }) {
+    return apiRequest<{ id: number; label: string; recipient_name: string; recipient_phone: string; recipient_email: string | null; hub_id: number | null; is_default: boolean; created_at: string }>(
+      `/api/v1/customer/addresses/${id}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+    );
+  },
+
+  deleteAddress(id: number) {
+    return apiRequest<unknown>(`/api/v1/customer/addresses/${id}`, { method: "DELETE" });
+  },
 };
 
 /* =========================================================
