@@ -659,6 +659,56 @@ export const customerApi = {
   getCustomerAiPredictions() {
     return apiRequest<unknown>("/api/v1/customer/ai_predictions/");
   },
+
+  // ── Delivery Rating ──────────────────────────────────────────────
+  submitRating(orderId: string, rating: number, comment?: string) {
+    return apiRequest<{
+      id: number;
+      order_id: string;
+      rating: number;
+      comment: string | null;
+      created_at: string;
+    }>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}/rating`,
+      {
+        method: "POST",
+        body: JSON.stringify({ rating, comment: comment ?? null }),
+      },
+    );
+  },
+
+  getRating(orderId: string) {
+    return apiRequest<{
+      id: number;
+      order_id: string;
+      rating: number;
+      comment: string | null;
+      created_at: string;
+    }>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}/rating`,
+    );
+  },
+
+  // ── Live Position ────────────────────────────────────────────────
+  getLivePosition(orderId: string) {
+    return apiRequest<{
+      order_id: string;
+      mission_id: string | null;
+      mission_status: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      altitude_m: number | null;
+      speed_mps: number | null;
+      battery_pct: number | null;
+      last_update: string | null;
+      elapsed_sec: number | null;
+      eta_sec: number | null;
+      is_flying: boolean;
+      status_label: string;
+    }>(
+      `/api/v1/customer/orders/${encodeURIComponent(orderId)}/live-position`,
+    );
+  },
 };
 
 /* =========================================================
