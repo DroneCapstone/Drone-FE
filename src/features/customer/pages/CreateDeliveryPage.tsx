@@ -42,6 +42,8 @@ import {
 
 } from "../services/customerDeliveryService";
 
+import { customerApi } from "../services/customerApi";
+
 import { customerProfileService } from "../services/customerProfileService";
 
 import {
@@ -1768,6 +1770,25 @@ function ContactStep({
 
 }: StepProps) {
 
+  // ── Address Book Picker ───────────────────────────────────────────
+  const [addresses, setAddresses] = useState<Array<{
+    id: number; label: string; recipient_name: string;
+    recipient_phone: string; recipient_email: string | null; is_default: boolean;
+  }>>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    customerApi.getAddresses()
+      .then((data) => setAddresses(data))
+      .catch(() => {/* silent */});
+  }, []);
+
+  const applyAddress = (a: typeof addresses[0]) => {
+    update("recipientName", a.recipient_name);
+    if (a.recipient_email) update("recipientEmail", a.recipient_email);
+    setPickerOpen(false);
+  };
+
   return (
 
     <section>
@@ -1827,6 +1848,38 @@ function ContactStep({
           description="The person collecting the package will receive delivery updates at this email."
 
         >
+
+          {/* Address book picker */}
+          {addresses.length > 0 && (
+            <div className="relative mb-2">
+              <button
+                type="button"
+                onClick={() => setPickerOpen((prev) => !prev)}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-500/[0.06] px-3 text-[11px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.12]"
+              >
+                📋 Choose from address book
+              </button>
+              {pickerOpen && (
+                <div className="absolute left-0 top-10 z-50 w-72 overflow-hidden rounded-xl border border-white/[0.12] bg-[#1a1620] shadow-2xl">
+                  {addresses.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => applyAddress(a)}
+                      className="flex w-full flex-col px-4 py-3 text-left transition hover:bg-white/[0.05]"
+                    >
+                      <span className="text-[13px] font-semibold text-white/[0.88]">
+                        {a.label}{a.is_default ? " ⭐" : ""}
+                      </span>
+                      <span className="text-[11px] text-white/[0.44]">
+                        {a.recipient_name} · {a.recipient_phone}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <Field
 
