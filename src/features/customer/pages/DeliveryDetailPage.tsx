@@ -856,6 +856,13 @@ function BackendOrderDetails({
 
             )}
 
+            {/* Cancel with reason — only for PENDING / AWAITING_DROP_OFF unpaid */}
+            <CancelWithReasonButton
+              orderId={order.id}
+              orderStatus={order.orderStatus}
+              paymentStatus={order.paymentStatus}
+            />
+
             <DeleteOrderAction orderId={order.id} visible={showDelete} enabled={canDelete} />
 
           </div>
@@ -1383,4 +1390,137 @@ function PriceRow({
 
   );
 
+}
+
+
+// ── Cancel with Reason ────────────────────────────────────────────────────────
+
+const CANCEL_REASONS: { value: string; label: string }[] = [
+  { value: "changed_my_mind",   label: "Changed my mind" },
+  { value: "wrong_information", label: "Wrong information entered" },
+  { value: "price_too_high",    label: "Price too high" },
+  { value: "found_alternative", label: "Found an alternative" },
+  { value: "delivery_too_slow", label: "Delivery too slow" },
+  { value: "other",             label: "Other" },
+];
+
+function CancelWithReasonButton({
+  orderId,
+  orderStatus,
+  paymentStatus,
+}: {
+  orderId: string;
+  orderStatus: string | null | undefined;
+  paymentStatus: string | null | undefined;
+}) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const eligible =
+    ["pending", "awaiting_drop_off"].includes(orderStatus?.toLowerCase() ?? "") &&
+    !["paid"].includes(paymentStatus?.toLowerCase() ?? "");
+
+  if (!eligible) return null;
+
+  const handleCancel = async () => {
+    if (!reason || loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      await customerApi.cancelOrderWithReason(orderId, reason, note.trim() || undefined);
+      navigate("/customer/deliveries", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to cancel. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-4 flex h-10 w-full items-center justify-center text-[12px] font-medium text-white/[0.30] transition hover:text-red-400"
+      >
+        Cancel this order
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217] shadow-2xl">
+            <div className="border-b border-white/[0.08] px-6 py-5">
+              <h2 className="text-[16px] font-semibold text-white">Cancel order #{orderId}</h2>
+              <p className="mt-1 text-[12px] text-white/[0.44]">Please tell us why you want to cancel.</p>
+            </div>
+
+            <div className="space-y-4 p-6">
+              {/* Reason select */}
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/[0.36]">Reason</label>
+                <div className="mt-2 space-y-2">
+                  {CANCEL_REASONS.map((r) => (
+                    <label key={r.value} className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="radio"
+                        name="cancel-reason"
+                        value={r.value}
+                        checked={reason === r.value}
+                        onChange={() => setReason(r.value)}
+                        className="h-4 w-4 accent-orange-500"
+                      />
+                      <span className="text-[13px] text-white/[0.78]">{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional note */}
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/[0.36]">
+                  Additional note (optional)
+                </label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Tell us more..."
+                  className="mt-2 w-full resize-none rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-2.5 text-[13px] text-white placeholder-white/[0.22] outline-none focus:border-orange-500/50"
+                />
+              </div>
+
+              {error && (
+                <p className="rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[12px] text-red-300">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 border-t border-white/[0.08] px-6 py-4">
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setError(""); }}
+                className="flex-1 h-10 rounded-xl border border-white/[0.12] text-[13px] font-medium text-white/[0.60] transition hover:border-white/[0.24]"
+              >
+                Keep order
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={!reason || loading}
+                className="flex-1 h-10 rounded-xl bg-red-500/80 text-[13px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-40"
+              >
+                {loading ? "Cancelling…" : "Cancel order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
