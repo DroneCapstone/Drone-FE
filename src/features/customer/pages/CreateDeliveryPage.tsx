@@ -44,6 +44,14 @@ import {
 
 import { customerProfileService } from "../services/customerProfileService";
 
+import {
+
+  readCreateDeliveryPrefill,
+
+  clearCreateDeliveryPrefill,
+
+} from "../chatbot/customerChatbotService";
+
 import type {
 
   DeliveryDraft,
@@ -340,6 +348,56 @@ export function CreateDeliveryPage() {
 
     setEstimateError("");
 
+    // ── Apply chatbot prefill if coming from chatbot ───────────────
+    if (searchParams.get("from") === "chatbot") {
+      const prefill = readCreateDeliveryPrefill<{
+        origin_hub_id?: number;
+        destination_hub_id?: number;
+        payload_kg?: number;
+        package_size?: string;
+        package_type?: string;
+      }>();
+
+      if (prefill) {
+        setForm((prev) => ({
+          ...prev,
+          ...(prefill.origin_hub_id != null && {
+            originArea: String(prefill.origin_hub_id),
+          }),
+          ...(prefill.destination_hub_id != null && {
+            destinationArea: String(prefill.destination_hub_id),
+          }),
+          ...(prefill.payload_kg != null && {
+            weightKg: prefill.payload_kg,
+          }),
+          ...(prefill.package_size && {
+            packageSize: prefill.package_size as PackageSize,
+          }),
+          ...(prefill.package_type && {
+            packageCategory: prefill.package_type as DeliveryDraftWithPricing["packageCategory"],
+          }),
+        }));
+
+        // If we have route + package data, skip straight to Delivery mode (step 3).
+        // If only partial, skip to Package step (step 1) so user can verify.
+        if (
+          prefill.origin_hub_id != null &&
+          prefill.destination_hub_id != null &&
+          prefill.payload_kg != null
+        ) {
+          setStep(3);
+        } else if (prefill.payload_kg != null) {
+          setStep(2);
+        } else {
+          setStep(1);
+        }
+
+        clearCreateDeliveryPrefill();
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+
     /*
 
      * Remove ?new=1 after the reset. This prevents a refresh from
@@ -367,6 +425,8 @@ export function CreateDeliveryPage() {
     navigate,
 
     profile.phone,
+
+    searchParams,
 
     user?.name,
 
