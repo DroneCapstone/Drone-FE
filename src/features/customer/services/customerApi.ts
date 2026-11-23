@@ -378,8 +378,12 @@ export type CustomerCreateOrderRequest = {
   requested_delivery_at: string | null;
 
   sender_phone: string;
+  /** Requires BE support in POST /api/v1/customer/orders. */
+  sender_email: string;
   receiver_name: string;
   receiver_email: string;
+  /** Requires BE support in POST /api/v1/customer/orders. */
+  receiver_phone: string;
 
   /**
    * New BE field.

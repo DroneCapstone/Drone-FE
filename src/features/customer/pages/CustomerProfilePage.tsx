@@ -28,9 +28,11 @@ export function CustomerProfilePage() {
 
   const cached = user
     ? customerProfileService.get(user.id)
-    : { phone: "" };
+    : { phone: "", email: "" };
 
   const [phone, setPhone] = useState(cached.phone);
+  const [email, setEmail] = useState(cached.email || user?.email || "");
+  const [savedEmail, setSavedEmail] = useState(cached.email || user?.email || "");
   const [loading, setLoading] = useState(Boolean(user));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -51,6 +53,9 @@ export function CustomerProfilePage() {
       .then((profile) => {
         if (!cancelled) {
           setPhone(profile.phone);
+          const currentEmail = profile.email || user.email || "";
+          setEmail(currentEmail);
+          setSavedEmail(currentEmail);
         }
       })
       .catch((error) => {
@@ -101,17 +106,31 @@ export function CustomerProfilePage() {
     user.name?.trim().charAt(0).toUpperCase() || "C";
 
   const save = async () => {
-    setSaving(true);
     setMessage("");
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setMessage("Please enter a valid email address.");
+      return;
+    }
+    const phoneDigits = cleanPhone.replace(/\D/g, "");
+    if (phoneDigits.length < 9 || phoneDigits.length > 12) {
+      setMessage("Please enter a valid phone number (9–12 digits).");
+      return;
+    }
+
+    setSaving(true);
     try {
-      const profile =
-        await customerProfileService.saveRemote(
-          user.id,
-          phone.trim(),
-        );
+      const profile = await customerProfileService.saveRemote(
+        user.id,
+        cleanPhone,
+        cleanEmail !== savedEmail.trim().toLowerCase() ? cleanEmail : undefined,
+      );
 
       setPhone(profile.phone);
+      setEmail(profile.email || cleanEmail);
+      setSavedEmail(profile.email || cleanEmail);
       setMessage("Changes saved");
     } catch (error) {
       setMessage(
@@ -219,7 +238,7 @@ export function CustomerProfilePage() {
                 <OverviewRow
                   icon={<Mail size={16} />}
                   label="Email"
-                  value={user.email}
+                  value={email}
                 />
 
                 <OverviewRow
@@ -274,7 +293,7 @@ export function CustomerProfilePage() {
             </h2>
 
             <p className="mt-1.5 text-[12px] leading-6 text-white/[0.62]">
-              Your name and email come from your account. You can update the phone number used for delivery contact.
+              Update the email and phone number used for delivery contact. Your name remains linked to your account.
             </p>
           </div>
 
@@ -300,7 +319,7 @@ export function CustomerProfilePage() {
 
               <Field
                 label="Email"
-                hint="Sign-in email"
+                hint="Account email / delivery contact"
               >
                 <div className="relative">
                   <Mail
@@ -309,9 +328,13 @@ export function CustomerProfilePage() {
                   />
 
                   <input
-                    value={user.email}
-                    readOnly
-                    className="h-12 w-full rounded-xl border border-white/[0.09] bg-white/[0.025] pl-11 pr-4 text-[13px] font-medium text-white/[0.72] outline-none"
+                    type="email"
+                    inputMode="email"
+                    value={email}
+                    disabled={loading || saving}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    className="h-12 w-full rounded-xl border border-white/[0.12] bg-[#0d0b0e] pl-11 pr-4 text-[13px] font-medium text-white outline-none transition placeholder:text-white/[0.28] focus:border-orange-500/[0.70] focus:ring-2 focus:ring-orange-500/[0.08] disabled:opacity-50"
                   />
                 </div>
               </Field>
@@ -356,7 +379,7 @@ export function CustomerProfilePage() {
                   </p>
 
                   <p className="mt-1 text-[11px] leading-5 text-white/[0.58]">
-                    Keep your phone number current so hub staff and delivery updates can reach you when needed.
+                    Your saved email and phone number will be suggested when creating a delivery. Email changes must also be supported by the backend account API.
                   </p>
                 </div>
               </div>
@@ -376,7 +399,7 @@ export function CustomerProfilePage() {
                   </p>
                 ) : (
                   <p className="text-[11px] text-white/[0.36]">
-                    Only your phone number can be edited here.
+                    Changes are saved to your account, not just this device.
                   </p>
                 )}
               </div>
