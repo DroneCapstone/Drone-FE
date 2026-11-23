@@ -129,6 +129,15 @@ const HelpPoliciesPage =
     "HelpPoliciesPage",
   );
 
+const OrderRatingPage =
+  lazyPage(
+    () =>
+      import(
+        "./pages/OrderRatingPage"
+      ),
+    "OrderRatingPage",
+  );
+
 export const customerRoutes: RouteObject[] =
   [
     {
@@ -173,6 +182,13 @@ export const customerRoutes: RouteObject[] =
       path: "deliveries/:deliveryId",
       element: (
         <DeliveryDetailPage />
+      ),
+    },
+
+    {
+      path: "deliveries/:deliveryId/rate",
+      element: (
+        <OrderRatingPage />
       ),
     },
 
