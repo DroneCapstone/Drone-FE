@@ -684,7 +684,7 @@ export function DeliveryDetailPage() {
 
             )}
 
-            {paid && delivery.orderStatus?.toUpperCase() === "DELIVERED_TO_HUB" && (
+            {paid && (delivery.backendStatus ?? "").trim().toUpperCase() === "DELIVERED_TO_HUB" && (
 
               <Link
 
