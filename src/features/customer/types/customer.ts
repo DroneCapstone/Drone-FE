@@ -42,9 +42,13 @@ export interface DeliveryHub {
 export interface DeliveryDraft {
   senderName: string;
   senderPhone: string;
+  /** Contact email prefilled from Customer Profile. */
+  senderEmail?: string;
 
   recipientName: string;
   recipientEmail: string;
+  /** Recipient phone, also available from Address Book. */
+  recipientPhone?: string;
 
   packageCategory: PackageCategory;
   packageDescription: string;
