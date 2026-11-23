@@ -1,8 +1,9 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, LoaderCircle, MessageCircle, Send, X } from "lucide-react";
 import mascotReactions from "../../../assets/mascot/delivery-drone-reactions.webp";
 import {
   askTechnicianChatbot,
+  getTechnicianQuickQuestions,
   type TechnicianChatWorkOrderContext,
 } from "../api/technicianChatbotApi";
 
@@ -15,8 +16,10 @@ type ChatMessage = {
 
 type MascotMood = "happy" | "thinking" | "sleep";
 
+type QuickQuestionsStatus = "idle" | "loading" | "ready" | "error";
+
 function Mascot({ mood = "happy", size = 40 }: { mood?: MascotMood; size?: number }) {
-  // delivery-drone-reactions.webp is the user's 3x3 sprite sheet.
+  // delivery-drone-reactions.webp is the existing 3x3 mascot sprite sheet.
   const positions: Record<MascotMood, string> = {
     happy: "0% 0%",
     thinking: "50% 50%",
@@ -37,32 +40,63 @@ function Mascot({ mood = "happy", size = 40 }: { mood?: MascotMood; size?: numbe
   );
 }
 
-const SUGGESTIONS = [
-  "Drone mất tín hiệu telemetry: cần kiểm tra gì?",
-  "Cách kiểm tra pin yếu hoặc sụt áp an toàn?",
-  "Đề xuất quy trình kiểm tra motor và cánh quạt.",
-  "Checklist trước khi đưa drone về Available?",
-];
-
 export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrderContext }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
+  const [quickQuestionsStatus, setQuickQuestionsStatus] = useState<QuickQuestionsStatus>("idle");
+  const [quickQuestionsError, setQuickQuestionsError] = useState("");
+
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
+  const quickAbortRef = useRef<AbortController | null>(null);
+  const quickRequestedRef = useRef(false);
+  const quickLoadingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const contextRef = useRef(context);
   contextRef.current = context;
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
+  const loadQuickQuestions = useCallback(async () => {
+    if (quickLoadingRef.current) return;
+    quickLoadingRef.current = true;
+    quickRequestedRef.current = true;
+    setQuickQuestionsStatus("loading");
+    setQuickQuestionsError("");
+    const controller = new AbortController();
+    quickAbortRef.current = controller;
+    try {
+      const questions = await getTechnicianQuickQuestions(controller.signal);
+      if (controller.signal.aborted) return;
+      setQuickQuestions(questions);
+      setQuickQuestionsStatus("ready");
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setQuickQuestionsError(error instanceof Error ? error.message : "Không tải được câu hỏi gợi ý.");
+      setQuickQuestionsStatus("error");
+    } finally {
+      if (quickAbortRef.current === controller) quickAbortRef.current = null;
+      quickLoadingRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      quickAbortRef.current?.abort();
+    };
+  }, []);
+
+  // Request the real Backend suggestions only when Technician first opens chat.
+  useEffect(() => {
+    if (open && !quickRequestedRef.current) void loadQuickQuestions();
+  }, [open, loadQuickQuestions]);
+
+  useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, open, sending]);
+  }, [messages, open, sending, quickQuestionsStatus]);
 
   useEffect(() => {
     if (open && !sending) inputRef.current?.focus();
@@ -143,7 +177,21 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
             {messages.length === 0 && (
               <div className="space-y-2 pl-1">
                 <p className="text-[11px] font-medium text-[var(--tech-muted)]">Câu hỏi gợi ý</p>
-                {SUGGESTIONS.map((suggestion) => (
+                {quickQuestionsStatus === "loading" && (
+                  <div className="flex items-center gap-2 text-[12px] text-[var(--tech-muted)]">
+                    <LoaderCircle size={14} className="animate-spin text-orange-500" /> Đang tải câu hỏi từ Backend...
+                  </div>
+                )}
+                {quickQuestionsStatus === "error" && (
+                  <div className="rounded-lg border border-red-500/25 px-3 py-2 text-[12px] leading-5 text-red-400">
+                    {quickQuestionsError}
+                    <button type="button" onClick={() => void loadQuickQuestions()} className="ml-2 font-semibold underline hover:text-orange-500">Retry</button>
+                  </div>
+                )}
+                {quickQuestionsStatus === "ready" && quickQuestions.length === 0 && (
+                  <p className="text-[12px] text-[var(--tech-muted)]">Backend chưa cung cấp câu hỏi gợi ý.</p>
+                )}
+                {quickQuestions.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
