@@ -684,6 +684,22 @@ export function DeliveryDetailPage() {
 
             )}
 
+            {paid && delivery.orderStatus?.toUpperCase() === "DELIVERED_TO_HUB" && (
+
+              <Link
+
+                to={`/customer/deliveries/${delivery.id}/rate`}
+
+                className="mt-6 flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.14]"
+
+              >
+
+                ★ Rate this delivery
+
+              </Link>
+
+            )}
+
             <DeleteOrderAction orderId={delivery.id} visible={showDeleteAction} enabled={deleteAllowed} />
 
           </div>
@@ -818,6 +834,23 @@ function BackendOrderDetails({
                 className="mt-6 flex h-11 items-center justify-center rounded-xl bg-orange-500 text-sm font-semibold text-black">
 
                 Continue to payment
+
+              </Link>
+
+            )}
+
+            {order.paymentStatus === "paid" &&
+              order.orderStatus?.toUpperCase() === "DELIVERED_TO_HUB" && (
+
+              <Link
+
+                to={`/customer/deliveries/${encodeURIComponent(order.id)}/rate`}
+
+                className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.14]"
+
+              >
+
+                ★ Rate this delivery
 
               </Link>
 
