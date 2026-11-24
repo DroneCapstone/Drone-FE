@@ -209,7 +209,7 @@ export function AddressBookPage() {
                 <div key={key}>
                   <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/[0.36]">{label}</label>
                   <input
-                    type="text" value={String(form[key as keyof typeof form] ?? "")} placeholder={placeholder}
+                    type="text" value={String(form[key as keyof FormState] ?? "")} placeholder={placeholder}
                     onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                     className="mt-2 w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-2.5 text-[13px] text-white placeholder-white/[0.22] outline-none focus:border-orange-500/50"
                   />
