@@ -143,7 +143,7 @@ export function AddressBookPage() {
           <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-[13px] text-red-300">{error}</div>
         )}
         {!loading && !error && addresses.length === 0 && (
-          <div className="rounded-2xl border border-white/[0.08] bg-[#161217]/80 px-6 py-10 text-center">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#161217]/94 px-6 py-10 text-center">
             <p className="text-[14px] font-medium text-white/[0.56]">No saved addresses yet.</p>
             <button type="button" onClick={openCreate}
               className="mt-4 inline-flex h-10 items-center gap-2 rounded-xl bg-orange-500/10 border border-orange-500/30 px-4 text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/20">
