@@ -1178,7 +1178,7 @@ function CancelWithReasonButton({
   const [error, setError] = useState("");
 
   const eligible =
-    ["pending", "awaiting_drop_off"].includes(orderStatus?.toLowerCase() ?? "") &&
+    ["pending"].includes(orderStatus?.toLowerCase() ?? "") &&
     !["paid"].includes(paymentStatus?.toLowerCase() ?? "");
 
   if (!eligible) return null;
