@@ -169,15 +169,11 @@ export function MyDeliveriesPage() {
       <div className="mx-auto max-w-[1320px] px-4 pb-24 pt-7 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
         <header className="flex items-start justify-between gap-3 pb-6 sm:items-end sm:pb-8">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-orange-500 sm:text-[12px]">
-              Deliveries
-            </p>
+      
             <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.035em] text-white sm:text-[38px] lg:text-[44px]">
               My deliveries
             </h1>
-            <p className="mt-1.5 text-[12px] leading-5 text-white/[0.52] sm:mt-2 sm:text-[14px]">
-              Follow every delivery from payment to handover.
-            </p>
+            
           </div>
           <Link
             to="/customer/deliveries/create?new=1"
