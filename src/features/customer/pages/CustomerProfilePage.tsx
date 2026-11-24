@@ -4,6 +4,9 @@ import {
   CheckCircle2,
   CreditCard,
   HelpCircle,
+  Eye,
+  EyeOff,
+  KeyRound,
   Mail,
   Phone,
   ShieldCheck,
@@ -20,7 +23,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/hooks/useAuth";
 import { customerProfileService } from "../services/customerProfileService";
-import { customerApi } from "../services/customerApi";
+import { apiRequest, customerApi } from "../services/customerApi";
 
 export function CustomerProfilePage() {
   const { user, logout } = useAuth();
@@ -40,6 +43,17 @@ export function CustomerProfilePage() {
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+
+  // Reset-by-email-token flow documented by POST /api/v1/auth/reset-password.
+  // Tokens and passwords stay in component state; nothing is persisted locally.
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordUpdated, setPasswordUpdated] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -98,6 +112,29 @@ export function CustomerProfilePage() {
     };
   }, [deleteOpen, deleting]);
 
+  // Accessibility and cleanup for the new password dialog only.
+  useEffect(() => {
+    if (!passwordDialogOpen) return;
+
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !resettingPassword) {
+        setPasswordDialogOpen(false);
+        setResetToken("");
+        setNextPassword("");
+        setConfirmPassword("");
+        setPasswordError("");
+        setPasswordUpdated(false);
+      }
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [passwordDialogOpen, resettingPassword]);
+
   if (!user) {
     return null;
   }
@@ -145,6 +182,73 @@ export function CustomerProfilePage() {
 
   const isSuccess =
     message === "Changes saved";
+
+  const closePasswordDialog = () => {
+    if (resettingPassword) return;
+    setPasswordDialogOpen(false);
+    setResetToken("");
+    setNextPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordUpdated(false);
+    setShowPasswords(false);
+  };
+
+  const openPasswordDialog = () => {
+    setResetToken("");
+    setNextPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordUpdated(false);
+    setShowPasswords(false);
+    setPasswordDialogOpen(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (resettingPassword || passwordUpdated) return;
+    setPasswordError("");
+
+    const token = resetToken.trim();
+    if (!token) {
+      setPasswordError("Enter the reset token you received by email.");
+      return;
+    }
+    if (!nextPassword) {
+      setPasswordError("Enter a new password.");
+      return;
+    }
+    if (nextPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation do not match.");
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      // Swagger request body: { token, new_password }.
+      // Do not send current_password: this is a token-based reset API.
+      const result = await apiRequest<{
+        success?: boolean;
+        message?: string;
+      } | null>("/api/v1/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token, new_password: nextPassword }),
+      }, { auth: false });
+      if (result?.success === false) {
+        throw new Error(result.message || "Unable to reset password.");
+      }
+      setResetToken("");
+      setNextPassword("");
+      setConfirmPassword("");
+      setShowPasswords(false);
+      setPasswordUpdated(true);
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error ? error.message : "Unable to reset password. Try again.",
+      );
+    } finally {
+      setResettingPassword(false);
+    }
+  };
 
   const closeDeleteDialog = () => {
     if (deleting) return;
@@ -415,6 +519,156 @@ export function CustomerProfilePage() {
         </div>
       </section>
 
+      {/* Security settings: visual addition only; existing profile actions unchanged. */}
+      <section className="mt-6 rounded-[22px] border border-white/[0.09] bg-[#151217]/94 px-5 py-5 sm:px-7 sm:py-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/[0.10] text-orange-300">
+              <KeyRound size={19} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-medium text-white sm:text-[18px]">Change Password</h2>
+              <p className="mt-1.5 max-w-[610px] text-[12px] leading-5 text-white/[0.58]">
+                Reset your sign-in password securely using a token sent to your email.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={openPasswordDialog}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/[0.16] bg-white/[0.04] px-5 text-[13px] font-semibold text-white transition hover:border-orange-500/[0.45] hover:bg-orange-500/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+          >
+            <KeyRound size={15} aria-hidden="true" />
+            Change Password
+          </button>
+        </div>
+      </section>
+
+      {passwordDialogOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-[3px]"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closePasswordDialog();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="change-password-title"
+            aria-describedby="change-password-description"
+            className="max-h-[90vh] w-full max-w-[460px] overflow-y-auto rounded-[22px] border border-white/[0.12] bg-[#161217]/95 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.48)] sm:p-6"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/[0.12] text-orange-300">
+                <KeyRound size={20} aria-hidden="true" />
+              </span>
+              <button
+                type="button"
+                onClick={closePasswordDialog}
+                disabled={resettingPassword}
+                aria-label="Close change password dialog"
+                className="rounded-lg p-1.5 text-white/[0.55] transition hover:bg-white/[0.06] hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <h2 id="change-password-title" className="mt-4 text-[20px] font-medium text-white">
+              Change Password
+            </h2>
+            <p id="change-password-description" className="mt-2 text-[12px] leading-5 text-white/[0.62]">
+              Use the password reset token received by email. If you do not have a token,
+              request one through <strong>Forgot Password</strong> on the sign-in screen first.
+            </p>
+
+            {passwordUpdated ? (
+              <p role="status" className="mt-5 rounded-xl border border-emerald-500/[0.25] bg-emerald-500/[0.08] px-4 py-3 text-[12px] leading-5 text-emerald-300">
+                Password updated successfully. Use your new password the next time you sign in.
+              </p>
+            ) : (
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleResetPassword();
+              }}
+            >
+              <PasswordInput
+                id="reset-token"
+                label="Reset Token (from email)"
+                value={resetToken}
+                onChange={setResetToken}
+                show={showPasswords}
+                autoComplete="one-time-code"
+                disabled={resettingPassword}
+              />
+              <PasswordInput
+                id="new-password"
+                label="New Password"
+                value={nextPassword}
+                onChange={setNextPassword}
+                show={showPasswords}
+                autoComplete="new-password"
+                disabled={resettingPassword}
+              />
+              <PasswordInput
+                id="confirm-password"
+                label="Confirm New Password"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                show={showPasswords}
+                autoComplete="new-password"
+                disabled={resettingPassword}
+              />
+              <button
+                type="button"
+                disabled={resettingPassword}
+                onClick={() => setShowPasswords((value) => !value)}
+                className="inline-flex items-center gap-2 text-[12px] text-white/[0.65] transition hover:text-white"
+                aria-pressed={showPasswords}
+              >
+                {showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}
+                {showPasswords ? "Hide passwords" : "Show passwords"}
+              </button>
+
+              {passwordError && (
+                <p role="alert" className="rounded-xl border border-orange-500/[0.25] bg-orange-500/[0.07] px-3.5 py-3 text-[12px] leading-5 text-orange-300">
+                  {passwordError}
+                </p>
+              )}
+              <div className="flex justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={closePasswordDialog}
+                  disabled={resettingPassword}
+                  className="h-11 rounded-xl border border-white/[0.14] bg-white/[0.035] px-5 text-[13px] font-semibold text-white/[0.82] transition hover:bg-white/[0.07] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resettingPassword || !resetToken.trim() || !nextPassword || !confirmPassword}
+                  className="h-11 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {resettingPassword ? "Updating…" : "Update Password"}
+                </button>
+              </div>
+            </form>
+            )}
+            {passwordUpdated && (
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={closePasswordDialog}
+                  className="h-11 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black hover:bg-orange-400"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Account deletion: intentionally separate from the editable contact form. */}
       <section className="mt-6 rounded-[22px] border border-orange-500/[0.22] bg-[#151217]/94 px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -632,5 +886,42 @@ function ProfileLink({
         className="shrink-0 text-white/[0.22] transition group-hover:translate-x-0.5 group-hover:text-orange-400"
       />
     </Link>
+  );
+}
+
+/** Self-contained password input for the new UI. No password is persisted. */
+function PasswordInput({
+  id,
+  label,
+  value,
+  onChange,
+  show,
+  autoComplete,
+  disabled = false,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  show: boolean;
+  autoComplete: "one-time-code" | "new-password";
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-2 block text-[12px] font-medium text-white/[0.80]">
+        {label}
+      </label>
+      <input
+        id={id}
+        type={show ? "text" : "password"}
+        autoComplete={autoComplete}
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={`Enter ${label.toLowerCase()}`}
+        className="h-11 w-full rounded-xl border border-white/[0.12] bg-[#0d0b0e] px-4 text-[13px] text-white outline-none transition placeholder:text-white/[0.28] focus:border-orange-500/[0.70] focus:ring-2 focus:ring-orange-500/[0.08]"
+      />
+    </div>
   );
 }
