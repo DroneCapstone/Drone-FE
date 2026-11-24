@@ -6,6 +6,7 @@
 
 
   MapPin,
+  Star,
 
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ import type {
 import type { CustomerOrderSummary } from "../services/customerDeliveryService";
 
 import { customerApi, ApiError } from "../services/customerApi";
+import { canShowDeliveryRating, loadCustomerRating, readSavedRating, type RatingLookup, refreshCustomerRatingLookup } from "../services/customerRatingState";
 
 import {
 
@@ -58,9 +60,6 @@ import {
 } from "../components/DeliveryProgressTimeline";
 
 import { useAuth } from "../../auth/hooks/useAuth";
-
-/** Backend statuses after which the customer may rate the delivery. */
-const RATABLE_BACKEND_STATUSES = new Set(["DELIVERED_TO_HUB", "DELIVERED_TO_CUSTOMER"]);
 
 export function DeliveryDetailPage() {
 
@@ -445,20 +444,18 @@ export function DeliveryDetailPage() {
 
             )}
 
-            {paid && RATABLE_BACKEND_STATUSES.has((delivery.backendStatus ?? "").trim().toUpperCase()) && (
-
-              <Link
-
-                to={`/customer/deliveries/${delivery.id}/rate`}
-
-                className="mt-6 flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.14]"
-
-              >
-
-                ★ Rate this delivery
-
-              </Link>
-
+            {paid && (
+              <OrderRatingAction
+                orderId={delivery.id}
+                eligible={canShowDeliveryRating(
+                  serverOrder?.orderStatus,
+                  serverOrder?.customerStatus,
+                  serverOrder?.statusLabel,
+                  status,
+                  delivery.backendStatus,
+                  delivery.orderStatus,
+                )}
+              />
             )}
 
             <CancelWithReasonButton
@@ -596,21 +593,11 @@ function BackendOrderDetails({
 
             )}
 
-            {order.paymentStatus === "paid" &&
-              RATABLE_BACKEND_STATUSES.has((order.orderStatus ?? "").trim().toUpperCase()) && (
-
-              <Link
-
-                to={`/customer/deliveries/${encodeURIComponent(order.id)}/rate`}
-
-                className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.14]"
-
-              >
-
-                ★ Rate this delivery
-
-              </Link>
-
+            {order.paymentStatus === "paid" && (
+              <OrderRatingAction
+                orderId={order.id}
+                eligible={canShowDeliveryRating(order.orderStatus, order.customerStatus, order.statusLabel)}
+              />
             )}
 
             {/* The only customer cancellation action: PATCH /customer/orders/{id}/cancel. */}
@@ -632,6 +619,77 @@ function BackendOrderDetails({
 
   );
 
+}
+
+/** Show a saved score regardless of a later order-status change.
+ * An unrated order receives the Rate action only after a completed delivery.
+ */
+function OrderRatingAction({ orderId, eligible }: { orderId: string; eligible: boolean }) {
+  const { user } = useAuth();
+  const customerId = String(user?.id ?? "");
+  const [state, setState] = useState<RatingLookup | { kind: "loading" }>(
+    () => {
+      const stored = readSavedRating(customerId, orderId);
+      return stored !== null ? { kind: "rated", rating: stored } : { kind: "loading" };
+    },
+  );
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const cached = readSavedRating(customerId, orderId);
+    if (cached !== null) {
+      setState({ kind: "rated", rating: cached });
+    } else if (!eligible || !customerId) {
+      setState({ kind: "unrated" });
+    } else {
+      setState({ kind: "loading" });
+      void loadCustomerRating(customerId, orderId).then((result) => {
+        if (active) setState(result);
+      });
+    }
+    return () => { active = false; };
+  }, [customerId, orderId, eligible, attempt]);
+
+  if (state.kind === "rated") {
+    return (
+      <div className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/[0.07] px-4 py-3"
+        role="status" aria-label={`Your rating: ${state.rating} out of 5 stars`}>
+        <p className="text-[12px] font-medium text-white/75">Your rating</p>
+        <div className="mt-2 flex items-center gap-1.5">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Star key={index} size={20} aria-hidden="true"
+              className={index < state.rating
+                ? "fill-orange-400 text-orange-400"
+                : "fill-transparent text-[#9b8f89]"} />
+          ))}
+          <span className="ml-2 text-[13px] font-semibold text-orange-400">{state.rating}/5</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Do not show a rating action for an order that has not finished delivery.
+  if (!eligible) return null;
+
+  if (state.kind === "loading") {
+    return <p role="status" className="mt-4 text-[12px] text-white/55">Checking rating…</p>;
+  }
+  if (state.kind === "error") {
+    return (
+      <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/60">
+        <span>Rating temporarily unavailable</span>
+        <button type="button" onClick={() => { refreshCustomerRatingLookup(customerId, orderId); setAttempt((n) => n + 1); }}
+          className="font-medium text-orange-400 hover:text-orange-300">Retry</button>
+      </div>
+    );
+  }
+  return (
+    <Link to={`/customer/deliveries/${encodeURIComponent(orderId)}/rate`}
+      className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] text-[13px] font-semibold text-orange-400 transition hover:bg-orange-500/[0.14]">
+      <Star size={15} aria-hidden="true" /> Rate this delivery
+    </Link>
+  );
 }
 
 /** One compact header for either data source; timestamps belong in the timeline. */
