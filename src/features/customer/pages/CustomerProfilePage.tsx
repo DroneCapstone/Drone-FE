@@ -1,9 +1,5 @@
 import {
-  ArrowRight,
-  Bell,
   CheckCircle2,
-  CreditCard,
-  HelpCircle,
   Eye,
   EyeOff,
   KeyRound,
@@ -19,7 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../auth/hooks/useAuth";
 import { customerProfileService } from "../services/customerProfileService";
@@ -295,9 +291,7 @@ export function CustomerProfilePage() {
               Your profile
             </h1>
 
-            <p className="mt-3 max-w-[560px] text-[13px] leading-6 text-white/[0.76] sm:text-[14px]">
-              Keep your contact details up to date so delivery handovers and customer notifications reach you correctly.
-            </p>
+            
           </div>
 
           <div className="flex items-center gap-3 rounded-[18px] border border-white/[0.09] bg-black/[0.18] px-4 py-3 backdrop-blur-sm">
@@ -360,28 +354,6 @@ export function CustomerProfilePage() {
               </div>
             </div>
 
-            <div className="px-5 py-3">
-              <ProfileLink
-                icon={<CreditCard size={15} />}
-                title="Pricing & services"
-                description="Delivery modes and fees"
-                to="/customer/pricing"
-              />
-
-              <ProfileLink
-                icon={<HelpCircle size={15} />}
-                title="Help & policies"
-                description="Delivery and package rules"
-                to="/customer/help"
-              />
-
-              <ProfileLink
-                icon={<Bell size={15} />}
-                title="Notifications"
-                description="Order and payment updates"
-                to="/customer/notifications"
-              />
-            </div>
           </div>
         </aside>
 
@@ -392,16 +364,14 @@ export function CustomerProfilePage() {
               Contact information
             </h2>
 
-            <p className="mt-1.5 text-[12px] leading-6 text-white/[0.62]">
-              Update the email and phone number used for delivery contact. Your name remains linked to your account.
-            </p>
+            
           </div>
 
           <div className="px-5 py-6 sm:px-7 sm:py-7">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 label="Full name"
-                hint="Account name"
+                
               >
                 <div className="relative">
                   <UserRound
@@ -419,7 +389,7 @@ export function CustomerProfilePage() {
 
               <Field
                 label="Email"
-                hint="Account email / delivery contact"
+                
               >
                 <div className="relative">
                   <Mail
@@ -442,7 +412,7 @@ export function CustomerProfilePage() {
               <div className="sm:col-span-2">
                 <Field
                   label="Phone number"
-                  hint="Used for package handover contact"
+                  
                 >
                   <div className="relative">
                     <Phone
@@ -479,7 +449,7 @@ export function CustomerProfilePage() {
                   </p>
 
                   <p className="mt-1 text-[11px] leading-5 text-white/[0.58]">
-                    Your saved email and phone number will be suggested when creating a delivery. Email changes must also be supported by the backend account API.
+                    Update the email and phone number used for delivery contact. Your name remains linked to your account.
                   </p>
                 </div>
               </div>
@@ -848,44 +818,6 @@ function OverviewRow({
         </p>
       </div>
     </div>
-  );
-}
-
-function ProfileLink({
-  icon,
-  title,
-  description,
-  to,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  to: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="group flex items-center gap-3 border-b border-white/[0.06] py-3.5 last:border-b-0"
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-white/[0.52] transition group-hover:bg-orange-500/[0.09] group-hover:text-orange-300">
-        {icon}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-semibold text-white/[0.84] transition group-hover:text-white">
-          {title}
-        </p>
-
-        <p className="mt-0.5 truncate text-[10px] text-white/[0.38]">
-          {description}
-        </p>
-      </div>
-
-      <ArrowRight
-        size={14}
-        className="shrink-0 text-white/[0.22] transition group-hover:translate-x-0.5 group-hover:text-orange-400"
-      />
-    </Link>
   );
 }
 
