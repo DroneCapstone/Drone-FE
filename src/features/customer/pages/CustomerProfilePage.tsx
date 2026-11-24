@@ -187,11 +187,7 @@ export function CustomerProfilePage() {
 
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-300">
-              Account
-            </p>
-
-            <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.045em] text-white sm:text-[42px]">
+            <h1 className="text-[34px] font-semibold tracking-[-0.045em] text-white sm:text-[42px]">
               Your profile
             </h1>
 
@@ -224,7 +220,7 @@ export function CustomerProfilePage() {
         <aside className="h-fit space-y-5">
           <div className="overflow-hidden rounded-[22px] border border-white/[0.09] bg-[#151217]/94">
             <div className="border-b border-white/[0.07] px-5 py-5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.52]">
+              <p className="text-[12px] font-medium capitalize tracking-normal text-white/[0.70]">
                 Account overview
               </p>
 

@@ -484,3 +484,44 @@ html[data-customer-theme="light"] .customer-keep-dark [class~="bg-black/25"] {
 html[data-customer-theme="light"] .customer-keep-dark [class~="hover:bg-black/35"]:hover {
   background-color: rgba(255,248,240,0.18) !important;
 }
+
+/* ================================================================
+   CUSTOMER TYPOGRAPHY — CONSISTENT SANS-SERIF HEADINGS
+
+   Global application heading styles may apply a serif/display font
+   to h1–h6. Customer page text already uses the application's normal
+   sans-serif font, so inherit that same font for every heading.
+   Both Light and Dark Mode are covered while CustomerHeader mounts
+   the data-customer-theme attribute. Other role layouts are untouched.
+
+   This changes only font family, not font size, weight, color, spacing,
+   layout, or any Customer functionality.
+   ================================================================ */
+html[data-customer-theme] :is(h1, h2, h3, h4, h5, h6, [role="heading"]) {
+  font-family: inherit !important;
+}
+
+/* ================================================================
+   CUSTOMER TYPOGRAPHY — CLEAN, LIGHT-WEIGHT TITLES
+
+   Keep the earlier sans-serif heading fix. Standardize the visual
+   thickness of primary and section titles in BOTH Customer themes.
+   Do not alter buttons, labels, form text, mascot or other app roles.
+   Decorative uppercase labels above page titles are removed from
+   the affected pages; meaningful order IDs/statuses are preserved.
+   ================================================================ */
+html[data-customer-theme] :is(h1, h2) {
+  font-weight: 400 !important;
+}
+html[data-customer-theme] :is(h3, h4, h5, h6) {
+  font-weight: 500 !important;
+}
+
+/* ================================================================
+   CUSTOMER HEADINGS — TITLE CASE (UI ONLY)
+   "Create Delivery", "Review Your Delivery", "Delivery Summary", etc.
+   Applies to both Customer light and dark modes. No state/API changes.
+   ================================================================ */
+html[data-customer-theme] :is(h1, h2, h3, h4, h5, h6, [role="heading"]) {
+  text-transform: capitalize !important;
+}

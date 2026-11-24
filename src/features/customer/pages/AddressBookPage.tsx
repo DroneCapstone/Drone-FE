@@ -123,8 +123,7 @@ export function AddressBookPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">Address Book</p>
-          <h1 className="mt-2 text-[28px] font-semibold leading-[1.05] tracking-[-0.03em] text-white sm:text-[34px]">
+          <h1 className="text-[28px] font-semibold leading-[1.05] tracking-[-0.03em] text-white sm:text-[34px]">
             Saved Addresses
           </h1>
           <p className="mt-2 text-[13px] text-white/[0.44]">Save recipient details for faster order creation.</p>
@@ -210,7 +209,7 @@ export function AddressBookPage() {
                 <div key={key}>
                   <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/[0.36]">{label}</label>
                   <input
-                    type="text" value={(form as Record<string, string>)[key]} placeholder={placeholder}
+                    type="text" value={String(form[key as keyof typeof form] ?? "")} placeholder={placeholder}
                     onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
                     className="mt-2 w-full rounded-xl border border-white/[0.10] bg-white/[0.04] px-4 py-2.5 text-[13px] text-white placeholder-white/[0.22] outline-none focus:border-orange-500/50"
                   />

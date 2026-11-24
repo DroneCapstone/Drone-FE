@@ -673,12 +673,6 @@ export function PaymentPage() {
 
       <div className="mt-7">
 
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-400">
-
-          Payment
-
-        </p>
-
         <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.045em] text-white sm:text-[38px]">
 
           Scan to pay
@@ -991,7 +985,7 @@ export function PaymentPage() {
 
         <aside className="h-fit rounded-[22px] border border-white/[0.10] bg-[#151217]/95 p-5 sm:p-6">
 
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.44]">
+          <p className="text-[12px] font-medium capitalize tracking-normal text-white/[0.64]">
 
             Payment summary
 

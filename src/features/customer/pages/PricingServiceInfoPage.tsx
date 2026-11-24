@@ -65,11 +65,7 @@ export function PricingServiceInfoPage() {
       <section className="overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#111014] shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
         <div className="grid lg:grid-cols-[1.08fr_0.92fr]">
           <div className="p-5 sm:p-7 lg:p-9">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-400">
-              Pricing & services
-            </p>
-
-            <h1 className="mt-3 max-w-[640px] text-[34px] font-semibold leading-[1.02] tracking-[-0.05em] text-white sm:text-[44px]">
+            <h1 className="max-w-[640px] text-[34px] font-semibold leading-[1.02] tracking-[-0.05em] text-white sm:text-[44px]">
               Choose a delivery option that fits your order
             </h1>
 
@@ -123,7 +119,7 @@ export function PricingServiceInfoPage() {
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,16,20,0.82),rgba(17,16,20,0.08)_44%,rgba(17,16,20,0.02))]" />
 
             <div className="customer-keep-dark absolute bottom-5 right-5 rounded-2xl border border-white/[0.12] bg-black/50 px-4 py-3 backdrop-blur-md">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.96]">
+              <p className="text-[10px] font-semibold capitalize tracking-normal text-white/[0.96]">
                 Final price
               </p>
 
