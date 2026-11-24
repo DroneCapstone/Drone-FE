@@ -189,51 +189,61 @@ export function CreateDeliveryPage() {
     setStep(0);
     setError("");
     setEstimateError("");
-    // ── Apply chatbot prefill if coming from chatbot ───────────────
+    // Prefill from the structured CREATE_DELIVERY action returned by BE.
+    // Only supported, validated fields are mapped into this wizard.
     if (searchParams.get("from") === "chatbot") {
       const prefill = readCreateDeliveryPrefill<{
-        origin_hub_id?: number;
-        destination_hub_id?: number;
+        origin_hub_id?: number | string;
+        destination_hub_id?: number | string;
         payload_kg?: number;
         package_size?: string;
         package_type?: string;
+        delivery_mode?: string;
+        has_insurance?: boolean;
       }>();
+
       if (prefill) {
-        setForm((prev) => ({
-          ...prev,
-          ...(prefill.origin_hub_id != null && {
-            originArea: String(prefill.origin_hub_id),
+        const origin = prefill.origin_hub_id == null
+          ? "" : String(prefill.origin_hub_id);
+        const destination = prefill.destination_hub_id == null
+          ? "" : String(prefill.destination_hub_id);
+        const weight = typeof prefill.payload_kg === "number" &&
+          Number.isFinite(prefill.payload_kg) &&
+          prefill.payload_kg > 0 && prefill.payload_kg <= 10
+            ? prefill.payload_kg : null;
+        const size = String(prefill.package_size ?? "").toUpperCase();
+        const validSize = Object.prototype.hasOwnProperty.call(PACKAGE_SIZE_RULES, size);
+        const mode = String(prefill.delivery_mode ?? "").toLowerCase();
+        const validMode = mode === "normal" || mode === "express" || mode === "scheduled";
+        const category = String(prefill.package_type ?? "").toLowerCase();
+        // `standard` from the chatbot means package handling type, NOT a
+        // category like documents/food/electronics in the Customer form.
+        const validCategory = PACKAGE_CATEGORIES.some((item) => item.value === category);
+
+        setForm((previous) => ({
+          ...previous,
+          ...(origin && { originArea: origin }),
+          ...(destination && { destinationArea: destination }),
+          ...(weight !== null && { weightKg: weight }),
+          ...(validSize && { packageSize: size as PackageSize }),
+          ...(validMode && {
+            deliveryMode: mode as DeliveryDraftWithPricing["deliveryMode"],
           }),
-          ...(prefill.destination_hub_id != null && {
-            destinationArea: String(prefill.destination_hub_id),
+          ...(validCategory && {
+            packageCategory: category as DeliveryDraftWithPricing["packageCategory"],
           }),
-          ...(prefill.payload_kg != null && {
-            weightKg: prefill.payload_kg,
-          }),
-          ...(prefill.package_size && {
-            packageSize: prefill.package_size as PackageSize,
-          }),
-          ...(prefill.package_type && {
-            packageCategory: prefill.package_type as DeliveryDraftWithPricing["packageCategory"],
+          ...(typeof prefill.has_insurance === "boolean" && {
+            hasInsurance: prefill.has_insurance,
           }),
         }));
-        // If we have route + package data, skip straight to Delivery mode (step 3).
-        // If only partial, skip to Package step (step 1) so user can verify.
-        if (
-          prefill.origin_hub_id != null &&
-          prefill.destination_hub_id != null &&
-          prefill.payload_kg != null
-        ) {
-          setStep(3);
-        } else if (prefill.payload_kg != null) {
-          setStep(2);
-        } else {
-          setStep(1);
-        }
+
+        // Start at Contact (step 0). Sender comes from Profile; recipient
+        // information has NOT been supplied by AI. Skipping Contact would
+        // bypass its required-field checks before Review.
+        setStep(0);
         clearCreateDeliveryPrefill();
       }
     }
-    // ──────────────────────────────────────────────────────────────
     /*
      * Remove ?new=1 after the reset. This prevents a refresh from
      * resetting the form again while the customer is filling it.
