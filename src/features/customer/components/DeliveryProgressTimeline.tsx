@@ -98,7 +98,12 @@ export function getConfirmedMilestones(
     events.filter((event) => event.completed !== false && !event.key.startsWith("forecast_")).map((event) => event.key),
   );
 
-  const collected = confirmedEvents.has("collected") || has(collectedStatuses);
+  // Customer-facing progress convention requested for DroneOptAI:
+  // use the order detail `destination_received_at` as confirmation for the
+  // FINAL displayed step, without adding an extra hub-received step.
+  // NOTE: Backend field represents hub receipt, not a separate pickup event.
+  const collected = confirmedEvents.has("collected") || has(collectedStatuses) ||
+    validTimestamp(order.destinationReceivedAt);
   const arrived = collected || confirmedEvents.has("destination_arrived") ||
     (!authoritative && has(arrivalStatuses));
   const departed = arrived || confirmedEvents.has("departed") ||
@@ -148,9 +153,15 @@ export function parseTrackingEvents(value: unknown): TrackingEvent[] {
     FLIGHT_STARTED: "departed", DRONE_DEPARTED: "departed", IN_DELIVERY: "departed",
     IN_FLIGHT: "departed", IN_TRANSIT: "departed",
     ARRIVED_AT_HUB: "destination_arrived", ARRIVED_AT_DESTINATION: "destination_arrived",
-    DESTINATION_HUB_ARRIVED: "destination_arrived", DELIVERED_TO_HUB: "destination_arrived",
-    AT_DESTINATION_HUB: "destination_arrived", READY_FOR_PICKUP: "destination_arrived",
-    // BE 'DELIVERED' means delivered AT HUB (ready for pickup), not recipient collection.
+    DESTINATION_HUB_ARRIVED: "destination_arrived",
+    AT_DESTINATION_HUB: "destination_arrived",
+    // Hub receipt events still belong to destination arrival; the final step
+    // is confirmed from `destination_received_at` in Order Detail instead.
+    DELIVERED_TO_HUB: "destination_arrived", READY_FOR_PICKUP: "destination_arrived",
+    PICKUP_READY: "destination_arrived",
+    PACKAGE_RECEIVED_AT_DESTINATION: "destination_arrived",
+    DESTINATION_HUB_RECEIVED: "destination_arrived",
+    DESTINATION_RECEIVED: "destination_arrived",
     DELIVERED: "destination_arrived",
     PICKED_UP: "collected", COLLECTED: "collected", RECIPIENT_PICKUP: "collected",
     RECIPIENT_COLLECTED: "collected", PACKAGE_COLLECTED: "collected",
@@ -191,6 +202,7 @@ export function parseTrackingEvents(value: unknown): TrackingEvent[] {
     ["created", "order_created_at"], ["paid", "paid_at"],
     ["origin_received", "package_received_at"], ["departed", "departed_at"],
     ["destination_arrived", "arrived_at"],
+    ["collected", "destination_received_at"],
   ];
   for (const [key, field] of actualFields) {
     const time = payload[field];
@@ -258,11 +270,13 @@ function getMilestoneTime(
   const actualFromOrder: Partial<Record<MilestoneKey, string | null>> = {
     created: order.createdAt, paid: order.paidAt, origin_received: order.originReceivedAt,
     scheduled: order.scheduledAt, departed: order.departedAt,
-    destination_arrived: order.destinationReceivedAt, collected: order.collectedAt,
+    collected: order.destinationReceivedAt ?? order.collectedAt,
   };
   if (confirmed) {
     // Use the Tracking timestamp before any Order Detail timestamp.
-    const actual = events.get(key)?.occurredAt ?? actualFromOrder[key];
+    const actual = key === "collected"
+      ? order.destinationReceivedAt ?? events.get(key)?.occurredAt ?? order.collectedAt
+      : events.get(key)?.occurredAt ?? actualFromOrder[key];
     const formatted = compactMilestoneTime(actual);
     return formatted ? { value: formatted, estimated: false } : null;
   }
