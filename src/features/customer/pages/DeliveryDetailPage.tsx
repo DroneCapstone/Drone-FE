@@ -1,4 +1,4 @@
-import {
+﻿import {
 
   ArrowLeft,
 
@@ -58,6 +58,9 @@ import {
 } from "../components/DeliveryProgressTimeline";
 
 import { useAuth } from "../../auth/hooks/useAuth";
+
+/** Backend statuses after which the customer may rate the delivery. */
+const RATABLE_BACKEND_STATUSES = new Set(["DELIVERED_TO_HUB", "DELIVERED_TO_CUSTOMER"]);
 
 export function DeliveryDetailPage() {
 
@@ -442,7 +445,7 @@ export function DeliveryDetailPage() {
 
             )}
 
-            {paid && (delivery.backendStatus ?? "").trim().toUpperCase() === "DELIVERED_TO_HUB" && (
+            {paid && RATABLE_BACKEND_STATUSES.has((delivery.backendStatus ?? "").trim().toUpperCase()) && (
 
               <Link
 
@@ -594,7 +597,7 @@ function BackendOrderDetails({
             )}
 
             {order.paymentStatus === "paid" &&
-              order.orderStatus?.toUpperCase() === "DELIVERED_TO_HUB" && (
+              RATABLE_BACKEND_STATUSES.has((order.orderStatus ?? "").trim().toUpperCase()) && (
 
               <Link
 
