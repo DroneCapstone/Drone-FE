@@ -6,7 +6,6 @@ import {
 
 
   MapPin,
-  Trash2,
 
 } from "lucide-react";
 
@@ -24,7 +23,6 @@ import {
   useEffect,
 
   useState,
-  useRef,
 
 } from "react";
 
@@ -60,221 +58,6 @@ import {
 } from "../components/DeliveryProgressTimeline";
 
 import { useAuth } from "../../auth/hooks/useAuth";
-import { createPortal } from "react-dom";
-
-/**
- * Be conservative: only the backend's fresh order detail may authorize the
- * Delete button. In particular, missing mission/payment fields are NOT proof
- * that an order is eligible for deletion.
- */
-function isDeletablePendingOrder(response: unknown, expectedId: string): boolean {
-  let value: unknown = response;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    const record = value as Record<string, unknown>;
-    if ("order_status" in record || "payment_status" in record) break;
-    value = record.order ?? record.data ?? record.result;
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const order = value as Record<string, unknown>;
-  const orderId = order.order_id ?? order.id;
-  const status = String(order.order_status ?? order.status ?? "").trim().toUpperCase();
-  const payment = String(order.payment_status ?? order.paymentStatus ?? "").trim().toUpperCase();
-  const hasMissionField = Object.prototype.hasOwnProperty.call(order, "mission_id") ||
-    Object.prototype.hasOwnProperty.call(order, "missionId");
-  // Null is meaningful here: it means no mission has been assigned.
-  const missionId = Object.prototype.hasOwnProperty.call(order, "mission_id")
-    ? order.mission_id
-    : order.missionId;
-
-  return String(orderId ?? "") === expectedId &&
-    status === "PENDING" &&
-    ["PENDING", "UNPAID", "NOT_PAID", "AWAITING_PAYMENT"].includes(payment) &&
-    hasMissionField && (missionId === null || missionId === "");
-}
-
-/** Remove only the deleted order from the existing local offline fallback. */
-function clearDeletedOrderFromCache(orderId: string) {
-  try {
-    const key = "droneoptai.customer.deliveries";
-    const saved = window.localStorage.getItem(key);
-    if (!saved) return;
-    const list: unknown = JSON.parse(saved);
-    if (!Array.isArray(list)) return;
-    window.localStorage.setItem(
-      key,
-      JSON.stringify(list.filter((item: unknown) => {
-        if (!item || typeof item !== "object") return true;
-        return (item as { id?: unknown }).id !== orderId;
-      })),
-    );
-  } catch {
-    // The server deletion already succeeded; unavailable local storage must
-    // not stop the customer from returning to My Deliveries.
-  }
-}
-
-function DeleteOrderAction({
-  orderId,
-  visible,
-  enabled,
-}: {
-  orderId: string;
-  visible: boolean;
-  enabled: boolean;
-}) {
-  const navigate = useNavigate();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const deleteRef = useRef<HTMLButtonElement>(null);
-  const deletingRef = useRef(deleting);
-  deletingRef.current = deleting;
-
-  // Keep the confirmation above the header and floating assistant, and make
-  // it usable with keyboard navigation. Only the modal is changed here.
-  useEffect(() => {
-    if (!confirmOpen || !visible) return;
-
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    cancelRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !deletingRef.current) {
-        event.preventDefault();
-        setConfirmOpen(false);
-      }
-      if (event.key !== "Tab") return;
-      const buttons = [cancelRef.current, deleteRef.current]
-        .filter((button): button is HTMLButtonElement => Boolean(button && !button.disabled));
-      if (buttons.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = buttons[0];
-      const last = buttons[buttons.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-      triggerRef.current?.focus();
-    };
-  }, [confirmOpen, visible]);
-
-  if (!visible) return null;
-
-  const closeConfirm = () => {
-    if (deleting) return;
-    setConfirmOpen(false);
-    setDeleteError("");
-  };
-
-  const handleDelete = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    setDeleteError("");
-    try {
-      // Confirm against the freshest backend data before calling DELETE.
-      // Payment/mission restrictions and the API remain unchanged.
-      const latest = await customerApi.getOrder(orderId);
-      if (!isDeletablePendingOrder(latest, orderId)) {
-        setDeleteError("This order can no longer be deleted. Please check its latest status.");
-        return;
-      }
-      await customerApi.deleteOrder(orderId);
-      clearDeletedOrderFromCache(orderId);
-      navigate("/customer/deliveries", { replace: true });
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Unable to delete this order.");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <div className="mt-4">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => { setDeleteError(""); setConfirmOpen(true); }}
-        title={!enabled ? "Eligibility will be checked before deleting" : undefined}
-        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-orange-500/40 bg-orange-500/[0.10] px-4 text-[13px] font-semibold text-orange-300 transition hover:border-orange-400/70 hover:bg-orange-500/[0.16]"
-      >
-        <Trash2 size={15} aria-hidden="true" />
-        Delete order
-      </button>
-
-      {confirmOpen && createPortal(
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-[3px]"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeConfirm();
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-order-title"
-            aria-describedby="delete-order-description"
-            className="my-auto max-h-[calc(100dvh-32px)] w-full max-w-[420px] overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#191519] p-5 text-white shadow-[0_24px_80px_rgba(0,0,0,0.6)] sm:p-6"
-          >
-            <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl border border-orange-500/[0.25] bg-orange-500/[0.10] text-orange-400">
-              <Trash2 size={19} aria-hidden="true" />
-            </div>
-            <h2 id="delete-order-title" className="text-[20px] font-semibold tracking-[-0.025em] text-white">
-              Delete this order?
-            </h2>
-            <p id="delete-order-description" className="mt-2 text-[13px] leading-6 text-white/[0.58]">
-              This order will be permanently removed. This action cannot be undone.
-            </p>
-            <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.035] px-3.5 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/[0.40]">Order ID</p>
-              <p className="mt-1 break-all text-[13px] font-semibold text-white/[0.86]">{orderId}</p>
-            </div>
-            {deleteError && (
-              <p role="alert" className="mt-4 rounded-lg border border-orange-500/[0.25] bg-orange-500/[0.08] px-3 py-2.5 text-[12px] leading-5 text-orange-200">
-                {deleteError}
-              </p>
-            )}
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                ref={cancelRef}
-                type="button"
-                onClick={closeConfirm}
-                disabled={deleting}
-                className="h-11 rounded-xl border border-white/[0.14] bg-white/[0.035] text-[13px] font-semibold text-white/[0.82] transition hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400 disabled:cursor-wait disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                ref={deleteRef}
-                type="button"
-                onClick={() => { void handleDelete(); }}
-                disabled={deleting}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 text-[13px] font-semibold text-black transition hover:bg-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300 disabled:cursor-wait disabled:opacity-70"
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                {deleting ? "Deleting…" : "Delete order"}
-              </button>
-            </div>
-          </section>
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
 
 export function DeliveryDetailPage() {
 
@@ -282,7 +65,6 @@ export function DeliveryDetailPage() {
 
   const { user } = useAuth();
 
-  const [verifiedDeletableOrderId, setVerifiedDeletableOrderId] = useState<string | null>(null);
 
   const [delivery, setDelivery] = useState(() => {
 
@@ -343,7 +125,6 @@ export function DeliveryDetailPage() {
     setTrackingEvents([]);
 
     setChangeNotice("");
-    setVerifiedDeletableOrderId(null);
 
     async function refreshSelectedOrder() {
 
@@ -359,12 +140,6 @@ export function DeliveryDetailPage() {
 
         if (!active) return;
 
-        // The existing detail GET has already populated this raw response;
-        // no duplicate GET is needed to check mission_id for the button.
-        const rawDetail = customerApi.getLastOrderDetail(currentId);
-        setVerifiedDeletableOrderId(
-          isDeletablePendingOrder(rawDetail, currentId) ? currentId : null,
-        );
 
         setServerOrder(latest);
 
@@ -454,21 +229,6 @@ export function DeliveryDetailPage() {
 
   }, [deliveryId, user?.id]);
 
-  // Reserve the Delete button slot immediately for a pending, unpaid order.
-  // Local data may only decide whether the slot is displayed, NEVER whether
-  // deletion is enabled. The backend detail response grants that permission.
-  const currentStatus = String(
-    serverOrder?.orderStatus ?? delivery?.backendStatus ?? delivery?.orderStatus ?? "",
-  ).trim().toUpperCase();
-  const currentPayment = serverOrder?.paymentStatus ?? delivery?.paymentStatus;
-  const showDeleteAction = Boolean(
-    currentPayment === "pending" &&
-    (currentStatus === "PENDING" || currentStatus === "PENDING_REVIEW")
-  );
-  const deleteAllowed = Boolean(
-    deliveryId && verifiedDeletableOrderId === deliveryId && showDeleteAction
-  );
-
   const progressOrder = serverOrder ?? (
 
     user?.id && deliveryId
@@ -495,8 +255,6 @@ export function DeliveryDetailPage() {
 
         refreshError={loadError}
 
-        showDelete={showDeleteAction}
-        canDelete={deleteAllowed}
 
       />
 
@@ -700,7 +458,11 @@ export function DeliveryDetailPage() {
 
             )}
 
-            <DeleteOrderAction orderId={delivery.id} visible={showDeleteAction} enabled={deleteAllowed} />
+            <CancelWithReasonButton
+              orderId={delivery.id}
+              orderStatus={serverOrder?.orderStatus ?? delivery.backendStatus ?? delivery.orderStatus}
+              paymentStatus={serverOrder?.paymentStatus ?? delivery.paymentStatus}
+            />
 
           </div>
 
@@ -728,10 +490,6 @@ function BackendOrderDetails({
 
   onDismiss,
 
-  showDelete,
-
-  canDelete,
-
 }: {
 
   order: CustomerOrderSummary;
@@ -743,10 +501,6 @@ function BackendOrderDetails({
   onDismiss: () => void;
 
   refreshError: string;
-
-  showDelete: boolean;
-
-  canDelete: boolean;
 
 }) {
 
@@ -856,14 +610,14 @@ function BackendOrderDetails({
 
             )}
 
-            {/* Cancel with reason — only for PENDING / AWAITING_DROP_OFF unpaid */}
+            {/* The only customer cancellation action: PATCH /customer/orders/{id}/cancel. */}
             <CancelWithReasonButton
               orderId={order.id}
               orderStatus={order.orderStatus}
               paymentStatus={order.paymentStatus}
             />
 
-            <DeleteOrderAction orderId={order.id} visible={showDelete} enabled={canDelete} />
+
 
           </div>
 
@@ -1445,9 +1199,9 @@ function CancelWithReasonButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-4 flex h-10 w-full items-center justify-center text-[12px] font-medium text-white/[0.30] transition hover:text-red-400"
+        className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-xl border border-orange-500/40 bg-orange-500/[0.10] px-4 text-[13px] font-semibold text-orange-400 transition hover:border-orange-400/70 hover:bg-orange-500/[0.16]"
       >
-        Cancel this order
+        Cancel order
       </button>
 
       {open && (
@@ -1513,7 +1267,7 @@ function CancelWithReasonButton({
                 type="button"
                 onClick={handleCancel}
                 disabled={!reason || loading}
-                className="flex-1 h-10 rounded-xl bg-red-500/80 text-[13px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-40"
+                className="flex-1 h-10 rounded-xl bg-orange-500 text-[13px] font-semibold text-black transition hover:bg-orange-400 disabled:opacity-40"
               >
                 {loading ? "Cancelling…" : "Cancel order"}
               </button>
