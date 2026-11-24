@@ -40,14 +40,14 @@ export function CustomerProfilePage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
-  // Reset-by-email-token flow documented by POST /api/v1/auth/reset-password.
-  // Tokens and passwords stay in component state; nothing is persisted locally.
+  // Authenticated change-password flow: current password + new password.
+  // Passwords stay in component state and are never persisted locally.
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [resetToken, setResetToken] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
-  const [resettingPassword, setResettingPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordUpdated, setPasswordUpdated] = useState(false);
 
@@ -115,9 +115,9 @@ export function CustomerProfilePage() {
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !resettingPassword) {
+      if (event.key === "Escape" && !changingPassword) {
         setPasswordDialogOpen(false);
-        setResetToken("");
+        setCurrentPassword("");
         setNextPassword("");
         setConfirmPassword("");
         setPasswordError("");
@@ -129,7 +129,7 @@ export function CustomerProfilePage() {
       document.body.style.overflow = oldOverflow;
       document.removeEventListener("keydown", onEscape);
     };
-  }, [passwordDialogOpen, resettingPassword]);
+  }, [passwordDialogOpen, changingPassword]);
 
   if (!user) {
     return null;
@@ -180,9 +180,9 @@ export function CustomerProfilePage() {
     message === "Changes saved";
 
   const closePasswordDialog = () => {
-    if (resettingPassword) return;
+    if (changingPassword) return;
     setPasswordDialogOpen(false);
-    setResetToken("");
+    setCurrentPassword("");
     setNextPassword("");
     setConfirmPassword("");
     setPasswordError("");
@@ -191,7 +191,7 @@ export function CustomerProfilePage() {
   };
 
   const openPasswordDialog = () => {
-    setResetToken("");
+    setCurrentPassword("");
     setNextPassword("");
     setConfirmPassword("");
     setPasswordError("");
@@ -200,13 +200,12 @@ export function CustomerProfilePage() {
     setPasswordDialogOpen(true);
   };
 
-  const handleResetPassword = async () => {
-    if (resettingPassword || passwordUpdated) return;
+  const handleChangePassword = async () => {
+    if (changingPassword || passwordUpdated) return;
     setPasswordError("");
 
-    const token = resetToken.trim();
-    if (!token) {
-      setPasswordError("Enter the reset token you received by email.");
+    if (!currentPassword) {
+      setPasswordError("Enter your current password.");
       return;
     }
     if (!nextPassword) {
@@ -218,31 +217,35 @@ export function CustomerProfilePage() {
       return;
     }
 
-    setResettingPassword(true);
+    setChangingPassword(true);
     try {
-      // Swagger request body: { token, new_password }.
-      // Do not send current_password: this is a token-based reset API.
+      // Swagger contract: POST /api/v1/auth/change-password.
+      // Requires the authenticated customer session.
       const result = await apiRequest<{
         success?: boolean;
         message?: string;
-      } | null>("/api/v1/auth/reset-password", {
+      } | null>("/api/v1/auth/change-password", {
         method: "POST",
-        body: JSON.stringify({ token, new_password: nextPassword }),
-      }, { auth: false });
+        body: JSON.stringify({
+          old_password: currentPassword,
+          new_password: nextPassword,
+          confirm_new_password: confirmPassword,
+        }),
+      });
       if (result?.success === false) {
-        throw new Error(result.message || "Unable to reset password.");
+        throw new Error(result.message || "Unable to change password.");
       }
-      setResetToken("");
+      setCurrentPassword("");
       setNextPassword("");
       setConfirmPassword("");
       setShowPasswords(false);
       setPasswordUpdated(true);
     } catch (error) {
       setPasswordError(
-        error instanceof Error ? error.message : "Unable to reset password. Try again.",
+        error instanceof Error ? error.message : "Unable to change password. Try again.",
       );
     } finally {
-      setResettingPassword(false);
+      setChangingPassword(false);
     }
   };
 
@@ -291,7 +294,6 @@ export function CustomerProfilePage() {
               Your profile
             </h1>
 
-            
           </div>
 
           <div className="flex items-center gap-3 rounded-[18px] border border-white/[0.09] bg-black/[0.18] px-4 py-3 backdrop-blur-sm">
@@ -364,14 +366,12 @@ export function CustomerProfilePage() {
               Contact information
             </h2>
 
-            
           </div>
 
           <div className="px-5 py-6 sm:px-7 sm:py-7">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 label="Full name"
-                
               >
                 <div className="relative">
                   <UserRound
@@ -389,7 +389,6 @@ export function CustomerProfilePage() {
 
               <Field
                 label="Email"
-                
               >
                 <div className="relative">
                   <Mail
@@ -412,7 +411,6 @@ export function CustomerProfilePage() {
               <div className="sm:col-span-2">
                 <Field
                   label="Phone number"
-                  
                 >
                   <div className="relative">
                     <Phone
@@ -499,7 +497,7 @@ export function CustomerProfilePage() {
             <div className="min-w-0">
               <h2 className="text-[16px] font-medium text-white sm:text-[18px]">Change Password</h2>
               <p className="mt-1.5 max-w-[610px] text-[12px] leading-5 text-white/[0.58]">
-                Reset your sign-in password securely using a token sent to your email.
+                Update your password securely by confirming your current password.
               </p>
             </div>
           </div>
@@ -535,7 +533,7 @@ export function CustomerProfilePage() {
               <button
                 type="button"
                 onClick={closePasswordDialog}
-                disabled={resettingPassword}
+                disabled={changingPassword}
                 aria-label="Close change password dialog"
                 className="rounded-lg p-1.5 text-white/[0.55] transition hover:bg-white/[0.06] hover:text-white"
               >
@@ -546,8 +544,7 @@ export function CustomerProfilePage() {
               Change Password
             </h2>
             <p id="change-password-description" className="mt-2 text-[12px] leading-5 text-white/[0.62]">
-              Use the password reset token received by email. If you do not have a token,
-              request one through <strong>Forgot Password</strong> on the sign-in screen first.
+              Enter your current password and choose a new password.
             </p>
 
             {passwordUpdated ? (
@@ -559,17 +556,17 @@ export function CustomerProfilePage() {
               className="mt-5 space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                void handleResetPassword();
+                void handleChangePassword();
               }}
             >
               <PasswordInput
-                id="reset-token"
-                label="Reset Token (from email)"
-                value={resetToken}
-                onChange={setResetToken}
+                id="current-password"
+                label="Current Password"
+                value={currentPassword}
+                onChange={setCurrentPassword}
                 show={showPasswords}
-                autoComplete="one-time-code"
-                disabled={resettingPassword}
+                autoComplete="current-password"
+                disabled={changingPassword}
               />
               <PasswordInput
                 id="new-password"
@@ -578,7 +575,7 @@ export function CustomerProfilePage() {
                 onChange={setNextPassword}
                 show={showPasswords}
                 autoComplete="new-password"
-                disabled={resettingPassword}
+                disabled={changingPassword}
               />
               <PasswordInput
                 id="confirm-password"
@@ -587,11 +584,11 @@ export function CustomerProfilePage() {
                 onChange={setConfirmPassword}
                 show={showPasswords}
                 autoComplete="new-password"
-                disabled={resettingPassword}
+                disabled={changingPassword}
               />
               <button
                 type="button"
-                disabled={resettingPassword}
+                disabled={changingPassword}
                 onClick={() => setShowPasswords((value) => !value)}
                 className="inline-flex items-center gap-2 text-[12px] text-white/[0.65] transition hover:text-white"
                 aria-pressed={showPasswords}
@@ -609,17 +606,17 @@ export function CustomerProfilePage() {
                 <button
                   type="button"
                   onClick={closePasswordDialog}
-                  disabled={resettingPassword}
+                  disabled={changingPassword}
                   className="h-11 rounded-xl border border-white/[0.14] bg-white/[0.035] px-5 text-[13px] font-semibold text-white/[0.82] transition hover:bg-white/[0.07] disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={resettingPassword || !resetToken.trim() || !nextPassword || !confirmPassword}
+                  disabled={changingPassword || !currentPassword.trim() || !nextPassword || !confirmPassword}
                   className="h-11 rounded-xl bg-orange-500 px-5 text-[13px] font-semibold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {resettingPassword ? "Updating…" : "Update Password"}
+                  {changingPassword ? "Updating…" : "Update Password"}
                 </button>
               </div>
             </form>
@@ -836,7 +833,7 @@ function PasswordInput({
   value: string;
   onChange: (value: string) => void;
   show: boolean;
-  autoComplete: "one-time-code" | "new-password";
+  autoComplete: "current-password" | "new-password";
   disabled?: boolean;
 }) {
   return (
