@@ -31,14 +31,46 @@ type NotificationItem = {
   orderId?: string;
 };
 
+/**
+ * BE notifications can omit order_id, but still include the order code in
+ * reference_id, title or message, e.g. PACKAGE_RECEIVED_ORD-20261117-0001.
+ * Only use an actual order code for fallback navigation; never treat a
+ * mission_id/work_order_id as a delivery order id.
+ */
+const ORDER_CODE_PATTERN = /(?:^|[^A-Z0-9])(ORD-\d{8}-\d+)(?!\d)/i;
+
+export function getNotificationOrderId(
+  item: NotificationApi,
+): string | undefined {
+  // Preserve explicit identifiers supplied by the BE (existing behavior).
+  for (const value of [item.order_id, item.delivery_id]) {
+    if ((typeof value === "string" && value.trim()) ||
+        (typeof value === "number" && Number.isFinite(value))) {
+      return String(value).trim();
+    }
+  }
+
+  // Older BE notifications only provide a reference such as
+  // PACKAGE_RECEIVED_ORD-20261117-0001, or mention the order in their text.
+  for (const value of [
+    item.reference_id,
+    item.title,
+    item.message,
+    item.description,
+    item.content,
+  ]) {
+    if (typeof value !== "string") continue;
+    const match = value.match(ORDER_CODE_PATTERN);
+    if (match) return match[1].toUpperCase();
+  }
+
+  return undefined;
+}
+
 function normalizeNotification(
   item: NotificationApi,
 ): NotificationItem {
-  const orderId = String(
-    item.order_id ??
-      item.delivery_id ??
-      "",
-  );
+  const orderId = getNotificationOrderId(item);
 
   const read = Boolean(
     item.is_read ??
@@ -61,11 +93,10 @@ function normalizeNotification(
       item.updated_at ??
       new Date().toISOString(),
     to: orderId
-      ? `/customer/deliveries/${orderId}`
+      ? `/customer/deliveries/${encodeURIComponent(orderId)}`
       : "/customer/notifications",
     read,
-    orderId:
-      orderId || undefined,
+    orderId,
   };
 }
 
