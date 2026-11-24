@@ -198,7 +198,7 @@ function RefundQuickGuide() {
     <section className="mb-4 overflow-hidden rounded-[18px] border border-white/[0.10] bg-[#151217]/92" aria-label="Refund rates summary">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.09] px-4 py-3.5 sm:px-5">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-orange-300">Refund guide</p>
+          <p className="text-[10px] font-semibold capitalize tracking-normal text-orange-300">Refund guide</p>
           <h3 className="mt-1 text-[17px] font-semibold text-white">Refunds at a glance</h3>
         </div>
         <span className="rounded-md border border-orange-500/[0.22] bg-orange-500/[0.09] px-2 py-1 text-[10px] font-semibold text-orange-300">DRAFT</span>
@@ -355,11 +355,7 @@ export function HelpPoliciesPage() {
   return (
     <div className="mx-auto w-full max-w-[1180px] px-4 pb-16 pt-7 sm:px-6 sm:pt-10 lg:px-8">
       <section className="mx-auto max-w-[760px] text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">
-          Help & policies
-        </p>
-
-        <h1 className="mt-3 text-[34px] font-semibold leading-[1.03] tracking-[-0.05em] text-white sm:text-[44px]">
+        <h1 className="text-[34px] font-semibold leading-[1.03] tracking-[-0.05em] text-white sm:text-[44px]">
           How can we help?
         </h1>
 

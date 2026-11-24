@@ -124,10 +124,7 @@ export function DeliveryReviewPage() {
     <>
       <div className="mx-auto w-full max-w-[1180px] px-4 pb-[132px] pt-6 sm:px-6 sm:pb-28 sm:pt-9 lg:px-10 lg:pb-16 lg:pt-12">
         <header className="max-w-[720px]">
-          <p className="hidden text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500 sm:block">
-            Review
-          </p>
-          <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:mt-3 sm:text-[42px]">
+          <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-[42px]">
             Review your delivery
           </h1>
          
@@ -297,7 +294,7 @@ export function DeliveryReviewPage() {
           <aside className="hidden h-fit lg:sticky lg:top-[96px] lg:block">
             <div className="overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/95 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-sm">
               <div className="border-b border-white/[0.08] px-6 py-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/[0.64]">
+                <p className="text-[12px] font-medium capitalize tracking-normal text-white/[0.75]">
                   Payment details
                 </p>
                 <p className="mt-2 text-[18px] font-semibold text-white">

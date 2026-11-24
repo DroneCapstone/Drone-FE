@@ -84,9 +84,6 @@ export function OrderRatingPage() {
 
       {/* Header */}
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">
-          Rate your experience
-        </p>
         <h1 className="mt-3 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-[36px]">
           How was your delivery?
         </h1>
@@ -99,7 +96,7 @@ export function OrderRatingPage() {
 
       {/* Star selector */}
       <div className="mt-10 overflow-hidden rounded-2xl border border-white/[0.10] bg-[#161217]/94 p-6 sm:p-8">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/[0.36]">
+        <p className="text-[11px] font-semibold capitalize tracking-normal text-white/[0.36]">
           Overall rating
         </p>
 

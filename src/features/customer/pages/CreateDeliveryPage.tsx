@@ -606,10 +606,7 @@ export function CreateDeliveryPage() {
             PAGE HEADER
         ================================================== */}
         <header>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-500 sm:text-[12px]">
-            New delivery
-          </p>
-          <h1 className="mt-2 text-[32px] font-bold tracking-[-0.04em] text-white sm:mt-3 sm:text-[40px] lg:text-[46px]">
+          <h1 className="text-[32px] font-bold tracking-[-0.04em] text-white sm:text-[40px] lg:text-[46px]">
             Create delivery
           </h1>
           
@@ -790,7 +787,7 @@ export function CreateDeliveryPage() {
           {/* SUMMARY */}
           <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#161217]/96 p-4 shadow-[0_10px_28px_rgba(0,0,0,0.24)] backdrop-blur-sm sm:p-6 sm:shadow-[0_14px_34px_rgba(0,0,0,0.30)] lg:sticky lg:top-[96px]">
             <div className="flex items-center justify-between">
-              <p className="text-[12px] font-bold uppercase tracking-[0.15em] text-white/[0.82] sm:text-[14px] sm:text-white">
+              <p className="text-[16px] font-medium capitalize tracking-normal text-white/[0.88] sm:text-[17px] sm:text-white">
                 Delivery summary
               </p>
               <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium text-white/[0.62] sm:px-3 sm:py-1.5 sm:text-[11px] sm:text-white">
@@ -841,7 +838,7 @@ export function CreateDeliveryPage() {
             <div className="mt-4 rounded-xl border border-white/[0.09] bg-[#19151a] p-4 sm:mt-6 sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/[0.42]">
+                  <p className="text-[11px] font-semibold capitalize tracking-normal text-white/[0.42]">
                     Estimated price
                   </p>
                   <p className="mt-1.5 text-[12px] leading-5 text-white/[0.48]">
@@ -1385,7 +1382,7 @@ function RouteStep({
         <div className="mt-6 sm:mt-8">
           <div className="flex items-center gap-3">
             <span className="h-2 w-2 rounded-full bg-orange-500" />
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-orange-400 sm:text-[11px]">
+            <p className="text-[10px] font-semibold capitalize tracking-normal text-orange-400 sm:text-[11px]">
               Selected route
             </p>
           </div>
