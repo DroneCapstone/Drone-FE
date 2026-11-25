@@ -71,7 +71,10 @@ function isSelectableMissionBattery(
   drone: OperatorDrone,
   originHubId: string,
 ) {
-  if (battery.isSelectable === false || battery.availableStatus?.trim().toLowerCase() !== 'ready') return false;
+  // An explicit BE eligibility flag is authoritative for battery availability.
+  // Older endpoint versions omit this flag, in which case READY remains required.
+  if (battery.isSelectable === false) return false;
+  if (battery.isSelectable !== true && battery.availableStatus?.trim().toLowerCase() !== 'ready') return false;
   if (!drone.isCrossHub) {
     return !battery.droneId && (!battery.hubId || battery.hubId === originHubId);
   }
@@ -122,6 +125,7 @@ export function CreateMissionPage() {
     data: queriedEligibleDronesData,
     error: eligibleDronesError,
     isLoading: isEligibleDronesLoading,
+    isFetching: isEligibleDronesFetching,
     refetch: refetchEligibleDrones,
   } = useOperatorEligibleDronesQuery(orderId);
   const order = (isAssigning && assignReviewSnapshotRef.current?.order) || queriedOrder;
@@ -138,6 +142,12 @@ export function CreateMissionPage() {
     return savedStep === 1 ? 1 : 3;
   });
   const [toast, setToast] = useState('');
+  // Handle both direct fallbacks and action feedback consistently.
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(''), 4_500);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
   const [resourceExplanationOpen, setResourceExplanationOpen] = useState(false);
   const [resourceExplanationForOrder, setResourceExplanationForOrder] = useState<{
     orderId: string; data: DispatchResourceRecommendation;
@@ -154,11 +164,16 @@ export function CreateMissionPage() {
   // The resource picker is an inline editor within the combined Route step.
   // Draft selections do not affect the active Route until Apply is confirmed.
   // Restore an unfinished manual choice into the inline editor, never the old Step 2.
-  const restoreInlineEditor = Boolean(restoredDraft?.manualSelectionOverride &&
+  const restoreIncompleteManualDraft = Boolean(restoredDraft?.manualSelectionOverride &&
     (!restoredDraft.selectedDroneId || !restoredDraft.selectedBatteryId));
-  const [resourceEditorOpen, setResourceEditorOpen] = useState(restoreInlineEditor);
-  const [draftDroneId, setDraftDroneId] = useState(restoreInlineEditor ? (restoredDraft?.selectedDroneId ?? '') : '');
-  const [draftBatteryId, setDraftBatteryId] = useState(restoreInlineEditor ? (restoredDraft?.selectedBatteryId ?? '') : '');
+  // Editing is always a deliberate action. Never show the editor while restoring
+  // an old draft or waiting for BE to recommend and validate resources.
+  const [resourceEditorOpen, setResourceEditorOpen] = useState(false);
+  const [resourceSetupError, setResourceSetupError] = useState(
+    restoreIncompleteManualDraft ? 'Previous resource selection is incomplete.' : '',
+  );
+  const [draftDroneId, setDraftDroneId] = useState(restoredDraft?.selectedDroneId ?? '');
+  const [draftBatteryId, setDraftBatteryId] = useState(restoredDraft?.selectedBatteryId ?? '');
   const [stateOrderId, setStateOrderId] = useState(orderId);
   const restoredManualChoice = Boolean(restoredDraft?.manualSelectionOverride &&
     (restoredDraft.selectedBatteryId || restoredDraft.step === 2));
@@ -167,6 +182,9 @@ export function CreateMissionPage() {
   const autoPreviewRequestedForOrderRef = useRef<string | null>(null);
   const autoPreviewAttemptRef = useRef(0);
   const pendingAiBatteryRef = useRef<{ orderId: string; droneId: string; batteryId: string; routeId: string } | null>(null);
+  // A BE recommendation can arrive before the eligible-battery query is refreshed.
+  // Recheck once before declaring the recommended battery unverified.
+  const aiBatteryEligibilityRefreshRef = useRef<string | null>(null);
   const [aiRouteSuggestion, setAiRouteSuggestion] = useState<{
     orderId: string; droneId: string; batteryId: string; routeId: string;
   } | null>(null);
@@ -198,11 +216,12 @@ export function CreateMissionPage() {
     autoPreviewAttemptRef.current += 1;
     pendingAiBatteryRef.current = null;
     setAiRouteSuggestion(null);
-    const resumeManualEditor = Boolean(nextDraft?.manualSelectionOverride &&
+    const incompleteManualDraft = Boolean(nextDraft?.manualSelectionOverride &&
       (!nextDraft.selectedDroneId || !nextDraft.selectedBatteryId));
-    setResourceEditorOpen(resumeManualEditor);
-    setDraftDroneId(resumeManualEditor ? (nextDraft?.selectedDroneId ?? '') : '');
-    setDraftBatteryId(resumeManualEditor ? (nextDraft?.selectedBatteryId ?? '') : '');
+    setResourceEditorOpen(false);
+    setResourceSetupError(incompleteManualDraft ? 'Previous resource selection is incomplete.' : '');
+    setDraftDroneId(nextDraft?.selectedDroneId ?? '');
+    setDraftBatteryId(nextDraft?.selectedBatteryId ?? '');
     setResourceExplanationOpen(false);
     setResourceExplanationForOrder(null);
     setResourceExplanationError('');
@@ -280,7 +299,8 @@ export function CreateMissionPage() {
   const createMissionMutation = useCreateMissionMutation();
   const resourceRecommendationMutation = useRecommendDispatchResourcesMutation();
 
-  // Show the existing inline selector, not the disabled standalone Step 2.
+  // Auto-selection failures must not open Edit by themselves. Explain the
+  // problem in place; the Operator can explicitly Retry or Choose manually.
   const openInlineManualFallback = (message: string, preferredDroneId = '') => {
     manualSelectionRef.current = true;
     setManualSelectionOverride(true);
@@ -288,9 +308,9 @@ export function CreateMissionPage() {
     pendingAiBatteryRef.current = null;
     setDraftDroneId(preferredDroneId);
     setDraftBatteryId('');
-    setResourceEditorOpen(true);
+    setResourceSetupError(message);
+    setResourceEditorOpen(false);
     setStep(3);
-    setToast(message);
   };
 
   // Step 1 -> Step 3: recommend Drone and Battery with the read-only resource API.
@@ -304,12 +324,14 @@ export function CreateMissionPage() {
       autoPreviewRequestedForOrderRef.current === orderId) return;
 
     autoPreviewRequestedForOrderRef.current = orderId;
+    setResourceSetupError('');
     const attemptId = ++autoPreviewAttemptRef.current;
     void resourceRecommendationMutation.mutateAsync({ orderId, bundledOrderIds: [] })
       .then((preview) => {
         if (currentOrderRef.current !== orderId || manualSelectionRef.current ||
           autoPreviewAttemptRef.current !== attemptId) return;
         // Preserve the original BE explanation even if Operator later changes resources.
+        setResourceSetupError('');
         setResourceExplanationForOrder({ orderId, data: preview });
         const drone = eligibleDronesData.drones.find((item) => item.id === preview.selectedDroneId);
         if (!drone || drone.isSelectable === false || drone.maxPayloadKg + 0.0001 < order.payloadKg) {
@@ -363,15 +385,25 @@ export function CreateMissionPage() {
       battery.id === pending.batteryId && isSelectableMissionBattery(battery, drone, order.originHubId)
     );
     if (!batteryIsEligible) {
+      const selectionKey = `${pending.orderId}|${pending.droneId}|${pending.batteryId}`;
+      // TanStack Query may still have the previous 30-second cached eligible list.
+      // The first mismatch triggers exactly one fresh BE check. The effect resumes
+      // when isFetching changes, and only then decides whether manual help is needed.
+      if (aiBatteryEligibilityRefreshRef.current !== selectionKey) {
+        aiBatteryEligibilityRefreshRef.current = selectionKey;
+        void refetchEligibleBatteries();
+        return;
+      }
       autoPreviewRequestedForOrderRef.current = null;
       setSelectedDroneId('');
-      openInlineManualFallback('AI-selected battery is unavailable. Please select manually.');
+      openInlineManualFallback('Recommended battery could not be verified. Retry or choose manually.');
       return;
     }
     setSelectedBatteryId(pending.batteryId);
     setAiRouteSuggestion(pending);
   }, [step, stateOrderId, orderId, order, selectedDroneId, selectedBatteryId, eligibleDronesData, eligibleBatteries,
-    isEligibleDronesLoading, eligibleDronesError, eligibleBatteriesLoading, eligibleBatteriesFetching, eligibleBatteriesError]);
+    isEligibleDronesLoading, eligibleDronesError, eligibleBatteriesLoading, eligibleBatteriesFetching, eligibleBatteriesError,
+    refetchEligibleBatteries]);
 
 
   // After F5, Step 3 can mount before the eligible-drone query has returned.
@@ -402,29 +434,19 @@ export function CreateMissionPage() {
   }, [step, stateOrderId, orderId, order, selectedDroneId, eligibleDronesData,
     isEligibleDronesLoading, eligibleDronesError, isAssigning]);
 
-  // A previous manual edit might have been saved without a complete Drone/Pin
-  // pair. Restore the inline resource picker inside the combined step.
+  // A partially restored manual draft stays in the passive recovery state.
+  // No automatic setResourceEditorOpen(true): Edit is only opened by a click.
+  // A query error also stays contextual; it must not turn the unfinished auto
+  // selection into a manual choice or open a stale resource editor.
   useEffect(() => {
-    if (step !== 3 || stateOrderId !== orderId || isAssigning ||
-      !manualSelectionRef.current || selectedDroneId) return;
-    // Legacy drafts may be incomplete. Open the editor rather than redirect.
-    if (!resourceEditorOpen) {
-      setDraftDroneId('');
-      setDraftBatteryId('');
-      setResourceEditorOpen(true);
-      setToast('Please complete your drone and battery selection.');
-    }
-  }, [step, stateOrderId, orderId, selectedDroneId, isAssigning, resourceEditorOpen]);
-
-  // An unavailable eligible-drone endpoint cannot support automatic selection.
-  // Show retry in the inline editor without navigating to the legacy Step 2.
-  useEffect(() => {
-    if (step !== 3 || !eligibleDronesError || isAssigning) return;
+    if (step !== 3 || !eligibleDronesError || isAssigning ||
+      (selectedDroneId && selectedBatteryId)) return;
     autoPreviewAttemptRef.current += 1;
     autoPreviewRequestedForOrderRef.current = null;
     pendingAiBatteryRef.current = null;
-    openInlineManualFallback('Unable to verify eligible drones. Please retry below.');
-  }, [step, eligibleDronesError, isAssigning]);
+    setResourceEditorOpen(false);
+    setToast('');
+  }, [step, eligibleDronesError, isAssigning, selectedDroneId, selectedBatteryId]);
 
   // Persist immediately after each choice, including Step 2 selections. Prevent
   // cross-Order draft writes during navigation and never re-save after Assign.
@@ -660,15 +682,39 @@ export function CreateMissionPage() {
   };
 
   const openResourceEditor = () => {
-    if (isAssigning) return;
-    setDraftDroneId(selectedDroneId);
-    setDraftBatteryId(selectedBatteryId);
+    if (isAssigning || !eligibleDronesData || isEligibleDronesLoading ||
+      isEligibleDronesFetching || eligibleDronesError) return;
+    // The normal Change action is available only after full Analyze. Manual
+    // recovery is the only exception, and must still be an explicit click.
+    if (!resourceSetupError && (!selectedDroneId || !selectedBatteryId ||
+      !planningAnalysis || isPlanningAnalysisFetching || planningAnalysisError)) return;
+    setDraftDroneId(selectedDroneId || draftDroneId);
+    setDraftBatteryId(selectedBatteryId || draftBatteryId);
     setResourceEditorOpen(true);
+  };
+
+  const retryAutomaticResources = () => {
+    autoPreviewAttemptRef.current += 1;
+    autoPreviewRequestedForOrderRef.current = null;
+    pendingAiBatteryRef.current = null;
+    aiBatteryEligibilityRefreshRef.current = null;
+    manualSelectionRef.current = false;
+    setManualSelectionOverride(false);
+    setResourceEditorOpen(false);
+    setResourceSetupError('');
+    setSelectedDroneId('');
+    setSelectedBatteryId('');
+    setSelectedRouteId('');
+    setExpandedRouteId(null);
+    setRouteSelectionConfirmed(false);
+    setAiRouteSuggestion(null);
+    if (eligibleDronesError) void refetchEligibleDrones();
   };
 
   const applyResourceEditor = () => {
     if (!draftDrone || draftDrone.isSelectable === false || draftDrone.maxPayloadKg + 0.0001 < totalPayloadKg || !draftBattery || draftBatteriesLoading || draftBatteriesFetching || draftBatteriesError) return;
     setResourceEditorOpen(false);
+    setResourceSetupError('');
     if (draftDroneId === selectedDroneId && draftBatteryId === selectedBatteryId) return;
     // A manual choice takes priority over late AI responses. Invalidate the
     // previous analyzed route; React Query will analyze the new Drone/Pin tuple.
@@ -710,7 +756,6 @@ export function CreateMissionPage() {
 
   const showToast = (message: string) => {
     setToast(message);
-    window.setTimeout(() => setToast(''), 2600);
   };
 
   const persistDraft = (nextStep = step, routeId = selectedRouteId) => {
@@ -847,6 +892,14 @@ export function CreateMissionPage() {
           })}
         </div>
 
+        {/* Inline feedback matches the Operator forms; never show a floating corner toast.
+            Eligible-drone fetch errors already have their own contextual Retry panel. */}
+        {toast && !eligibleDronesError && (
+          <div className="mission-planning-note" role="status" aria-live="polite">
+            <span>{toast}</span>
+          </div>
+        )}
+
         {step === 1 && (
           <div className="mission-step-stack">
           <OperatorPanel title="Order information">
@@ -981,7 +1034,7 @@ export function CreateMissionPage() {
 
         {step === 3 && (
           <div className="mission-step-stack">
-            {selectedDrone && selectedBattery && (
+            {selectedDrone && selectedBattery && planningAnalysis && !isPlanningAnalysisFetching && !planningAnalysisError && (
               <OperatorPanel
                 title="Flight Plan Overview"
                 action={(
@@ -1012,7 +1065,7 @@ export function CreateMissionPage() {
                 </div>
               </OperatorPanel>
             )}
-            {resourceEditorOpen && (
+            {resourceEditorOpen && eligibleDronesData && !eligibleDronesError && (
               <OperatorPanel
                 title="Edit drone & battery"
               >
@@ -1099,7 +1152,7 @@ export function CreateMissionPage() {
                 </div>
               </OperatorPanel>
             )}
-            {selectedDrone && (
+            {selectedDrone && selectedBattery && (
             <>
             <OperatorPanel title="Choose flight route">
               {/* Preserve already-loaded route cards during background requests.
@@ -1272,11 +1325,28 @@ export function CreateMissionPage() {
           </div>
         )}
 
-        {step === 3 && !selectedDrone && !resourceEditorOpen && (
+        {step === 3 && (!selectedDrone || !selectedBattery) && !resourceEditorOpen && (
           <OperatorPanel title="Route, energy & timing">
-            <OperatorLoadingState label={selectedDroneId
-              ? 'Restoring your flight plan…'
-              : 'Preparing your flight plan…'} />
+            {eligibleDronesError && !isEligibleDronesFetching ? (
+              <div className="operator-empty-state mission-create-gate" role="alert">
+                <strong>Unable to load eligible drones</strong>
+                <ActionButton variant="secondary" onClick={() => void refetchEligibleDrones()}>Retry</ActionButton>
+              </div>
+            ) : resourceSetupError && !isEligibleDronesLoading && !isEligibleDronesFetching ? (
+              <div className="operator-empty-state mission-create-gate" role="status">
+                <strong>{resourceSetupError}</strong>
+                <div className="mission-resource-editor-actions">
+                  <ActionButton variant="secondary" onClick={retryAutomaticResources}>Retry automatic selection</ActionButton>
+                  <ActionButton onClick={openResourceEditor}>Choose manually</ActionButton>
+                </div>
+              </div>
+            ) : (
+              <OperatorLoadingState label={isEligibleDronesLoading || isEligibleDronesFetching
+                ? 'Loading eligible drones…'
+                : resourceRecommendationMutation.isPending
+                  ? 'Selecting drone and battery…'
+                  : selectedDroneId ? 'Verifying selected battery…' : 'Preparing your flight plan…'} />
+            )}
           </OperatorPanel>
         )}
 
@@ -1453,6 +1523,8 @@ export function CreateMissionPage() {
             // Enter internal Step 3, which is visible as Step 2 in the new three-step UI.
             // A partial previous selection cannot block a fresh recommendation.
             if (!selectedDroneId || !selectedBatteryId) {
+              setResourceSetupError('');
+              setResourceEditorOpen(false);
               manualSelectionRef.current = false;
               setManualSelectionOverride(false);
               autoPreviewAttemptRef.current += 1;
@@ -1497,7 +1569,6 @@ export function CreateMissionPage() {
           )}
         </div>
       </div>
-      {toast && <div className="operator-toast">{toast}</div>}
       <ResourceExplanationPopup
         open={resourceExplanationOpen && step === 3}
         onClose={() => setResourceExplanationOpen(false)}

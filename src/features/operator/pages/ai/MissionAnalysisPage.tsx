@@ -159,7 +159,11 @@ export function MissionAnalysisPage() {
       : null,
   );
 
-  const routeOptions = planningAnalysis?.routes ?? [];
+  // Show the backend-recommended route first while preserving the API order of other routes.
+  // The selected route still comes from routeId/user selection, not from this display order.
+  const routeOptions = [...(planningAnalysis?.routes ?? [])].sort((a, b) =>
+    Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)),
+  );
   const [selectedRouteId, setSelectedRouteId] = useState(queryRouteId || selectedMission?.routeId || '');
   const [weatherLegIndex, setWeatherLegIndex] = useState(0);
   const routeId = selectedRouteId || routeOptions.find((item) => item.recommended)?.id || routeOptions[0]?.id || '';
