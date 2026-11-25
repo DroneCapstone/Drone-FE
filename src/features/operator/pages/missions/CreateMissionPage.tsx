@@ -82,6 +82,26 @@ function isSelectableMissionBattery(
   return !battery.droneId || battery.droneId === drone.id;
 }
 
+/** Review only: show the route's Hub path, not BE's speed/altitude profile suffix.
+ * Keep route ID visible for identification. Exclude dispatch legs here because
+ * the review already has a dedicated Dispatch flight row. */
+function getReviewRoutePath(route: RouteOption): string {
+  const deliveryLegs = (route.legDetails ?? [])
+    .filter((leg) => !leg.is_dispatch && leg.leg_type?.toUpperCase() !== 'DISPATCH')
+    .sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0));
+  if (deliveryLegs.length) {
+    const hubLabels = [
+      deliveryLegs[0].from_hub_name || deliveryLegs[0].from_hub_code,
+      ...deliveryLegs.map((leg) => leg.to_hub_name || leg.to_hub_code),
+    ];
+    return hubLabels.map((hub) => formatHubName(hub)).join(' → ');
+  }
+  // Older BE responses may omit legs_detail. Remove only the terminal flight
+  // profile (speed/altitude), preserving any intermediate battery-swap stop.
+  const routeText = route.routeString || route.name;
+  return formatRouteName(routeText.replace(/\s*\((?=[^)]*(?:km\/h|m\/s|altitude))[^)]*\)\s*$/i, ''));
+}
+
 function getRouteRelayHubIds(
   route: RouteOption,
   originHubId: string,
@@ -591,10 +611,22 @@ export function CreateMissionPage() {
     (a, b) => Number(b.recommended === true) - Number(a.recommended === true),
   );
   const selectedRoute = routeOptions.find((route) => route.id === selectedRouteId);
+  // Review uses BE consumption percentages per leg; with battery swaps there is
+  // no meaningful single "expected remaining" percentage for the whole route.
+  const reviewLegConsumption = selectedRoute
+    ? getRouteLegBatteryUse(selectedRoute)
+    : [];
   const originHubLabel = formatHubName(originHub?.name || order.originHubName || eligibleDronesData?.hub.name) || order.originHubId || 'Origin hub';
   const destinationHubLabel = formatHubName(destinationHub?.name || order.destinationHubName) || order.destinationHubId || 'Destination hub';
   const hubName = (hubId: string) =>
     formatHubName(networkHubs.find((hub) => hub.id === hubId)?.name) || hubId;
+  // Review: identify each segment by its actual departure/arrival hubs from BE.
+  // Prefer named hubs; use the Hub network or code only when BE omits a name.
+  const reviewLegHubLabel = (name?: string, code?: string, id?: string | number): string =>
+    formatHubName(name) ||
+    formatHubName(networkHubs.find((hub) => hub.id === String(id ?? ''))?.name) ||
+    formatHubName(code) ||
+    (id !== undefined && id !== null ? `Hub ${id}` : '');
   const selectedRouteEnergy = selectedRoute
     ? getEnergyFeasibility(selectedRoute, DEFAULT_BATTERY_RESERVE_PCT)
     : undefined;
@@ -1383,7 +1415,7 @@ export function CreateMissionPage() {
                 <div className="mission-review-info-row mission-review-info-row--full">
                   <dl className="mission-review-field">
                     <dt>Route</dt>
-                    <dd>{selectedRoute.id} · {formatRouteName(selectedRoute.name)}</dd>
+                    <dd>{selectedRoute.id} · {getReviewRoutePath(selectedRoute)}</dd>
                   </dl>
                 </div>
 
@@ -1430,35 +1462,8 @@ export function CreateMissionPage() {
                   </dl>
                   <dl className="mission-review-field"><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></dl>
                 </div>
-                <div className="mission-review-info-row">
-                  <dl className="mission-review-field">
-                    <dt>{selectedDrone.isCrossHub ? 'Dispatch battery' : 'Origin battery'}</dt>
-                    <dd>{selectedBattery?.serialNumber || selectedBatteryId}{selectedBattery?.model ? ` · ${selectedBattery.model}` : ''}</dd>
-                  </dl>
-                  <dl className="mission-review-field">
-                    <dt>Relay batteries</dt>
-                    <dd className="mission-review-relay-list">
-                      {selectedRelayHubIds.length ? selectedRelayHubIds.map((hubId) => {
-                        const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
-                        const nextLeg = selectedRoute.legDetails?.find((leg) => String(leg.from_hub_id) === hubId);
-                        const batteryId = plan?.swapBatteryId ?? nextLeg?.battery_id;
-                        const model = plan?.selectedBatteryModel ?? nextLeg?.battery_model ?? plan?.batteryModel;
-                        const charge = plan?.selectedBatteryChargePct ?? nextLeg?.battery_charge_pct;
-                        const energy = plan?.selectedBatteryEnergyWh ?? nextLeg?.battery_energy_wh;
-                        return (
-                          <span className="mission-review-relay-entry" key={hubId}>
-                            <strong>{batteryId || 'No battery allocated'}{batteryId && model ? ` · ${model}` : ''}</strong>
-                            <small>
-                              {hubName(hubId)}
-                              {batteryId && charge !== undefined ? ` · ${charge}%` : ''}
-                              {batteryId && energy !== undefined ? ` · ${energy.toFixed(1)} Wh` : ''}
-                            </small>
-                          </span>
-                        );
-                      }) : 'Not required'}
-                    </dd>
-                  </dl>
-                </div>
+                {/* Battery assignments are shown with their matching Leg in
+                    Performance & Energy. Avoid duplicating a long relay list here. */}
                 <div className="mission-review-info-row mission-review-info-row--last">
                   <dl className="mission-review-field"><dt>Planned start</dt><dd>{formatMissionTime(selectedTiming.plannedStartAt)}</dd></dl>
                   <dl className="mission-review-field"><dt>Estimated arrival</dt><dd>{formatMissionTime(selectedTiming.estimatedArrivalAt)}</dd></dl>
@@ -1476,30 +1481,73 @@ export function CreateMissionPage() {
                     <strong>{selectedRoute.predictedEnergyWh.toFixed(1)} Wh</strong>
                   </div>
                 </div>
-                <dl className="mission-review-energy-metrics">
-                  <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Predicted battery consumption' : 'Predicted battery consumption'}</dt>
-                    <dd>
-                      {selectedRoute.relayHubIds?.length ? (
-                        getRouteLegBatteryUse(selectedRoute).length ? (
-                          <span className="mission-review-leg-uses">
-                            {getRouteLegBatteryUse(selectedRoute).map((leg) => (
-                              <span className="mission-review-leg-use" key={leg.legNumber}>
-                                <small>Leg {leg.legNumber}</small>
-                                <strong>{leg.batteryUsePct === undefined ? '—' : `${leg.batteryUsePct}%`}</strong>
-                              </span>
-                            ))}
-                          </span>
-                        ) : '—'
-                      ) : `${selectedRoute.batteryConsumptionPct}%`}
-                    </dd>
+                <div className="mission-review-energy-consumption">
+                  <span className="mission-review-energy-label">Energy consumption by leg</span>
+                  <div className="mission-review-energy-leg-list" role="list">
+                    {(reviewLegConsumption.length
+                      ? reviewLegConsumption
+                      : [{ legNumber: 1, batteryUsePct: selectedRoute.batteryConsumptionPct }]
+                    ).map((leg) => {
+                      const consumption = leg.batteryUsePct;
+                      const isValid = typeof consumption === 'number' && Number.isFinite(consumption)
+                        && consumption >= 0 && consumption <= 100;
+                      const detailLeg = selectedRoute.legDetails?.[leg.legNumber - 1];
+                      const plannedLeg = selectedRoute.legs?.[leg.legNumber - 1];
+                      const fromHub = reviewLegHubLabel(
+                        detailLeg?.from_hub_name,
+                        detailLeg?.from_hub_code,
+                        detailLeg?.from_hub_id ?? plannedLeg?.fromHubId,
+                      );
+                      const toHub = reviewLegHubLabel(
+                        detailLeg?.to_hub_name,
+                        detailLeg?.to_hub_code,
+                        detailLeg?.to_hub_id ?? plannedLeg?.toHubId,
+                      );
+                      const hubPath = fromHub && toHub ? `${fromHub} → ${toHub}` : '';
+                      const isDispatch = detailLeg?.is_dispatch || detailLeg?.leg_type?.toUpperCase() === 'DISPATCH';
+                      // A battery is assigned to a specific leg, not to the entire route.
+                      // Prefer the exact Analyze legs_detail allocation (never a serial).
+                      // Only fall back to a relay plan at the leg's departure hub.
+                      const departureHubId = String(detailLeg?.from_hub_id ?? plannedLeg?.fromHubId ?? '');
+                      const relayPlan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === departureHubId);
+                      const legBatteryId = detailLeg?.battery_id || plannedLeg?.batteryId ||
+                        relayPlan?.swapBatteryId || (leg.legNumber === 1 ? (selectedBattery?.id || selectedBatteryId) : '');
+                      const legBatteryModel = detailLeg?.battery_model || plannedLeg?.batteryModel ||
+                        relayPlan?.selectedBatteryModel || relayPlan?.batteryModel ||
+                        (legBatteryId === (selectedBattery?.id || selectedBatteryId) ? selectedBattery?.model : undefined);
+                      return (
+                        <div className="mission-review-energy-leg-item" role="listitem" key={leg.legNumber}>
+                          <div className="mission-review-energy-leg-row">
+                            <span>{isDispatch ? `Dispatch flight · Leg ${leg.legNumber}` : `Leg ${leg.legNumber}`}</span>
+                            <strong>{isValid ? `${consumption}% used` : '—'}</strong>
+                          </div>
+                          {hubPath && <div className="mission-review-energy-leg-path">{hubPath}</div>}
+                          <div className="mission-review-energy-leg-battery">
+                            <span>Battery</span>
+                            <strong>{legBatteryId || 'Not specified'}</strong>
+                            {legBatteryModel && <span>· {legBatteryModel}</span>}
+                          </div>
+                          <div
+                            className="mission-review-energy-leg-track"
+                            role={isValid ? 'progressbar' : undefined}
+                            aria-label={isValid ? `Leg ${leg.legNumber} energy consumption` : undefined}
+                            aria-valuemin={isValid ? 0 : undefined}
+                            aria-valuemax={isValid ? 100 : undefined}
+                            aria-valuenow={isValid ? consumption : undefined}
+                          >
+                            {isValid && (
+                              <span className="mission-review-energy-leg-fill" style={{ width: `${consumption}%` }} />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Expected remaining' : 'Expected remaining'}</dt>
-                    <dd>{selectedRouteEnergy && Number.isFinite(selectedRouteEnergy.remainingBattery) ? `${selectedRouteEnergy.remainingBattery}%` : '—'}</dd>
-                  </div>
-                  <div><dt>Minimum reserve</dt><dd>{DEFAULT_BATTERY_RESERVE_PCT}%</dd></div>
-                </dl>
+                </div>
+                <div className="mission-review-reserve">
+                  <span className="mission-review-energy-label">Minimum reserve</span>
+                  <strong>{DEFAULT_BATTERY_RESERVE_PCT}%</strong>
+                </div>
               </div>
             </div>
           </OperatorPanel>
