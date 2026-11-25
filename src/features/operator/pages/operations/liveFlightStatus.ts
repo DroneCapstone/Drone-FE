@@ -37,6 +37,20 @@ export function resolveLiveFlightStatus(
   if (status === 'Failed' || (!status && rawMissionStatus === 'FAILED')) {
     return { key: 'failed', label: 'Failed', tone: 'danger', detail: 'Mission failed' };
   }
+  // BE's `arrived_at` is an explicit physical landing event, not mission
+  // completion. It can precede technician confirmation and a status transition:
+  // during that interval BE can still report `Flying` and the last leg `FLYING`.
+  // Treat landing as the flight stage even if telemetry stops after touch-down.
+  // Do not overwrite actual mission Completed/Failed (handled above).
+  if (mission?.flightArrivedAt && mission.status === 'Flying') {
+    return {
+      key: 'destination',
+      label: 'Arrived at Destination',
+      tone: 'warning',
+      detail: 'Awaiting arrival confirmation',
+    };
+  }
+
   const failsafe = aircraft.failsafeStatus?.toUpperCase();
   if (failsafe === 'DISCONNECTED') {
     return { key: 'disconnected', label: 'Disconnected', tone: 'danger', detail: 'Telemetry connection lost' };

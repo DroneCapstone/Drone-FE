@@ -1,3 +1,4 @@
+import { MissionWeatherConditions } from './MissionWeatherConditions';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -257,27 +258,7 @@ export function MissionAnalysisPage() {
           </div> : <p className="mission-ai-evidence-muted">No SHAP contributions are available for this route.</p>}
         </section>
 
-        <section className="mission-ai-evidence-weather" aria-label="Weather Conditions">
-          <div className="mission-ai-evidence-heading">
-            <h2>Weather Conditions</h2>
-            {weatherDiffersByLeg && <select aria-label="Weather for flight leg" value={Math.min(weatherLegIndex, legs.length - 1)} onChange={(event) => setWeatherLegIndex(Number(event.target.value))}>
-              {legs.map((leg, index) => <option key={index} value={index}>Leg {leg.sequence_no ?? index + 1}</option>)}
-            </select>}
-          </div>
-          {weather ? <>
-            <div className="mission-ai-weather-primary">
-              <strong>{weatherLabel(weather.temperatureC, '°C')}</strong>
-              <span>{weather.conditionLabel ? formatBackendLabel(weather.conditionLabel) : '—'}</span>
-            </div>
-            <div className="mission-ai-weather-table">
-              <div><small>Wind speed</small><strong>{weatherLabel(weather.windSpeedMs, ' m/s')}</strong></div>
-              <div><small>Wind gust</small><strong>{weatherLabel(weather.windGustMs, ' m/s')}</strong></div>
-              <div><small>Humidity</small><strong>{weatherLabel(weather.humidityPct, '%', 0)}</strong></div>
-              <div><small>Precipitation</small><strong>{weatherLabel(weather.precipitationMm, ' mm')}</strong></div>
-            </div>
-            {weather.warningMessage && <p className="mission-ai-weather-warning">{formatBackendLabel(weather.warningMessage)}</p>}
-          </> : <p className="mission-ai-evidence-muted">Weather data is not available for this route.</p>}
-        </section>
+        <MissionWeatherConditions route={route} isLoading={isPlanningAnalysisFetching} />
       </div>
 
       <section className="mission-ai-evidence-battery" aria-label="Route Feasibility and Battery Plan">

@@ -164,8 +164,15 @@ export function LiveTrackingPage() {
   const liveDrone = useMemo(() => sourceDrones.map(drone => {
     const flight = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
     const confirmedGroundStop = ['relay', 'awaiting-swap', 'swapping', 'ready-to-depart', 'destination', 'completed', 'scheduled'].includes(flight.key);
-    // Preserve explicit BE warnings and DISCONNECTED. Suppress only the FE's
-    // fabricated "delayed telemetry" warning at a BE-confirmed ground stop.
+    // A lack of telemetry after BE has explicitly logged arrival is normal for
+    // a stopped simulator. Only suppress a stale-only Attention with no real
+    // incident/failsafe; never hide explicit connection-loss or safety alerts.
+    const anomalyIsOnlyStale = /^(?:telemetry update delayed|telemetry data (?:stale|delayed)|stale telemetry)/i.test((drone.anomaly ?? '').trim());
+    if (flight.key === 'destination' && drone.health === 'Attention' &&
+        anomalyIsOnlyStale && !drone.alertId && !drone.incidentReason &&
+        (drone.failsafeStatus ?? '').trim().toUpperCase() !== 'DISCONNECTED') {
+      return { ...drone, health: 'Normal' as const, anomaly: undefined, anomalyDuration: undefined, incidentPolicy: 'none' as const };
+    }
     if (drone.health !== 'Normal' || !stale(drone.lastUpdated) || confirmedGroundStop) return drone;
     return { ...drone, health: 'Attention' as const, anomaly: 'Telemetry update delayed (>10 seconds)', incidentPolicy: 'monitor' as const };
     // clockTick refreshes computed age even when no new telemetry arrives.

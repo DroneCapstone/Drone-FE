@@ -1,0 +1,102 @@
+/* Matches the AI Decision Center's compact, neutral evidence-panel style. */
+.mission-ai-evidence-weather.mission-weather-panel {
+  min-width: 0;
+  padding: 20px 22px;
+}
+.mission-weather-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mission-weather-panel-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  color: var(--text);
+}
+.mission-weather-panel-heading select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 9px;
+}
+.mission-weather-panel-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  padding: 22px 0 13px;
+  border-bottom: 1px solid var(--border);
+}
+.mission-weather-panel-primary strong {
+  color: var(--text);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.mission-weather-panel-primary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mission-weather-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.mission-weather-panel-grid > div {
+  min-width: 0;
+  padding: 14px 8px 13px 0;
+}
+.mission-weather-panel-grid > div:nth-child(even) {
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+.mission-weather-panel-grid > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
+.mission-weather-panel-grid small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.mission-weather-panel-grid strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mission-weather-panel-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 150px;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mission-weather-panel-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: #f97316;
+  border-radius: 50%;
+  animation: weather-panel-spin 0.8s linear infinite;
+}
+@keyframes weather-panel-spin { to { transform: rotate(360deg); } }
+.mission-weather-panel-unavailable,
+.mission-weather-panel-warning,
+.mission-weather-panel-summary {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 14px 0 0;
+  color: var(--muted);
+}
+.mission-weather-panel-warning { color: #e46b20; }
+@media (prefers-reduced-motion: reduce) {
+  .mission-weather-panel-spinner { animation: none; }
+}

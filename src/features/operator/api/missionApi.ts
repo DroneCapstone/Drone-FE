@@ -434,7 +434,7 @@ function mapMissionLeg(raw: unknown, index: number, routeLeg?: unknown): Mission
     id: pickString(record, ['id', 'leg_id', 'legId'], `LEG-${index + 1}`),
     fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']) || pickString(snapshot, ['from_hub_id', 'fromHubId']),
     toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']) || pickString(snapshot, ['to_hub_id', 'toHubId']),
-    status: rawStatus === 'COMPLETED' ? 'Completed' : rawStatus === 'IN_PROGRESS' ? 'In Progress' : 'Pending',
+    status: rawStatus === 'COMPLETED' ? 'Completed' : ['IN_PROGRESS', 'FLYING', 'IN_FLIGHT'].includes(rawStatus) ? 'In Progress' : 'Pending',
     legType: pickString(record, ['leg_type', 'legType']) || pickString(snapshot, ['leg_type', 'legType']) || undefined,
     isDispatch: pickOptionalBoolean(record, ['is_dispatch', 'isDispatch']) ??
       pickOptionalBoolean(snapshot, ['is_dispatch', 'isDispatch']) ??
@@ -557,7 +557,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     orderId: pickString(record, ['order_id', 'orderId']),
     route: pickString(record, ['route', 'route_name', 'routeName', 'route_id', 'routeId'], 'Active route'),
     health,
-    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus']) || undefined,
+    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus', 'status']) || undefined,
     failsafeStatus: pickString(record, ['failsafe_status', 'failsafeStatus']) || undefined,
     batterySwapStatus: pickString(record, ['battery_swap_status', 'batterySwapStatus']) || undefined,
     alertId: pickString(record, ['alert_id', 'alertId']) || undefined,
@@ -1171,12 +1171,9 @@ export async function getEligibleMissionBatteriesApi(
     `/orders/${id}/eligible-batteries?${droneQuery}`,
   ];
   let response: unknown;
-  // One bounded verification budget across all compatibility/legacy endpoints.
-  // Without it a hung endpoint can leave Create Mission waiting indefinitely.
-  const eligibleBatterySignal = AbortSignal.timeout(20_000);
   for (const [index, path] of paths.entries()) {
     try {
-      response = await operatorApiRequest<unknown>(path, { signal: eligibleBatterySignal });
+      response = await operatorApiRequest<unknown>(path);
       break;
     } catch (error) {
       if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status) || index === paths.length - 1) throw error;
@@ -1194,14 +1191,7 @@ export async function getEligibleMissionBatteriesApi(
     const record = asRecord(entry);
     const nested = isRecord(record.battery) ? record.battery : record;
     const id = pickString(nested, ['id', 'battery_id', 'batteryId']);
-    // Some BE versions wrap details inside `battery` while keeping eligibility
-    // and availability flags on the OUTER item. Read both, with explicit
-    // rejection always winning over an approval from the other layer.
-    const outerSelectable = pickOptionalBoolean(record, ['is_selectable', 'isSelectable', 'feasible', 'eligible', 'compatible']);
-    const innerSelectable = pickOptionalBoolean(nested, ['is_selectable', 'isSelectable', 'feasible', 'eligible', 'compatible']);
-    const isSelectable = outerSelectable === false || innerSelectable === false
-      ? false : outerSelectable === true || innerSelectable === true ? true : undefined;
-    if (!id) return null; // Keep explicit ineligible records for clear FE diagnostics.
+    if (!id || record.eligible === false || record.compatible === false) return null;
     return {
       id,
       serialNumber: pickString(nested, ['serial_number', 'serialNumber', 'battery_serial', 'batterySerial'], id),
@@ -1209,19 +1199,13 @@ export async function getEligibleMissionBatteriesApi(
       capacityWh: pickOptionalNumber(nested, ['capacity_wh', 'capacityWh']),
       chargeLevelPct: pickOptionalNumber(nested, ['charge_level_pct', 'chargeLevelPct', 'battery_charge_pct', 'batteryChargePct']),
       availableEnergyWh: pickOptionalNumber(nested, ['available_energy_wh', 'availableEnergyWh', 'battery_energy_wh', 'batteryEnergyWh']),
-      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) ||
-        pickString(record, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
-      droneId: pickString(nested, ['drone_id', 'droneId']) ||
-        pickString(record, ['drone_id', 'droneId']) || undefined,
-      availableStatus: pickString(nested, ['available_status', 'availableStatus']) ||
-        pickString(record, ['available_status', 'availableStatus']) || undefined,
-      isSelectable,
-      unavailableReason: pickString(nested, ['unavailable_reason', 'unavailableReason']) ||
-        pickString(record, ['unavailable_reason', 'unavailableReason']) || undefined,
-      assignedMissionId: pickString(nested, ['assigned_mission_id', 'assignedMissionId']) ||
-        pickString(record, ['assigned_mission_id', 'assignedMissionId']) || undefined,
-      isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']) ??
-        pickOptionalBoolean(record, ['is_installed_on_drone', 'isInstalledOnDrone']),
+      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
+      droneId: pickString(nested, ['drone_id', 'droneId']) || undefined,
+      availableStatus: pickString(nested, ['available_status', 'availableStatus']) || undefined,
+      isSelectable: pickOptionalBoolean(nested, ['is_selectable', 'isSelectable']),
+      unavailableReason: pickString(nested, ['unavailable_reason', 'unavailableReason']) || undefined,
+      assignedMissionId: pickString(nested, ['assigned_mission_id', 'assignedMissionId']) || undefined,
+      isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']),
     } as EligibleMissionBattery;
   }).filter((item): item is EligibleMissionBattery => item !== null);
 }
@@ -1262,7 +1246,6 @@ export async function recommendDispatchResourcesApi(
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch/recommend-resources', {
-    signal: AbortSignal.timeout(30_000),
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
@@ -1301,7 +1284,6 @@ export async function analyzeMissionPlanningApi(
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/mission-planning/analyze', {
-    signal: AbortSignal.timeout(60_000),
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
