@@ -7,7 +7,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/shadcn/ui/button";
 import { Card, CardContent } from "@/components/shadcn/ui/card";
@@ -164,7 +164,10 @@ export function OutboundDeliveriesPage() {
   const [search, setSearch] = useState("");
   const [modeFilter, setModeFilter] = useState<ModeFilter>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
+  // Track each Receive request independently: other rows stay interactive.
+  // The ref prevents duplicate clicks on the same order before React rerenders.
+  const receivingOrdersRef = useRef<Set<string>>(new Set());
+  const [receivingOrderIds, setReceivingOrderIds] = useState<string[]>([]);
   const [dispatchingMissionId, setDispatchingMissionId] = useState<string | null>(null);
   const [dispatchConfirmOrderId, setDispatchConfirmOrderId] = useState<string | null>(null);
   // Keep evidence of a successful READY POST if a following Dispatch fails.
@@ -234,9 +237,10 @@ export function OutboundDeliveriesPage() {
 
   const handleReceiveAtHub = async (orderId: string) => {
     const delivery = normalizedDeliveries.find((item) => item.orderId === orderId);
-    if (!delivery || delivery.status !== "Awaiting Drop-off" || receivingOrderId !== null || receiveMutation.isPending) return;
+    if (!delivery || delivery.status !== "Awaiting Drop-off" || receivingOrdersRef.current.has(orderId)) return;
 
-    setReceivingOrderId(orderId);
+    receivingOrdersRef.current.add(orderId);
+    setReceivingOrderIds((current) => [...current, orderId]);
     setActionMessage("");
     try {
       await receiveMutation.mutateAsync(orderId);
@@ -257,7 +261,8 @@ export function OutboundDeliveriesPage() {
         setActionMessage(message);
       }
     } finally {
-      setReceivingOrderId(null);
+      receivingOrdersRef.current.delete(orderId);
+      setReceivingOrderIds((current) => current.filter((id) => id !== orderId));
     }
   };
 
@@ -408,7 +413,7 @@ export function OutboundDeliveriesPage() {
                       {display(delivery.orderCode ?? delivery.orderId)}
                     </button>
                     <p className={`mt-1 text-[11px] font-medium ${delivery.deliveryMode === "EXPRESS" ? "text-orange-500" : "text-[var(--tech-muted)]"}`}>
-                      {delivery.deliveryMode === "EXPRESS" ? "Express" : delivery.deliveryMode === "SCHEDULED" ? "Scheduled" : display(delivery.deliveryMode)}
+                      {delivery.deliveryMode === "EXPRESS" ? "Express" : delivery.deliveryMode === "SCHEDULED" ? "Scheduled" : display(delivery.deliveryMode).toUpperCase() === "NORMAL" ? "Normal" : display(delivery.deliveryMode)}
                     </p>
                   </div>
                   <div className="min-w-0">
@@ -464,12 +469,12 @@ export function OutboundDeliveriesPage() {
                     {delivery.status === "Awaiting Drop-off" && (
                       <Button
                         type="button"
-                        disabled={receivingOrderId !== null || receiveMutation.isPending}
+                        disabled={receivingOrderIds.includes(delivery.orderId)}
                         onClick={() => void handleReceiveAtHub(delivery.orderId)}
                         className="h-9 rounded-md bg-orange-500 px-2.5 text-[11px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <PackageCheck size={13} />
-                        {receivingOrderId === delivery.orderId ? "Receiving..." : "Receive at hub"}
+                        {receivingOrderIds.includes(delivery.orderId) ? "Receiving..." : "Receive at hub"}
                       </Button>
                     )}
                     {delivery.status === "At Hub" && (

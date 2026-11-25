@@ -115,9 +115,15 @@ export type TransitMission = {
 
   batteryId?: string;
 
-  /** New battery assigned by Operator for this relay, NOT the installed battery_id. */
+  /** New battery assigned by Operator for the next leg, NOT the current battery_id. */
 
   assignedReplacementBatteryId?: string;
+
+  /** Optional next_leg metadata returned by GET /technician/fleet/incoming. */
+
+  assignedReplacementBatteryCode?: string;
+
+  assignedReplacementBatteryPct?: number;
 
   batteryLevelPct: number;
 
@@ -824,15 +830,23 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
     batteryId: batteryCode || undefined,
 
-    // Never reuse battery_id here: it is the OLD installed battery.
+    // Current mission battery_id is the OLD installed battery for leg 1.
+    // Operator's selected battery for leg 2 is next_leg.battery_id.
+    assignedReplacementBatteryId:
+      (nextLegObject ? pickString(nextLegObject, ["battery_id", "new_battery_id", "assigned_battery_id"], "") : "") ||
+      pickString(value, [
+        "assigned_replacement_battery_id", "replacement_battery_id",
+        "operator_assigned_battery_id", "next_battery_id",
+      ], "") || undefined,
 
-    assignedReplacementBatteryId: pickString(value, [
+    assignedReplacementBatteryCode:
+      (nextLegObject ? pickString(nextLegObject, ["battery_code", "serial_number"], "") : "") || undefined,
 
-      "assigned_replacement_battery_id", "replacement_battery_id",
-
-      "operator_assigned_battery_id", "next_battery_id",
-
-    ], "") || undefined,
+    assignedReplacementBatteryPct:
+      nextLegObject && ["battery_percent", "battery_level_pct", "battery_pct"].some(key =>
+        nextLegObject[key] !== null && nextLegObject[key] !== undefined)
+        ? pickNumber(nextLegObject, ["battery_percent", "battery_level_pct", "battery_pct"], 0)
+        : undefined,
 
     batteryLevelPct: pickNumber(
 
