@@ -327,7 +327,7 @@ export function LiveTrackingPage() {
       <div className="live-ops-main">
         <OperatorPanel className={`live-map-panel live-ops-map-panel ${isMapExpanded ? 'live-ops-map-expanded' : ''}`}>
           <div className="live-3d-toolbar">
-            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft tracked · refresh from 250 ms</small></div>
+            <div className="live-3d-title"><strong>Drone Fleet Map</strong></div>
             <div className="live-3d-tools" aria-label="Map controls">
               <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Icon name="plus" size={17} /></button>
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>

@@ -336,6 +336,43 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   }
 }
 
+// Keep the native attribution control and its source links. Only shorten the
+// standard two-provider label; additional basemap/imagery credits stay intact.
+function configureCompactAttribution(map: MapLibreMap): () => void {
+  const control = map.getContainer().querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+  if (!control) return () => {};
+  let initialized = false;
+  const sync = () => {
+    const inner = control.querySelector<HTMLElement>('.maplibregl-ctrl-attrib-inner');
+    if (!inner) return;
+    const label = inner.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const links = Array.from(inner.querySelectorAll<HTMLAnchorElement>('a[href]'));
+    if (/^©\s*MapTiler\s*(?:[|·]\s*)?©\s*OpenStreetMap(?: contributors)?$/i.test(label) && links.length === 2) {
+      const maptiler = links.find(a => /^(?:www\.)?maptiler\.com$/i.test(a.hostname));
+      const osm = links.find(a => /^(?:www\.)?openstreetmap\.org$/i.test(a.hostname));
+      if (maptiler && osm && label !== '© MapTiler · © OpenStreetMap') {
+        const first = maptiler.cloneNode(true) as HTMLAnchorElement;
+        const second = osm.cloneNode(true) as HTMLAnchorElement;
+        first.textContent = '© MapTiler';
+        second.textContent = '© OpenStreetMap';
+        inner.replaceChildren(first, ' · ', second);
+      }
+    }
+    // Credits can arrive asynchronously with style/source metadata. Collapse
+    // only once, so subsequent GPS/style refreshes do not undo a user's click.
+    if (!initialized && label && control.classList.contains('maplibregl-compact') &&
+        !control.classList.contains('maplibregl-attrib-empty')) {
+      initialized = true;
+      control.classList.remove('maplibregl-compact-show');
+      control.removeAttribute('open');
+    }
+  };
+  const observer = new MutationObserver(sync);
+  observer.observe(control, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  sync();
+  return () => observer.disconnect();
+}
+
 export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, arrivedMissionIds, mapStyle, selectedMissionId, onSelectMission, connectionHealthy = true }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -352,16 +389,11 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   const appliedStyleUrlRef = useRef(MAP_STYLE(mapStyle, themeNow()));
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [isFollowing, setIsFollowing] = useState(false);
   const [showHubs, setShowHubs] = useState(true);
   const [pathScope, setPathScope] = useState<FlightPathScope>('none');
-  const [hasCompletedPlanGap, setHasCompletedPlanGap] = useState(false);
-  const [viewLabel, setViewLabel] = useState('Expanded Ho Chi Minh City');
 
   function stopFollowing() {
     followRef.current = null;
-    setIsFollowing(false);
-    setViewLabel('Free view');
   }
   function showSelectedPath() {
     stopFollowing();
@@ -370,12 +402,6 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   function changePathScope(next: FlightPathScope) {
     if (next !== 'selected') stopFollowing();
     setPathScope(next);
-  }
-  function entireCity() {
-    stopFollowing();
-    setPathScope('none');
-    mapRef.current?.fitBounds([[106.05, 8.55], [108.25, 11.55]], { padding: 24, duration: 900 });
-    setViewLabel('Expanded Ho Chi Minh City');
   }
   function fitAll() {
     const map = mapRef.current;
@@ -388,7 +414,6 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     for (const d of stateRef.current.drones) { const pt = asPoint(d.longitude, d.latitude); if (pt) { bounds.extend(pt); count++; } }
     if (count > 0) map.fitBounds(bounds, { padding: 75, maxZoom: 13, duration: 900 });
     else map.flyTo({ center: INITIAL_CENTER, zoom: 8, duration: 800 });
-    setViewLabel('Hub network');
   }
   function focus(missionId: string) {
     const map = mapRef.current;
@@ -400,8 +425,6 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     const displayed = dronesRef.current.get(missionId)?.marker.getLngLat().toArray() as Point | undefined;
     setPathScope('selected');
     followRef.current = missionId;
-    setIsFollowing(true);
-    setViewLabel(`Following ${drone.id}`);
     // Follow needs a readable zoom immediately: continuous map.jumpTo() calls
     // from the GPS animation would otherwise cancel an in-progress easeTo zoom.
     // Zoom 16 makes the 15-25 m GPS steps clearly visible (~7-11 px in HCMC).
@@ -420,6 +443,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     if (!host.current || !MAPTILER_KEY) return;
     let disposed = false;
     let map: MapLibreMap;
+    let cleanupAttribution: (() => void) | undefined;
     try {
       map = new maplibregl.Map({
         container: host.current,
@@ -435,6 +459,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         canvasContextAttributes: { antialias: true },
       });
       map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+      cleanupAttribution = configureCompactAttribution(map);
       map.dragRotate.enable();
       map.touchZoomRotate.enableRotation();
       map.scrollZoom.enable();
@@ -450,7 +475,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
             setError('Unable to load the map. Check the MapTiler API key, Allowed HTTP Origins and your Internet connection.');
         }
       });
-    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to initialize the map.'); return; }
+    } catch (e) { cleanupAttribution?.(); setError(e instanceof Error ? e.message : 'Unable to initialize the map.'); return; }
     const resizeObserver = new ResizeObserver(() => { if (!disposed) map.resize(); });
     resizeObserver.observe(host.current);
     const themeObserver = new MutationObserver(() => {
@@ -465,6 +490,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       disposed = true;
+      cleanupAttribution?.();
       themeObserver.disconnect();
       resizeObserver.disconnect();
       for (const m of hubsRef.current.values()) m.remove();
@@ -505,8 +531,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         const activeIds = new Set(current.drones.map(drone => drone.missionId));
         const routes = scopeFlightPaths(current.plannedRoutes, pathScope, current.selectedMissionId, activeIds);
         const trails = scopeFlightPaths(current.histories, pathScope, current.selectedMissionId, activeIds);
-        const hasGap = drawPlannedRoutes(map, routes, current.hubs, trails, current.arrivedMissionIds, current.selectedMissionId);
-        setHasCompletedPlanGap(hasGap);
+        drawPlannedRoutes(map, routes, current.hubs, trails, current.arrivedMissionIds, current.selectedMissionId);
         drawTrails(map, trails, current.selectedMissionId);
         // Keep the thin plan beneath the real GPS even after a style refresh.
         if (map.getLayer('droneoptai-completed-plan') && map.getLayer('droneoptai-trails')) {
@@ -561,6 +586,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       marker.setLngLat(point);
       const element = marker.getElement();
       element.style.display = showHubs ? '' : 'none';
+      if (!showHubs) marker.getPopup()?.remove();
       const occupied = drones.some(drone => {
         const dronePoint = asPoint(drone.longitude, drone.latitude);
         return dronePoint && typeof drone.speedKmh === 'number' && drone.speedKmh <= 1
@@ -748,19 +774,10 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   }, [selectedMissionId, pathScope]);
 
   const selected = drones.find(d => d.missionId === selectedMissionId);
-  const selectedPathVisible = pathScope === 'selected' && Boolean(selected);
   return <div className="live-geo-shell">
     <div ref={host} className="live-geo-map" role="application" aria-label="Live geographic drone map of Ho Chi Minh City" />
     {!MAPTILER_KEY && <div className="live-geo-error">MapTiler API key is not configured. Add VITE_MAPTILER_API_KEY to .env.local and restart Vite.</div>}
     {error && <div className="live-geo-error" role="alert">{error}</div>}
-    <div className="live-geo-badge">{!isFollowing && selectedPathVisible ? `Selected ${selected?.id}` : viewLabel}</div>
-    <div className="live-geo-controls">
-      <button type="button" onClick={entireCity}>Entire city</button>
-      <button type="button" onClick={fitAll}>Hub network</button>
-      {isFollowing
-        ? <button type="button" onClick={stopFollowing}>Stop following</button>
-        : <button type="button" disabled={!selected || !ready || !asPoint(selected.longitude, selected.latitude)} onClick={() => selected && focus(selected.missionId)}>Follow drone</button>}
-    </div>
     <div className="live-geo-layers" role="group" aria-label="Map layers">
       <button type="button" aria-pressed={showHubs} onClick={() => setShowHubs(v => !v)} className={showHubs ? 'active' : ''}>Hubs</button>
       <select aria-label="Flight paths" title="Choose which flight paths to display" className={`live-geo-path-scope ${pathScope !== 'none' ? 'active' : ''}`} value={pathScope} onChange={event => changePathScope(event.target.value as FlightPathScope)}>
@@ -770,11 +787,6 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       </select>
     </div>
 
-    {(pathScope === 'all' || selectedPathVisible) && <div className="live-geo-route-legend" aria-label="Flight path legend">
-      <span><i className="live-geo-route-dash" aria-hidden="true" />Planned route</span>
-      <span><i className="live-geo-route-solid" aria-hidden="true" />Recorded GPS</span>
-      {hasCompletedPlanGap && <span title="Assigned route geometry, not recorded GPS"><i style={{ borderTopWidth: 2 }} aria-hidden="true" />Arrived route · GPS gap</span>}
-    </div>}
     {/* <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div> */}
   </div>;
 });
