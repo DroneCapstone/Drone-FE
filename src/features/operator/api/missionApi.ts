@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteWeatherConditions, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -723,22 +723,6 @@ function mapRelayBattery(raw: unknown): PlannedRelayBattery {
   };
 }
 
-/** Preserve only actual Analyze weather fields; no inferred values or mock weather. */
-function mapAnalyzeWeather(raw: unknown): RouteWeatherConditions | undefined {
-  if (!isRecord(raw)) return undefined;
-  const weather: RouteWeatherConditions = {
-    temperatureC: pickOptionalNumber(raw, ['temperature_c', 'temperatureC']),
-    windSpeedMs: pickOptionalNumber(raw, ['wind_speed_ms', 'windSpeedMs']),
-    windGustMs: pickOptionalNumber(raw, ['wind_gust_ms', 'windGustMs']),
-    humidityPct: pickOptionalNumber(raw, ['humidity_pct', 'humidityPct']),
-    precipitationMm: pickOptionalNumber(raw, ['precipitation_mm', 'precipitationMm']),
-    conditionLabel: pickString(raw, ['condition_label', 'conditionLabel']) || undefined,
-    isBadWeather: pickOptionalBoolean(raw, ['is_bad_weather', 'isBadWeather']),
-    warningMessage: pickString(raw, ['warning_message', 'warningMessage']) || undefined,
-  };
-  return Object.values(weather).some((value) => value !== undefined) ? weather : undefined;
-}
-
 function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
   const item = asRecord(raw);
   const from = pickString(item, ['from_hub_code', 'fromHubCode']);
@@ -770,7 +754,6 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
     energy_wh: pickOptionalNumber(item, ['energy_wh', 'energyWh']),
     battery_consumption_pct: pickOptionalNumber(item, ['battery_consumption_pct', 'batteryConsumptionPct']),
     remaining_battery_pct: pickOptionalNumber(item, ['remaining_battery_pct', 'remainingBatteryPct']),
-    weather: mapAnalyzeWeather(item.weather),
   };
 }
 
@@ -865,7 +848,6 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     confidencePct: pickNumber(record, ['confidence_pct', 'confidencePct', 'confidence'], 0),
     risk: normalizeRisk(record.risk_level ?? record.risk),
     weatherImpact: pickString(record, ['weather_impact', 'weatherImpact']),
-    weather: mapAnalyzeWeather(record.weather),
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
@@ -1189,9 +1171,12 @@ export async function getEligibleMissionBatteriesApi(
     `/orders/${id}/eligible-batteries?${droneQuery}`,
   ];
   let response: unknown;
+  // One bounded verification budget across all compatibility/legacy endpoints.
+  // Without it a hung endpoint can leave Create Mission waiting indefinitely.
+  const eligibleBatterySignal = AbortSignal.timeout(20_000);
   for (const [index, path] of paths.entries()) {
     try {
-      response = await operatorApiRequest<unknown>(path);
+      response = await operatorApiRequest<unknown>(path, { signal: eligibleBatterySignal });
       break;
     } catch (error) {
       if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status) || index === paths.length - 1) throw error;
@@ -1209,7 +1194,14 @@ export async function getEligibleMissionBatteriesApi(
     const record = asRecord(entry);
     const nested = isRecord(record.battery) ? record.battery : record;
     const id = pickString(nested, ['id', 'battery_id', 'batteryId']);
-    if (!id || record.eligible === false || record.compatible === false) return null;
+    // Some BE versions wrap details inside `battery` while keeping eligibility
+    // and availability flags on the OUTER item. Read both, with explicit
+    // rejection always winning over an approval from the other layer.
+    const outerSelectable = pickOptionalBoolean(record, ['is_selectable', 'isSelectable', 'feasible', 'eligible', 'compatible']);
+    const innerSelectable = pickOptionalBoolean(nested, ['is_selectable', 'isSelectable', 'feasible', 'eligible', 'compatible']);
+    const isSelectable = outerSelectable === false || innerSelectable === false
+      ? false : outerSelectable === true || innerSelectable === true ? true : undefined;
+    if (!id) return null; // Keep explicit ineligible records for clear FE diagnostics.
     return {
       id,
       serialNumber: pickString(nested, ['serial_number', 'serialNumber', 'battery_serial', 'batterySerial'], id),
@@ -1217,13 +1209,19 @@ export async function getEligibleMissionBatteriesApi(
       capacityWh: pickOptionalNumber(nested, ['capacity_wh', 'capacityWh']),
       chargeLevelPct: pickOptionalNumber(nested, ['charge_level_pct', 'chargeLevelPct', 'battery_charge_pct', 'batteryChargePct']),
       availableEnergyWh: pickOptionalNumber(nested, ['available_energy_wh', 'availableEnergyWh', 'battery_energy_wh', 'batteryEnergyWh']),
-      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
-      droneId: pickString(nested, ['drone_id', 'droneId']) || undefined,
-      availableStatus: pickString(nested, ['available_status', 'availableStatus']) || undefined,
-      isSelectable: pickOptionalBoolean(nested, ['is_selectable', 'isSelectable']),
-      unavailableReason: pickString(nested, ['unavailable_reason', 'unavailableReason']) || undefined,
-      assignedMissionId: pickString(nested, ['assigned_mission_id', 'assignedMissionId']) || undefined,
-      isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']),
+      hubId: pickString(nested, ['current_hub_id', 'hub_id', 'hubId']) ||
+        pickString(record, ['current_hub_id', 'hub_id', 'hubId']) || undefined,
+      droneId: pickString(nested, ['drone_id', 'droneId']) ||
+        pickString(record, ['drone_id', 'droneId']) || undefined,
+      availableStatus: pickString(nested, ['available_status', 'availableStatus']) ||
+        pickString(record, ['available_status', 'availableStatus']) || undefined,
+      isSelectable,
+      unavailableReason: pickString(nested, ['unavailable_reason', 'unavailableReason']) ||
+        pickString(record, ['unavailable_reason', 'unavailableReason']) || undefined,
+      assignedMissionId: pickString(nested, ['assigned_mission_id', 'assignedMissionId']) ||
+        pickString(record, ['assigned_mission_id', 'assignedMissionId']) || undefined,
+      isInstalledOnDrone: pickOptionalBoolean(nested, ['is_installed_on_drone', 'isInstalledOnDrone']) ??
+        pickOptionalBoolean(record, ['is_installed_on_drone', 'isInstalledOnDrone']),
     } as EligibleMissionBattery;
   }).filter((item): item is EligibleMissionBattery => item !== null);
 }
@@ -1264,6 +1262,7 @@ export async function recommendDispatchResourcesApi(
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/auto-dispatch/recommend-resources', {
+    signal: AbortSignal.timeout(30_000),
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,
@@ -1302,6 +1301,7 @@ export async function analyzeMissionPlanningApi(
   }
 
   const payload = await operatorApiRequest<unknown>('/operator/missions/mission-planning/analyze', {
+    signal: AbortSignal.timeout(60_000),
     method: 'POST',
     body: JSON.stringify({
       orderId: input.orderId,

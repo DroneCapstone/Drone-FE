@@ -34,5 +34,6 @@ export function useOperatorEligibleDronesQuery(orderId: string) {
     queryKey: operatorQueryKeys.eligibleDrones(orderId),
     queryFn: () => getEligibleDronesApi(orderId),
     enabled: Boolean(orderId.trim()),
+    retry: false, // Operator can retry explicitly on the Create Mission screen.
   });
 }

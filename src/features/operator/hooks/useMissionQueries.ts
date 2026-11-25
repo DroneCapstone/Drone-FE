@@ -144,6 +144,7 @@ export function useEligibleMissionBatteriesQuery(orderId: string, droneId: strin
     queryKey: operatorQueryKeys.eligibleMissionBatteries(orderId, droneId, crossHubCurrentHubId),
     queryFn: () => getEligibleMissionBatteriesApi(droneId, orderId, crossHubCurrentHubId),
     enabled: Boolean(orderId.trim() && droneId.trim()),
+    retry: false, // Explicit Retry action: no long chained background retries.
     // Keep the user's current Step-2/3 selection stable when switching windows.
     // Final Assign explicitly refetches and validates battery eligibility.
     staleTime: 30_000,
@@ -204,6 +205,7 @@ export function useMissionPlanningAnalysisQuery(
     ),
     queryFn: () => analyzeMissionPlanningApi(input as AnalyzeMissionPlanningInput),
     enabled: Boolean(input?.orderId.trim() && input?.droneId.trim() && input?.batteryId.trim()),
+    retry: false, // Show an actionable Analyze error instead of retrying silently.
     // AI Analyze can take several seconds. Keep successful results visible when
     // the tab regains focus or this page is revisited, instead of re-running it.
     // Changing Order/Drone/Battery still changes the query key and analyzes anew.

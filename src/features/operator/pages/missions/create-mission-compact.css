@@ -491,97 +491,6 @@
   .page-content .mission-builder .mission-review-energy-metrics > div:last-child { border-bottom: 0; }
 }
 
-/* Review & Assign: a readable vertical consumption list for any number of legs.
-   One route-wide "Expected remaining" value is intentionally not displayed:
-   batteries can be swapped between legs, so each leg has its own percentage. */
-.page-content .mission-builder .mission-review-energy-consumption {
-  padding: 18px 0;
-  border-bottom: 1px solid var(--border);
-}
-.page-content .mission-builder .mission-review-energy-leg-list {
-  display: grid;
-  gap: 13px;
-  max-height: 276px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  margin-top: 13px;
-  padding-right: 6px;
-  scrollbar-width: thin;
-}
-.page-content .mission-builder .mission-review-energy-leg-item {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-.page-content .mission-builder .mission-review-energy-leg-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 650;
-}
-/* One short Hub-to-Hub line makes Leg 1, Leg 2, etc. identifiable. */
-.page-content .mission-builder .mission-review-energy-leg-path {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-/* Keep each battery ID/model beside the flight leg that actually uses it.
-   Show BE battery IDs only; no serial numbers or duplicate relay list. */
-.page-content .mission-builder .mission-review-energy-leg-battery {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 6px;
-  row-gap: 1px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.page-content .mission-builder .mission-review-energy-leg-battery strong {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 650;
-}
-.page-content .mission-builder .mission-review-energy-leg-row strong {
-  color: var(--orange, #f97316);
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.page-content .mission-builder .mission-review-energy-leg-track {
-  height: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--border, #e6e8ed);
-}
-.page-content .mission-builder .mission-review-energy-leg-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--orange, #f97316);
-}
-.page-content .mission-builder .mission-review-reserve {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding-top: 17px;
-}
-.page-content .mission-builder .mission-review-reserve strong {
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 /* Order consolidation — scoped to Create Mission; no global/theme changes. */
 
 /* Empty/loading consolidation state: a concise note, no fake selection controls. */
@@ -1412,4 +1321,13 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.35;
+}
+
+/* Create Mission: keep manual/retry actions near their own progressive-loading section. */
+.page-content .mission-builder .mission-resource-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
 }
