@@ -48,6 +48,43 @@ export function parseCancellations(value: unknown): CancellationReport {
   }).sort((a, b) => b.count - a.count);
   return { total, reasons };
 }
+export type RatingFilter = '' | '1' | '2' | '3' | '4' | '5';
+export type CustomerRating = { id: number; order_id: string; customer_id: string; rating: number; comment: string; created_at: string };
+export type RatingReport = { total: number; average: number | null; distribution: { stars: number; count: number }[] | null; ratings: CustomerRating[] };
+
+export function parseRatings(value: unknown): RatingReport {
+  const root = isRecord(value) && isRecord(value.data) ? value.data : value;
+  if (!isRecord(root) || !Array.isArray(root.ratings)) throw invalid();
+  const total = number(root.total_ratings, true);
+  const average = total === 0 ? null : number(root.avg_rating);
+  if (average !== null && (average < 1 || average > 5)) throw invalid();
+  const raw = root.distribution;
+  let distribution: RatingReport['distribution'] = null;
+  // Swagger does not specify distribution values. Accept numeric counts or { count }.
+  if (isRecord(raw)) {
+    const parsed = [5, 4, 3, 2, 1].map(stars => {
+      const entry = raw[String(stars)];
+      const n = entry === undefined ? 0 : isRecord(entry) ? entry.count : entry;
+      return { stars, count: typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : NaN };
+    });
+    if (Object.keys(raw).every(key => /^[1-5]$/.test(key)) && parsed.every(row => Number.isFinite(row.count)) && parsed.reduce((sum, row) => sum + row.count, 0) === total) distribution = parsed;
+  }
+  const ratings = root.ratings.map(row => {
+    if (!isRecord(row) || typeof row.order_id !== 'string' || typeof row.customer_id !== 'string' || typeof row.created_at !== 'string' || (row.comment != null && typeof row.comment !== 'string')) throw invalid();
+    const rating = number(row.rating, true);
+    if (rating < 1 || rating > 5) throw invalid();
+    return { id: number(row.id, true), order_id: row.order_id, customer_id: row.customer_id, rating, comment: typeof row.comment === 'string' ? row.comment : '', created_at: row.created_at };
+  });
+  return { total, average, distribution, ratings };
+}
+
+export function ratingsQuery(rating: RatingFilter, limit: number, offset: number) {
+  if ((rating !== '' && !/^[1-5]$/.test(rating)) || !Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid rating filter.');
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (rating) query.set('rating', rating);
+  return `?${query.toString()}`;
+}
+
 export function reportQuery(range: ReportRange = {}, status: MissionReportStatus = '') {
   const query = new URLSearchParams();
   if (range.from_date) query.set('from_date', range.from_date);
@@ -92,5 +129,6 @@ export const adminReportsApi = {
   revenue: async (days: number) => parseRevenue(await adminRequest<unknown>(`/admin/reports/chart/revenue?days=${days}`)),
   missions: async (days: number) => parseMissions(await adminRequest<unknown>(`/admin/reports/chart/missions?days=${days}`)),
   cancellations: async (range: ReportRange) => parseCancellations(await adminRequest<unknown>(`/admin/reports/cancellation-stats${reportQuery(range)}`)),
+  ratings: async (rating: RatingFilter, limit: number, offset: number) => parseRatings(await adminRequest<unknown>(`/admin/orders/ratings${ratingsQuery(rating, limit, offset)}`)),
   exportCsv,
 };

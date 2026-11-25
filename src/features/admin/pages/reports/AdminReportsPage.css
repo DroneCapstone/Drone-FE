@@ -54,3 +54,31 @@
 .admin-reports .report-performance-range select { min-width: 150px; }
 .admin-reports .report-performance-range input[type="date"] { min-width: 145px; box-sizing: border-box; }
 @media (max-width: 720px) { .admin-reports .report-performance-range { justify-content: flex-start; } }
+
+/* Reports tabs and read-only customer feedback. */
+.admin-reports .report-tabs { display: flex; flex-wrap: wrap; gap: 4px; width: fit-content; max-width: 100%; padding: 4px; border: 1px solid var(--report-border); border-radius: 8px; background: var(--report-surface); }
+.admin-reports .report-tabs button { border: 1px solid transparent; background: transparent; color: var(--report-muted); font: inherit; font-size: 14px; font-weight: 500; padding: 9px 15px; border-radius: 6px; cursor: pointer; }
+.admin-reports .report-tabs button:hover, .admin-reports .report-tabs button.active { background: var(--admin-surface-3, var(--surface-2, #eef0f3)); color: var(--report-text); }
+.admin-reports .report-tabs button.active { border-color: var(--report-border); }
+.admin-reports .report-tabs button:focus-visible, .admin-reports .report-rating-row:focus-visible { outline: 2px solid #ff6b00; outline-offset: 2px; }
+.admin-reports .report-feedback-metrics .report-panel-head { margin-bottom: 8px; }
+.admin-reports .report-feedback-metrics .report-panel > strong { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.admin-reports .report-feedback-metrics small { color: var(--report-muted); font-size: 14px; font-weight: 400; }
+.admin-reports .report-rating-distribution { display: grid; gap: 5px; max-width: 850px; }
+.admin-reports .report-rating-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 70px 65px; align-items: center; gap: 12px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--report-text); font: inherit; font-size: 14px; padding: 7px 8px; cursor: pointer; text-align: left; }
+.admin-reports .report-rating-row:hover, .admin-reports .report-rating-row.active { background: var(--admin-surface-3, var(--surface-2, #eef0f3)); }
+.admin-reports .report-rating-row.active { border-color: #ff6b00; }
+.admin-reports .report-star-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-weight: 500; }
+.admin-reports .report-star-label svg { color: #ff6b00; flex-shrink: 0; }
+.admin-reports .report-rating-row .report-track { display: block; height: 9px; }
+.admin-reports .report-rating-row .report-track > span { display: block; height: 100%; background: #ff6b00; border-radius: 2px; }
+.admin-reports .report-rating-count, .admin-reports .report-rating-percent { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-reports .report-rating-percent { color: var(--report-muted); }
+.admin-reports .report-review-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.admin-reports .report-review-table :is(th,td) { padding: 13px 10px; border-bottom: 1px solid var(--report-border); vertical-align: top; }
+.admin-reports .report-review-table th { text-transform: uppercase; font-size: 12px; letter-spacing: .035em; color: var(--report-muted); font-weight: 600; white-space: nowrap; }
+.admin-reports .report-review-table td:not(.report-review-comment) { white-space: nowrap; }
+.admin-reports .report-review-comment { min-width: 180px; max-width: 520px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin-reports .report-pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 16px; color: var(--report-muted); font-size: 13px; }
+.admin-reports .report-pagination > div { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 520px) { .admin-reports .report-rating-row { grid-template-columns: 35px minmax(0,1fr) 45px 52px; gap: 6px; padding: 6px 4px; font-size: 12px; } .admin-reports .report-tabs button { font-size: 13px; padding: 8px 10px; } }

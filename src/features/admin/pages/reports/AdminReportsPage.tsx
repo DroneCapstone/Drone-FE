@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Download, FileSpreadsheet, Plane, RotateCw, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileSpreadsheet, MessageSquare, Plane, RotateCw, Star, Wallet } from 'lucide-react';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminApiError } from '../../api/adminOperationsApi';
-import { adminReportsApi, type ReportKind, type MissionReportStatus } from '../../api/adminReportsApi';
+import { adminReportsApi, type ReportKind, type MissionReportStatus, type RatingFilter } from '../../api/adminReportsApi';
 import { adminDisplayText } from '../../utils/adminDisplayText';
 import './AdminReportsPage.css';
 
@@ -74,7 +74,24 @@ function DailyChart({ rows, labels, currency = false }: { rows: ChartRow[]; labe
   </>;
 }
 
+type ReportTab = 'performance' | 'feedback';
+const ratingPageSize = 20;
+const reviewDate = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+};
 export function AdminReportsPage() {
+  const [tab, setTab] = useState<ReportTab>('performance');
+  const [rating, setRating] = useState<RatingFilter>('');
+  const [page, setPage] = useState(0);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const invalidExportRange = !!exportFrom && !!exportTo && exportFrom > exportTo;
+  const exportRange = { from_date: exportFrom || undefined, to_date: exportTo || undefined };
+  const ratingSummary = useReport('rating-summary', () => adminReportsApi.ratings('', 1, 0), tab === 'feedback');
+  const ratingRows = useReport(`rating-${rating}-${page}`, () => adminReportsApi.ratings(rating, ratingPageSize + 1, page * ratingPageSize), tab === 'feedback');
+  const changeRating = (value: RatingFilter) => { setRating(value); setPage(0); };
+
   const [period, setPeriod] = useState('30');
   const [chartFrom, setChartFrom] = useState(() => daysBefore(29));
   const [chartTo, setChartTo] = useState(() => localDate(new Date()));
@@ -94,16 +111,16 @@ export function AdminReportsPage() {
   const revenue = useReport(`revenue-${chartKey}`, async () => {
     const rows = await adminReportsApi.revenue(chartDays);
     return custom ? filterChartDates(rows, chartFrom, chartTo) : rows;
-  }, !chartRangeError);
+  }, tab === 'performance' && !chartRangeError);
   const missions = useReport(`missions-${chartKey}`, async () => {
     const rows = await adminReportsApi.missions(chartDays);
     return custom ? filterChartDates(rows, chartFrom, chartTo) : rows;
-  }, !chartRangeError);
-  const cancellations = useReport(`cancellations-${from}-${to}`, () => adminReportsApi.cancellations(range), !invalidRange);
+  }, tab === 'performance' && !chartRangeError);
+  const cancellations = useReport(`cancellations-${from}-${to}`, () => adminReportsApi.cancellations(range), tab === 'performance' && !invalidRange);
   async function download(kind: ReportKind) {
-    if (downloading || (kind !== 'fleet' && invalidRange)) return;
+    if (downloading || (kind !== 'fleet' && invalidExportRange)) return;
     setDownloading(kind); setDownloadError('');
-    try { await adminReportsApi.exportCsv(kind, range, status); }
+    try { await adminReportsApi.exportCsv(kind, exportRange, status); }
     catch (error) { setDownloadError(reportError(error, 'Unable to download report. Please try again.')); }
     finally { setDownloading(null); }
   }
@@ -112,8 +129,12 @@ export function AdminReportsPage() {
     { kind: 'missions', label: 'Mission report', icon: FileSpreadsheet },
     { kind: 'fleet', label: 'Fleet report', icon: Plane },
   ];
-  return <AdminPageShell title="Reports" actions={<button type="button" className="button button-secondary" onClick={() => { if (!chartRangeError) { revenue.retry(); missions.retry(); } if (!invalidRange) cancellations.retry(); }}><RotateCw size={15} /> Refresh</button>}>
+  return <AdminPageShell title="Reports" actions={<button type="button" className="button button-secondary" onClick={() => { if (tab === 'performance') { if (!chartRangeError) { revenue.retry(); missions.retry(); } if (!invalidRange) cancellations.retry(); } else if (tab === 'feedback') { ratingSummary.retry(); ratingRows.retry(); } }}><RotateCw size={15} /> Refresh</button>}>
     <div className="admin-reports">
+      <nav className="report-tabs" aria-label="Reports navigation">
+        {([{ id: 'performance', label: 'Performance' }, { id: 'feedback', label: 'Customer Feedback' }] as const).map(item => <button key={item.id} type="button" className={tab === item.id ? 'active' : undefined} aria-pressed={tab === item.id} onClick={() => setTab(item.id)}>{item.label}</button>)}
+      </nav>
+      {tab === 'performance' && <>
       <div className="report-section-head"><h2>Performance</h2><div className="report-range report-performance-range"><label className="report-inline-field">Period<select value={period} onChange={e => setPeriod(e.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="custom">Custom range</option></select></label>{custom && <><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={chartFrom} max={today} onChange={e => setChartFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={chartTo} max={today} onChange={e => setChartTo(e.target.value)} /></label></>}</div></div>
       {chartRangeError && <p className="report-validation" role="alert">{chartRangeError}</p>}
       <div className="report-grid">
@@ -126,19 +147,45 @@ export function AdminReportsPage() {
           <DailyChart rows={data.map(row => ({ date: row.date, values: [row.completed, row.failed, row.cancelled] }))} labels={series} />
         </>}</ReportContent>}</Panel>
       </div>
-      <div className="report-section-head report-range-head"><h2>Cancellation &amp; exports</h2><div className="report-range"><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={to} onChange={e => setTo(e.target.value)} /></label><button type="button" className="button button-secondary" onClick={() => { setFrom(''); setTo(''); setStatus(''); }}>Clear</button></div></div>
+      <div className="report-section-head report-range-head"><h2>Cancellation statistics</h2><div className="report-range"><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={to} onChange={e => setTo(e.target.value)} /></label><button type="button" className="button button-secondary" onClick={() => { setFrom(''); setTo(''); }}>Clear</button></div></div>
       {invalidRange && <p className="report-validation" role="alert">End date must be on or after the start date.</p>}
-      <div className="report-grid">
+      <div>
         <Panel title="Cancellation reasons">{invalidRange ? <p className="report-message">Select a valid date range.</p> : <ReportContent state={cancellations} label="cancellation statistics">{data => <>
           <div className="report-metrics"><div><span>Cancelled orders</span><strong>{count(data.total)}</strong></div></div>
           {data.reasons.length ? <div className="report-reasons">{data.reasons.slice(0, 5).map((row, i) => <div key={`${row.reason}-${i}`}><div className="report-reason-label"><span>{adminDisplayText(row.reason).replace(/_/g, ' ')}</span><strong>{count(row.count)}{data.total > 0 ? ` · ${(row.count / data.total * 100).toFixed(1)}%` : ''}</strong></div><div className="report-track"><div style={{ width: `${data.total > 0 ? Math.min(100, row.count / data.total * 100) : 0}%` }} /></div></div>)}</div> : <p className="report-message">{data.total === 0 ? 'No cancelled orders for this period.' : 'No cancellation reasons available.'}</p>}
           {data.reasons.length > 5 && <details className="report-details"><summary>All cancellation reasons</summary><div className="report-table-scroll"><table><thead><tr><th>Reason</th><th>Orders</th></tr></thead><tbody>{data.reasons.map((row, i) => <tr key={`${row.reason}-${i}`}><td>{adminDisplayText(row.reason).replace(/_/g, ' ')}</td><td>{count(row.count)}</td></tr>)}</tbody></table></div></details>}
         </>}</ReportContent>}</Panel>
-        <Panel title="Export reports">
-          <div className="report-exports">{exports.map(({ kind, label, icon: Icon }) => <div key={kind} className="report-export-row"><Icon size={19} className="report-export-icon" /><div className="report-export-name"><strong>{label}</strong>{kind === 'fleet' && <span>All drones</span>}{kind === 'missions' && <label className="report-status-filter"><span>Status</span><select aria-label="Mission status" value={status} onChange={e => setStatus(e.target.value as MissionReportStatus)}><option value="">All statuses</option><option value="Completed">Completed</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>}</div><button type="button" className="button button-secondary report-download" aria-label={`Download ${label.toLowerCase()} as CSV`} disabled={downloading !== null || (invalidRange && kind !== 'fleet')} onClick={() => void download(kind)}><Download size={15} />{downloading === kind ? 'Downloading…' : 'CSV'}</button></div>)}</div>
+      </div>
+        <div className="report-section-head"><h2>Export reports</h2><div className="report-range"><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={exportTo} onChange={e => setExportTo(e.target.value)} /></label><button type="button" className="button button-secondary" onClick={() => { setExportFrom(''); setExportTo(''); setStatus(''); }}>Clear</button></div></div>
+        {invalidExportRange && <p className="report-validation" role="alert">End date must be on or after the start date.</p>}
+        <Panel title="CSV reports">
+          <div className="report-exports">{exports.map(({ kind, label, icon: Icon }) => <div key={kind} className="report-export-row"><Icon size={19} className="report-export-icon" /><div className="report-export-name"><strong>{label}</strong>{kind === 'fleet' && <span>All drones</span>}{kind === 'missions' && <label className="report-status-filter"><span>Status</span><select aria-label="Mission status" value={status} onChange={e => setStatus(e.target.value as MissionReportStatus)}><option value="">All statuses</option><option value="Completed">Completed</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>}</div><button type="button" className="button button-secondary report-download" aria-label={`Download ${label.toLowerCase()} as CSV`} disabled={downloading !== null || (invalidExportRange && kind !== 'fleet')} onClick={() => void download(kind)}><Download size={15} />{downloading === kind ? 'Downloading…' : 'CSV'}</button></div>)}</div>
           {downloadError && <p className="report-validation" role="alert">{downloadError}</p>}
         </Panel>
-      </div>
+      </>}
+      {tab === 'feedback' && <>
+        <ReportContent state={ratingSummary} label="rating statistics">{data => <>
+          <div className="report-grid report-feedback-metrics">
+            <section className="report-panel"><div className="report-panel-head"><h2>Total Ratings</h2><MessageSquare size={18} className="report-export-icon" /></div><strong>{count(data.total)}</strong></section>
+            <section className="report-panel"><div className="report-panel-head"><h2>Average Rating</h2><Star size={18} className="report-export-icon" /></div><strong>{data.average === null ? '—' : data.average.toFixed(1)}{data.average !== null && <small> / 5</small>}</strong></section>
+          </div>
+          <Panel title="Rating Distribution">
+            {data.total === 0 ? <p className="report-message">No ratings yet.</p> : data.distribution === null ? <p className="report-message">Rating distribution is unavailable.</p> : <div className="report-rating-distribution">
+              {data.distribution.map(row => { const value = String(row.stars) as RatingFilter; const percent = row.count / data.total * 100; return <button type="button" key={row.stars} className={`report-rating-row${rating === value ? ' active' : ''}`} aria-pressed={rating === value} onClick={() => changeRating(rating === value ? '' : value)}><span className="report-star-label">{row.stars}<Star size={15} /></span><span className="report-track"><span style={{ width: `${percent}%` }} /></span><span className="report-rating-count">{count(row.count)}</span><span className="report-rating-percent">{percent.toFixed(1)}%</span></button>; })}
+            </div>}
+          </Panel>
+        </>}</ReportContent>
+        <Panel title="Customer Reviews" action={<select aria-label="Filter by rating" value={rating} onChange={e => changeRating(e.target.value as RatingFilter)}><option value="">All ratings</option>{[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} {n === 1 ? 'star' : 'stars'}</option>)}</select>}>
+          <ReportContent state={ratingRows} label="customer reviews">{data => {
+            const visible = data.ratings.slice(0, ratingPageSize);
+            const hasNext = data.ratings.length > ratingPageSize;
+            return <>
+              {visible.length ? <div className="report-table-scroll"><table className="report-review-table"><thead><tr><th>Order</th><th>Customer</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead><tbody>{visible.map(review => <tr key={review.id}><td>{review.order_id}</td><td>{review.customer_id}</td><td><span className="report-star-label">{review.rating}.0<Star size={15} /></span></td><td className="report-review-comment">{review.comment.trim() || '—'}</td><td>{reviewDate(review.created_at)}</td></tr>)}</tbody></table></div> : <p className="report-message">No reviews found.</p>}
+              {(visible.length > 0 || page > 0) && <div className="report-pagination"><span>{visible.length ? `Showing ${count(page * ratingPageSize + 1)}–${count(page * ratingPageSize + visible.length)} reviews` : 'No reviews on this page'}</span><div><button type="button" className="button button-secondary" aria-label="Previous page" disabled={page === 0} onClick={() => setPage(n => Math.max(0, n - 1))}><ChevronLeft size={16} /></button><span>Page {page + 1}</span><button type="button" className="button button-secondary" aria-label="Next page" disabled={!hasNext} onClick={() => setPage(n => n + 1)}><ChevronRight size={16} /></button></div></div>}
+            </>;
+          }}</ReportContent>
+        </Panel>
+      </>}
     </div>
   </AdminPageShell>;
 }
