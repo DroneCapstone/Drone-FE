@@ -63,8 +63,8 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
   </Dialog>;
 }
 
-type BulkItem = { partId: string; quantity: number; override: string };
-const blank = (): BulkItem => ({ partId: '', quantity: 1, override: '' });
+type BulkItem = { partId: string; quantity: number };
+const blank = (): BulkItem => ({ partId: '', quantity: 1 });
 export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onClose, onSaved }: { open: boolean; hubs: HubApi[]; parts: PartCategoryApi[]; defaultHub: string; onClose: () => void; onSaved: () => Promise<void> }) {
   const [hub, setHub] = useState('');
   const [rows, setRows] = useState<BulkItem[]>([blank(), blank()]);
@@ -74,15 +74,15 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
   useEffect(() => { if (!open) return; setHub(defaultHub !== 'all' ? defaultHub : String(activeHubs[0]?.id ?? '')); setRows([blank(), blank()]); setError('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const validRows = useMemo(() => rows.length > 0 && rows.every(r => parts.some(p => p.id === Number(r.partId) && p.is_active !== false) && isInt(r.quantity) && r.quantity > 0 && (!r.override.trim() || Number.isFinite(Number(r.override)) && Number(r.override) >= 0)) && new Set(rows.map(r => r.partId)).size === rows.length, [rows, parts]);
+  const validRows = useMemo(() => rows.length > 0 && rows.every(r => parts.some(p => p.id === Number(r.partId) && p.is_active !== false) && isInt(r.quantity) && r.quantity > 0) && new Set(rows.map(r => r.partId)).size === rows.length, [rows, parts]);
   const valid = activeHubs.some(h => String(h.id) === hub) && validRows;
   function edit(index: number, patch: Partial<BulkItem>) { setRows(previous => previous.map((r, i) => i === index ? { ...r, ...patch } : r)); }
   async function submit(event: FormEvent) {
     event.preventDefault(); if (!valid || saving) return;
-    if (!window.confirm(`Receive ${rows.length} spare-part categories into ${activeHubs.find(h => String(h.id) === hub)?.name}? This records a real stock intake and acquisition cost.`)) return;
+    if (!window.confirm(`Receive ${rows.length} spare-part categories into ${activeHubs.find(h => String(h.id) === hub)?.name}?`)) return;
     setSaving(true); setError('');
     try {
-      await adminOperationsApi.bulkReceive(Number(hub), rows.map(r => ({ part_category_id: Number(r.partId), quantity: r.quantity, ...(!r.override.trim() ? {} : { unit_cost_override: Number(r.override) }) })));
+      await adminOperationsApi.bulkReceive(Number(hub), rows.map(r => ({ part_category_id: Number(r.partId), quantity: r.quantity })));
       await onSaved(); onClose();
     } catch (e) { setError(apiError(e)); } finally { setSaving(false); }
   }
@@ -91,11 +91,10 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
       <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Bulk Receive</DialogTitle><p className="mt-1 text-xs text-muted-foreground">Add multiple spare-part categories to one Hub in a single receipt.</p></div>
       <div className="admin-inventory-dialog__body p-5 space-y-3">
         <label className="block text-sm"><span>Receiving Hub *</span><select className="mt-1 w-full" value={hub} required onChange={e => setHub(e.target.value)}><option value="">Select Hub</option>{activeHubs.map(h => <option value={h.id} key={h.id}>{h.name}</option>)}</select></label>
-        {rows.map((row, i) => <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 sm:grid-cols-3" key={i}>
+        {rows.map((row, i) => <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 sm:grid-cols-2" key={i}>
           <label><span className="text-xs">Spare part *</span><select className="w-full" required value={row.partId} onChange={e => edit(i, { partId: e.target.value })}><option value="">Select part</option>{parts.filter(p => p.is_active !== false).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
           <label><span className="text-xs">Quantity *</span><input className="w-full" type="number" min={1} step={1} required value={row.quantity} onChange={e => edit(i, { quantity: Number(e.target.value) })}/></label>
-          <label><span className="text-xs">Unit cost override (VND)</span><input className="w-full" type="number" min={0} step="any" placeholder="Catalog price" value={row.override} onChange={e => edit(i, { override: e.target.value })}/></label>
-          <button type="button" className="text-button text-xs sm:col-span-3" disabled={rows.length === 1} onClick={() => setRows(old => old.filter((_, index) => i !== index))}>Remove item</button>
+          <button type="button" className="text-button text-xs sm:col-span-2" disabled={rows.length === 1} onClick={() => setRows(old => old.filter((_, index) => i !== index))}>Remove item</button>
         </div>)}
         <button type="button" className="text-button" disabled={rows.length >= 20} onClick={() => setRows(old => [...old, blank()])}>+ Add another part</button>
       </div>

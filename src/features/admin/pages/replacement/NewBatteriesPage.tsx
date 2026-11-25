@@ -1,7 +1,7 @@
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { BatteryCharging, Box, CalendarDays, Pencil, ReceiptText, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { BatteryCharging, Box, CalendarDays, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
 import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
@@ -11,8 +11,7 @@ import { AdminToolbar } from '../../components/AdminToolbar';
 import { adminOperationsApi, apiError, type BatteryApi, type BatteryModelApi } from '../../api/adminOperationsApi';
 import './NewBatteriesQuantityDialog.css';
 
-const field = 'h-10 w-full rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-sm text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
-const formatVnd = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+const field = 'h-11 w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-sm text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
 
 function thisWeekStart(): Date {
   const date = new Date();
@@ -46,6 +45,7 @@ export function NewBatteriesPage() {
   const available = useMemo(() => allBatteries.filter(b => b.current_hub_id == null && b.drone_id == null), [allBatteries]);
   const [catalog, setCatalog] = useState<BatteryModelApi[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inventoryReady, setInventoryReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [modelFilter, setModelFilter] = useState('ALL');
@@ -75,6 +75,7 @@ export function NewBatteriesPage() {
       batteries.status === 'rejected' ? `Batteries: ${apiError(batteries.reason)}` : '',
       modelsResult.status === 'rejected' ? `Battery models: ${apiError(modelsResult.reason)}` : '',
     ].filter(Boolean).join(' · '));
+    setInventoryReady(batteries.status === 'fulfilled' && modelsResult.status === 'fulfilled');
     setLoading(false);
   }
   useEffect(() => { void refresh(); }, []);
@@ -83,8 +84,7 @@ export function NewBatteriesPage() {
   ])).sort(), [catalog, available]);
   const modelSummary = useMemo(() => models.map(name => ({
     name, quantity: available.filter(b => b.battery_model === name).length,
-    referencePrice: catalog.find(m => m.name === name)?.unit_cost ?? null,
-  })), [models, available, catalog]);
+  })), [models, available]);
   const shown = modelSummary.filter(item => {
     if (modelFilter !== 'ALL' && item.name !== modelFilter) return false;
     const match = search.trim().toLowerCase();
@@ -92,7 +92,6 @@ export function NewBatteriesPage() {
       && `${b.id} ${b.serial_number}`.toLowerCase().includes(match));
   });
   const existingQuantity = modelSummary.find(item => item.name === model)?.quantity ?? 0;
-  const referencePrice = catalog.find(m => m.name === model)?.unit_cost ?? null;
   const serialLines = serials.replace(/\r/g, '').split('\n').map(value => value.trim()).filter(Boolean);
   const serialCount = serialLines.length;
   const validQuantity = Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 30;
@@ -101,7 +100,6 @@ export function NewBatteriesPage() {
   const serialsUnused = serialLines.every(s => !existingSerials.has(s.toLowerCase()));
   const activeModel = catalog.some(m => m.name === model && m.is_active);
   const validSerials = validQuantity && serialCount === quantity && serialsUnique && serialsUnused;
-  const validCost = validQuantity && referencePrice != null && Number.isFinite(referencePrice * quantity);
 
   function openCreate(selectedModel?: string) {
     setModel(selectedModel && models.includes(selectedModel) ? selectedModel : models.includes(modelHint) ? modelHint : catalog.find(m => m.is_active)?.name ?? '');
@@ -157,16 +155,16 @@ export function NewBatteriesPage() {
   // return <AdminPageShell title="New Batteries" actions={<ActionButton icon="plus" onClick={() => openCreate()}>Add batteries</ActionButton>}></AdminPageShell>
   return <AdminPageShell title="New Batteries">
     {validReturn && <div className="mb-3"><Link className="text-button" to={validReturn}>Back to replacement request</Link></div>}
-    <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+    {!loading && inventoryReady && <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <CompactMetric label="Total new batteries" value={available.length} note="Unassigned · available for supply" icon={BatteryCharging} />
       <CompactMetric label="Battery models" value={modelSummary.filter((item) => item.quantity > 0).length} note="Models currently in stock" icon={Box} />
       <CompactMetric label="Added this week" value="—" note="Registration dates unavailable" icon={CalendarDays} />
-    </div>
+    </div>}
     {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
     {loading && <OperatorLoadingState label="Loading new batteries…" />}
     {error && !creating && !editing && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {/* Browser-only demo stock is intentionally disabled. This table reads the Backend catalog and physical battery units. */}
-    <OperatorPanel className="flush-panel">
+    {!loading && inventoryReady && <OperatorPanel className="flush-panel">
       <AdminToolbar
         searchValue={search} onSearchChange={setSearch}
         placeholder="Search Battery Model, Battery ID or serial…"
@@ -175,11 +173,10 @@ export function NewBatteriesPage() {
         </select>}
         meta={`${shown.length} of ${modelSummary.length} battery models`}
       />
-      <div className="table-wrap"><table><thead><tr><th>Battery Model</th><th>Current Quantity</th><th>Reference Unit Price</th><th>Actions</th></tr></thead>
+      <div className="table-wrap"><table><thead><tr><th>Battery Model</th><th>Current Quantity</th><th>Actions</th></tr></thead>
         <tbody>{shown.map((item) => <tr key={item.name}>
           <td><strong>{item.name}</strong></td>
-          <td><strong className={item.quantity === 0 ? 'text-orange-500' : undefined}>{item.quantity}</strong><small>Unassigned units</small></td>
-          <td>{item.referencePrice != null ? formatVnd(item.referencePrice) : 'Not configured'}</td>
+          <td><strong className={item.quantity === 0 ? 'text-red-600' : undefined}>{item.quantity}</strong><small className={item.quantity === 0 ? '!text-red-600' : undefined}>{item.quantity === 0 ? 'Out of stock' : 'Unassigned units'}</small></td>
           <td><div className="flex flex-wrap items-center gap-2">
             {/* <ActionButton variant="ghost" onClick={() => setExpandedModel(expandedModel === item.name ? null : item.name)}>
               {expandedModel === item.name ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -188,10 +185,10 @@ export function NewBatteriesPage() {
             <ActionButton variant="secondary" onClick={() => openCreate(item.name)}>Add Quantity</ActionButton>
           </div></td>
         </tr>)}
-          {!loading && !error && !shown.length && <tr><td colSpan={4} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
+          {!loading && !error && !shown.length && <tr><td colSpan={3} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
         </tbody></table></div>
-    </OperatorPanel>
-    {expandedModel && <OperatorPanel className="flush-panel mt-4">
+    </OperatorPanel>}
+    {!loading && inventoryReady && expandedModel && <OperatorPanel className="flush-panel mt-4">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--admin-border)] p-4">
         <div><strong>{expandedModel}</strong><p className="text-xs text-[var(--admin-muted)]">Individual Battery IDs · {expandedUnits.length} unit(s)</p></div>
         <ActionButton variant="secondary" onClick={() => setExpandedModel(null)}>Close</ActionButton>
@@ -232,13 +229,6 @@ export function NewBatteriesPage() {
           </label>
           <p className="new-batteries-quantity-hint">{serialCount} serial(s) entered for {validQuantity ? quantity : '—'} new unit(s). Battery IDs are generated automatically. All serials must be unique across all registered batteries.</p>
           {!validSerials && <p role="alert" className="new-batteries-quantity-error">Enter exactly {quantity} unique serial number(s); none may already exist.</p>}
-          <div className="new-batteries-quantity-cost">
-            <div className="new-batteries-quantity-cost-title"><span><ReceiptText size={17} aria-hidden="true" />Acquisition Cost</span></div>
-            <div className="new-batteries-quantity-cost-row"><span>Reference Unit Price</span><strong>{referencePrice != null ? formatVnd(referencePrice) : 'Not configured'}</strong></div>
-            <div className="new-batteries-quantity-cost-row"><span>Quantity</span><strong>{validQuantity ? quantity : '—'}</strong></div>
-            <div className="new-batteries-quantity-cost-row is-total"><span>Total Recorded Cost</span><strong>{validCost ? formatVnd((referencePrice ?? 0) * quantity) : '—'}</strong></div>
-            {/* <p className="new-batteries-quantity-hint">Reference cost only. Backend registers the physical batteries in Admin warehouse; no bank payment is initiated.</p> */}
-          </div>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
         <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving || !activeModel || !validSerials}>{saving ? 'Saving…' : 'Confirm Addition'}</ActionButton></div>

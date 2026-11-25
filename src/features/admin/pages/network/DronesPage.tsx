@@ -19,11 +19,11 @@ const statusTone = (status: string): 'success' | 'info' | 'warning' | 'neutral' 
 
 type AddDroneDraft = {
   name: string; model: string; serialNumber: string; payloadKg: string;
-  maxSpeed: string; hubId: string; acquisitionCost: string; status: 'Available' | 'Maintenance' | 'Retired';
+  maxSpeed: string; hubId: string; status: 'Available' | 'Maintenance' | 'Retired';
 };
 const emptyAddDroneDraft: AddDroneDraft = {
   name: '', model: '', serialNumber: '', payloadKg: '', maxSpeed: '',
-  hubId: '', acquisitionCost: '', status: 'Available',
+  hubId: '', status: 'Available',
 };
 
 export function DronesPage() {
@@ -55,7 +55,6 @@ export function DronesPage() {
     const serial = addDraft.serialNumber.trim();
     const payload = Number(addDraft.payloadKg);
     const speed = Number(addDraft.maxSpeed);
-    const cost = addDraft.acquisitionCost.trim() === '' ? null : Number(addDraft.acquisitionCost);
     const hubId = addDraft.hubId === '' ? null : Number(addDraft.hubId);
     if (!model || !serial || !addDraft.payloadKg.trim() || !Number.isFinite(payload) || payload <= 0 ||
       !addDraft.maxSpeed.trim() || !Number.isFinite(speed) || speed <= 0) {
@@ -70,10 +69,6 @@ export function DronesPage() {
       setAddError('Select a valid Hub or leave it unassigned.');
       return;
     }
-    if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
-      setAddError('Acquisition cost must be a non-negative number.');
-      return;
-    }
     setAddSaving(true);
     setAddError('');
     try {
@@ -82,7 +77,6 @@ export function DronesPage() {
         max_speed: speed, status: addDraft.status,
         ...(addDraft.name.trim() ? { name: addDraft.name.trim() } : {}),
         ...(hubId !== null ? { current_hub_id: hubId } : {}),
-        ...(cost !== null ? { acquisition_cost: cost } : {}),
       };
       await adminOperationsApi.createDrone(body);
       setAdding(false);
@@ -163,7 +157,6 @@ export function DronesPage() {
             <label><span>Status</span><select value={addDraft.status} onChange={(e) => setAddDraft({ ...addDraft, status: e.target.value as AddDroneDraft['status'] })}>
               <option value="Available">Available</option><option value="Maintenance">Maintenance</option><option value="Retired">Retired</option>
             </select></label>
-            <label className="sm:col-span-2"><span>Acquisition cost (optional)</span><input type="number" min="0" step="any" value={addDraft.acquisitionCost} onChange={(e) => setAddDraft({ ...addDraft, acquisitionCost: e.target.value })} /></label>
             {addError && <p className="sm:col-span-2 text-sm text-red-500" role="alert">{addError}</p>}
           </div>
           <div className="form-actions border-t border-border p-5">

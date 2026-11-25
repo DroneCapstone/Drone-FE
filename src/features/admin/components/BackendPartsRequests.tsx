@@ -36,7 +36,6 @@ export function BackendPartsRequests() {
       <div><strong>Hub:</strong> {hubName(selected.hub_id)}</div><div><strong>Technician ID:</strong> {selected.requested_by}</div>
       <div><strong>Quantity:</strong> {selected.quantity_needed} · <strong>Stock at Hub:</strong> {selected.hub_stock_available??'Unknown'}</div>
       <div><strong>Status:</strong> {selected.status}</div><div><strong>Reported issue:</strong> {selected.description}</div>
-      {selected.actual_cost!==null&&<div><strong>Recorded Cost:</strong> {selected.actual_cost.toLocaleString('vi-VN')}đ</div>}
       {['PENDING','WAITING_STOCK'].includes(selected.status.toUpperCase())&&<><label className="block"><span className="block mb-1">Admin note / reason</span><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} className="w-full rounded-md border border-border p-2"/></label>
       <p className="text-xs text-muted-foreground">Approval depends on available Hub stock. If stock is insufficient, receive or transfer stock before trying again.</p>
       <Link className="text-button" to="/admin/network/spare-parts" onClick={()=>setSelected(null)}>Manage stock</Link></>}
