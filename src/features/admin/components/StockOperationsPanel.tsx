@@ -50,7 +50,6 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
   return <div className="mt-4 space-y-4">
     <OperatorPanel title="Hub stock operations" eyebrow="INVENTORY MANAGEMENT">
       <div className="p-4">
-        <p className="mb-3 text-xs text-muted-foreground">Use Add quantity to receive new stock. Confirmed stock changes take effect immediately.</p>
         <div className="fields two">
           <label><span>Operation</span><select value={kind} onChange={e=>{setKind(e.target.value as typeof kind);setError('');setNumber('1');}}>
             <option value="TRANSFER">Transfer between Hubs</option><option value="ADJUST">Inventory adjustment (+ / -)</option><option value="DISCARD">Discard damaged / expired items</option><option value="THRESHOLD">Set low-stock threshold</option>{/* <option value="BULK">Bulk supplier receipt</option> */}

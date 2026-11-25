@@ -167,7 +167,6 @@ export function AdminUsersPage() {
         <form onSubmit={save}>
           <div className="admin-ud-modal-head">
             <DialogTitle>Create internal user</DialogTitle>
-            <p>Create a staff account. Customers register their own accounts.</p>
           </div>
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
@@ -182,8 +181,6 @@ export function AdminUsersPage() {
               <label><span>Initial password <b aria-hidden="true">*</b></span>
                 <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
             </div>
-            {creating.role === 'Technician' && <p className="admin-ud-helper">Creating a technician account does not assign a Hub.</p>}
-            <p className="admin-ud-helper">Share the initial password securely. An invitation email is not sent automatically.</p>
             {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
           </div>
           <div className="admin-ud-modal-foot">

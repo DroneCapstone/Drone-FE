@@ -48,7 +48,7 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
   }
   return <Dialog open={!!part && !!action} onOpenChange={open => { if (!open && !saving) onClose(); }}>
     {part && action && <DialogContent className="admin-inventory-dialog"><form onSubmit={e => void submit(e)}>
-      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{label}</DialogTitle><p className="mt-1 text-xs text-muted-foreground">{part.name} · PART-{part.id} · Inventory by Hub</p></div>
+      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{label}</DialogTitle><p className="mt-1 text-xs text-muted-foreground">{part.name} · PART-{part.id}</p></div>
       <div className="admin-inventory-dialog__body fields two p-5">
         <label><span>{action === 'TRANSFER' ? 'From Hub' : 'Hub'} *</span><select value={hub} required onChange={e => { setHub(e.target.value); setDestination(''); }}><option value="">Select Hub</option>{activeHubs.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
         {action === 'TRANSFER' && <label><span>To Hub *</span><select value={destination} required onChange={e => setDestination(e.target.value)}><option value="">Select destination</option>{activeHubs.filter(h => String(h.id) !== hub).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>}
@@ -88,7 +88,7 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
   }
   return <Dialog open={open} onOpenChange={next => { if (!next && !saving) onClose(); }}>
     <DialogContent className="admin-inventory-dialog"><form onSubmit={e => void submit(e)}>
-      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Bulk Receive</DialogTitle><p className="mt-1 text-xs text-muted-foreground">Add multiple spare-part categories to one Hub in a single receipt.</p></div>
+      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Bulk Receive</DialogTitle></div>
       <div className="admin-inventory-dialog__body p-5 space-y-3">
         <label className="block text-sm"><span>Receiving Hub *</span><select className="mt-1 w-full" value={hub} required onChange={e => setHub(e.target.value)}><option value="">Select Hub</option>{activeHubs.map(h => <option value={h.id} key={h.id}>{h.name}</option>)}</select></label>
         {rows.map((row, i) => <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 sm:grid-cols-2" key={i}>
@@ -99,7 +99,6 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
         <button type="button" className="text-button" disabled={rows.length >= 20} onClick={() => setRows(old => [...old, blank()])}>+ Add another part</button>
       </div>
       {error && <p role="alert" className="px-5 text-xs text-red-500">{error}</p>}
-      {!validRows && <p className="px-5 text-xs text-muted-foreground">Choose different active spare parts with valid positive quantities.</p>}
       <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5"><ActionButton variant="secondary" disabled={saving} onClick={onClose}>Cancel</ActionButton><ActionButton type="submit" disabled={!valid || saving}>{saving ? 'Saving…' : 'Confirm Receipt'}</ActionButton></div>
     </form></DialogContent>
   </Dialog>;

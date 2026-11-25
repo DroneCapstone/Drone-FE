@@ -143,7 +143,7 @@ export function DroneDetailPage() {
       </>}
     </div>
     <Dialog open={editing} onOpenChange={(open) => !open && setEditing(false)}>{drone && editing && <DialogContent><form onSubmit={(event) => void save(event)}>
-      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle><p className="mt-1 text-xs text-muted-foreground">The serial number cannot be changed.</p></div>
+      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle></div>
       <div className="fields two p-5">
         <label><span>Drone name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/></label>
         <label><span>Serial number</span><input readOnly value={drone.serial_number}/></label>

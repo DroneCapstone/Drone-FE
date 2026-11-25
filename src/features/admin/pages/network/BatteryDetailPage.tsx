@@ -48,7 +48,6 @@ export function BatteryDetailPage() {
           <div><dt>Last charged</dt><dd>{battery.last_charged_at ? new Date(battery.last_charged_at).toLocaleString('en-GB') : '—'}</dd></div>
         </dl></section>
       </div>}
-      {battery && <p className="mt-4 text-xs text-muted-foreground">Battery retirement and verification cannot be changed on this page.</p>}
     </div>
   </AdminPageShell>;
 }

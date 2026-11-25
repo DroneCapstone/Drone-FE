@@ -192,7 +192,6 @@ export function AdminUserDetailPage() {
             <Field label="Sign-in access">{user.is_active ? 'Allowed' : 'Blocked'}</Field>
             {archived && <Field label="Restore eligibility">Not restorable</Field>}
           </dl>
-          {user.role === 'Technician' && <p className="admin-ud-helper admin-ud-scope-note">Hub assignment is not available on this page.</p>}
           {!user.is_active && !archived && <p className="admin-ud-helper admin-ud-scope-note">Soft-deleted account. Its history is preserved and it can be restored unless the email is registered again.</p>}
         </section>
       </div>
@@ -209,7 +208,7 @@ export function AdminUserDetailPage() {
 
     <Dialog open={editing && !archived} onOpenChange={(open) => { if (!open && !submitting) closeEdit(); }}>
       <DialogContent className="admin-ud-modal">
-        <div className="admin-ud-modal-head"><DialogTitle>Edit user</DialogTitle><p>Update account information and access role.</p></div>
+        <div className="admin-ud-modal-head"><DialogTitle>Edit user</DialogTitle></div>
         {draft && <form onSubmit={save}>
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
@@ -224,8 +223,7 @@ export function AdminUserDetailPage() {
                   </select>}
               </label>
             </div>
-            {draft.role === 'Technician' && <p className="admin-ud-helper">Hub assignment cannot be changed on this page.</p>}
-            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Ensure the user has no pending operational responsibilities.</p>}
+            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Check pending responsibilities.</p>}
             {error && <p className="admin-ud-error" role="alert">{error}</p>}
           </div>
           <div className="admin-ud-modal-foot">
@@ -241,8 +239,8 @@ export function AdminUserDetailPage() {
         <div className="admin-ud-modal-head">
           <DialogTitle>{user.is_active ? 'Deactivate account?' : 'Restore account?'}</DialogTitle>
           <p>{user.is_active
-            ? 'This soft-deletes the account. Sign-in will be blocked immediately and existing orders, missions and work orders remain stored.'
-            : 'Restores sign-in access to this account if it has not been permanently archived due to email re-registration.'}</p>
+            ? 'Sign-in will be blocked. Existing records are preserved.'
+            : 'Restores sign-in access unless the account is archived.'}</p>
         </div>
         <form onSubmit={confirmAccountAction}>
           <div className="admin-ud-modal-body">

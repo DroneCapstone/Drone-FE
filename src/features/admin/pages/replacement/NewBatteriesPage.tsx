@@ -53,6 +53,7 @@ export function NewBatteriesPage() {
   const [model, setModel] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [serials, setSerials] = useState('');
+  const [serialsTouched, setSerialsTouched] = useState(false);
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
   const [editing, setEditing] = useState<BatteryApi | null>(null);
   const [editSerial, setEditSerial] = useState('');
@@ -103,7 +104,7 @@ export function NewBatteriesPage() {
 
   function openCreate(selectedModel?: string) {
     setModel(selectedModel && models.includes(selectedModel) ? selectedModel : models.includes(modelHint) ? modelHint : catalog.find(m => m.is_active)?.name ?? '');
-    setQuantity(1); setSerials(''); setError(''); setNotice(''); setCreating(true);
+    setQuantity(1); setSerials(''); setSerialsTouched(false); setError(''); setNotice(''); setCreating(true);
   }
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -211,7 +212,6 @@ export function NewBatteriesPage() {
       {creating && <DialogContent className="new-batteries-quantity-dialog"><form onSubmit={register}>
         <div className="new-batteries-quantity-header">
           <DialogTitle className="text-lg font-semibold">Add New Batteries</DialogTitle>
-          <p>Increase inventory by Battery Model — same process as Spare Parts.</p>
         </div>
         <div className="new-batteries-quantity-body">
           <label className="block text-sm"><span>Battery Model <span className="text-red-500">*</span></span>
@@ -225,10 +225,9 @@ export function NewBatteriesPage() {
           </div>
           <div className="new-batteries-quantity-result"><span>Quantity after addition</span><strong>{validQuantity ? `${existingQuantity + quantity} units` : '—'}</strong></div>
           <label className="block text-sm"><span>Serial Numbers <span className="text-red-500">*</span></span>
-            <textarea rows={3} className={`${field} mt-2 !h-auto resize-y py-2`} placeholder={'Exactly one serial per line\nEach battery requires a unique serial'} value={serials} onChange={(event) => setSerials(event.target.value)} />
+            <textarea rows={3} className={`${field} mt-2 !h-auto resize-y py-2`} placeholder="Enter one serial per line" value={serials} onChange={(event) => { setSerials(event.target.value); setSerialsTouched(true); }} />
           </label>
-          <p className="new-batteries-quantity-hint">{serialCount} serial(s) entered for {validQuantity ? quantity : '—'} new unit(s). Battery IDs are generated automatically. All serials must be unique across all registered batteries.</p>
-          {!validSerials && <p role="alert" className="new-batteries-quantity-error">Enter exactly {quantity} unique serial number(s); none may already exist.</p>}
+          {serialsTouched && !validSerials && <p role="alert" className="new-batteries-quantity-error">{!validQuantity ? 'Enter a quantity from 1 to 30.' : !serialsUnique || !serialsUnused ? 'Serial numbers must be unique.' : `Enter ${quantity} serial number${quantity === 1 ? '' : 's'}.`}</p>}
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
         <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving || !activeModel || !validSerials}>{saving ? 'Saving…' : 'Confirm Addition'}</ActionButton></div>
@@ -237,7 +236,7 @@ export function NewBatteriesPage() {
 
     <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
       {editing && <DialogContent className="new-batteries-quantity-dialog"><form onSubmit={saveEdit}>
-        <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle><p>Update the serial number of this battery.</p></div>
+        <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle></div>
         <div className="new-batteries-quantity-body space-y-4"><label className="block text-sm"><span>Battery Model</span><input readOnly className={`${field} mt-2`} value={editing.battery_model ?? '—'} /></label>
           <label className="block text-sm"><span>Serial Number *</span><input className={`${field} mt-2`} value={editSerial} onChange={(event) => setEditSerial(event.target.value)} placeholder="Required" required /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
@@ -247,7 +246,7 @@ export function NewBatteriesPage() {
     </Dialog>
 
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open) { setRemoving(null); setRemovalReason(''); setError(''); } }}>
-      {removing && <DialogContent className="new-batteries-quantity-dialog"><div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Remove {removing.id}?</DialogTitle><p>Only warehouse units can be removed here. Removal is permanent and the reason cannot be saved.</p></div>
+      {removing && <DialogContent className="new-batteries-quantity-dialog"><div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Remove {removing.id}?</DialogTitle><p>Removal is permanent. The reason will not be saved.</p></div>
         <div className="new-batteries-quantity-body"><label className="block text-sm" htmlFor="new-battery-removal-reason"><span>Reason for removal <span className="text-red-500">*</span></span>
           <textarea id="new-battery-removal-reason" className={`${field} mt-2 !h-auto resize-none py-2`} rows={3} maxLength={500} required placeholder="Enter reason…" value={removalReason} onChange={(event) => setRemovalReason(event.target.value)} /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}

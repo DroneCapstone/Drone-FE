@@ -91,7 +91,7 @@ export function TransactionsPage() {
     <Dialog open={!!selected} onOpenChange={open => { if (!open && !saving) setSelected(null); }}>
       {selected && <DialogContent><div className="p-5">
         <DialogTitle className="text-lg font-semibold">Refund order {orderOf(selected)}?</DialogTitle>
-        <p className="mt-2 text-sm text-muted-foreground">Submit a refund request for order {orderOf(selected)}. The payment provider confirms the final settlement.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Final settlement is confirmed by the payment provider.</p>
         <label className="mt-4 block text-sm"><span>Reason for refund *</span><textarea rows={3} maxLength={500} className="mt-2 w-full rounded-lg border border-[var(--admin-border)] p-2" required value={reason} onChange={e => setReason(e.target.value)} /></label>
         {error && <p role="alert" className="mt-2 text-sm text-red-500">{error}</p>}
         <div className="form-actions mt-5"><ActionButton variant="secondary" disabled={saving} onClick={() => setSelected(null)}>Cancel</ActionButton><ActionButton variant="danger" disabled={saving || !reason.trim()} onClick={() => void refund()}>{saving ? 'Submitting…' : 'Confirm Refund'}</ActionButton></div>

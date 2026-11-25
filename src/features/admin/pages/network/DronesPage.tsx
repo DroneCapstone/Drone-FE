@@ -142,7 +142,6 @@ export function DronesPage() {
         <form onSubmit={(event) => void addDrone(event)}>
           <div className="border-b border-border p-5">
             <DialogTitle className="text-lg font-semibold">Add Drone</DialogTitle>
-            <p className="mt-1 text-xs text-muted-foreground">Register one physical Drone using its unique serial number.</p>
           </div>
           <div className="fields two max-h-[65vh] overflow-y-auto p-5">
             <label><span>Drone name (optional)</span><input value={addDraft.name} onChange={(e) => setAddDraft({ ...addDraft, name: e.target.value })} /></label>

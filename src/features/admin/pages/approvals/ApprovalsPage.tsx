@@ -359,7 +359,7 @@ export function ApprovalsPage() {
 
     <Dialog open={Boolean(requestId)} onOpenChange={(open) => { if (!open) closeRequest(); }}>
 
-      <DialogContent aria-describedby="replacement-detail-description"
+      <DialogContent aria-describedby={undefined}
 
         className="admin-replacement-dialog top-1/2 flex max-h-[calc(100dvh-32px)] w-[min(640px,calc(100%-30px))] -translate-y-1/2 flex-col overflow-hidden"
 
@@ -376,12 +376,6 @@ export function ApprovalsPage() {
               {request ? `Replacement ${request.id}` : 'Replacement not found'}
 
             </div></DialogTitle>
-
-            <p id="replacement-detail-description" className="mt-1 text-xs text-[var(--admin-muted)]">
-
-              {request ? (rejectMode ? 'Confirm the reason before rejecting this replacement' : 'Reported replacement details and supply confirmation') : 'This record is no longer available.'}
-
-            </p>
 
           </div>
 
@@ -405,7 +399,7 @@ export function ApprovalsPage() {
 
               <p className="mb-4 text-[13px] leading-relaxed text-[var(--admin-muted)]">
 
-                Review the reported issue and enter a reason. Rejecting closes this record without allocating a replacement item.
+                Rejecting closes this request without supplying an item.
 
               </p>
 
@@ -546,12 +540,6 @@ export function ApprovalsPage() {
                   </Link>
 
                 </div>}
-
-                <p className="mt-3 text-xs leading-relaxed text-[var(--admin-muted)]">
-
-                  Confirm Supply allocates this item once. Technician confirms receipt separately.
-
-                </p>
 
               </div>}
 

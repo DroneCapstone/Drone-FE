@@ -150,7 +150,7 @@ export function AdminDashboardPage() {
         </div>
 
         <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartPanel title="Revenue overview" subtitle="Recorded revenue for today and the current month">
+          <ChartPanel title="Revenue overview">
             <RevenueBars today={data.revenue.today} month={data.revenue.this_month} />
           </ChartPanel>
           <ChartPanel title="Mission status" subtitle={`Total missions: ${data.missions.total} · Success rate: ${data.missions.success_rate}%`}>
@@ -175,7 +175,7 @@ export function AdminDashboardPage() {
             <HorizontalBars items={data.ai.risk_breakdown} />
             <p className="mt-4 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]">Average estimated energy: {Number(data.ai.avg_estimated_energy_wh ?? 0).toLocaleString('vi-VN')} Wh</p>
           </ChartPanel> */}
-          <ChartPanel title="Operational alerts" subtitle="Items requiring administrative attention">
+          <ChartPanel title="Operational alerts">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-[#FFF7ED] p-3"><Wrench size={17} className="mb-2 text-[#EA580C]" /><strong className="block text-2xl text-[#172033]">{data.alerts.pending_maintenance_alerts}</strong><span className="text-xs text-[#8A5A36]">Maintenance alerts</span></div>
               <div className="rounded-lg bg-[#FEF2F2] p-3"><ShieldAlert size={17} className="mb-2 text-[#DC2626]" /><strong className="block text-2xl text-[#172033]">{data.alerts.open_incidents}</strong><span className="text-xs text-[#8A4A4A]">Open incidents</span></div>
@@ -185,7 +185,7 @@ export function AdminDashboardPage() {
           </ChartPanel>
         </div>
 
-        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2><p className="mt-1 text-xs text-[#8791A2]"></p></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
+        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
         <HubDroneMap hubs={hubs} drones={drones} />
         <RevenueChartPanel />
       </>}
@@ -209,7 +209,7 @@ function RevenueChartPanel() {
 
   if (loading || chartError || chartData.length === 0) {
     return (
-      <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
+      <ChartPanel title="Revenue trend — last 30 days" className="mt-4">
         {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">{chartError ? "Unable to load revenue trend." : "No data available yet."}</p>}
       </ChartPanel>
     );
@@ -218,7 +218,7 @@ function RevenueChartPanel() {
   const maxRevenue = Math.max(...chartData.map((d) => d.revenue), 1);
 
   return (
-    <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
+    <ChartPanel title="Revenue trend — last 30 days" className="mt-4">
       <div className="flex h-40 items-end gap-[3px] overflow-hidden">
         {chartData.map((d) => {
           const pct = (d.revenue / maxRevenue) * 100;

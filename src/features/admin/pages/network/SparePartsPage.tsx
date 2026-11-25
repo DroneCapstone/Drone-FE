@@ -135,7 +135,7 @@ export function SparePartsPage() {
     </OperatorPanel>}
 
     <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>{editing && <DialogContent className="admin-inventory-dialog"><form onSubmit={(e) => void save(e)}>
-      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{editing === 'new' ? 'Add spare part category' : 'Edit spare part category'}</DialogTitle><p className="mt-1 text-xs text-muted-foreground">Register the component model; physical stock is received separately per Hub.</p></div>
+      <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{editing === 'new' ? 'Add spare part category' : 'Edit spare part category'}</DialogTitle></div>
       <div className="admin-inventory-dialog__body fields two p-5">
         <label><span>Component name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
         <label><span>Component type</span><select value={draft.categoryType} disabled={editing !== 'new'} onChange={(e) => setDraft({ ...draft, categoryType: e.target.value })}>{TYPES.map((v) => <option key={v}>{v}</option>)}</select></label>
@@ -154,7 +154,7 @@ export function SparePartsPage() {
           <label><span>Current quantity (at Hub)</span><input className={`spare-quantity-input spare-quantity-input--readonly${selectedLow ? ' is-low-stock' : ''}`} readOnly value={chosenHub ? currentFor(restocking, chosenHub.id) : '—'} /></label>
           <label><span>Quantity to Add *</span><input className="spare-quantity-input" type="number" min={1} step={1} required value={added} onChange={(e) => setAdded(Number(e.target.value))} /></label>
         </div>
-        {selectedLow && <p role="status" className="spare-quantity-low-stock">Low stock{Number.isFinite(selectedStock?.min_stock_threshold) ? ` — Minimum stock: ${selectedStock?.min_stock_threshold} units.` : '.'} Replenishment required.</p>}
+        {selectedLow && <p role="status" className="spare-quantity-low-stock">Low stock{Number.isFinite(selectedStock?.min_stock_threshold) ? ` — Minimum stock: ${selectedStock?.min_stock_threshold} units.` : '.'}</p>}
         <div className="spare-quantity-result"><span>Quantity after addition (at Hub)</span><strong>{validQuantity ? `${currentFor(restocking, chosenHub!.id) + added} units` : '—'}</strong></div>
         {error && <p role="alert" className="spare-quantity-error">{error}</p>}
       </div>

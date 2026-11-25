@@ -264,7 +264,6 @@ export function HubsPage() {
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={newHub.latitude} onChange={(event) => setNewHub((current) => ({ ...current, latitude: event.target.value }))} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={newHub.longitude} onChange={(event) => setNewHub((current) => ({ ...current, longitude: event.target.value }))} /></label>
                 <label className="sm:col-span-2"><span>Capacity (drone slots)</span><input required type="number" min={1} step={1} value={newHub.capacity} onChange={(event) => setNewHub((current) => ({ ...current, capacity: event.target.value }))} /></label>
-                <p className="sm:col-span-2 text-xs text-muted-foreground">New Hubs need compatible, charged batteries before Dijkstra can use them as relay stops. Creating a Hub does not automatically supply batteries.</p>
                 {createError && <p role="alert" className="sm:col-span-2 text-sm text-red-500">{createError}</p>}
               </div>
               <div className="form-actions border-t border-border p-5">

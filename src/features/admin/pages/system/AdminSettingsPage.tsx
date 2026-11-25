@@ -35,15 +35,15 @@ export function AdminSettingsPage() {
       <OperatorPanel title="Notification settings" eyebrow="CHANNEL & EVENT POLICY" >
         <div id="notifications" className="toggle-list">
           {[
-            ["Payment notifications", "Payment success, failure and reconciliation events", "paymentNotifications"],
-            ["Order status notifications", "Customer order lifecycle changes", "orderStatusNotifications"],
-            ["Mission incident notifications", "Important mission incident events", "missionIncidentNotifications"],
-            ["Maintenance notifications", "Drone and battery maintenance changes", "maintenanceNotifications"],
-            ["System notifications", "Critical administrative platform notices", "systemNotifications"],
-            ["Email channel", "Send supported Admin notifications by email", "emailNotifications"],
-          ].map(([label, detail, key]) => (
+            ["Payment notifications", "paymentNotifications"],
+            ["Order status notifications", "orderStatusNotifications"],
+            ["Mission incident notifications", "missionIncidentNotifications"],
+            ["Maintenance notifications", "maintenanceNotifications"],
+            ["System notifications", "systemNotifications"],
+            ["Email channel", "emailNotifications"],
+          ].map(([label, key]) => (
             <div className="toggle-row" key={key}>
-              <span><strong>{label}</strong><small>{detail}</small></span>
+              <span><strong>{label}</strong></span>
               <Switch checked={Boolean(settings[key as keyof typeof settings])} onCheckedChange={(checked) => setSettings({ ...settings, [key]: checked })} aria-label={label} />
             </div>
           ))}
