@@ -36,16 +36,16 @@
 
 /* Mission Analysis is an explanation view, not a second Mission planner. */
 .mission-ai-section-head {
-  display:flex; justify-content:space-between; align-items:end; gap:12px;
+  display:flex; justify-content:space-between; align-items:flex-end; gap:12px;
   padding:0 1px 12px;
 }
-.mission-ai-section-head h2 {font-size:18px; font-weight:750; color:var(--text); margin:5px 0 0;}
-.mission-ai-section-head > small {font-size:12px; color:var(--muted);}
+.mission-ai-section-head h2 {font-size:18px; font-weight:750; color:var(--text); margin:0;}
+.mission-ai-section-head p {margin:5px 0 0; font-size:12px; color:var(--muted); line-height:1.5;}
 .page-content .mission-ai-route-switcher {grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:16px;}
 .page-content .mission-ai-route-switcher button.mission-ai-route-option,
 .page-content .mission-ai-route-switcher button.mission-ai-route-option.active {
   display:flex; flex-direction:column; align-items:stretch; justify-content:space-between;
-  gap:12px; min-width:0; min-height:168px; height:100%; padding:16px 16px 14px;
+  gap:12px; min-width:0; min-height:176px; height:100%; padding:17px 17px 15px;
   border:1px solid var(--border) !important; border-radius:11px;
   background:var(--surface) !important; color:var(--text);
   box-shadow:none !important; text-align:left;
@@ -60,12 +60,22 @@
 .page-content .mission-ai-route-switcher button.mission-ai-route-option:not(.active):focus-visible {
   border-color:var(--orange) !important; background:var(--surface) !important;
 }
-.mission-ai-route-top {display:flex; flex-direction:column; align-items:flex-start; gap:7px; width:100%; min-width:0;}
-.mission-ai-route-top > strong {font-size:14px; line-height:1.45; font-weight:750; color:var(--text); overflow-wrap:anywhere;}
-.page-content .ai-route-switcher .mission-ai-route-selected,
-.page-content .ai-route-switcher .mission-ai-route-recommended {margin:0; font-size:10px; font-weight:700; white-space:nowrap;}
-.mission-ai-route-selected {color:var(--orange) !important;}
-.mission-ai-route-recommended {color:var(--green,#16a34a) !important;}
+.mission-ai-route-top {
+  display:flex; flex-direction:row; justify-content:space-between; align-items:flex-start;
+  gap:10px; width:100%; min-width:0; min-height:30px;
+}
+.mission-ai-route-top > strong {
+  font-size:14px; line-height:1.45; font-weight:750;
+  color:var(--text); overflow-wrap:anywhere; min-width:0;
+}
+/* The orange border, not an extra Selected badge, identifies the current route. */
+.page-content .ai-route-switcher .mission-ai-route-recommended {
+  display:inline-flex; align-items:center; flex-shrink:0;
+  margin:0; padding:5px 7px; border:1px solid var(--green-border,#ccebd9);
+  border-radius:5px; background:var(--surface);
+  color:var(--green,#16a34a) !important;
+  font-size:10px; font-weight:700; line-height:1.25; white-space:nowrap;
+}
 .page-content .ai-route-switcher .mission-ai-route-path {color:var(--muted); font-size:12px; line-height:1.5; width:100%; min-height:31px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere;}
 .mission-ai-route-metrics {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; width:100%; padding-top:11px; border-top:1px solid var(--border);}
 .page-content .ai-route-switcher .mission-ai-route-metrics > span {display:grid; align-content:start; gap:4px; min-width:0;}
@@ -74,6 +84,14 @@
 .mission-ai-explanation-layout {display:grid; grid-template-columns:minmax(0,1.28fr) minmax(290px,.72fr); gap:14px; align-items:start;}
 .mission-ai-explanation-layout > * {min-width:0;}
 .mission-ai-shap-chart {display:grid; gap:16px; padding:4px 0 12px;}
+/* One SHAP row per factor; units are in Wh, inputs come from BE where valid. */
+.mission-ai-shap-description {margin:0 0 2px; color:var(--muted); font-size:11px; line-height:1.5;}
+.mission-ai-shap-factor {min-width:0; line-height:1.5;}
+.mission-ai-shap-input {color:var(--muted); font-size:11px; font-weight:400; white-space:nowrap; text-transform:none;}
+.mission-ai-shap-text strong {flex:none; white-space:nowrap;}
+.mission-ai-alternative-summary .mission-ai-insight p {margin-top:5px;}
+.mission-ai-alternative-summary .mission-ai-insight p.mission-ai-alternative-context {margin-top:3px; font-size:11px;}
+
 .mission-ai-shap-item {display:grid; gap:8px;}
 .mission-ai-shap-text {display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--text);}
 .mission-ai-shap-text span {text-transform:capitalize; overflow-wrap:anywhere;}
@@ -94,14 +112,87 @@
 .mission-ai-insight p {margin:6px 0 0; color:var(--muted); font-size:12px; line-height:1.6; overflow-wrap:anywhere;}
 .mission-ai-summary {border:1px solid var(--border); border-radius:9px; padding:14px; background:var(--surface);}
 .mission-ai-summary p {margin:0; color:var(--text); font-size:13px; line-height:1.7; overflow-wrap:anywhere;}
+/* Interpretation: concise, BE-driven rationale with typography matched to Feature insights. */
+.mission-ai-decision-content {
+  min-width: 0;
+  padding: 2px 0 0;
+  animation: mission-ai-decision-enter 180ms ease-out both;
+}
+.mission-ai-decision-heading {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.mission-ai-decision-points { display: grid; gap: 5px; }
+.mission-ai-decision-point {
+  display: flex; align-items: flex-start; gap: 10px;
+  min-width: 0; padding: 9px 8px;
+  border-radius: 7px;
+  transition: background-color 160ms ease;
+}
+.mission-ai-decision-point:hover { background: var(--surface-2, rgba(128, 128, 128, .05)); }
+.mission-ai-decision-marker {
+  flex: none; width: 7px; height: 7px;
+  margin-top: 5px; border-radius: 50%;
+  background: var(--orange, #ea580c);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, .09);
+}
+.mission-ai-decision-copy { min-width: 0; }
+.mission-ai-decision-copy strong {
+  display: block; margin: 0 0 3px;
+  color: var(--text); font-size: 12px; font-weight: 700;
+  line-height: 1.45;
+}
+.mission-ai-decision-copy p,
+.mission-ai-decision-fallback {
+  margin: 0; font-size: 12px; font-weight: 400;
+  line-height: 1.6; color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.mission-ai-tradeoff-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.mission-ai-tradeoff-metric {
+  min-width: 0; padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2, rgba(128, 128, 128, .035));
+  transition: border-color 160ms ease;
+}
+.mission-ai-tradeoff-metric:hover { border-color: var(--orange); }
+.mission-ai-tradeoff-metric span {
+  display: block; margin-bottom: 6px;
+  color: var(--muted); font-size: 11px; font-weight: 450;
+}
+.mission-ai-tradeoff-metric strong {
+  display: block; color: var(--text); font-size: 13px; font-weight: 700;
+  line-height: 1.4; font-variant-numeric: tabular-nums;
+}
+@keyframes mission-ai-decision-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mission-ai-decision-content { animation: none; }
+  .mission-ai-decision-point, .mission-ai-tradeoff-metric { transition: none; }
+}
+@media (max-width: 420px) {
+  .mission-ai-tradeoff-grid { grid-template-columns: 1fr; }
+}
 .mission-ai-leg-summary {padding-top:16px; margin-top:16px; border-top:1px solid var(--border);}
 .mission-ai-leg {padding:11px 0; border-bottom:1px solid var(--border);}
 .mission-ai-leg:last-child {border-bottom:0;}
-.mission-ai-leg-header {display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--text);}
-.mission-ai-leg-header span {font-weight:700; font-variant-numeric:tabular-nums;}
-.mission-ai-leg-route {color:var(--text); font-size:12px; margin:7px 0 4px;}
-.mission-ai-leg small,.mission-ai-leg-note {color:var(--muted); font-size:11px; line-height:1.5;}
-.mission-ai-leg-note {margin:7px 0 0;}
+/* Keep distance and energy together on the Leg header instead of leaving km on a separate line. */
+.mission-ai-leg-header {display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px 12px; font-size:12px; color:var(--text);}
+.mission-ai-leg-header > strong {font-weight:700;}
+.mission-ai-leg-stats {display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px 14px; font-variant-numeric:tabular-nums;}
+.mission-ai-leg-distance {color:var(--muted); font-size:11px; font-weight:500; white-space:nowrap;}
+.mission-ai-leg-energy {color:var(--text); font-size:12px; font-weight:750; white-space:nowrap;}
+.mission-ai-leg-route {color:var(--text); font-size:12px; margin:7px 0 4px; overflow-wrap:anywhere;}
+.mission-ai-leg-note {color:var(--muted); font-size:11px; line-height:1.5; margin:7px 0 0; overflow-wrap:anywhere;}
 .mission-ai-no-explanation {font-size:12px; line-height:1.6; color:var(--muted); margin:8px 0;}
 @media (max-width:1140px) {
   .mission-ai-explanation-layout {grid-template-columns:1fr;}
@@ -112,4 +203,121 @@
   .mission-ai-section-head {align-items:flex-start; flex-direction:column;}
 }
 
-.page-content .ai-route-switcher .mission-ai-route-flags {display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin:0;}
+
+/* Subtle draft-safety note replaces the repeated top Mission Draft Analysis banner. */
+.mission-ai-footer-actions {align-items:center; flex-wrap:wrap;}
+.mission-ai-footer-note {color:var(--muted); font-size:11px; line-height:1.5; margin-right:auto;}
+@media (max-width:620px) {
+  .mission-ai-footer-actions {align-items:stretch;}
+  .mission-ai-footer-note {margin-right:0;}
+}
+
+/* 2026-11: Approved detailed AI view. One evidence container, without repeated
+   alternative-route panels or demonstration-only mode switches. */
+.mission-ai-evidence {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+.mission-ai-evidence h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.45;
+  color: var(--text);
+}
+.mission-ai-evidence-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(310px, 0.85fr);
+}
+.mission-ai-evidence-shap,
+.mission-ai-evidence-weather {
+  min-width: 0;
+  padding: 20px 22px 23px;
+}
+.mission-ai-evidence-weather {border-left: 1px solid var(--border);}
+.mission-ai-evidence-shap-list {display: grid; gap: 15px; margin-top: 22px;}
+.mission-ai-evidence-factor {display: grid; gap: 7px; min-width: 0;}
+.mission-ai-evidence-factor-label {display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12px;}
+.mission-ai-evidence-factor-label > span {min-width: 0; overflow-wrap: anywhere; font-weight: 550;}
+.mission-ai-evidence-factor-label small {font-size: 11px; font-weight: 400; color: var(--muted); white-space: nowrap;}
+.mission-ai-evidence-factor-label > strong {font-size: 12px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums;}
+.mission-ai-evidence-factor-label .positive {color: var(--orange);}
+.mission-ai-evidence-factor-label .negative {color: var(--muted);}
+.mission-ai-evidence-track {height: 7px; background: var(--surface-3, #f1f2f4); border-radius: 9px; overflow: hidden; min-width: 0;}
+.mission-ai-evidence-track > span {display: block; height: 100%; background: var(--orange); border-radius: inherit; transition: width 180ms ease;}
+.mission-ai-evidence-track > span.negative {background: #8a95a5;}
+.mission-ai-evidence-heading {display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;}
+.mission-ai-evidence-heading select {
+  font: inherit; font-size: 11px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; max-width: 155px;
+}
+.mission-ai-evidence-heading select:focus-visible {outline: 2px solid var(--orange); outline-offset: 2px;}
+.mission-ai-weather-primary {display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 13px; padding: 20px 0 14px; border-bottom: 1px solid var(--border);}
+.mission-ai-weather-primary > strong {font-size: 25px; line-height: 1; color: var(--text); font-weight: 750; font-variant-numeric: tabular-nums;}
+.mission-ai-weather-primary > span {font-size: 12px; color: var(--muted);}
+.mission-ai-weather-table {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));}
+.mission-ai-weather-table > div {min-width: 0; padding: 15px 9px 14px 0;}
+.mission-ai-weather-table > div:nth-child(even) {padding-left: 16px; border-left: 1px solid var(--border);}
+.mission-ai-weather-table > div:nth-child(n + 3) {border-top: 1px solid var(--border);}
+.mission-ai-weather-table small {display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px;}
+.mission-ai-weather-table strong {display: block; font-size: 15px; font-weight: 750; color: var(--text); font-variant-numeric: tabular-nums;}
+.mission-ai-weather-warning {font-size: 12px; line-height: 1.55; color: var(--orange); margin: 0;}
+.mission-ai-evidence-muted {font-size: 12px; color: var(--muted); line-height: 1.6; margin: 15px 0 0;}
+.mission-ai-evidence-battery {border-top: 1px solid var(--border); padding: 20px 22px 22px;}
+.mission-ai-battery-header {margin-bottom: 19px;}
+.mission-ai-battery-summary {display: flex; align-items: center; gap: 14px; flex-wrap: wrap;}
+.mission-ai-battery-summary > span {font-size: 11px; color: var(--muted); white-space: nowrap;}
+.mission-ai-battery-summary strong {font-weight: 750; color: var(--text); margin-left: 3px;}
+.mission-ai-battery-summary strong.positive {color: #18a56a;}
+.mission-ai-battery-summary strong.negative {color: #db6d39;}
+.mission-ai-evidence-battery h3 {font-size: 13px; font-weight: 750; color: var(--text); margin: 0 0 12px;}
+.mission-ai-leg-timeline {max-height: 410px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 5px 4px 0;}
+.mission-ai-timeline-group {display: grid; grid-template-columns: 31px minmax(0, 1fr); gap: 0 10px;}
+.mission-ai-timeline-line {display: flex; justify-content: center; position: relative; align-items: start; min-height: 12px;}
+.mission-ai-timeline-line::after {content: ''; position: absolute; top: 23px; bottom: -12px; width: 1px; background: var(--border); left: 50%;}
+.mission-ai-timeline-group:last-child > .mission-ai-timeline-line:not(.mission-ai-timeline-swap-symbol)::after {display: none;}
+.mission-ai-timeline-line > span {z-index: 1; flex: none; width: 23px; height: 23px; border-radius: 50%; background: var(--surface-2, #f8f9fb); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); font-size: 11px; font-weight: 750;}
+.mission-ai-timeline-card {border: 1px solid var(--border); border-radius: 8px; padding: 13px 14px; margin-bottom: 11px; min-width: 0;}
+.mission-ai-timeline-head {display: flex; gap: 8px 15px; align-items: center; justify-content: space-between; flex-wrap: wrap;}
+.mission-ai-timeline-head > strong {font-size: 12px; color: var(--text);}
+.mission-ai-timeline-head > div {display: flex; gap: 13px; align-items: center; font-variant-numeric: tabular-nums;}
+.mission-ai-timeline-head > div > span {font-size: 11px; color: var(--muted);}
+.mission-ai-timeline-head > div > b {font-size: 12px; color: var(--text);}
+.mission-ai-timeline-card > p {font-size: 11px; margin: 8px 0 10px; line-height: 1.5; color: var(--muted);}
+.mission-ai-timeline-consumption {display: flex; align-items: center; gap: 12px;}
+.mission-ai-timeline-consumption .mission-ai-evidence-track {flex: 1; height: 7px;}
+.mission-ai-timeline-consumption > strong {font-size: 11px; font-weight: 750; color: var(--orange); white-space: nowrap;}
+.mission-ai-timeline-swap-symbol {align-items: start;}
+.mission-ai-timeline-swap-symbol > span {width: 22px; height: 22px; font-size: 15px; border: 0; border-radius: 6px; background: rgba(249, 115, 22, .10); color: var(--orange);}
+.mission-ai-timeline-swap-symbol::after {top: 22px;}
+.mission-ai-timeline-swap {display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px 12px; margin: 0 0 11px; padding: 10px 13px; background: var(--surface-2, #f8f9fb); border: 1px solid var(--border); border-radius: 7px;}
+.mission-ai-timeline-swap strong {font-size: 11px; font-weight: 700; color: var(--text);}
+.mission-ai-timeline-swap > span {font-size: 11px; color: var(--muted); overflow-wrap: anywhere;}
+/* Final conclusion remains part of the same evidence panel. Only its heading is orange. */
+.mission-ai-final-conclusion {
+  display: grid; grid-template-columns: minmax(130px, 170px) minmax(0, 1fr);
+  gap: 20px; align-items: center;
+  background: var(--surface-2, rgba(128, 128, 128, .045));
+  border-top: 1px solid var(--border);
+  padding: 15px 22px;
+  animation: mission-ai-decision-enter 180ms ease-out both;
+}
+.mission-ai-final-conclusion > strong {font-size: 12.5px; color: var(--orange); font-weight: 750; line-height: 1.5;}
+.mission-ai-final-conclusion > span {font-size: 12px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere;}
+/* Keep the existing route card layout exactly as on the approved Choose Route page. */
+@media (max-width: 1020px) {
+  .mission-ai-evidence-top {grid-template-columns: 1fr;}
+  .mission-ai-evidence-weather {border-left: 0; border-top: 1px solid var(--border);}
+}
+@media (max-width: 720px) {
+  .mission-ai-evidence-shap, .mission-ai-evidence-weather, .mission-ai-evidence-battery {padding: 16px;}
+  .mission-ai-battery-header {align-items: start; flex-direction: column; gap: 8px;}
+  .mission-ai-final-conclusion {grid-template-columns: 1fr; gap: 5px; padding: 14px 16px;}
+  .mission-ai-weather-primary {padding-top: 15px;}
+}
+@media (prefers-reduced-motion: reduce) {
+  .mission-ai-evidence-track > span, .mission-ai-final-conclusion {animation: none; transition: none;}
+}
