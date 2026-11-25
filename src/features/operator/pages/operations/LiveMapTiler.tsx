@@ -114,6 +114,59 @@ function getLine(h: MissionTelemetryPoint[]): Point[] {
     .filter((p): p is Point => p !== null);
 }
 
+// WGS84 local distance is sufficient for short hub-to-hub visual segments.
+// This is strictly for display; it does not alter GPS or mission/leg status.
+function distanceInMeters(a: Point, b: Point): number {
+  const latitudeRad = (a[1] + b[1]) / 2 * Math.PI / 180;
+  return Math.hypot(
+    (a[0] - b[0]) * 111_320 * Math.cos(latitudeRad),
+    (a[1] - b[1]) * 111_320,
+  );
+}
+
+type PlannedSegment = { from: Point; to: Point; start: number; length: number };
+
+function projectedProgress(p: Point, seg: PlannedSegment): { progress: number; crossTrack: number } {
+  const latRad = (seg.from[1] + seg.to[1]) / 2 * Math.PI / 180;
+  const metersPerLng = 111_320 * Math.cos(latRad);
+  const dx = (seg.to[0] - seg.from[0]) * metersPerLng;
+  const dy = (seg.to[1] - seg.from[1]) * 111_320;
+  const x = (p[0] - seg.from[0]) * metersPerLng;
+  const y = (p[1] - seg.from[1]) * 111_320;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared > 0 ? Math.min(1, Math.max(0, (x * dx + y * dy) / lengthSquared)) : 0;
+  return {
+    progress: seg.start + t * seg.length,
+    crossTrack: Math.hypot(x - dx * t, y - dy * t),
+  };
+}
+
+/**
+ * Find the furthest point *confirmed by recorded GPS* along the planned path.
+ * Do not infer progress from animation, speed, or the end of the planned line.
+ * The planned line remains dashed only AFTER the observed GPS progress.
+ */
+function recordedRouteProgress(segments: PlannedSegment[], history: MissionTelemetryPoint[]): number {
+  if (history.length < 2 || segments.length === 0) return 0;
+  let furthest = 0;
+  for (const gps of getLine(history)) {
+    let closest: { progress: number; crossTrack: number } | null = null;
+    for (const segment of segments) {
+      const projection = projectedProgress(gps, segment);
+      if (!closest || projection.crossTrack < closest.crossTrack) closest = projection;
+    }
+    // A large deviation can be a different corridor, not evidence that a
+    // straight planned segment was flown. In that case retain the dashed route.
+    if (closest && closest.crossTrack <= 200) {
+      furthest = Math.max(furthest, closest.progress);
+    }
+  }
+  const total = segments[segments.length - 1].start + segments[segments.length - 1].length;
+  // A final fix within 25m of the end is treated as visually complete. This
+  // affects the line only: never mark the Mission Completed from GPS alone.
+  return total - furthest <= 25 ? total : furthest;
+}
+
 function emptyCollection() {
   return {
     type: 'FeatureCollection' as const, features: [] as Array<{
@@ -126,6 +179,7 @@ function drawPlannedRoutes(
   map: MapLibreMap,
   routes: Props['plannedRoutes'],
   hubs: Props['hubs'],
+  histories: Props['histories'],
   selectedMissionId?: string,
 ) {
   const data = emptyCollection();
@@ -139,19 +193,34 @@ function drawPlannedRoutes(
   };
   for (const [missionId, legs] of Object.entries(routes)) {
     if (!legs?.length) continue;
+    const segments: PlannedSegment[] = [];
+    let routeDistance = 0;
     for (const leg of [...legs].sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0))) {
       const from = asPoint(leg.from_longitude, leg.from_latitude) ??
         hubPoint(leg.from_hub_id, leg.from_hub_code, leg.from_hub_name);
       const to = asPoint(leg.to_longitude, leg.to_latitude) ??
         hubPoint(leg.to_hub_id, leg.to_hub_code, leg.to_hub_name);
-      // A missing coordinate is unknown, never invent a straight line to 0,0
-      // or connect non-adjacent legs across an unrecorded segment.
+      // Never invent missing coordinates or connect nonadjacent legs.
       if (!from || !to || (from[0] === to[0] && from[1] === to[1])) continue;
       if ((from[0] === 0 && from[1] === 0) || (to[0] === 0 && to[1] === 0)) continue;
+      const length = distanceInMeters(from, to);
+      if (length < 1) continue;
+      segments.push({ from, to, start: routeDistance, length });
+      routeDistance += length;
+    }
+    const traveled = recordedRouteProgress(segments, histories[missionId] ?? []);
+    for (const segment of segments) {
+      const segmentEnd = segment.start + segment.length;
+      if (traveled >= segmentEnd) continue; // Only GPS-confirmed completed portion is hidden.
+      const fraction = Math.max(0, (traveled - segment.start) / segment.length);
+      const remainingStart: Point = [
+        segment.from[0] + (segment.to[0] - segment.from[0]) * fraction,
+        segment.from[1] + (segment.to[1] - segment.from[1]) * fraction,
+      ];
       data.features.push({
         type: 'Feature',
         properties: { selected: String(missionId === selectedMissionId) },
-        geometry: { type: 'LineString', coordinates: [from, to] },
+        geometry: { type: 'LineString', coordinates: [remainingStart, segment.to] },
       });
     }
   }
@@ -163,11 +232,28 @@ function drawPlannedRoutes(
   if (!map.getLayer('droneoptai-planned-routes')) {
     map.addLayer({
       id: 'droneoptai-planned-routes', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['==', ['get', 'selected'], 'false'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#f97316', '#64748b'],
-        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.85, 0.55],
-        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 3.2, 2],
+        'line-color': '#64748b',
+        'line-opacity': 0.35,
+        'line-width': 2,
+        'line-dasharray': [3, 2],
+      },
+    });
+  }
+  // Keep the followed aircraft's planned route above other flights' paths.
+  // The selected path uses the same orange as its recorded GPS trail; line style
+  // (dashed versus solid) remains the visual distinction.
+  if (!map.getLayer('droneoptai-planned-routes-selected')) {
+    map.addLayer({
+      id: 'droneoptai-planned-routes-selected', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['==', ['get', 'selected'], 'true'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 3.2,
         'line-dasharray': [3, 2],
       },
     });
@@ -189,13 +275,32 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   if (!map.getLayer('droneoptai-trails')) {
     map.addLayer({
       id: 'droneoptai-trails', type: 'line', source: 'droneoptai-trails',
+      filter: ['==', ['get', 'selected'], 'false'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#fb923c', '#38bdf8'],
-        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.94, 0.38],
-        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 4.5, 2.5]
+        'line-color': '#38bdf8',
+        'line-opacity': 0.27,
+        'line-width': 2.5
       }
     });
+  }
+  if (!map.getLayer('droneoptai-trails-selected')) {
+    map.addLayer({
+      id: 'droneoptai-trails-selected', type: 'line', source: 'droneoptai-trails',
+      filter: ['==', ['get', 'selected'], 'true'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 4.5,
+      },
+    });
+  }
+  // Draw the followed Mission above every other aircraft's route/trail:
+  // unselected planned -> selected planned initially -> unselected GPS -> selected GPS.
+  // Reorder selected planned between the two GPS layers to avoid gray/blue blending.
+  if (map.getLayer('droneoptai-planned-routes-selected')) {
+    map.moveLayer('droneoptai-planned-routes-selected', 'droneoptai-trails-selected');
   }
 }
 
@@ -343,9 +448,9 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       // style.load fires after the new style can accept custom layers.
       // No isStyleLoaded() gate: that check can still be false while tiles load.
       try {
-        drawPlannedRoutes(map, stateRef.current.plannedRoutes, stateRef.current.hubs, stateRef.current.selectedMissionId);
+        drawPlannedRoutes(map, stateRef.current.plannedRoutes, stateRef.current.hubs, stateRef.current.histories, stateRef.current.selectedMissionId);
         drawTrails(map, stateRef.current.histories, stateRef.current.selectedMissionId);
-        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails']) {
+        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails', 'droneoptai-planned-routes-selected', 'droneoptai-trails-selected']) {
           if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showTrails ? 'visible' : 'none');
         }
       } catch (error) {
@@ -392,15 +497,23 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       marker.setLngLat(point);
       const element = marker.getElement();
       element.style.display = showHubs ? '' : 'none';
+      const occupied = drones.some(drone => {
+        const dronePoint = asPoint(drone.longitude, drone.latitude);
+        return dronePoint && typeof drone.speedKmh === 'number' && drone.speedKmh <= 1
+          && distanceInMeters(point, dronePoint) <= 85;
+      });
+      // Lift the Hub name above a parked aircraft; keep the aircraft visible.
+      element.classList.toggle('live-geo-hub--occupied', Boolean(occupied));
+      element.style.zIndex = occupied ? '12' : '';
       const label = element.querySelector('.live-geo-hub-label');
-      if (label) label.textContent = hub.code || formatHubName(hub.name);
+      if (label) label.textContent = formatHubName(hub.name) || hub.code || `Hub ${hub.id}`;
       marker.getPopup()?.setDOMContent(createPopup(formatHubName(hub.name), [
         ['Hub', hub.code || hub.id],
         ['Position', `${point[1].toFixed(5)}, ${point[0].toFixed(5)}`],
       ]));
     }
     for (const [id, marker] of hubsRef.current) { if (!current.has(id)) { marker.remove(); hubsRef.current.delete(id); } }
-  }, [hubs, ready, showHubs]);
+  }, [hubs, drones, ready, showHubs]);
 
   // One animation frame clock, but no forward GPS extrapolation or snap-back.
   // Reconciles toward BE fixes *without overshooting*. A new fix starts from
