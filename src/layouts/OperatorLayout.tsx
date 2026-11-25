@@ -7,6 +7,8 @@ import { useOperatorTheme } from "../hooks/useOperatorTheme";
 import { OperatorQueryProvider } from "../features/operator/query/OperatorQueryProvider";
 import { useLiveTrackingQuery } from "../features/operator/hooks/useMissionQueries";
 import "../features/operator/styles/operator-shell.css";
+import "../features/operator/styles/operator-tokens.css";
+import "../features/operator/styles/operator-components.css";
 
 /** Poll Live Tracking once per Operator session, even while another page/tab
  * is visible. The shared cache makes opening the map fast after dispatch. */

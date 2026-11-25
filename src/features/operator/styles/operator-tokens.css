@@ -1,0 +1,27 @@
+/* Operator UI — Table component baseline + Mission Detail hierarchy.
+   Scope tokens to Operator and its own portal UI, not other roles. */
+.operator-app,
+.mission-resource-popup,
+.operator-contact-dialog,
+:root:has(.operator-app) :is([role="listbox"], .profile-popover) {
+  --op-font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --op-page-title: 28px;
+  --op-detail-title: 21px;
+  --op-panel-title: 16px;
+  --op-section-title: 14px;
+  --op-value: 15px;
+  --op-body: 13px;
+  --op-secondary: 12px;
+  --op-caption: 11.5px;
+  --op-kpi: 28px;
+  --op-control: 40px;
+  --op-table-action: 32px;
+  --op-control-radius: 6px;
+  --op-panel-radius: 11px;
+  --op-panel-gap: 14px;
+  --op-badge-font: 11px;
+  --op-badge-compact-height: 18px;
+  --op-badge-detail-height: 22px;
+  --op-review-energy-bg: #FFFCF9;
+}
+:root[data-theme="dark"] .operator-app { --op-review-energy-bg: var(--surface-2); }

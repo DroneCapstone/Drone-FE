@@ -150,7 +150,7 @@ export function FlightHistoryPage() {
             options={[{ value: '__all_statuses__', label: 'All statuses' }, 'Completed', 'Failed']}
             onChange={value => setFilter('status', value === '__all_statuses__' ? '' : value)}
             ariaLabel="Filter flights by status"
-            className="w-full min-w-0 !h-[34px] !text-[11px]"
+            className="w-full min-w-0"
           />
         </div>
         <div className="fh-filter">
@@ -160,7 +160,7 @@ export function FlightHistoryPage() {
             options={[{ value: '__all_hubs__', label: 'All hubs' }, ...Array.from(hubs, ([id, name]) => ({ value: id, label: formatHubName(name) || name }))]}
             onChange={value => setFilter('hub', value === '__all_hubs__' ? '' : value)}
             ariaLabel="Filter flights by hub"
-            className="w-full min-w-0 !h-[34px] !text-[11px]"
+            className="w-full min-w-0"
           />
         </div>
         <button type="button" className="fh-button fh-reset" onClick={clearFilters}>Reset filters</button>
