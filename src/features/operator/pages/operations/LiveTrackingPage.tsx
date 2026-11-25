@@ -2,7 +2,7 @@ import { formatRouteName, formatBackendLabel } from '../../utils/displayEnglish'
 import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
@@ -61,8 +61,66 @@ function bearing(from: MissionTelemetryPoint, to: MissionTelemetryPoint): number
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// The inline trail is a rolling GPS window, not the entire Mission history.
+// Key by actual telemetry identity, never by an array index (which is page-local).
+function gpsIdentity(point: MissionTelemetryPoint): string | undefined {
+  const time = Date.parse(point.recordedAt);
+  if (Number.isFinite(time) && Number.isFinite(point.latitude) && Number.isFinite(point.longitude)) {
+    return `${time}:${point.latitude}:${point.longitude}`;
+  }
+  const id = point.raw.id ?? point.raw.telemetry_id ?? point.raw.telemetryId;
+  return typeof id === 'number' || (typeof id === 'string' && id.length > 0) ? `id:${id}` : undefined;
+}
+
+/** GET /telemetry is ordered timestamp ASC. Keep its raw row count for offset. */
+async function extendGpsHistory(
+  missionId: string,
+  previous: MissionTelemetryPoint[],
+  fetchPage = getMissionTelemetryApi,
+): Promise<MissionTelemetryPoint[]> {
+  const pageSize = 5000;
+  const points = [...previous];
+  const seen = new Set(points.map(gpsIdentity).filter((id): id is string => id !== undefined));
+  for (let page = 0; page < 100; page++) {
+    const batch = await fetchPage(missionId, { limit: pageSize, offset: points.length });
+    if (batch.length === 0) return points.length === previous.length ? previous : points;
+    const keys = batch.map(gpsIdentity);
+    // A server ignoring offset must not append the same history indefinitely.
+    if (keys.every(key => key !== undefined && seen.has(key))) {
+      throw new Error('Telemetry pagination returned an already recorded page.');
+    }
+    points.push(...batch);
+    for (const key of keys) if (key !== undefined) seen.add(key);
+    if (batch.length < pageSize) return points;
+  }
+  throw new Error('Telemetry pagination exceeded its safety limit.');
+}
+
+/** Preserve the full history; append only a continuous overlapping live window. */
+function mergeLiveGps(history: MissionTelemetryPoint[], trail: MissionTelemetryPoint[]): MissionTelemetryPoint[] {
+  if (!history.length) return trail;
+  if (!trail.length) return history;
+  const seen = new Set(history.map(gpsIdentity).filter((id): id is string => id !== undefined));
+  const overlap = trail.some(point => {
+    const key = gpsIdentity(point);
+    return key !== undefined && seen.has(key);
+  });
+  // Do not draw a solid straight line across an unrecorded gap between windows.
+  // The next incremental telemetry request fills the gap with actual BE records.
+  if (!overlap) return history;
+  const merged = [...history];
+  for (const point of trail) {
+    const key = gpsIdentity(point);
+    if (key === undefined || seen.has(key)) continue;
+    merged.push(point);
+    seen.add(key);
+  }
+  return merged.sort((a, b) => (Date.parse(a.recordedAt) || 0) - (Date.parse(b.recordedAt) || 0));
+}
+
 export function LiveTrackingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   // Consume the warm Operator-session cache; do not create a second poll timer.
   const { data: rawDrones, isLoading, error, dataUpdatedAt } = useLiveTrackingQuery({ subscribeOnly: true });
   const hubsQuery = useMissionHubsQuery();
@@ -127,10 +185,15 @@ export function LiveTrackingPage() {
     [missionIds, rememberedIds],
   );
   const trailsQuery = useQueries({
-    queries: missionIds.map(id => ({
-      queryKey: [...operatorQueryKeys.missionTelemetry(id), 'live-3d-trail', 200] as const,
-      queryFn: () => getMissionTelemetryApi(id, { limit: 200 }), refetchInterval: 8000, staleTime: 3000,
-    }))
+    queries: missionIds.map(id => {
+      const queryKey = [...operatorQueryKeys.missionTelemetry(id), 'live-3d-full-trail'] as const;
+      return {
+        queryKey,
+        queryFn: () => extendGpsHistory(id, queryClient.getQueryData<MissionTelemetryPoint[]>(queryKey) ?? []),
+        refetchInterval: 8000,
+        staleTime: 3000,
+      };
+    }),
   });
   // Load assigned route geometry independently from GPS telemetry. A planned
   // line must remain visible before the drone records its second GPS point.
@@ -206,13 +269,13 @@ export function LiveTrackingPage() {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionIds, trailsKey]);
-  // The live-tracking response may already include a more recent BE GPS trail.
-  // Preserve telemetry API for detailed logs; use inline trail only for the map.
+  // Never replace the entire historical path with the last inline GPS window.
+  // Merge only within the same Mission, regardless of Selected/All/Follow mode.
   const mapHistories = useMemo(() => {
     const result: Record<string, MissionTelemetryPoint[]> = { ...histories };
     for (const drone of liveDrone) {
-      if (drone.missionId && (drone.trail?.length ?? 0) >= 2) {
-        result[drone.missionId] = drone.trail!;
+      if (drone.missionId && drone.trail?.length) {
+        result[drone.missionId] = mergeLiveGps(histories[drone.missionId] ?? [], drone.trail);
       }
     }
     return result;
@@ -235,14 +298,14 @@ export function LiveTrackingPage() {
   const visibleLogs = logFilter === 'selected' && selectedDrone ? logEvents.filter(e => e.missionId === selectedDrone.missionId) : logEvents;
   const selectedHistory = selectedDrone ? mapHistories[selectedDrone.missionId] ?? [] : [];
   const heading = selectedHistory.length > 1 ? bearing(selectedHistory[selectedHistory.length - 2], selectedHistory[selectedHistory.length - 1]) : undefined;
-  // The first aircraft is highlighted on load, not auto-followed; the user chooses when to follow.
-  function followFromAircraftList(aircraft: LiveTrackingDrone) {
+  // Selection shows one route; camera Follow is an explicit map action.
+  function selectFromAircraftList(aircraft: LiveTrackingDrone) {
     setSelectedDroneId(aircraft.id);
-    mapRef.current?.focus(aircraft.missionId);
+    mapRef.current?.showSelectedPath();
   }
   useEffect(() => { if (!isMapExpanded) return; const handle = (e: KeyboardEvent) => { if (e.key === 'Escape') setMapExpanded(false); }; window.addEventListener('keydown', handle); return () => window.removeEventListener('keydown', handle); }, [isMapExpanded]);
   const filterCount = (value: Filter) => value === 'All' ? liveDrone.length : liveDrone.filter(d => d.health === value).length;
-  const handleFilterChange = (next: Filter) => { setFilter(next); if (next !== 'All' && selectedDrone?.health !== next) { const found = sortedDrone.find(d => d.health === next); if (found) followFromAircraftList(found); } };
+  const handleFilterChange = (next: Filter) => { setFilter(next); if (next !== 'All' && selectedDrone?.health !== next) { const found = sortedDrone.find(d => d.health === next); if (found) selectFromAircraftList(found); } };
   return <OperationPageShell active="/operator/operations/live">
     <div className="live-ops-layout">
       <div className="live-ops-main">
@@ -396,7 +459,7 @@ export function LiveTrackingPage() {
                 type="button"
                 key={aircraft.id}
                 className={`live-aircraft-card health-${healthClass} ${isSelected ? 'selected' : ''}`}
-                onClick={() => followFromAircraftList(aircraft)}
+                onClick={() => selectFromAircraftList(aircraft)}
               >
                 <span className="live-aircraft-card-icon"><Icon name="drone" size={18} /></span>
                 <span className="live-aircraft-card-main">
