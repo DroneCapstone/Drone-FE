@@ -32,6 +32,8 @@ type Props = {
   mapStyle: LiveMapStyle;
   selectedMissionId?: string;
   onSelectMission: (missionId: string) => void;
+  /** Stop forward prediction immediately when the Live Tracking request fails. */
+  connectionHealthy?: boolean;
 };
 
 type Point = [number, number];
@@ -39,15 +41,33 @@ type MovingMarker = {
   marker: Marker;
   element: HTMLElement;
   popup: Popup;
-  /** Most recent accepted real GPS fix; do not confuse with animated position. */
+  /** Most recent accepted BE GPS fix; not the approximate on-screen position. */
   position: Point;
   lastFixAt?: number;
-  frame?: number;
+  /** Monotonic time of the last CHANGED GPS fix received from BE. */
+  lastReceivedAt: number;
+  /** Smoothly approach a confirmed GPS target; never go past it. */
+  segmentFrom: Point;
+  segmentTo: Point;
+  segmentStartedAt: number;
+  segmentDurationMs: number;
+  /** Moving estimate of actual GPS update spacing (includes request latency). */
+  gpsCadenceMs: number;
 };
-// Maximum on-screen interpolation time. Do not delay a new BE fix by a fixed
-// 3 seconds: accelerated simulator points can arrive sooner than that.
-const MAX_MARKER_TRANSITION_MS = 1_500;
-const MIN_MARKER_TRANSITION_MS = 250;
+// The previous predictive animation could travel *ahead* of BE and then use a
+// correction vector that dragged the marker backwards whenever GPS caught up.
+// Instead interpolate between confirmed positions with a small cadence buffer.
+// It may pause if BE sends no new coordinates; that is intentional (no fake GPS).
+const DEFAULT_GPS_CADENCE_MS = 2_800;
+const MIN_SEGMENT_MS = 700;
+const MAX_SEGMENT_MS = 5_500;
+const MAX_GPS_JUMP_METERS = 2_000;
+
+/** Linear interpolation cannot overshoot the newest confirmed GPS fix. */
+function sampleGpsSegment(from: Point, to: Point, startedAt: number, durationMs: number, now: number): Point {
+  const t = Math.max(0, Math.min(1, (now - startedAt) / Math.max(1, durationMs)));
+  return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+}
 const INITIAL_CENTER: Point = [106.78, 10.83];
 const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? '').trim();
 // MapTiler style IDs: grayscale current map, colorful Replay streets,
@@ -179,13 +199,15 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   }
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, mapStyle, selectedMissionId, onSelectMission }, ref) {
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, mapStyle, selectedMissionId, onSelectMission, connectionHealthy = true }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
   const dronesRef = useRef(new Map<string, MovingMarker>());
-  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission });
-  stateRef.current = { hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission };
+  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission, connectionHealthy });
+  stateRef.current = { hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission, connectionHealthy };
+  // One animation clock for all aircraft; refetches never restart this clock.
+  const animationClockRef = useRef<number | null>(null);
   const followRef = useRef<string | null>(null);
   // Changing the basemap must never reconstruct the map or its DOM markers.
   const mapStyleRef = useRef<LiveMapStyle>(mapStyle);
@@ -289,7 +311,9 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       resizeObserver.disconnect();
       for (const m of hubsRef.current.values()) m.remove();
       hubsRef.current.clear();
-      for (const m of dronesRef.current.values()) { if (m.frame) cancelAnimationFrame(m.frame); m.marker.remove(); }
+      if (animationClockRef.current !== null) cancelAnimationFrame(animationClockRef.current);
+      animationClockRef.current = null;
+      for (const m of dronesRef.current.values()) m.marker.remove();
       dronesRef.current.clear();
       map.remove();
       mapRef.current = null;
@@ -378,6 +402,51 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     for (const [id, marker] of hubsRef.current) { if (!current.has(id)) { marker.remove(); hubsRef.current.delete(id); } }
   }, [hubs, ready, showHubs]);
 
+  // One animation frame clock, but no forward GPS extrapolation or snap-back.
+  // Reconciles toward BE fixes *without overshooting*. A new fix starts from
+  // the currently displayed marker so no animation restarts or retrograde jump.
+  useEffect(() => {
+    if (!ready) return;
+    const tick = (now: number) => {
+      const map = mapRef.current;
+      if (map) {
+        const canAnimate = stateRef.current.connectionHealthy && !document.hidden;
+        for (const [id, moving] of dronesRef.current) {
+          if (!canAnimate) {
+            // Freeze immediately when requests fail / tab is hidden. Do not
+            // fast-forward an old animation when the tab is shown again.
+            const current = moving.marker.getLngLat().toArray() as Point;
+            moving.segmentFrom = current;
+            moving.segmentTo = current;
+            moving.segmentStartedAt = now;
+            continue;
+          }
+          const next = sampleGpsSegment(
+            moving.segmentFrom, moving.segmentTo,
+            moving.segmentStartedAt, moving.segmentDurationMs, now,
+          );
+          const current = moving.marker.getLngLat();
+          if (Math.abs(current.lng - next[0]) < 1e-10 && Math.abs(current.lat - next[1]) < 1e-10) continue;
+          moving.marker.setLngLat(next);
+          if (moving.popup.isOpen()) moving.popup.setLngLat(next);
+          // MapLibre jumpTo() interrupts zoomIn/zoomOut easing when called on
+          // every frame. Let zoom/rotate/pitch animations finish uninterrupted;
+          // keep updating the marker's geographic position throughout.
+          if (followRef.current === id &&
+            !map.isMoving()) {
+            map.jumpTo({ center: next });
+          }
+        }
+      }
+      animationClockRef.current = requestAnimationFrame(tick);
+    };
+    animationClockRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animationClockRef.current !== null) cancelAnimationFrame(animationClockRef.current);
+      animationClockRef.current = null;
+    };
+  }, [ready]);
+
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const map = mapRef.current;
@@ -404,7 +473,15 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         element.addEventListener('mouseenter', () => popup.setLngLat(marker.getLngLat()).addTo(map));
         element.addEventListener('mouseleave', () => popup.remove());
         const initialFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
-        moving = { marker, element, popup, position: pt, lastFixAt: Number.isFinite(initialFixAt) ? initialFixAt : undefined };
+        const now = performance.now();
+        moving = {
+          marker, element, popup, position: pt,
+          lastFixAt: Number.isFinite(initialFixAt) ? initialFixAt : undefined,
+          lastReceivedAt: now,
+          segmentFrom: pt, segmentTo: pt, segmentStartedAt: now,
+          segmentDurationMs: DEFAULT_GPS_CADENCE_MS,
+          gpsCadenceMs: DEFAULT_GPS_CADENCE_MS,
+        };
         dronesRef.current.set(id, moving);
       }
       moving.element.className = `live-geo-drone health-${drone.health.toLowerCase()} ${selectedMissionId === id ? 'selected' : ''}`;
@@ -419,87 +496,67 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       const parsedFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
       const fixAt = Number.isFinite(parsedFixAt) ? parsedFixAt : undefined;
       const outOfOrder = fixAt !== undefined && moving.lastFixAt !== undefined && fixAt < moving.lastFixAt;
-      // Diagnostic: this proves which GPS actually reaches the map component.
-      // Keep this DEV-only; do not log bearer tokens or the complete response.
-      if (import.meta.env.DEV && selectedMissionId === id) {
-        console.info('[DroneOptAI MAP GPS]', {
-          missionId: id,
-          latestLat: pt[1], latestLng: pt[0],
-          markerLat: moving.marker.getLngLat().lat,
-          markerLng: moving.marker.getLngLat().lng,
-          changed: moving.position[0] !== pt[0] || moving.position[1] !== pt[1],
-          outOfOrder,
-          lastUpdated: drone.lastUpdated,
-          zoom: Number(map.getZoom().toFixed(1)),
-        });
-      }
+      // Ignore only strictly older BE timestamps. Two distinct GPS positions
+      // may share the same second-resolution timestamp, so do not drop those.
       if (outOfOrder) continue;
-      if (moving.position[0] !== pt[0] || moving.position[1] !== pt[1]) {
-        if (moving.frame !== undefined) cancelAnimationFrame(moving.frame);
-        const start: Point = moving.marker.getLngLat().toArray() as Point;
-        // A timestamp older than 10 seconds still describes a real received GPS
-        // point. The operator UI keeps its existing "Telemetry update delayed"
-        // warning, but we should NOT suppress animation merely because BE timestamps
-        // are older than the browser wall clock (e.g. delayed flight replay).
-        // Interpolate only between two genuinely different GPS fixes.
-        const longGap = fixAt !== undefined && moving.lastFixAt !== undefined &&
-          fixAt - moving.lastFixAt > 30_000;
-        const latRadians = ((start[1] + pt[1]) / 2) * Math.PI / 180;
+      const gpsChanged = moving.position[0] !== pt[0] || moving.position[1] !== pt[1];
+      const now = performance.now();
+      const groundStop = (drone.speedKmh !== undefined && drone.speedKmh <= 0.5) ||
+        ['SCHEDULED', 'COMPLETED', 'FAILED'].includes((drone.missionStatusRaw ?? '').toUpperCase());
+      if (gpsChanged) {
+        const previous = moving.position;
+        const displayed = moving.marker.getLngLat().toArray() as Point;
+        const gapMs = Math.max(100, now - moving.lastReceivedAt);
+        const gapOnServer = fixAt !== undefined && moving.lastFixAt !== undefined
+          ? fixAt - moving.lastFixAt : undefined;
+        const latitudeRad = (pt[1] + previous[1]) / 2 * Math.PI / 180;
         const jumpMeters = Math.hypot(
-          (pt[0] - start[0]) * 111_320 * Math.cos(latRadians),
-          (pt[1] - start[1]) * 111_320,
+          (pt[0] - previous[0]) * 111_320 * Math.cos(latitudeRad),
+          (pt[1] - previous[1]) * 111_320,
         );
-        // GPS jumps over 2 km in one refresh should not be visualized as a
-        // normal 3-second flight, even if the BE timestamp appears up to date.
-        const abnormalJump = jumpMeters > 2_000;
-        const previousFixAt = moving.lastFixAt;
+        const discontinuity = jumpMeters > MAX_GPS_JUMP_METERS ||
+          (gapOnServer !== undefined && gapOnServer > 30_000);
         moving.position = pt;
-        moving.lastFixAt = fixAt;
-        // BE simulator may emit points at interval_sec / speed_multiplier.
-        // Cap visual animation so the map catches up instead of lagging one or
-        // more telemetry points behind. Keep the GPS target authoritative.
-        const fixInterval = fixAt !== undefined && previousFixAt !== undefined
-          ? fixAt - previousFixAt : 2_000;
-        const animationMs = Math.max(MIN_MARKER_TRANSITION_MS,
-          Math.min(MAX_MARKER_TRANSITION_MS, fixInterval > 0 ? fixInterval * 0.85 : 1_200));
-        if (import.meta.env.DEV) {
-          console.info('[DroneOptAI GPS]', {
-            missionId: id, drone: drone.id,
-            previous: start, received: pt, lastUpdated: drone.lastUpdated,
-            jumpMeters: Math.round(jumpMeters),
-            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : `ANIMATE ${Math.round(animationMs)}ms`
-          });
-        }
-        if (longGap || abnormalJump) {
+        moving.lastFixAt = fixAt ?? moving.lastFixAt;
+        moving.lastReceivedAt = now;
+        moving.gpsCadenceMs = Math.max(MIN_SEGMENT_MS, Math.min(MAX_SEGMENT_MS,
+          moving.gpsCadenceMs * 0.5 + gapMs * 0.5,
+        ));
+        if (discontinuity || groundStop) {
+          // Genuine discontinuities or explicit stops use the BE location.
+          // They are not predicted; no coasting past a landing or relay hub.
+          moving.segmentFrom = pt;
+          moving.segmentTo = pt;
+          moving.segmentStartedAt = now;
           moving.marker.setLngLat(pt);
-          moving.popup.setLngLat(pt);
-          if (followRef.current === id) map.jumpTo({ center: pt });
-          moving.frame = undefined;
-          continue;
+          if (moving.popup.isOpen()) moving.popup.setLngLat(pt);
+          if (followRef.current === id && !map.isMoving()) {
+            map.jumpTo({ center: pt });
+          }
+        } else {
+          moving.segmentFrom = displayed;
+          moving.segmentTo = pt;
+          moving.segmentStartedAt = now;
+          // A slightly buffered duration covers regular 2–4 second snapshots.
+          // It follows BE exactly, never predicts a position past this GPS fix.
+          moving.segmentDurationMs = Math.max(MIN_SEGMENT_MS, Math.min(MAX_SEGMENT_MS,
+            moving.gpsCadenceMs * 1.12,
+          ));
         }
-        const begin = performance.now();
-        const animate = (now: number) => {
-          // Linear interpolation preserves the BE slowing/descending profile.
-          const t = Math.min(1, (now - begin) / animationMs);
-          const next: Point = [
-            start[0] + (pt[0] - start[0]) * t,
-            start[1] + (pt[1] - start[1]) * t,
-          ];
-          moving!.marker.setLngLat(next);
-          if (moving!.popup.isOpen()) moving!.popup.setLngLat(next);
-          if (followRef.current === id) map.jumpTo({ center: next });
-          if (t < 1) moving!.frame = requestAnimationFrame(animate);
-          else moving!.frame = undefined;
-        };
-        moving.frame = requestAnimationFrame(animate);
+      } else if (groundStop) {
+        // A genuine stationary fix must not keep an earlier animation moving.
+        moving.segmentFrom = pt;
+        moving.segmentTo = pt;
+        moving.segmentStartedAt = now;
+        moving.marker.setLngLat(pt);
       } else if (fixAt !== undefined && (moving.lastFixAt === undefined || fixAt > moving.lastFixAt)) {
-        // A fresh timestamp with unchanged GPS means the aircraft stayed put.
+        // BE sent fresh telemetry at the same GPS coordinates: do not fabricate
+        // extra displacement; allow any in-flight interpolation to finish.
         moving.lastFixAt = fixAt;
       }
     }
     for (const [id, moving] of dronesRef.current) {
       if (!active.has(id)) {
-        if (moving.frame) cancelAnimationFrame(moving.frame);
         moving.marker.remove(); dronesRef.current.delete(id);
         if (followRef.current === id) { followRef.current = null; setIsFollowing(false); }
       }

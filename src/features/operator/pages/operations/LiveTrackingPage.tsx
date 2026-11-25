@@ -63,7 +63,8 @@ function bearing(from: MissionTelemetryPoint, to: MissionTelemetryPoint): number
 
 export function LiveTrackingPage() {
   const navigate = useNavigate();
-  const { data: rawDrones, isLoading, error, dataUpdatedAt } = useLiveTrackingQuery();
+  // Consume the warm Operator-session cache; do not create a second poll timer.
+  const { data: rawDrones, isLoading, error, dataUpdatedAt } = useLiveTrackingQuery({ subscribeOnly: true });
   const hubsQuery = useMissionHubsQuery();
   const [clockTick, setClockTick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => setClockTick(v => v + 1), 5000); return () => window.clearInterval(id); }, []);
@@ -164,8 +165,15 @@ export function LiveTrackingPage() {
   const liveDrone = useMemo(() => sourceDrones.map(drone => {
     const flight = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
     const confirmedGroundStop = ['relay', 'awaiting-swap', 'swapping', 'ready-to-depart', 'destination', 'completed', 'scheduled'].includes(flight.key);
-    // Preserve explicit BE warnings and DISCONNECTED. Suppress only the FE's
-    // fabricated "delayed telemetry" warning at a BE-confirmed ground stop.
+    // A lack of telemetry after BE has explicitly logged arrival is normal for
+    // a stopped simulator. Only suppress a stale-only Attention with no real
+    // incident/failsafe; never hide explicit connection-loss or safety alerts.
+    const anomalyIsOnlyStale = /^(?:telemetry update delayed|telemetry data (?:stale|delayed)|stale telemetry)/i.test((drone.anomaly ?? '').trim());
+    if (flight.key === 'destination' && drone.health === 'Attention' &&
+        anomalyIsOnlyStale && !drone.alertId && !drone.incidentReason &&
+        (drone.failsafeStatus ?? '').trim().toUpperCase() !== 'DISCONNECTED') {
+      return { ...drone, health: 'Normal' as const, anomaly: undefined, anomalyDuration: undefined, incidentPolicy: 'none' as const };
+    }
     if (drone.health !== 'Normal' || !stale(drone.lastUpdated) || confirmedGroundStop) return drone;
     return { ...drone, health: 'Attention' as const, anomaly: 'Telemetry update delayed (>10 seconds)', incidentPolicy: 'monitor' as const };
     // clockTick refreshes computed age even when no new telemetry arrives.
@@ -240,7 +248,7 @@ export function LiveTrackingPage() {
       <div className="live-ops-main">
         <OperatorPanel className={`live-map-panel live-ops-map-panel ${isMapExpanded ? 'live-ops-map-expanded' : ''}`}>
           <div className="live-3d-toolbar">
-            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft flying · updates ~every 2s</small></div>
+            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft tracked · refresh from 250 ms</small></div>
             <div className="live-3d-tools" aria-label="Map controls">
               <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Icon name="plus" size={17} /></button>
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
@@ -370,7 +378,18 @@ export function LiveTrackingPage() {
           {filteredDrone.map((aircraft) => {
             const isSelected = selectedDrone?.id === aircraft.id;
             const healthClass = aircraft.health.toLowerCase();
-            const flightStatus = resolveLiveFlightStatus(aircraft, missionById[aircraft.missionId], hubNames);
+            const missionDetail = missionById[aircraft.missionId];
+            const missionDetailIndex = trackedMissionIds.indexOf(aircraft.missionId);
+            const missionDetailPending = !missionDetail && missionDetailIndex >= 0 &&
+              routesQuery[missionDetailIndex]?.isPending;
+            // Avoid showing "Flight: Disconnected" just because the flight-progress
+            // endpoint has not yet returned. Telemetry alerts remain visible.
+            const flightStatus = missionDetailPending
+              ? { key: 'unknown', label: 'Checking mission status', tone: 'neutral', detail: undefined }
+              : resolveLiveFlightStatus(aircraft, missionDetail, hubNames);
+            const alertMessage = aircraft.anomaly
+              ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}`
+              : '';
 
             return (
               <button
@@ -385,15 +404,14 @@ export function LiveTrackingPage() {
                     <strong>{aircraft.id}</strong>
                     <StatusBadge tone={healthTone[aircraft.health]}>{aircraft.health}</StatusBadge>
                   </span>
-                  <small>{aircraft.orderId ? `Delivery ${aircraft.orderId}` : `Mission ${aircraft.missionId || '—'}`}</small>
-                  <small>{formatRouteName(aircraft.route)}</small>
+                  <small title={aircraft.missionId || undefined}>Mission {aircraft.missionId || '—'}</small>
                   <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
                     <span className="live-aircraft-flight-dot" aria-hidden="true" />
-                    <span>Flight: {flightStatus.label}</span>
+                    <span>{flightStatus.key === 'disconnected' ? 'Telemetry: Disconnected' : `Flight: ${flightStatus.label}`}</span>
                   </span>
                   {flightStatus.detail && <small title={flightStatus.detail}>{flightStatus.detail}</small>}
-                  <em className="live-aircraft-state">
-                    {aircraft.anomaly ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
+                  <em className="live-aircraft-state" title={alertMessage || 'Operating normally'}>
+                    {alertMessage || 'Operating normally'}
                   </em>
                 </span>
                 <span className="live-aircraft-card-metrics">

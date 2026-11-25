@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import {
   useMutation,
   useQuery,
@@ -85,14 +87,50 @@ export function useMissionMiniHubsQuery() {
   });
 }
 
-export function useLiveTrackingQuery() {
+/**
+ * One shared Live Tracking query stays subscribed for the entire Operator session.
+ * This keeps its latest GPS snapshot in React Query while the Operator is on a
+ * different page or browser tab. The Live Tracking screen only consumes it;
+ * it does not start a second polling timer.
+ *
+ * Browser background throttling and BE simulator speed can still outpace FE;
+ * the snapshot always represents the BE's latest known (not historical) GPS.
+ */
+// Aggressive refresh: one request at a time, never an unconditional 4 RPS
+// if BE is slow. The interval starts again when the previous request settles.
+export const LIVE_TRACKING_FOREGROUND_POLL_MS = 250;
+export const LIVE_TRACKING_BACKGROUND_POLL_MS = 1_000;
+const LIVE_TRACKING_ERROR_RETRY_MS = 2_000;
+
+export function useLiveTrackingQuery(options?: { subscribeOnly?: boolean }) {
+  const [tabVisible, setTabVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState === 'visible',
+  );
+
+  useEffect(() => {
+    // Also works when Technician is active in another tab/window.
+    const onVisibilityChange = () => setTabVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   return useQuery({
     queryKey: operatorQueryKeys.liveTracking(),
     queryFn: getLiveTrackingApi,
-    // Faster snapshots help the map follow accelerated BE simulator flights.
-    refetchInterval: 2_000,
-    // Do not overload the API from a hidden tab; refocus fetches fresh telemetry.
-    refetchIntervalInBackground: false,
+    staleTime: 0,
+    // Only the session-wide OperatorLayout warmup owns this timer.
+    // Other screens subscribe to the same cache without starting more timers.
+    refetchInterval: (query) => {
+      if (options?.subscribeOnly !== false) return false;
+      // IMPORTANT: don't restart a request while the previous one is pending.
+      // Prevent overlapping GETs when latency exceeds the 250 ms interval.
+      if (query.state.fetchStatus === 'fetching') return false;
+      if (query.state.status === 'error') return LIVE_TRACKING_ERROR_RETRY_MS;
+      return tabVisible ? LIVE_TRACKING_FOREGROUND_POLL_MS : LIVE_TRACKING_BACKGROUND_POLL_MS;
+    },
+    refetchIntervalInBackground: options?.subscribeOnly === false,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: true,
   });
 }
 

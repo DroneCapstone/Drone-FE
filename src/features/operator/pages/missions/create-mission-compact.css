@@ -391,7 +391,14 @@
   min-width: 0;
   padding: 21px 24px;
   border-left: 1px solid var(--border);
-  background: #FFFCF9;
+  /* Default keeps the original light-mode warm background. */
+  background: var(--mission-review-energy-bg, #FFFCF9);
+}
+/* Dark theme is set on <html> by useOperatorTheme().
+   Declare the override beside the original rule so it is not lost when
+   other Create Mission styles are updated. */
+:root[data-theme='dark'] .page-content .mission-builder .mission-review-energy {
+  --mission-review-energy-bg: var(--surface-2);
 }
 .page-content .mission-builder .mission-review-energy-heading {
   display: flex;
@@ -638,12 +645,18 @@
   }
 }
 
-/* Assign: preserve Step 4 review while revalidating and acknowledge the first click. */
+/* Assign: match Back and Assign height; no extra progress row below buttons. */
+.mission-builder .mission-builder-actions {
+  align-items: center;
+}
+.mission-builder .mission-builder-actions > .button,
+.mission-builder .mission-assign-button {
+  align-self: center;
+  min-height: 40px;
+}
 .mission-builder .mission-assign-action {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 7px;
+  align-items: center;
 }
 .mission-builder .mission-assign-button[aria-busy="true"] {
   opacity: .50;
@@ -652,13 +665,6 @@
 .mission-builder .mission-assign-spinner {
   flex: none;
   animation: mission-assign-spin .8s linear infinite;
-}
-.mission-builder .mission-assign-progress {
-  max-width: 300px;
-  color: var(--muted, #8893a7);
-  font-size: 12px;
-  text-align: right;
-  line-height: 1.4;
 }
 @keyframes mission-assign-spin {
   to { transform: rotate(360deg); }
@@ -1321,4 +1327,13 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.35;
+}
+
+/* Create Mission: keep manual/retry actions near their own progressive-loading section. */
+.page-content .mission-builder .mission-resource-progress-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
 }

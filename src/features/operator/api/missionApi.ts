@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteWeatherConditions, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -434,7 +434,7 @@ function mapMissionLeg(raw: unknown, index: number, routeLeg?: unknown): Mission
     id: pickString(record, ['id', 'leg_id', 'legId'], `LEG-${index + 1}`),
     fromHubId: pickString(record, ['from_hub_id', 'fromHubId', 'origin_hub_id', 'originHubId']) || pickString(snapshot, ['from_hub_id', 'fromHubId']),
     toHubId: pickString(record, ['to_hub_id', 'toHubId', 'destination_hub_id', 'destinationHubId']) || pickString(snapshot, ['to_hub_id', 'toHubId']),
-    status: rawStatus === 'COMPLETED' ? 'Completed' : rawStatus === 'IN_PROGRESS' ? 'In Progress' : 'Pending',
+    status: rawStatus === 'COMPLETED' ? 'Completed' : ['IN_PROGRESS', 'FLYING', 'IN_FLIGHT'].includes(rawStatus) ? 'In Progress' : 'Pending',
     legType: pickString(record, ['leg_type', 'legType']) || pickString(snapshot, ['leg_type', 'legType']) || undefined,
     isDispatch: pickOptionalBoolean(record, ['is_dispatch', 'isDispatch']) ??
       pickOptionalBoolean(snapshot, ['is_dispatch', 'isDispatch']) ??
@@ -557,7 +557,7 @@ function mapLiveDrone(raw: unknown, index: number): LiveTrackingDrone {
     orderId: pickString(record, ['order_id', 'orderId']),
     route: pickString(record, ['route', 'route_name', 'routeName', 'route_id', 'routeId'], 'Active route'),
     health,
-    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus']) || undefined,
+    missionStatusRaw: pickString(record, ['mission_status', 'missionStatus', 'status']) || undefined,
     failsafeStatus: pickString(record, ['failsafe_status', 'failsafeStatus']) || undefined,
     batterySwapStatus: pickString(record, ['battery_swap_status', 'batterySwapStatus']) || undefined,
     alertId: pickString(record, ['alert_id', 'alertId']) || undefined,
@@ -723,22 +723,6 @@ function mapRelayBattery(raw: unknown): PlannedRelayBattery {
   };
 }
 
-/** Preserve only actual Analyze weather fields; no inferred values or mock weather. */
-function mapAnalyzeWeather(raw: unknown): RouteWeatherConditions | undefined {
-  if (!isRecord(raw)) return undefined;
-  const weather: RouteWeatherConditions = {
-    temperatureC: pickOptionalNumber(raw, ['temperature_c', 'temperatureC']),
-    windSpeedMs: pickOptionalNumber(raw, ['wind_speed_ms', 'windSpeedMs']),
-    windGustMs: pickOptionalNumber(raw, ['wind_gust_ms', 'windGustMs']),
-    humidityPct: pickOptionalNumber(raw, ['humidity_pct', 'humidityPct']),
-    precipitationMm: pickOptionalNumber(raw, ['precipitation_mm', 'precipitationMm']),
-    conditionLabel: pickString(raw, ['condition_label', 'conditionLabel']) || undefined,
-    isBadWeather: pickOptionalBoolean(raw, ['is_bad_weather', 'isBadWeather']),
-    warningMessage: pickString(raw, ['warning_message', 'warningMessage']) || undefined,
-  };
-  return Object.values(weather).some((value) => value !== undefined) ? weather : undefined;
-}
-
 function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
   const item = asRecord(raw);
   const from = pickString(item, ['from_hub_code', 'fromHubCode']);
@@ -770,7 +754,6 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
     energy_wh: pickOptionalNumber(item, ['energy_wh', 'energyWh']),
     battery_consumption_pct: pickOptionalNumber(item, ['battery_consumption_pct', 'batteryConsumptionPct']),
     remaining_battery_pct: pickOptionalNumber(item, ['remaining_battery_pct', 'remainingBatteryPct']),
-    weather: mapAnalyzeWeather(item.weather),
   };
 }
 
@@ -865,7 +848,6 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     confidencePct: pickNumber(record, ['confidence_pct', 'confidencePct', 'confidence'], 0),
     risk: normalizeRisk(record.risk_level ?? record.risk),
     weatherImpact: pickString(record, ['weather_impact', 'weatherImpact']),
-    weather: mapAnalyzeWeather(record.weather),
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
