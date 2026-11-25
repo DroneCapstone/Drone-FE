@@ -62,15 +62,15 @@
   display: inline-flex; align-items: center; justify-content: center;
   align-self: center; flex: 0 0 auto; width: max-content; max-width: 100%;
   min-height: 0; height: auto; box-sizing: border-box;
-  padding: 2px 6px; border-radius: 6px;
+  padding: var(--op-badge-padding); border-radius: var(--op-control-radius);
   border: 1px solid var(--border-strong); background: transparent;
   font-family: var(--op-font); font-size: var(--op-badge-font);
-  font-weight: 600; line-height: 1.3; white-space: nowrap;
+  font-weight: var(--op-badge-weight); line-height: var(--op-badge-line-height); white-space: nowrap;
 }
 .operator-app .main-column .page-content .operator-ui-table .badge,
 .operator-app .main-column .page-content .operator-ui-table.fh-table .fh-status {
-  padding: 4px 8px; border-radius: 6px; font-size: var(--op-badge-font);
-  font-weight: 600; line-height: 1.3;
+  padding: var(--op-badge-table-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font);
+  font-weight: var(--op-badge-weight); line-height: var(--op-badge-line-height);
 }
 .operator-app .main-column .page-content :is(.live-aircraft-card-title,
   .live-selection-title, .telemetry-aircraft-top, .telemetry-log-heading,
@@ -78,8 +78,8 @@
 .operator-app .main-column .page-content .ai-route-switcher .mission-ai-route-recommended,
 .operator-app .main-column .page-content .mission-ai-route-recommended {
   height: var(--op-badge-compact-height); min-height: 0;
-  padding: 0 5px; border-radius: 3px; font-size: var(--op-badge-font);
-  font-weight: 600; line-height: 1;
+  padding: var(--op-badge-compact-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font);
+  font-weight: var(--op-badge-weight); line-height: 1;
 }
 .operator-app .main-column .page-content :is(.live-aircraft-card-title, .live-selection-title, .telemetry-aircraft-top) {
   align-items: center; flex-wrap: wrap; gap: 4px 6px;
@@ -90,9 +90,9 @@
 }
 .operator-app .main-column .page-content .live-selection-title > strong { font-size: var(--op-value); font-weight: 600; line-height: 1.4; }
 .operator-app .main-column .page-content :is(.mission-hero, .incident-detail-title) .badge {
-  height: var(--op-badge-detail-height); padding: 0 7px; font-size: 12px; line-height: 1;
+  height: var(--op-badge-detail-height); padding: var(--op-badge-detail-padding); font-size: var(--op-badge-detail-font); line-height: 1;
 }
-.operator-app .main-column .page-content .mission-detail-leg-list .badge { padding: 2px 6px; }
+.operator-app .main-column .page-content .mission-detail-leg-list .badge { padding: var(--op-badge-padding); }
 /* Controls: only ordinary actions/forms, not map, pagination or replay tools. */
 .operator-app .main-column .page-content .button,
 .operator-contact-dialog .button {
@@ -192,4 +192,14 @@
 .operator-app .main-column .page-content :is(.fh-stat-list dd, .fh-replay-metrics strong) { font-weight: 600; }
 .operator-app .main-column .page-content :is(.fh-summary-metrics small, .fh-replay-metrics small, .fh-summary-note, .fh-subtle) { font-size: var(--op-secondary); }
 .operator-app .main-column .page-content :is(.mission-detail-refined, .mission-detail-refined .detail-main, .mission-detail-refined .detail-side, .telemetry-layout, .fh-columns) { gap: var(--op-panel-gap); }
-.operator-app .main-column .page-content .mission-builder .mission-route-leg-number { height: 18px; min-height: 0; min-width: 0; padding: 0 5px; border-radius: 3px; font-size: 11px; font-weight: 600; line-height: 1; }
+.operator-app .main-column .page-content .mission-builder .mission-route-leg-number { height: var(--op-badge-compact-height); min-height: 0; min-width: 0; padding: var(--op-badge-compact-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font); font-weight: var(--op-badge-weight); line-height: 1; }
+
+/* One corner radius for controls and status labels, independent of height.
+   Radix DropdownSelect is a button[role=combobox], not a native select. */
+.operator-app .main-column .page-content :is(button[role="combobox"], .dropdown-trigger,
+  .live-health-filters button, .live-events-filters, .live-events-filters button,
+  .notification-filter button, .notification-filter span, .model-chip, .weather-chip),
+.operator-contact-dialog button[role="combobox"],
+:root:has(.operator-app) [role="listbox"] {
+  border-radius: var(--op-control-radius);
+}

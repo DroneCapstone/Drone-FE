@@ -16,10 +16,17 @@
   --op-kpi: 28px;
   --op-control: 40px;
   --op-table-action: 32px;
-  --op-control-radius: 6px;
+  --op-control-radius: var(--radius-control, 6px);
   --op-panel-radius: 11px;
   --op-panel-gap: 14px;
   --op-badge-font: 11px;
+  --op-badge-detail-font: 12px;
+  --op-badge-weight: 600;
+  --op-badge-line-height: 1.3;
+  --op-badge-padding: 2px 6px;
+  --op-badge-table-padding: 4px 8px;
+  --op-badge-compact-padding: 0 5px;
+  --op-badge-detail-padding: 0 7px;
   --op-badge-compact-height: 18px;
   --op-badge-detail-height: 22px;
   --op-review-energy-bg: #FFFCF9;
