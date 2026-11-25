@@ -51,6 +51,16 @@ function formatBattery(drone: LiveTrackingDrone) {
   return drone.batteryVoltage !== undefined ? `${drone.batteryVoltage.toFixed(2)} V` : '—';
 }
 function measure(value?: number, unit = '') { return value !== undefined && Number.isFinite(value) ? `${value.toFixed(2)}${unit}` : '—'; }
+/** Display a single telemetry value without inventing missing measurements. */
+function LiveMeasurement({ label, value, unit, digits = 2, title }: {
+  label: string; value?: number; unit: string; digits?: number; title?: string;
+}) {
+  const valid = typeof value === 'number' && Number.isFinite(value);
+  return <div className="live-measurement" title={title}>
+    <dt>{label}</dt>
+    <dd>{valid ? <><strong>{value.toFixed(digits)}</strong><span>{unit}</span></> : <strong>—</strong>}</dd>
+  </div>;
+}
 function eventTime(value: string) { const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleTimeString('en-GB', { hour12: false }) : '—'; }
 function bearing(from: MissionTelemetryPoint, to: MissionTelemetryPoint): number | undefined {
   if (from.latitude === undefined || from.longitude === undefined || to.latitude === undefined || to.longitude === undefined) return undefined;
@@ -242,6 +252,12 @@ export function LiveTrackingPage() {
     // clockTick refreshes computed age even when no new telemetry arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [sourceDrones, missionById, hubNames, clockTick]);
+  // Only the already-established BE arrival status changes the presentation of
+  // missing plan geometry. Actual GPS records are never modified or synthesized.
+  const arrivedMissionIds = useMemo(() => new Set(liveDrone.filter(drone => {
+    const status = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
+    return status.key === 'destination' || status.key === 'completed';
+  }).map(drone => drone.missionId)), [liveDrone, missionById, hubNames]);
   const sortedDrone = useMemo(() => [...liveDrone].sort((a, b) => priority[a.health] - priority[b.health] || a.id.localeCompare(b.id)), [liveDrone]);
   const selectedDrone = liveDrone.find(drone => drone.id === selectedDroneId) ?? liveDrone[0];
   const filteredDrone = filter === 'All' ? sortedDrone : sortedDrone.filter(drone => drone.health === filter);
@@ -298,10 +314,10 @@ export function LiveTrackingPage() {
   const visibleLogs = logFilter === 'selected' && selectedDrone ? logEvents.filter(e => e.missionId === selectedDrone.missionId) : logEvents;
   const selectedHistory = selectedDrone ? mapHistories[selectedDrone.missionId] ?? [] : [];
   const heading = selectedHistory.length > 1 ? bearing(selectedHistory[selectedHistory.length - 2], selectedHistory[selectedHistory.length - 1]) : undefined;
-  // Selection shows one route; camera Follow is an explicit map action.
+  // Selecting an aircraft also follows its actual GPS marker.
   function selectFromAircraftList(aircraft: LiveTrackingDrone) {
     setSelectedDroneId(aircraft.id);
-    mapRef.current?.showSelectedPath();
+    mapRef.current?.focus(aircraft.missionId);
   }
   useEffect(() => { if (!isMapExpanded) return; const handle = (e: KeyboardEvent) => { if (e.key === 'Escape') setMapExpanded(false); }; window.addEventListener('keydown', handle); return () => window.removeEventListener('keydown', handle); }, [isMapExpanded]);
   const filterCount = (value: Filter) => value === 'All' ? liveDrone.length : liveDrone.filter(d => d.health === value).length;
@@ -364,6 +380,7 @@ export function LiveTrackingPage() {
               drones={liveDrone}
               histories={mapHistories}
               plannedRoutes={plannedRoutes}
+              arrivedMissionIds={arrivedMissionIds}
               mapStyle={mapStyle}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
@@ -377,42 +394,54 @@ export function LiveTrackingPage() {
           </div>
         </OperatorPanel>
         <div ref={detailRef}>
-          {selectedDrone ? <OperatorPanel className="live-selection-panel">
+          {selectedDrone ? <OperatorPanel className="live-selection-panel live-horizontal-summary">
             <div className="live-selection-head">
-              <div className="live-selection-id"><span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span><div><div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div><small>{selectedDrone.orderId ? `Delivery ${selectedDrone.orderId} · ` : ''}{formatRouteName(selectedDrone.route)}</small></div></div>
-              <div className="live-selection-tools">
-                <div className="live-selection-metrics">
-                  <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
-                  <span><Icon name="pin" size={16} /><strong>{measure(selectedDrone.altitudeM, ' m')}</strong><small>Altitude</small></span>
-                  <span><Icon name="speed" size={16} /><strong>{measure(selectedDrone.speedKmh, ' km/h')}</strong><small>Speed</small></span>
+              <div className="live-selection-id">
+                <span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span>
+                <div>
+                  <div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div>
+                  <small>Mission {selectedDrone.missionId || '—'}</small>
                 </div>
-                <button
-                  type="button"
-                  className="live-view-telemetry"
-                  onClick={() => navigate(`/operator/operations/telemetry?aircraft=${encodeURIComponent(selectedDrone.id)}&missionId=${encodeURIComponent(selectedDrone.missionId)}`)}
-                >
-                  <Icon name="chart" size={16} />
-                  View telemetry
-                  <Icon name="chevron" size={15} />
-                </button>
               </div>
+              <button
+                type="button"
+                className="live-view-telemetry"
+                onClick={() => navigate(`/operator/operations/telemetry?aircraft=${encodeURIComponent(selectedDrone.id)}&missionId=${encodeURIComponent(selectedDrone.missionId)}`)}
+              >
+                <Icon name="chart" size={16} />
+                View telemetry
+                <Icon name="chevron" size={15} />
+              </button>
+            </div>
+            <div className="live-summary-groups">
+              <section className="live-summary-group" aria-label="Flight Telemetry">
+                <h3><Icon name="speed" size={16} />Flight Telemetry</h3>
+                <dl className="live-summary-metrics">
+                  <LiveMeasurement label="Battery voltage" value={selectedDrone.batteryVoltage} unit="V" />
+                  <LiveMeasurement label="Altitude" value={selectedDrone.altitudeM} unit="m" />
+                  <LiveMeasurement label="Speed" value={selectedDrone.speedKmh} unit="km/h" />
+                  <LiveMeasurement label="Heading (GPS)" value={heading === undefined ? undefined : Math.round(heading) % 360} unit="°" digits={0} title="Direction of travel from the last two recorded GPS positions; not aircraft yaw." />
+                </dl>
+              </section>
+              <section className="live-summary-group" aria-label="Weather Conditions">
+                <h3><Icon name="cloud" size={16} />Weather Conditions</h3>
+                <dl className="live-summary-metrics">
+                  <LiveMeasurement label="Temperature" value={selectedDrone.weather?.temperature} unit="°C" digits={1} />
+                  <LiveMeasurement label="Wind speed" value={selectedDrone.weather?.windSpeed} unit="m/s" digits={1} />
+                  <LiveMeasurement label="Humidity" value={selectedDrone.weather?.humidity} unit="%" digits={0} />
+                  <LiveMeasurement label="Wind direction" value={selectedDrone.weather?.windDirection} unit="°" digits={0} />
+                </dl>
+              </section>
             </div>
           </OperatorPanel> : <OperatorPanel className="live-selection-panel"><div className="operator-empty-state">Select an aircraft in flight to view details.</div></OperatorPanel>}
         </div>
         <div className="live-ops-bottom">
           <OperatorPanel className="live-events-panel">
-            <div className="live-events-head"><div><strong>LIVE OPERATIONS LOG</strong><small></small></div>
+            <div className="live-events-head"><div><strong>Live Operations Log</strong></div>
               <div className="live-events-filters"><button type="button" className={logFilter === 'all' ? 'active' : ''} onClick={() => setLogFilter('all')}>All</button><button type="button" className={logFilter === 'selected' ? 'active' : ''} onClick={() => setLogFilter('selected')}>Selected</button></div></div>
             <div className="live-events-scroll" aria-live="polite">
               {!visibleLogs.length ? <p className="live-events-empty">No recorded events yet.</p> : visibleLogs.map(e => <div key={e.key} className={`live-events-entry level-${e.level.toLowerCase()}`}><time>{eventTime(e.time)}</time><strong>{e.droneId}</strong><span>{e.message}</span></div>)}
             </div>
-          </OperatorPanel>
-          <OperatorPanel className="live-route-panel"><div className="live-route-title">FLIGHT FOLLOW-UP</div>
-            <div className="live-route-metric"><small>AIRCRAFT</small><strong>{selectedDrone?.id ?? '—'}</strong></div>
-            <div className="live-route-metric"><small>MISSION</small><strong title={selectedDrone?.missionId}>{selectedDrone?.missionId ?? '—'}</strong></div>
-            <div className="live-route-metric"><small>HEADING (GPS)</small><strong>{heading !== undefined ? `${Math.round(heading)}°` : '—'}</strong></div>
-            <div className="live-route-metric"><small>CHECKPOINTS</small><strong>{selectedDrone?.checkpointsPassed ?? '—'}</strong></div>
-            {/* <p>Heading is calculated from consecutive GPS coordinates. Click an aircraft to follow it on the map.</p> */}
           </OperatorPanel>
         </div>
       </div>

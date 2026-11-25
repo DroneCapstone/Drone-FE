@@ -30,6 +30,7 @@ type Props = {
   histories: Record<string, MissionTelemetryPoint[]>;
   /** Planned hub-to-hub Mission route, separate from recorded GPS. */
   plannedRoutes: Record<string, RouteLegSnapshot[] | undefined>;
+  arrivedMissionIds: ReadonlySet<string>;
   mapStyle: LiveMapStyle;
   selectedMissionId?: string;
   onSelectMission: (missionId: string) => void;
@@ -204,6 +205,7 @@ function drawPlannedRoutes(
   routes: Props['plannedRoutes'],
   hubs: Props['hubs'],
   histories: Props['histories'],
+  arrivedMissionIds: ReadonlySet<string>,
   selectedMissionId?: string,
 ) {
   const data = emptyCollection();
@@ -237,7 +239,7 @@ function drawPlannedRoutes(
       for (const coordinates of uncoveredLegParts(segment, coverage)) {
         data.features.push({
           type: 'Feature',
-          properties: { selected: String(missionId === selectedMissionId) },
+          properties: { selected: String(missionId === selectedMissionId), completedPlan: String(arrivedMissionIds.has(missionId)) },
           geometry: { type: 'LineString', coordinates },
         });
       }
@@ -251,7 +253,7 @@ function drawPlannedRoutes(
   if (!map.getLayer('droneoptai-planned-routes')) {
     map.addLayer({
       id: 'droneoptai-planned-routes', type: 'line', source: 'droneoptai-planned-routes',
-      filter: ['==', ['get', 'selected'], 'false'],
+      filter: ['all', ['==', ['get', 'selected'], 'false'], ['==', ['get', 'completedPlan'], 'false']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#f97316',
@@ -267,7 +269,7 @@ function drawPlannedRoutes(
   if (!map.getLayer('droneoptai-planned-routes-selected')) {
     map.addLayer({
       id: 'droneoptai-planned-routes-selected', type: 'line', source: 'droneoptai-planned-routes',
-      filter: ['==', ['get', 'selected'], 'true'],
+      filter: ['all', ['==', ['get', 'selected'], 'true'], ['==', ['get', 'completedPlan'], 'false']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#f97316',
@@ -277,6 +279,17 @@ function drawPlannedRoutes(
       },
     });
   }
+  // A confirmed arrival can have a missing first/last GPS sample. Keep that
+  // part visible as the assigned plan, NOT a fabricated recorded GPS line.
+  if (!map.getLayer('droneoptai-completed-plan')) {
+    map.addLayer({
+      id: 'droneoptai-completed-plan', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['==', ['get', 'completedPlan'], 'true'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#f97316', 'line-opacity': 1, 'line-width': 2 },
+    });
+  }
+  return data.features.some(feature => feature.properties.completedPlan === 'true');
 }
 
 function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMissionId?: string) {
@@ -323,13 +336,13 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
   }
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, mapStyle, selectedMissionId, onSelectMission, connectionHealthy = true }, ref) {
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, arrivedMissionIds, mapStyle, selectedMissionId, onSelectMission, connectionHealthy = true }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
   const dronesRef = useRef(new Map<string, MovingMarker>());
-  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission, connectionHealthy });
-  stateRef.current = { hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission, connectionHealthy };
+  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, onSelectMission, connectionHealthy });
+  stateRef.current = { hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, onSelectMission, connectionHealthy };
   // One animation clock for all aircraft; refetches never restart this clock.
   const animationClockRef = useRef<number | null>(null);
   const followRef = useRef<string | null>(null);
@@ -342,7 +355,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   const [isFollowing, setIsFollowing] = useState(false);
   const [showHubs, setShowHubs] = useState(true);
   const [pathScope, setPathScope] = useState<FlightPathScope>('none');
-  const [showWeather, setShowWeather] = useState(true);
+  const [hasCompletedPlanGap, setHasCompletedPlanGap] = useState(false);
   const [viewLabel, setViewLabel] = useState('Expanded Ho Chi Minh City');
 
   function stopFollowing() {
@@ -492,9 +505,14 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         const activeIds = new Set(current.drones.map(drone => drone.missionId));
         const routes = scopeFlightPaths(current.plannedRoutes, pathScope, current.selectedMissionId, activeIds);
         const trails = scopeFlightPaths(current.histories, pathScope, current.selectedMissionId, activeIds);
-        drawPlannedRoutes(map, routes, current.hubs, trails, current.selectedMissionId);
+        const hasGap = drawPlannedRoutes(map, routes, current.hubs, trails, current.arrivedMissionIds, current.selectedMissionId);
+        setHasCompletedPlanGap(hasGap);
         drawTrails(map, trails, current.selectedMissionId);
-        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails', 'droneoptai-planned-routes-selected', 'droneoptai-trails-selected']) {
+        // Keep the thin plan beneath the real GPS even after a style refresh.
+        if (map.getLayer('droneoptai-completed-plan') && map.getLayer('droneoptai-trails')) {
+          map.moveLayer('droneoptai-completed-plan', 'droneoptai-trails');
+        }
+        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails', 'droneoptai-planned-routes-selected', 'droneoptai-trails-selected', 'droneoptai-completed-plan']) {
           if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', pathScope !== 'none' ? 'visible' : 'none');
         }
       } catch (error) {
@@ -508,7 +526,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     return () => {
       map.off('style.load', sync);
     };
-  }, [ready, hubs, drones, histories, plannedRoutes, selectedMissionId, pathScope]);
+  }, [ready, hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, pathScope]);
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const map = mapRef.current;
@@ -618,14 +636,14 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       let moving = dronesRef.current.get(id);
       if (!moving) {
         const element = document.createElement('button'); element.type = 'button';
-        element.className = 'live-geo-drone'; element.title = `View flight path of ${drone.id}`;
+        element.className = 'live-geo-drone'; element.title = `Follow ${drone.id}`;
         const body = document.createElement('span'); body.className = 'live-geo-drone-symbol'; body.innerHTML = OLD_DRONE_SVG;
         const text = document.createElement('span'); text.className = 'live-geo-drone-label';
         element.append(body, text);
         element.addEventListener('click', (evt) => {
           evt.preventDefault(); evt.stopPropagation();
           stateRef.current.onSelectMission(id);
-          showSelectedPath();
+          focus(id);
         });
         const popup = new maplibregl.Popup({ closeButton: false, offset: 23 });
         const marker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat(pt).setPopup(popup).addTo(map);
@@ -743,15 +761,6 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         ? <button type="button" onClick={stopFollowing}>Stop following</button>
         : <button type="button" disabled={!selected || !ready || !asPoint(selected.longitude, selected.latitude)} onClick={() => selected && focus(selected.missionId)}>Follow drone</button>}
     </div>
-    {showWeather && selected && <div className="live-geo-weather">
-      <strong>Observed weather · selected aircraft</strong>
-      <span>{selected.id}</span>
-      <div><span>Temperature</span><b>{selected.weather?.temperature !== undefined ? `${selected.weather.temperature.toFixed(1)}°C` : '—'}</b></div>
-      <div><span>Wind</span><b>{selected.weather?.windSpeed !== undefined ? `${selected.weather.windSpeed.toFixed(1)}` : '—'}</b></div>
-      <div><span>Humidity</span><b>{selected.weather?.humidity !== undefined ? `${selected.weather.humidity.toFixed(0)}%` : '—'}</b></div>
-      <div><span>Wind direction</span><b>{selected.weather?.windDirection !== undefined ? `${Math.round(selected.weather.windDirection)}°` : '—'}</b></div>
-      {/* <small>Weather at aircraft location, not district-wide conditions.</small> */}
-    </div>}
     <div className="live-geo-layers" role="group" aria-label="Map layers">
       <button type="button" aria-pressed={showHubs} onClick={() => setShowHubs(v => !v)} className={showHubs ? 'active' : ''}>Hubs</button>
       <select aria-label="Flight paths" title="Choose which flight paths to display" className={`live-geo-path-scope ${pathScope !== 'none' ? 'active' : ''}`} value={pathScope} onChange={event => changePathScope(event.target.value as FlightPathScope)}>
@@ -759,12 +768,12 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         <option value="selected" disabled={!selected}>Flight paths: Selected</option>
         <option value="all">All flight paths</option>
       </select>
-      <button type="button" aria-pressed={showWeather} onClick={() => setShowWeather(v => !v)} className={showWeather ? 'active' : ''}>Weather</button>
     </div>
 
     {(pathScope === 'all' || selectedPathVisible) && <div className="live-geo-route-legend" aria-label="Flight path legend">
       <span><i className="live-geo-route-dash" aria-hidden="true" />Planned route</span>
       <span><i className="live-geo-route-solid" aria-hidden="true" />Recorded GPS</span>
+      {hasCompletedPlanGap && <span title="Assigned route geometry, not recorded GPS"><i style={{ borderTopWidth: 2 }} aria-hidden="true" />Arrived route · GPS gap</span>}
     </div>}
     {/* <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div> */}
   </div>;
