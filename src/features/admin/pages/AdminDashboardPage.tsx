@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -96,7 +97,7 @@ function RevenueBars({ today, month }: { today: number; month: number }) {
           <div className="h-3 overflow-hidden rounded-full bg-[#F0F2F5]"><div className="h-full rounded-full" style={{ width: `${(item.value / max) * 100}%`, background: index === 0 ? '#FDBA74' : '#F97316' }} /></div>
         </div>
       ))}
-      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Backend recorded revenue · Values shown by their respective periods</p> */}
+      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Recorded revenue · Values shown by their respective periods</p> */}
     </div>
   );
 }
@@ -138,18 +139,18 @@ export function AdminDashboardPage() {
   return (
     <AdminPageShell title="Dashboard" description="">
       {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-      {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard…</p>}
-      {data && <>
+      {loading && <OperatorLoadingState label="Loading dashboard…" />}
+      {!loading && !error && data && <>
         {/* Four primary KPIs only; secondary figures are presented in charts below. */}
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Backend recorded revenue" icon={Wallet} />
+          <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Recorded revenue" icon={Wallet} />
           <AdminSummaryCard label="Paid orders" value={data.revenue.paid_orders} note="Payment confirmations" icon={CircleCheck} />
           <AdminSummaryCard label="Total users" value={data.users.total} note={`${data.users.active} active · ${data.users.inactive} inactive`} icon={UsersRound} />
           <AdminSummaryCard label="Total drones" value={data.fleet.total_drones} note="Registered fleet" icon={Plane} />
         </div>
 
         <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ChartPanel title="Revenue overview" subtitle="Recorded revenue for today and the current month">
+          <ChartPanel title="Revenue overview">
             <RevenueBars today={data.revenue.today} month={data.revenue.this_month} />
           </ChartPanel>
           <ChartPanel title="Mission status" subtitle={`Total missions: ${data.missions.total} · Success rate: ${data.missions.success_rate}%`}>
@@ -174,17 +175,17 @@ export function AdminDashboardPage() {
             <HorizontalBars items={data.ai.risk_breakdown} />
             <p className="mt-4 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]">Average estimated energy: {Number(data.ai.avg_estimated_energy_wh ?? 0).toLocaleString('vi-VN')} Wh</p>
           </ChartPanel> */}
-          <ChartPanel title="Operational alerts" subtitle="Items requiring administrative attention">
+          <ChartPanel title="Operational alerts">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-[#FFF7ED] p-3"><Wrench size={17} className="mb-2 text-[#EA580C]" /><strong className="block text-2xl text-[#172033]">{data.alerts.pending_maintenance_alerts}</strong><span className="text-xs text-[#8A5A36]">Maintenance alerts</span></div>
               <div className="rounded-lg bg-[#FEF2F2] p-3"><ShieldAlert size={17} className="mb-2 text-[#DC2626]" /><strong className="block text-2xl text-[#172033]">{data.alerts.open_incidents}</strong><span className="text-xs text-[#8A4A4A]">Open incidents</span></div>
               <div className="rounded-lg bg-[#EFF6FF] p-3"><Bell size={17} className="mb-2 text-[#2563EB]" /><strong className="block text-2xl text-[#172033]">{data.alerts.total_audit_logs}</strong><span className="text-xs text-[#526B91]">Audit events</span></div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Live backend summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Operational summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
           </ChartPanel>
         </div>
 
-        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2><p className="mt-1 text-xs text-[#8791A2]"></p></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
+        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
         <HubDroneMap hubs={hubs} drones={drones} />
         <RevenueChartPanel />
       </>}
@@ -196,19 +197,20 @@ export function AdminDashboardPage() {
 
 function RevenueChartPanel() {
   const [chartData, setChartData] = useState<Array<{ date: string; revenue: number; mission_count: number }>>([]);
+  const [chartError, setChartError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     adminOperationsApi.revenueChart(30)
       .then((res) => { setChartData(res.data ?? []); })
-      .catch(() => {/* silent */})
+      .catch(() => setChartError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || chartData.length === 0) {
+  if (loading || chartError || chartData.length === 0) {
     return (
-      <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
-        <p className="text-xs text-[#8791A2]">{loading ? "Loading…" : "No data available yet."}</p>
+      <ChartPanel title="Revenue trend — last 30 days" className="mt-4">
+        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">{chartError ? "Unable to load revenue trend." : "No data available yet."}</p>}
       </ChartPanel>
     );
   }
@@ -216,7 +218,7 @@ function RevenueChartPanel() {
   const maxRevenue = Math.max(...chartData.map((d) => d.revenue), 1);
 
   return (
-    <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
+    <ChartPanel title="Revenue trend — last 30 days" className="mt-4">
       <div className="flex h-40 items-end gap-[3px] overflow-hidden">
         {chartData.map((d) => {
           const pct = (d.revenue / maxRevenue) * 100;

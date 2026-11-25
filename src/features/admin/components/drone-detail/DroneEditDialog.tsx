@@ -24,7 +24,6 @@ export function DroneEditDialog({ drone, hubs, onClose, onSave }: {
       <form onSubmit={submit}>
         <div className="dd-dialog-head">
           <DialogTitle asChild><h2>Edit drone · {drone.id}</h2></DialogTitle>
-          <p>Update administrative drone details. Operational status and maintenance remain read-only.</p>
         </div>
         <div className="dd-dialog-form">
           <label><span className="dd-field-label">Drone name <em aria-hidden="true">*</em></span><input autoFocus required maxLength={80} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>

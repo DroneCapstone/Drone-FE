@@ -1,3 +1,5 @@
+import { adminDisplayText } from '../../utils/adminDisplayText';
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -136,7 +138,7 @@ export function AdminUserDetailPage() {
   };
 
   if (!userId) return <AdminPageShell title="User detail"><Link to="/admin/users">Back to Users</Link></AdminPageShell>;
-  if (loading && !user) return <AdminPageShell title="User detail" description="Loading account…"><p className="admin-ud-helper"></p></AdminPageShell>;
+  if (loading && !user) return <AdminPageShell title="User detail"><OperatorLoadingState label="Loading account…" /></AdminPageShell>;
   if (!user) return <AdminPageShell title="User detail"><div className="admin-ud-list-error" role="alert">
     <span>{loadError || 'User not found.'}</span>
     <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
@@ -148,7 +150,7 @@ export function AdminUserDetailPage() {
   const currentAdmin = authService.getCurrentUser()?.id === user.id;
   const statusText = archived ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE';
   const canChangeStatus = !archived && !(user.is_active && (lastActiveAdmin || currentAdmin));
-  const scope = user.role === 'Technician' ? 'Hub assignment not supplied by Users API'
+  const scope = user.role === 'Technician' ? 'Hub assignment unavailable here'
     : user.role === 'Customer' ? 'Customer account' : 'System-wide access';
 
   return <AdminPageShell
@@ -190,7 +192,6 @@ export function AdminUserDetailPage() {
             <Field label="Sign-in access">{user.is_active ? 'Allowed' : 'Blocked'}</Field>
             {archived && <Field label="Restore eligibility">Not restorable</Field>}
           </dl>
-          {user.role === 'Technician' && <p className="admin-ud-helper admin-ud-scope-note">Assigning a Technician to a Hub is not yet supported by this API.</p>}
           {!user.is_active && !archived && <p className="admin-ud-helper admin-ud-scope-note">Soft-deleted account. Its history is preserved and it can be restored unless the email is registered again.</p>}
         </section>
       </div>
@@ -198,7 +199,7 @@ export function AdminUserDetailPage() {
         <div className="admin-ud-card-head"><h2 id="admin-ud-activity-title">Recent actions by this user</h2><span className="admin-ud-helper">Activity Logs</span></div>
         <div className="admin-ud-events">
           {activity.map((event) => <div className="admin-ud-event" key={event.id}>
-            <div><strong>{event.action.replaceAll('_', ' ')}</strong><small>{event.resource_type ?? 'General'}</small></div>
+            <div><strong>{adminDisplayText(event.action.replaceAll('_', ' '))}</strong><small>{adminDisplayText(event.resource_type, 'General')}</small></div>
             <time>{formatDate(event.created_at)}</time>
           </div>)}
         </div>
@@ -207,7 +208,7 @@ export function AdminUserDetailPage() {
 
     <Dialog open={editing && !archived} onOpenChange={(open) => { if (!open && !submitting) closeEdit(); }}>
       <DialogContent className="admin-ud-modal">
-        <div className="admin-ud-modal-head"><DialogTitle>Edit user</DialogTitle><p>Update account information and role through Backend.</p></div>
+        <div className="admin-ud-modal-head"><DialogTitle>Edit user</DialogTitle></div>
         {draft && <form onSubmit={save}>
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
@@ -222,8 +223,7 @@ export function AdminUserDetailPage() {
                   </select>}
               </label>
             </div>
-            {draft.role === 'Technician' && <p className="admin-ud-helper">Hub assignment cannot be changed here because the current User API has no hub_id field.</p>}
-            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Ensure the user has no pending operational responsibilities.</p>}
+            {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Check pending responsibilities.</p>}
             {error && <p className="admin-ud-error" role="alert">{error}</p>}
           </div>
           <div className="admin-ud-modal-foot">
@@ -239,13 +239,13 @@ export function AdminUserDetailPage() {
         <div className="admin-ud-modal-head">
           <DialogTitle>{user.is_active ? 'Deactivate account?' : 'Restore account?'}</DialogTitle>
           <p>{user.is_active
-            ? 'This soft-deletes the account. Sign-in will be blocked immediately and existing orders, missions and work orders remain stored.'
-            : 'Restores sign-in access to this account if it has not been permanently archived due to email re-registration.'}</p>
+            ? 'Sign-in will be blocked. Existing records are preserved.'
+            : 'Restores sign-in access unless the account is archived.'}</p>
         </div>
         <form onSubmit={confirmAccountAction}>
           <div className="admin-ud-modal-body">
             <p className="admin-ud-helper"><strong>{user.full_name}</strong> · {user.email}</p>
-            {user.role === 'Technician' && <p className="admin-ud-helper">The Admin API does not document a check for active Work Orders. Confirm operational responsibilities before deactivation.</p>}
+            {user.role === 'Technician' && <p className="admin-ud-helper">Check for active work orders and confirm operational responsibilities before deactivation.</p>}
             {actionError && <p className="admin-ud-error" role="alert">{actionError}</p>}
           </div>
           <div className="admin-ud-modal-foot">

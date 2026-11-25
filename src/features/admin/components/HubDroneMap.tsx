@@ -247,11 +247,11 @@ export function HubDroneMap({
               <div ref={hostRef} className="admin-hub-network-map__canvas" />
             ) : (
               <div className="admin-hub-network-map__canvas admin-hub-network-map__canvas--empty">
-                <p>Map is unavailable because VITE_MAPTILER_API_KEY is not configured.</p>
+                <p>Map is currently unavailable.</p>
               </div>
             )}
-            {!visibleHubs.length ? (
-              <div className="admin-hub-network-map__empty-state">No hubs match the current filters.</div>
+            {MAPTILER_KEY && !visibleHubs.length ? (
+              <div className="admin-hub-network-map__empty-state">{query.trim() || statusFilter !== "all" ? "No hubs match the current filters." : "No hubs available on the map."}</div>
             ) : null}
           </div>
 
@@ -316,7 +316,7 @@ export function HubDroneMap({
                 </Link>
               </>
             ) : (
-              <p className="admin-hub-network-map__empty-copy">Select a hub to view its details.</p>
+              <p className="admin-hub-network-map__empty-copy">{query.trim() || statusFilter !== "all" ? "Try a different search or reset the filters." : "No hub details available."}</p>
             )}
           </aside>
         </div>

@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
@@ -142,7 +143,7 @@ export function HubsPage() {
         latitude, longitude, status: newHub.status,
       });
       setCreating(false);
-      setNotice(`Hub ${name} (${code}) created in Backend. Supply compatible batteries before testing relay routes.`);
+      setNotice(`Hub ${name} (${code}) created successfully.`);
       // Existing refresh reloads cards, map and Hub list from Backend.
       void refresh();
     } catch (cause) {
@@ -164,7 +165,7 @@ export function HubsPage() {
         latitude: editing.latitude, longitude: editing.longitude, capacity: editing.capacity,
       });
       setEditing(null);
-      setNotice('Hub updated in Backend.');
+      setNotice('Hub updated successfully.');
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
@@ -176,6 +177,9 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
       actions={<ActionButton onClick={openCreate}><Plus size={16} aria-hidden="true" /> Create hub</ActionButton>}
     >
+      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
+      {loading ? <OperatorLoadingState label="Loading hubs…" /> : summary !== null && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminSummaryCard label="Total hubs" value={summary?.total_hubs ?? hubs.length} note="Registered hubs" icon={MapPin} />
         <AdminSummaryCard label="Active" value={summary?.active_hubs ?? hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
@@ -183,9 +187,6 @@ export function HubsPage() {
         <AdminSummaryCard label="Batteries" value={summary?.total_batteries ?? batteriesCount} note="Assigned to Hubs" icon={BatteryCharging} />
       </div>
 
-      {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
-      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs…</p>}
       <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">
@@ -222,10 +223,12 @@ export function HubsPage() {
                   </td>
                 </tr>
               ))}
+              {!visible.length && <tr><td colSpan={7} className="p-5 text-center">{hubs.length ? "No hubs match your filters." : "No hubs available yet."}</td></tr>}
             </tbody>
           </table>
         </div>
       </OperatorPanel>
+      </>}
 
       <Dialog open={creating} onOpenChange={(open) => { if (!open && !createSaving) setCreating(false); }}>
         {creating ? (
@@ -261,7 +264,6 @@ export function HubsPage() {
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={newHub.latitude} onChange={(event) => setNewHub((current) => ({ ...current, latitude: event.target.value }))} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={newHub.longitude} onChange={(event) => setNewHub((current) => ({ ...current, longitude: event.target.value }))} /></label>
                 <label className="sm:col-span-2"><span>Capacity (drone slots)</span><input required type="number" min={1} step={1} value={newHub.capacity} onChange={(event) => setNewHub((current) => ({ ...current, capacity: event.target.value }))} /></label>
-                <p className="sm:col-span-2 text-xs text-muted-foreground">New Hubs need compatible, charged batteries before Dijkstra can use them as relay stops. Creating a Hub does not automatically supply batteries.</p>
                 {createError && <p role="alert" className="sm:col-span-2 text-sm text-red-500">{createError}</p>}
               </div>
               <div className="form-actions border-t border-border p-5">

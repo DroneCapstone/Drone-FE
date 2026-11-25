@@ -1,3 +1,5 @@
+import { adminDetailText, adminDisplayText } from '../../utils/adminDisplayText';
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { CreditCard, CircleCheck, Clock3, CircleX } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -46,27 +48,27 @@ export function TransactionsPage() {
   async function refund() {
     if (!selected || saving || !reason.trim() || statusOf(selected) !== 'PAID') return;
     const orderId = orderOf(selected);
-    if (orderId === '—') { setError('This Backend payment row has no order_id to refund.'); return; }
-    if (!window.confirm(`Submit a REAL refund for order ${orderId}? This action can affect customer funds and cannot be undone in the browser.`)) return;
+    if (orderId === '—') { setError('A linked order is required to request a refund.'); return; }
+    if (!window.confirm(`Submit a refund for order ${orderId}? This action affects customer funds and cannot be undone here.`)) return;
     setSaving(true); setError('');
     try {
       const result = await adminOperationsApi.refundOrder(orderId, { reason: reason.trim() });
       setSelected(null); setReason('');
-      setNotice(result.message || `Backend received refund request for order ${orderId}.`);
+      setNotice(adminDisplayText(result.message, `Refund request submitted for order ${orderId}.`));
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
 
-  return <AdminPageShell title="Transactions" description="Payment transactions returned by Backend.">
-    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading payments from Backend…</p>}
+  return <AdminPageShell title="Transactions" description="Track customer payments and manage refund requests.">
+    {loading && <OperatorLoadingState label="Loading transactions…" />}
     {error && !selected && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Gross collected" value={knownAmount ? money(collected) : '—'} note="Transactions with known amounts" icon={CreditCard} />
       <AdminSummaryCard label="Paid" value={items.filter(row => statusOf(row) === 'PAID').length} note="Successful transactions" icon={CircleCheck} />
       <AdminSummaryCard label="Pending" value={items.filter(row => statusOf(row) === 'PENDING').length} note="Awaiting confirmation" icon={Clock3} />
-      <AdminSummaryCard label="Failed / refunded" value={items.filter(row => ['FAILED', 'REFUNDED'].includes(statusOf(row))).length} note="No new capture" icon={CircleX} />
+      <AdminSummaryCard label="Failed / refunded" value={items.filter(row => ['FAILED', 'REFUNDED'].includes(statusOf(row))).length} note="Failed or refunded payments" icon={CircleX} />
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search transaction, order or customer…" filters={<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="REFUNDED">Refunded</option></select>} meta={`${visible.length} of ${items.length} transactions`} />
@@ -80,16 +82,16 @@ export function TransactionsPage() {
           <td>{field(row, 'payment_method', 'method', 'gateway', 'provider')}</td>
           <td>{timestamp(row, 'paid_at', 'payment_at', 'created_at')}</td>
           <td><ActionButton variant="ghost" disabled={statusOf(row) !== 'PAID' || orderOf(row) === '—'} onClick={() => { setSelected(row); setReason(''); setError(''); }}>Refund</ActionButton>
-            <details><summary className="text-button text-xs">Backend record</summary><pre className="max-w-xs overflow-auto whitespace-pre-wrap break-all text-[11px]">{JSON.stringify(row, null, 2)}</pre></details>
+            <details><summary className="text-button text-xs">View details</summary><pre className="max-w-xs overflow-auto whitespace-pre-wrap break-all text-[11px]">{adminDetailText(row)}</pre></details>
           </td>
         </tr>)}
-        {!loading && !visible.length && <tr><td colSpan={8} className="p-5 text-center">No Backend transactions returned.</td></tr>}
+        {!loading && !error && !visible.length && <tr><td colSpan={8} className="p-5 text-center">No transactions match your filters.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
     <Dialog open={!!selected} onOpenChange={open => { if (!open && !saving) setSelected(null); }}>
       {selected && <DialogContent><div className="p-5">
         <DialogTitle className="text-lg font-semibold">Refund order {orderOf(selected)}?</DialogTitle>
-        <p className="mt-2 text-sm text-muted-foreground">This sends a real refund request to Backend for order {orderOf(selected)}, not a local simulation. The Backend/payment provider determines the final settlement.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Final settlement is confirmed by the payment provider.</p>
         <label className="mt-4 block text-sm"><span>Reason for refund *</span><textarea rows={3} maxLength={500} className="mt-2 w-full rounded-lg border border-[var(--admin-border)] p-2" required value={reason} onChange={e => setReason(e.target.value)} /></label>
         {error && <p role="alert" className="mt-2 text-sm text-red-500">{error}</p>}
         <div className="form-actions mt-5"><ActionButton variant="secondary" disabled={saving} onClick={() => setSelected(null)}>Cancel</ActionButton><ActionButton variant="danger" disabled={saving || !reason.trim()} onClick={() => void refund()}>{saving ? 'Submitting…' : 'Confirm Refund'}</ActionButton></div>

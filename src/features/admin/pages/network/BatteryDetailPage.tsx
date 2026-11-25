@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
@@ -29,12 +30,12 @@ export function BatteryDetailPage() {
   return <AdminPageShell title={battery?.id ?? batteryId ?? 'Battery'} description={`${battery?.battery_model ?? 'Battery'} · ${hub?.name ?? 'Unassigned'}`} hideSectionTabs>
     <div className="admin-battery-detail">
       <div className="abd-back"><Link to="/admin/network/batteries"><ArrowLeft size={16}/>Back to Batteries</Link></div>
-      {loading && <p className="text-sm text-muted-foreground">Loading Battery Detail from Backend…</p>}
+      {loading && <OperatorLoadingState label="Loading battery details…" compact />}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       {battery && <div className="abd-grid">
         <section className="abd-card"><h2>Battery information</h2><dl className="abd-data">
           <div><dt>Battery ID</dt><dd>{battery.id}</dd></div>
-          <div><dt>Battery model</dt><dd>{battery.battery_model ?? 'Not provided by Backend'}</dd></div>
+          <div><dt>Battery model</dt><dd>{battery.battery_model ?? 'Not available'}</dd></div>
           <div><dt>Serial number</dt><dd>{battery.serial_number}</dd></div>
           <div><dt>Energy capacity</dt><dd>{battery.capacity_wh} Wh</dd></div>
           <div><dt>Assigned Hub</dt><dd>{hub ? <Link className="abd-link" to={`/admin/network/hubs/${hub.id}`}>{hub.name}<ExternalLink size={12}/></Link> : 'Not assigned'}</dd></div>
@@ -47,7 +48,6 @@ export function BatteryDetailPage() {
           <div><dt>Last charged</dt><dd>{battery.last_charged_at ? new Date(battery.last_charged_at).toLocaleString('en-GB') : '—'}</dd></div>
         </dl></section>
       </div>}
-      {battery && <p className="mt-4 text-xs text-muted-foreground">Battery retirement and Technician verification are read-only here. The current Backend DELETE endpoint is not used as an administrative retire action.</p>}
     </div>
   </AdminPageShell>;
 }

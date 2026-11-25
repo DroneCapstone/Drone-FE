@@ -10,17 +10,12 @@
 .spare-quantity-input--readonly { background:#f4f5f7; color:#6b7280; }
 .spare-quantity-result { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; margin:16px 0; border-radius:8px; background:#f7f8f9; font-size:13px; }
 .spare-quantity-result span { color:#6b7280; }
-.spare-quantity-cost { border:1px solid #e1e3e8; border-radius:9px; padding:16px; }
-.spare-quantity-cost-title,.spare-quantity-cost-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
-.spare-quantity-cost-title { margin-bottom:13px; }
-.spare-quantity-cost-title > span { display:flex; gap:7px; align-items:center; font-weight:650; font-size:14px; }
-.spare-quantity-cost-title svg { color:#ff6b00; }
-.spare-quantity-cost-title small { font-size:11px; color:#6b7280; }
-.spare-quantity-cost-row { padding:7px 0; font-size:13px; }
-.spare-quantity-cost-row span { color:#6b7280; }
-.spare-quantity-cost-total { border-top:1px solid #e1e3e8; padding-top:14px; margin-top:8px; font-weight:650; }
-.spare-quantity-cost-total strong { color:#fa6700; font-size:16px; }
 .spare-quantity-hint { color:#6b7280; margin:12px 0 0; font-size:12px; line-height:1.6; }
 .spare-quantity-footer { border-top:1px solid #e1e3e8; padding:14px 24px; }
 .spare-quantity-error { color:#dc2626; font-size:12px; margin-top:10px; }
 @media(max-width:480px) {.spare-quantity-fields { grid-template-columns:1fr; } .spare-quantity-header,.spare-quantity-body { padding:16px; } .spare-quantity-footer { padding:12px 16px; } }
+/* Keep the existing form; align the receiving Hub dropdown with both inputs. */
+.spare-quantity-input { height: 44px; }
+.spare-quantity-input--readonly.is-low-stock { color: #dc2626; }
+.spare-quantity-low-stock { color: #dc2626; font-size: 13px; margin: 10px 0 0; }
+.spare-quantity-result { margin: 16px 0 0; }

@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
   CreditCard,
+  BarChart3,
   Gauge,
   MapPinned,
   ScrollText,
@@ -53,6 +54,7 @@ export const adminNavigation: AdminNavigationItem[] = [
       { label: "Financial Overview", path: "/admin/payments/financial" },
     ],
   },
+  { label: "Reports", path: "/admin/reports", icon: BarChart3 },
   { label: "Logs", path: "/admin/logs/activity", icon: ScrollText, children: [
     { label: "Activity Logs", path: "/admin/logs/activity" },
     { label: "System Logs", path: "/admin/logs/system" },

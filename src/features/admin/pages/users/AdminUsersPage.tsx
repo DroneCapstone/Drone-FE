@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Users, UserCog, UserRound, UserX, Eye, Pencil } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -135,7 +136,7 @@ export function AdminUsersPage() {
             <th scope="col" className="admin-users-actions-heading">Actions</th>
           </tr></thead>
           <tbody>
-            {loading && <tr><td colSpan={5} className="admin-users-empty">Loading users from Backend…</td></tr>}
+            {loading && <tr><td colSpan={5}><OperatorLoadingState label="Loading users…" /></td></tr>}
             {!loading && !listError && visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
             {!loading && !listError && visible.map((user) => <tr key={user.id}>
               <td><strong className="admin-users-name">{user.full_name}</strong></td>
@@ -166,7 +167,6 @@ export function AdminUsersPage() {
         <form onSubmit={save}>
           <div className="admin-ud-modal-head">
             <DialogTitle>Create internal user</DialogTitle>
-            <p>Creates a real account through the Admin API. Customers register themselves.</p>
           </div>
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
@@ -181,8 +181,6 @@ export function AdminUsersPage() {
               <label><span>Initial password <b aria-hidden="true">*</b></span>
                 <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
             </div>
-            {creating.role === 'Technician' && <p className="admin-ud-helper">Assigned Hub is not part of the current UserCreate API; creating this account does not assign a Hub.</p>}
-            <p className="admin-ud-helper">Share the initial password securely. Backend does not provide an invitation email in this API.</p>
             {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
           </div>
           <div className="admin-ud-modal-foot">

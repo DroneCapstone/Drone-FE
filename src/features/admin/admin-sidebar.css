@@ -1,0 +1,169 @@
+/* Sidebar-only parity with operator-shell.css. Admin content and other roles are unaffected. */
+.admin-workspace {
+  grid-template-columns: 252px minmax(0, 1fr);
+  transition: grid-template-columns 200ms ease;
+}
+
+.admin-workspace.sidebar-collapsed {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.admin-workspace .sidebar {
+  width: 252px;
+  padding: 20px 12px 12px;
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: width 200ms ease, transform 200ms ease;
+}
+
+.admin-workspace .sidebar.is-collapsed {
+  width: 78px;
+}
+
+.admin-workspace .brand-row {
+  min-height: 48px;
+  padding: 0;
+}
+
+.admin-workspace .brand {
+  gap: 8px;
+}
+
+.admin-workspace .brand-logo {
+  width: 56px;
+  height: 48px;
+  flex: 0 0 56px;
+  margin-left: 0;
+}
+
+.admin-workspace .brand-strong,
+.admin-workspace .brand-light {
+  font-size: 25px;
+}
+
+.admin-workspace .side-nav {
+  gap: 4px;
+  padding-top: 32px;
+  padding-right: 4px;
+  scrollbar-width: none;
+}
+
+.admin-workspace .side-nav::-webkit-scrollbar { display: none; }
+
+.admin-workspace .nav-caption {
+  margin: 0 12px 12px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .22em;
+}
+
+.admin-workspace .nav-main {
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  gap: 12px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: .005em;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.admin-workspace .nav-main .nav-icon { flex: 0 0 19px; }
+
+.admin-workspace .nav-group.active > .nav-main {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.admin-workspace .nav-group.active > .nav-main::before { height: 24px; }
+.admin-workspace .nav-group.active > .nav-main .nav-icon { color: var(--orange); }
+
+/* Icon's original path points right. A quarter-turn makes it point down. */
+.admin-workspace .nav-chevron { transform: rotate(0); transition: transform 200ms ease; }
+.admin-workspace .nav-chevron.is-expanded { transform: rotate(90deg); }
+
+.admin-workspace .nav-children {
+  margin: 0 0 0 26px;
+  padding: 4px 0 4px 16px;
+}
+
+.admin-workspace .nav-children a {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.admin-workspace .nav-children a.active { font-weight: 600; }
+.admin-workspace .nav-children a.active::before {
+  left: -20px;
+  width: 6px;
+  height: 6px;
+  border: 0;
+}
+
+.admin-workspace .sidebar-footer { padding-top: 8px; }
+.admin-workspace .sidebar-logout {
+  min-height: 44px;
+  margin-top: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 300;
+}
+
+.admin-workspace .sidebar.is-collapsed .side-nav { padding-right: 0; }
+.admin-workspace .sidebar.is-collapsed .brand-row { padding: 0; }
+.admin-workspace .sidebar.is-collapsed .brand-logo { width: 48px; height: 48px; flex-basis: 48px; }
+.admin-workspace .sidebar.is-collapsed .nav-group,
+.admin-workspace .sidebar.is-collapsed .nav-main { width: 44px; }
+.admin-workspace .sidebar.is-collapsed .nav-main { height: 48px; min-height: 48px; }
+
+@media (max-width: 900px) {
+  .admin-workspace,
+  .admin-workspace.sidebar-collapsed { display: block; }
+
+  .admin-workspace .sidebar,
+  .admin-workspace .sidebar.is-collapsed { width: 252px; }
+  .admin-workspace .sidebar.is-collapsed .nav-group,
+  .admin-workspace .sidebar.is-collapsed .nav-main { width: 100%; }
+  .admin-workspace .sidebar.is-collapsed .brand-logo { width: 56px; height: 48px; flex-basis: 56px; }
+  .admin-workspace .sidebar.is-collapsed .nav-main { justify-content: flex-start; gap: 12px; padding: 0 12px; }
+  .admin-workspace .sidebar.is-collapsed .nav-children { display: flex; }
+}
+
+/* Admin has longer navigation labels than Operator. Keep them readable at
+   the same width and font size instead of clipping them with an ellipsis. */
+.admin-workspace .nav-main > span {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.admin-workspace .nav-children a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-workspace .nav-main:focus-visible,
+.admin-workspace .nav-children a:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: -2px;
+}
+.admin-workspace .sidebar.is-collapsed .sidebar-footer { padding-top: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .admin-workspace,
+  .admin-workspace .sidebar,
+  .admin-workspace .nav-main,
+  .admin-workspace .nav-chevron { transition: none; }
+}

@@ -16,7 +16,7 @@ export function AdminSettingsPage() {
   };
 
   return (
-    <AdminPageShell title="System Settings" description="Configure cross-system operational thresholds and notification policies. Backend remains the final enforcement point." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
+    <AdminPageShell title="System Settings" description="Manage local operational preferences and notification settings. These preferences are saved in this browser only." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
       <div className="mb-3">
         <OperatorPanel title="Mission & fleet" eyebrow="OPERATIONAL THRESHOLDS">
           <div className="fields two">
@@ -35,20 +35,20 @@ export function AdminSettingsPage() {
       <OperatorPanel title="Notification settings" eyebrow="CHANNEL & EVENT POLICY" >
         <div id="notifications" className="toggle-list">
           {[
-            ["Payment notifications", "Payment success, failure and reconciliation events", "paymentNotifications"],
-            ["Order status notifications", "Customer order lifecycle changes", "orderStatusNotifications"],
-            ["Mission incident notifications", "Important mission incident events", "missionIncidentNotifications"],
-            ["Maintenance notifications", "Drone and battery maintenance changes", "maintenanceNotifications"],
-            ["System notifications", "Critical administrative platform notices", "systemNotifications"],
-            ["Email channel", "Send supported Admin notifications by email", "emailNotifications"],
-          ].map(([label, detail, key]) => (
+            ["Payment notifications", "paymentNotifications"],
+            ["Order status notifications", "orderStatusNotifications"],
+            ["Mission incident notifications", "missionIncidentNotifications"],
+            ["Maintenance notifications", "maintenanceNotifications"],
+            ["System notifications", "systemNotifications"],
+            ["Email channel", "emailNotifications"],
+          ].map(([label, key]) => (
             <div className="toggle-row" key={key}>
-              <span><strong>{label}</strong><small>{detail}</small></span>
+              <span><strong>{label}</strong></span>
               <Switch checked={Boolean(settings[key as keyof typeof settings])} onCheckedChange={(checked) => setSettings({ ...settings, [key]: checked })} aria-label={label} />
             </div>
           ))}
         </div>
-        {saved ? <div className="operator-toast">Settings saved successfully.</div> : null}
+        {saved ? <div className="operator-toast">Preferences saved on this device.</div> : null}
       </OperatorPanel>
     </AdminPageShell>
   );

@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CircleCheck, Plane, RadioTower, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -18,11 +19,11 @@ const statusTone = (status: string): 'success' | 'info' | 'warning' | 'neutral' 
 
 type AddDroneDraft = {
   name: string; model: string; serialNumber: string; payloadKg: string;
-  maxSpeed: string; hubId: string; acquisitionCost: string; status: 'Available' | 'Maintenance' | 'Retired';
+  maxSpeed: string; hubId: string; status: 'Available' | 'Maintenance' | 'Retired';
 };
 const emptyAddDroneDraft: AddDroneDraft = {
   name: '', model: '', serialNumber: '', payloadKg: '', maxSpeed: '',
-  hubId: '', acquisitionCost: '', status: 'Available',
+  hubId: '', status: 'Available',
 };
 
 export function DronesPage() {
@@ -54,7 +55,6 @@ export function DronesPage() {
     const serial = addDraft.serialNumber.trim();
     const payload = Number(addDraft.payloadKg);
     const speed = Number(addDraft.maxSpeed);
-    const cost = addDraft.acquisitionCost.trim() === '' ? null : Number(addDraft.acquisitionCost);
     const hubId = addDraft.hubId === '' ? null : Number(addDraft.hubId);
     if (!model || !serial || !addDraft.payloadKg.trim() || !Number.isFinite(payload) || payload <= 0 ||
       !addDraft.maxSpeed.trim() || !Number.isFinite(speed) || speed <= 0) {
@@ -69,10 +69,6 @@ export function DronesPage() {
       setAddError('Select a valid Hub or leave it unassigned.');
       return;
     }
-    if (cost !== null && (!Number.isFinite(cost) || cost < 0)) {
-      setAddError('Acquisition cost must be a non-negative number.');
-      return;
-    }
     setAddSaving(true);
     setAddError('');
     try {
@@ -81,11 +77,10 @@ export function DronesPage() {
         max_speed: speed, status: addDraft.status,
         ...(addDraft.name.trim() ? { name: addDraft.name.trim() } : {}),
         ...(hubId !== null ? { current_hub_id: hubId } : {}),
-        ...(cost !== null ? { acquisition_cost: cost } : {}),
       };
       await adminOperationsApi.createDrone(body);
       setAdding(false);
-      setNotice(`Drone ${serial} added successfully. List reloaded from Backend.`);
+      setNotice(`Drone ${serial} added successfully.`);
       await refresh();
     } catch (cause) {
       setAddError(apiError(cause));
@@ -114,7 +109,7 @@ export function DronesPage() {
   return <AdminPageShell title="Drones" description="Registered physical drones and their administrative availability."
     actions={<ActionButton icon="plus" onClick={openAddDrone}>Add Drone</ActionButton>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drones...</p>}
+    {loading && <OperatorLoadingState label="Loading drones…" />}
     {notice && <p role="status" className="mb-4 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Total drones" value={summary?.total_drones ?? drones.length} note="Registered drones" icon={Plane} />
@@ -139,7 +134,7 @@ export function DronesPage() {
           <td>{d.payload_capacity_kg} kg</td>
           <td><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></td>
         </tr>)}
-        {!loading && visible.length === 0 && <tr><td colSpan={8}>No drones found.</td></tr>}
+        {!loading && !error && visible.length === 0 && <tr><td colSpan={8}>No drones found.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
     <Dialog open={adding} onOpenChange={(open) => { if (!open && !addSaving) setAdding(false); }}>
@@ -147,7 +142,6 @@ export function DronesPage() {
         <form onSubmit={(event) => void addDrone(event)}>
           <div className="border-b border-border p-5">
             <DialogTitle className="text-lg font-semibold">Add Drone</DialogTitle>
-            <p className="mt-1 text-xs text-muted-foreground">Register one physical Drone using its unique serial number.</p>
           </div>
           <div className="fields two max-h-[65vh] overflow-y-auto p-5">
             <label><span>Drone name (optional)</span><input value={addDraft.name} onChange={(e) => setAddDraft({ ...addDraft, name: e.target.value })} /></label>
@@ -162,7 +156,6 @@ export function DronesPage() {
             <label><span>Status</span><select value={addDraft.status} onChange={(e) => setAddDraft({ ...addDraft, status: e.target.value as AddDroneDraft['status'] })}>
               <option value="Available">Available</option><option value="Maintenance">Maintenance</option><option value="Retired">Retired</option>
             </select></label>
-            <label className="sm:col-span-2"><span>Acquisition cost (optional)</span><input type="number" min="0" step="any" value={addDraft.acquisitionCost} onChange={(e) => setAddDraft({ ...addDraft, acquisitionCost: e.target.value })} /></label>
             {addError && <p className="sm:col-span-2 text-sm text-red-500" role="alert">{addError}</p>}
           </div>
           <div className="form-actions border-t border-border p-5">

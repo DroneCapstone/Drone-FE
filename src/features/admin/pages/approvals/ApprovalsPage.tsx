@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Link, useSearchParams } from 'react-router-dom';
@@ -98,7 +99,7 @@ const adminDialogFont = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Se
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-[13px] text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
 
-function ReplacementMetric({ label, value, note, icon: Icon }: {
+function ReplacementMetric({ label, value, icon: Icon }: {
 
   label: string;
 
@@ -110,13 +111,13 @@ function ReplacementMetric({ label, value, note, icon: Icon }: {
 
 }) {
 
-  return <div className="min-w-0 px-4 py-3" style={{
+  return <div className="flex min-w-0 flex-col justify-center px-4 py-3" style={{
 
     backgroundColor: '#FFFFFF', border: '1px solid #DDE2E8', borderRadius: 12,
 
     boxShadow: '0 8px 22px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.05)',
 
-    minHeight: 112,
+    minHeight: 88,
 
   }}>
 
@@ -129,8 +130,6 @@ function ReplacementMetric({ label, value, note, icon: Icon }: {
     </div>
 
     <strong className="mt-1 block text-2xl font-bold text-[var(--admin-text)]">{value}</strong>
-
-    <span className="mt-0.5 block text-[11px] text-[var(--admin-muted)]">{note}</span>
 
   </div>;
 
@@ -253,12 +252,12 @@ export function ApprovalsPage() {
   }
   async function confirmSupply() {
     if (!request || !rawRequest || !actionable || !canSupply || saving) return;
-    if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Backend supports one supplied battery ID per request; batch replacement needs Backend changes.'); return; }
-    if (!window.confirm(`Confirm supply for replacement ${request.id}? Backend will update stock and notify Technician.`)) return;
+    if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Only one replacement battery can be supplied per request.'); return; }
+    if (!window.confirm(`Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`)) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.supplyReplacement(rawRequest.request_id, request.type === 'BATTERY' ? chosenId : undefined);
-      closeRequest(); setNotice(`Replacement ${request.id} supplied by Backend.`); await refresh();
+      closeRequest(); setNotice(`Replacement ${request.id} supplied successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -269,7 +268,7 @@ export function ApprovalsPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.rejectReplacement(rawRequest.request_id, reason);
-      closeRequest(); setNotice(`Replacement ${request.id} rejected by Backend.`); await refresh();
+      closeRequest(); setNotice(`Replacement ${request.id} rejected successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -291,8 +290,8 @@ export function ApprovalsPage() {
 
     </div>
 
-    {loading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement records…</p>}
-    {detailLoading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement detail…</p>}
+    {loading && <OperatorLoadingState label="Loading replacement records…" />}
+    {detailLoading && <OperatorLoadingState label="Loading replacement detail…" compact />}
     {error && !request && <div role="alert" className="mb-3 text-sm text-red-500">{error}</div>}
     {notice && <div role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">{notice}</div>}
 
@@ -350,7 +349,7 @@ export function ApprovalsPage() {
 
           })}
 
-          {visible.length === 0 && <tr><td colSpan={7} className="text-center">No matching replacement records.</td></tr>}
+          {!loading && !error && visible.length === 0 && <tr><td colSpan={7} className="text-center">No matching replacement records.</td></tr>}
 
         </tbody>
 
@@ -360,7 +359,7 @@ export function ApprovalsPage() {
 
     <Dialog open={Boolean(requestId)} onOpenChange={(open) => { if (!open) closeRequest(); }}>
 
-      <DialogContent aria-describedby="replacement-detail-description"
+      <DialogContent aria-describedby={undefined}
 
         className="admin-replacement-dialog top-1/2 flex max-h-[calc(100dvh-32px)] w-[min(640px,calc(100%-30px))] -translate-y-1/2 flex-col overflow-hidden"
 
@@ -377,12 +376,6 @@ export function ApprovalsPage() {
               {request ? `Replacement ${request.id}` : 'Replacement not found'}
 
             </div></DialogTitle>
-
-            <p id="replacement-detail-description" className="mt-1 text-xs text-[var(--admin-muted)]">
-
-              {request ? (rejectMode ? 'Confirm the reason before rejecting this replacement' : 'Reported replacement details and supply confirmation') : 'This record is no longer available.'}
-
-            </p>
 
           </div>
 
@@ -406,7 +399,7 @@ export function ApprovalsPage() {
 
               <p className="mb-4 text-[13px] leading-relaxed text-[var(--admin-muted)]">
 
-                Review the reported issue and enter a reason. Rejecting closes this record without allocating a replacement item.
+                Rejecting closes this request without supplying an item.
 
               </p>
 
@@ -547,12 +540,6 @@ export function ApprovalsPage() {
                   </Link>
 
                 </div>}
-
-                <p className="mt-3 text-xs leading-relaxed text-[var(--admin-muted)]">
-
-                  Confirm Supply allocates this item once. Technician confirms receipt separately.
-
-                </p>
 
               </div>}
 
