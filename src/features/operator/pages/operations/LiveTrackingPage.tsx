@@ -377,7 +377,18 @@ export function LiveTrackingPage() {
           {filteredDrone.map((aircraft) => {
             const isSelected = selectedDrone?.id === aircraft.id;
             const healthClass = aircraft.health.toLowerCase();
-            const flightStatus = resolveLiveFlightStatus(aircraft, missionById[aircraft.missionId], hubNames);
+            const missionDetail = missionById[aircraft.missionId];
+            const missionDetailIndex = trackedMissionIds.indexOf(aircraft.missionId);
+            const missionDetailPending = !missionDetail && missionDetailIndex >= 0 &&
+              routesQuery[missionDetailIndex]?.isPending;
+            // Avoid showing "Flight: Disconnected" just because the flight-progress
+            // endpoint has not yet returned. Telemetry alerts remain visible.
+            const flightStatus = missionDetailPending
+              ? { key: 'unknown', label: 'Checking mission status', tone: 'neutral', detail: undefined }
+              : resolveLiveFlightStatus(aircraft, missionDetail, hubNames);
+            const alertMessage = aircraft.anomaly
+              ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}`
+              : '';
 
             return (
               <button
@@ -392,15 +403,15 @@ export function LiveTrackingPage() {
                     <strong>{aircraft.id}</strong>
                     <StatusBadge tone={healthTone[aircraft.health]}>{aircraft.health}</StatusBadge>
                   </span>
-                  <small>{aircraft.orderId ? `Delivery ${aircraft.orderId}` : `Mission ${aircraft.missionId || '—'}`}</small>
-                  <small>{formatRouteName(aircraft.route)}</small>
+                  <small title={aircraft.missionId || undefined}>Mission {aircraft.missionId || '—'}</small>
+                  <small title={formatRouteName(aircraft.route)}>{formatRouteName(aircraft.route)}</small>
                   <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
                     <span className="live-aircraft-flight-dot" aria-hidden="true" />
-                    <span>Flight: {flightStatus.label}</span>
+                    <span>{flightStatus.key === 'disconnected' ? 'Telemetry: Disconnected' : `Flight: ${flightStatus.label}`}</span>
                   </span>
                   {flightStatus.detail && <small title={flightStatus.detail}>{flightStatus.detail}</small>}
-                  <em className="live-aircraft-state">
-                    {aircraft.anomaly ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
+                  <em className="live-aircraft-state" title={alertMessage || 'Operating normally'}>
+                    {alertMessage || 'Operating normally'}
                   </em>
                 </span>
                 <span className="live-aircraft-card-metrics">
