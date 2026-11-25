@@ -9,15 +9,17 @@ import { OrderTable } from '../../components/OrderTable';
 import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrdersQuery } from '../../hooks/useOrderQueries';
 import {
+  canCreateMissionForOrder,
   getOrderPlanningBadge,
   sortOrdersByPlanningPriority,
 } from '../../utils/deliveryPlanning';
 import { OrderPageShell } from './OrderPageShell';
 
 const ALL_PLANNING_STATES = 'All planning states';
+const PLANNING_QUEUE = 'Planning queue';
 const ALL_DELIVERY_MODES = 'All delivery modes';
 
-// Show only the four requested planning states in the filter.
+// Keep the four BE planning states separate from the actionable Planning queue.
 // FUTURE may still exist in API data, but is not a selectable filter option.
 // Do not mix Order status (PENDING/AT_HUB/...) into this dropdown.
 const PLANNING_STATES = [
@@ -33,13 +35,13 @@ export function AllOrdersPage() {
   const readyLink = location.pathname.endsWith('/ready');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [status, setStatus] = useState(() => readyLink ? 'Ready for Planning' : ALL_PLANNING_STATES);
+  const [status, setStatus] = useState(() => readyLink ? PLANNING_QUEUE : ALL_PLANNING_STATES);
   const [deliveryMode, setDeliveryMode] = useState(ALL_DELIVERY_MODES);
   const [page, setPage] = useState(1);
   const { data: missions = [] } = useMissionListQuery();
 
   useEffect(() => {
-    setStatus(readyLink ? 'Ready for Planning' : ALL_PLANNING_STATES);
+    setStatus(readyLink ? PLANNING_QUEUE : ALL_PLANNING_STATES);
     setPage(1);
   }, [readyLink]);
 
@@ -63,8 +65,11 @@ export function AllOrdersPage() {
   const filtered = sortOrdersByPlanningPriority(
     orders.filter((order) => {
       const matchesMode = deliveryMode === ALL_DELIVERY_MODES || order.deliveryMode === deliveryMode;
+      // The Dashboard queue uses BE permission, not the planning-state label.
       const matchesState = status === ALL_PLANNING_STATES
-        || getOrderPlanningBadge(order, missions) === status;
+        || (status === PLANNING_QUEUE
+          ? canCreateMissionForOrder(order, missions)
+          : getOrderPlanningBadge(order, missions) === status);
       return matchesMode && matchesState;
     }),
     missions,
@@ -94,7 +99,7 @@ export function AllOrdersPage() {
           </div>
           <DropdownSelect
             value={status}
-            options={[ALL_PLANNING_STATES, ...PLANNING_STATES]}
+            options={[ALL_PLANNING_STATES, PLANNING_QUEUE, ...PLANNING_STATES]}
             onChange={(value) => {
               setStatus(value);
               setPage(1);
