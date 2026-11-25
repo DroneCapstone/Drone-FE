@@ -404,7 +404,6 @@ export function LiveTrackingPage() {
                     <StatusBadge tone={healthTone[aircraft.health]}>{aircraft.health}</StatusBadge>
                   </span>
                   <small title={aircraft.missionId || undefined}>Mission {aircraft.missionId || '—'}</small>
-                  <small title={formatRouteName(aircraft.route)}>{formatRouteName(aircraft.route)}</small>
                   <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
                     <span className="live-aircraft-flight-dot" aria-hidden="true" />
                     <span>{flightStatus.key === 'disconnected' ? 'Telemetry: Disconnected' : `Flight: ${flightStatus.label}`}</span>
