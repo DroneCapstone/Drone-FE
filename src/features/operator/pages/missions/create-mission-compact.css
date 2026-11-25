@@ -1042,7 +1042,7 @@
   box-sizing: border-box;
   /* Rendered via createPortal(document.body): inherit the same typeface as
      .app-shell .main-column instead of browser defaults (serif headings). */
-  font-family: "Montserrat", "DM Sans", "Segoe UI", sans-serif;
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
   width: min(100%, 560px);
   max-height: min(85dvh, 750px);
   overflow: auto;

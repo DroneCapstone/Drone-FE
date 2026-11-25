@@ -43,7 +43,7 @@ export function CustomerContactDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="operator-contact-dialog">
         <div className="border-b border-border px-5 py-4">
           <DialogTitle className="text-base font-semibold">Record customer contact</DialogTitle>
           <p className="mt-1 text-sm text-muted-foreground">

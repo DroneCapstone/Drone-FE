@@ -30,3 +30,48 @@
 .live-geo-route-legend i{width:22px;height:0;display:inline-block;flex:none;border-top:3px solid #fb923c}
 .live-geo-route-legend i.live-geo-route-dash{border-top:3px dashed #f97316}
 @media(max-width:720px){.live-geo-route-legend{bottom:53px;right:10px;max-width:calc(100% - 20px);font-size:9px;gap:8px}}
+
+/* A drone can occupy the same geographic point as a Hub marker. Keep the
+   Hub name readable above the aircraft without covering the drone symbol. */
+.live-geo-hub.live-geo-hub--occupied .live-geo-hub-badge {
+  opacity: 0;
+  pointer-events: none;
+}
+.live-geo-hub.live-geo-hub--occupied .live-geo-hub-label {
+  position: relative;
+  top: -34px;
+  left: -22px;
+  z-index: 2;
+  border: 1px solid #0e7490;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+
+/* Flight-path scope uses the existing map controls and theme tokens. */
+.live-geo-layers .live-geo-path-scope {
+  max-width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(0,0,0,.11);
+}
+.live-geo-layers .live-geo-path-scope.active {
+  border-color: #0891b2;
+  color: #0891b2;
+}
+.live-geo-layers .live-geo-path-scope option {
+  color: var(--text);
+  background: var(--surface);
+}
+.live-geo-controls button:disabled { opacity: .5; cursor: not-allowed; }
+.live-geo-layers { max-width: calc(100% - 26px); flex-wrap: wrap; }
+.live-geo-route-legend i { border-top-color: #f97316; }
+@media(max-width: 960px) {
+  .live-geo-route-legend { bottom: 53px; }
+}
