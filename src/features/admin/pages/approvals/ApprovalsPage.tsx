@@ -349,7 +349,7 @@ export function ApprovalsPage() {
 
           })}
 
-          {visible.length === 0 && <tr><td colSpan={7} className="text-center">No matching replacement records.</td></tr>}
+          {!loading && !error && visible.length === 0 && <tr><td colSpan={7} className="text-center">No matching replacement records.</td></tr>}
 
         </tbody>
 

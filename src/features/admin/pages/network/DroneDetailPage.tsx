@@ -26,6 +26,9 @@ export function DroneDetailPage() {
   const [flights, setFlights] = useState<FlightHistoryApi | null>(null);
   const [loading, setLoading] = useState(true);
   const [tabLoading, setTabLoading] = useState(false);
+  const [tabResult, setTabResult] = useState<{ key: string; ok: boolean } | null>(null);
+  const tabKey = `${droneId}:${tab}`;
+  const tabPending = tab !== 'overview' && (tabLoading || tabResult?.key !== tabKey);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -45,17 +48,17 @@ export function DroneDetailPage() {
   }
   useEffect(() => { setDrone(null); setTab('overview'); void refresh(); }, [droneId]);
   useEffect(() => {
-    if (!droneId || tab === 'overview') return;
+    if (!droneId || tab === 'overview') { setTabLoading(false); setTabResult(null); return; }
     let live = true;
-    setTabLoading(true);
+    setTabLoading(true); setTabResult(null);
     const req = tab === 'maintenance' ? adminOperationsApi.droneMaintenance(droneId) : tab === 'orders' ? adminOperationsApi.droneWorkOrders(droneId) : adminOperationsApi.droneFlights(droneId);
     void req.then((result) => {
       if (!live) return;
       if (tab === 'maintenance') setMaintenance(result as DroneMaintenanceApi);
       else if (tab === 'orders') setOrders(result as WorkOrderApi[]);
       else setFlights(result as FlightHistoryApi);
-      setError('');
-    }).catch((cause: unknown) => { if (live) setError(apiError(cause)); }).finally(() => { if (live) setTabLoading(false); });
+      setError(''); setTabResult({ key: tabKey, ok: true });
+    }).catch((cause: unknown) => { if (live) { setError(apiError(cause)); setTabResult({ key: tabKey, ok: false }); } }).finally(() => { if (live) setTabLoading(false); });
     return () => { live = false; };
   }, [droneId, tab]);
 
@@ -101,10 +104,10 @@ export function DroneDetailPage() {
       {loading && <OperatorLoadingState label="Loading drone details…" compact />}
       {error && <p role="alert" className="dd-error">{error}</p>}
       {notice && <p role="status" className="dd-notice">{notice}</p>}
-      {drone && <>
+      {!loading && drone && <>
         <div className="dd-tabs" role="tablist" aria-label="Drone detail tabs">{detailTabs.map(({ id, label }) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'dd-tab is-active' : 'dd-tab'} onClick={() => setTab(id)}>{label}</button>)}</div>
-        {tabLoading && <OperatorLoadingState label="Loading details…" compact />}
-        <div role="tabpanel">
+        {tabPending && <OperatorLoadingState label="Loading details…" compact />}
+        {(tab === 'overview' || (!tabPending && tabResult?.ok)) && <div role="tabpanel">
         {tab === 'overview' && <div className="dd-overview">
           <DetailCard title="Drone information" action={<button type="button" className="dd-edit-btn" onClick={() => setEditing(true)}><Pencil size={15}/> Edit</button>}>
             <div className="dd-master-fields-grid">
@@ -136,7 +139,7 @@ export function DroneDetailPage() {
           {flights.flights.map((f, i) => <tr key={f.flight_code ?? f.flight_id ?? f.id ?? i}><td>{f.flight_code ?? f.flight_id ?? f.id ?? '—'}</td><td>{f.mission_id ?? '—'}</td><td>{f.route ?? '—'}</td><td>{dateText(f.departure ?? f.departed_at)}</td><td>{f.status ?? '—'}</td></tr>)}
           {flights.flights.length === 0 && <tr><td colSpan={5}>No flight history.</td></tr>}
         </tbody></table></div></DetailCard>}
-        </div>
+        </div>}
       </>}
     </div>
     <Dialog open={editing} onOpenChange={(open) => !open && setEditing(false)}>{drone && editing && <DialogContent><form onSubmit={(event) => void save(event)}>

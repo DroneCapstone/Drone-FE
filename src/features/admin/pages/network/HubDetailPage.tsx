@@ -16,7 +16,7 @@ export function HubDetailPage() {
   const [assetTab, setAssetTab] = useState<'drones' | 'batteries'>('drones');
   useEffect(() => {
     if (!hubId) return;
-    let live = true; setLoading(true); setHub(null);
+    let live = true; setLoading(true); setHub(null); setSpareStock([]); setError('');
     void adminOperationsApi.hub(hubId).then(async (data) => {
       if (!live) return;
       setHub(data); setError('');
@@ -38,7 +38,7 @@ export function HubDetailPage() {
     <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/hubs"><ArrowLeft size={15} />Back to Hubs</Link>
     {loading && <OperatorLoadingState label="Loading hub details…" compact />}
     {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
-    {hub && <div className="admin-hub-detail">
+    {!loading && hub && <div className="admin-hub-detail">
       <section className="admin-hub-section" aria-labelledby="hub-information">
         <h2 id="hub-information" className="admin-hub-section-title"><MapPin size={17} aria-hidden="true" />Hub information</h2>
         <div className="admin-hub-info-grid">
@@ -71,7 +71,7 @@ export function HubDetailPage() {
         <h2 id="hub-spareparts" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Spare parts at this Hub</h2>
         <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Part</th><th>Quantity</th><th>Minimum threshold</th><th>Stock alert</th></tr></thead><tbody>
           {spareStock.map((part) => <tr key={`${part.hub_id}:${part.part_category_id}`}><td><strong>{part.part_name}</strong></td><td>{part.quantity}</td><td>{part.min_stock_threshold}</td><td>{part.is_low_stock ? 'Low stock' : 'Normal'}</td></tr>)}
-          {spareStock.length === 0 && <tr><td colSpan={4}>No spare parts registered for this Hub.</td></tr>}
+          {!error && spareStock.length === 0 && <tr><td colSpan={4}>No spare parts registered for this Hub.</td></tr>}
         </tbody></table></div>
       </section>
     </div>}

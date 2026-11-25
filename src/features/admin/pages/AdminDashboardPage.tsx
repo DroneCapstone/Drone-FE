@@ -140,7 +140,7 @@ export function AdminDashboardPage() {
     <AdminPageShell title="Dashboard" description="">
       {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
       {loading && <OperatorLoadingState label="Loading dashboard…" />}
-      {data && <>
+      {!loading && !error && data && <>
         {/* Four primary KPIs only; secondary figures are presented in charts below. */}
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Recorded revenue" icon={Wallet} />
@@ -181,7 +181,7 @@ export function AdminDashboardPage() {
               <div className="rounded-lg bg-[#FEF2F2] p-3"><ShieldAlert size={17} className="mb-2 text-[#DC2626]" /><strong className="block text-2xl text-[#172033]">{data.alerts.open_incidents}</strong><span className="text-xs text-[#8A4A4A]">Open incidents</span></div>
               <div className="rounded-lg bg-[#EFF6FF] p-3"><Bell size={17} className="mb-2 text-[#2563EB]" /><strong className="block text-2xl text-[#172033]">{data.alerts.total_audit_logs}</strong><span className="text-xs text-[#526B91]">Audit events</span></div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Live backend summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Operational summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
           </ChartPanel>
         </div>
 
@@ -197,19 +197,20 @@ export function AdminDashboardPage() {
 
 function RevenueChartPanel() {
   const [chartData, setChartData] = useState<Array<{ date: string; revenue: number; mission_count: number }>>([]);
+  const [chartError, setChartError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     adminOperationsApi.revenueChart(30)
       .then((res) => { setChartData(res.data ?? []); })
-      .catch(() => {/* silent */})
+      .catch(() => setChartError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || chartData.length === 0) {
+  if (loading || chartError || chartData.length === 0) {
     return (
       <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
-        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">No data available yet.</p>}
+        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">{chartError ? "Unable to load revenue trend." : "No data available yet."}</p>}
       </ChartPanel>
     );
   }

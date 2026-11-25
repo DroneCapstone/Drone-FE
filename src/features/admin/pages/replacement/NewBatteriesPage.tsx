@@ -188,7 +188,7 @@ export function NewBatteriesPage() {
             <ActionButton variant="secondary" onClick={() => openCreate(item.name)}>Add Quantity</ActionButton>
           </div></td>
         </tr>)}
-          {!shown.length && <tr><td colSpan={4} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
+          {!loading && !error && !shown.length && <tr><td colSpan={4} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
         </tbody></table></div>
     </OperatorPanel>
     {expandedModel && <OperatorPanel className="flush-panel mt-4">
@@ -206,7 +206,7 @@ export function NewBatteriesPage() {
             <button type="button" aria-label={`Remove ${battery.id}`} title="Remove new battery" onClick={() => { setError(''); setNotice(''); setRemovalReason(''); setRemoving(battery); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-red-500 hover:border-red-400"><Trash2 size={15} /></button>
           </div></td>
         </tr>)}
-        {expandedUnits.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
+        {!loading && !error && expandedUnits.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>}
 

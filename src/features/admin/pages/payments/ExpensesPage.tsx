@@ -58,7 +58,7 @@ export function ExpensesPage() {
     <OperatorPanel title="Acquisition costs by category" eyebrow="COST BREAKDOWN">
       <div className="table-wrap"><table><thead><tr><th>Category</th><th>Recorded amount</th></tr></thead><tbody>
         {breakdownEntries.map(([category, value]) => <tr key={category}><td>{category.replace(/_/g, ' ')}</td><td><strong>{money(value as number)}</strong></td></tr>)}
-        {!loading && !breakdownEntries.length && <tr><td colSpan={2}>No cost breakdown available.</td></tr>}
+        {!loading && !error && !breakdownEntries.length && <tr><td colSpan={2}>No cost breakdown available.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
     <div className="mt-4"><OperatorPanel title="Recorded cost history" eyebrow="FINANCIAL HISTORY">
@@ -68,7 +68,7 @@ export function ExpensesPage() {
           <td>{field(item, 'category', 'type', 'reason')}</td><td>{adminDisplayText(field(item, 'description', 'message'))}</td>
           <td><strong>{money(amount(item, 'amount_vnd', 'amount', 'total'))}</strong></td>
         </tr>)}
-        {!loading && !entries.length && <tr><td colSpan={5}>No cost history available.</td></tr>}
+        {!loading && !error && !entries.length && <tr><td colSpan={5}>No cost history available.</td></tr>}
       </tbody></table></div>
     </OperatorPanel></div>
     {(report || stockReport) && <details className="mt-3 rounded-lg border border-[var(--admin-border)] p-3 text-xs">

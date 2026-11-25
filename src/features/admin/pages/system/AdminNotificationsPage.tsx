@@ -39,6 +39,6 @@ export function AdminNotificationsPage() {
       <span className="min-w-0 flex-1"><strong className="text-[13px]">{adminDisplayText(item.title)}</strong><span className="block mt-1 text-[12px] text-[var(--admin-muted)]">{adminDisplayText(item.message)}</span><span className="block mt-2 text-[10px] uppercase tracking-wide text-[var(--admin-muted)]">{adminDisplayText(item.notifications_type)} · {new Date(item.created_at).toLocaleString('en-GB')}</span></span>
       <span className="text-[11px]">{item.is_read ? 'Read' : 'Unread'}</span>
     </button>)}
-    {!loading && items.length === 0 && <p className="p-4 text-sm text-muted-foreground">No notifications.</p>}</div>
+    {!loading && !error && items.length === 0 && <p className="p-4 text-sm text-muted-foreground">No notifications.</p>}</div>
   </AdminPageShell>;
 }

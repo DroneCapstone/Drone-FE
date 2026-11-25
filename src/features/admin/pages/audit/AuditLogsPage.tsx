@@ -33,7 +33,7 @@ export function AuditLogsPage() {
       {loading && <OperatorLoadingState label="Loading audit logs…" />}
       <div className="table-wrap"><table><thead><tr><th>Time</th><th>Actor ID</th><th>Action</th><th>Resource</th><th>Event details</th></tr></thead><tbody>
         {visible.map((log) => <tr key={log.id}><td>{new Date(log.created_at).toLocaleString('en-GB')}</td><td><strong>{log.user_id ?? 'System'}</strong></td><td>{adminDisplayText(log.action)}</td><td>{adminDisplayText(log.resource_table)}</td><td><small>{log.details_json ? adminDetailText(log.details_json) : '—'}</small></td></tr>)}
-        {!loading && visible.length === 0 && <tr><td colSpan={5}>No audit entries found.</td></tr>}
+        {!loading && !error && visible.length === 0 && <tr><td colSpan={5}>No audit entries found.</td></tr>}
       </tbody></table></div>
       <div className="flex items-center justify-end gap-3 border-t border-border p-4"><ActionButton variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage((p) => p - 1)}>Previous</ActionButton><span className="text-xs">Page {page} / {Math.max(1, Math.ceil(total / 30))}</span><ActionButton variant="secondary" disabled={page * 30 >= total || loading} onClick={() => setPage((p) => p + 1)}>Next</ActionButton></div>
     </OperatorPanel>

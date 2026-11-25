@@ -177,6 +177,9 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
       actions={<ActionButton onClick={openCreate}><Plus size={16} aria-hidden="true" /> Create hub</ActionButton>}
     >
+      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
+      {loading ? <OperatorLoadingState label="Loading hubs…" /> : summary !== null && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminSummaryCard label="Total hubs" value={summary?.total_hubs ?? hubs.length} note="Registered hubs" icon={MapPin} />
         <AdminSummaryCard label="Active" value={summary?.active_hubs ?? hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
@@ -184,9 +187,6 @@ export function HubsPage() {
         <AdminSummaryCard label="Batteries" value={summary?.total_batteries ?? batteriesCount} note="Assigned to Hubs" icon={BatteryCharging} />
       </div>
 
-      {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
-      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-      {loading && <OperatorLoadingState label="Loading hubs…" />}
       <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">
@@ -223,10 +223,12 @@ export function HubsPage() {
                   </td>
                 </tr>
               ))}
+              {!visible.length && <tr><td colSpan={7} className="p-5 text-center">{hubs.length ? "No hubs match your filters." : "No hubs available yet."}</td></tr>}
             </tbody>
           </table>
         </div>
       </OperatorPanel>
+      </>}
 
       <Dialog open={creating} onOpenChange={(open) => { if (!open && !createSaving) setCreating(false); }}>
         {creating ? (
