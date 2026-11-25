@@ -3,7 +3,6 @@ import type { LucideIcon } from "lucide-react";
 export function AdminMetricCard({
   label,
   value,
-  helper,
   icon: Icon,
   accent = false,
 }: {
@@ -20,7 +19,6 @@ export function AdminMetricCard({
         <Icon size={16} strokeWidth={1.5} />
       </div>
       <strong>{value}</strong>
-      {helper ? <small>{helper}</small> : null}
     </div>
   );
 }

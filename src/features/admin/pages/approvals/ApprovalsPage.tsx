@@ -99,7 +99,7 @@ const adminDialogFont = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Se
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-[13px] text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
 
-function ReplacementMetric({ label, value, note, icon: Icon }: {
+function ReplacementMetric({ label, value, icon: Icon }: {
 
   label: string;
 
@@ -111,13 +111,13 @@ function ReplacementMetric({ label, value, note, icon: Icon }: {
 
 }) {
 
-  return <div className="min-w-0 px-4 py-3" style={{
+  return <div className="flex min-w-0 flex-col justify-center px-4 py-3" style={{
 
     backgroundColor: '#FFFFFF', border: '1px solid #DDE2E8', borderRadius: 12,
 
     boxShadow: '0 8px 22px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.05)',
 
-    minHeight: 112,
+    minHeight: 88,
 
   }}>
 
@@ -130,8 +130,6 @@ function ReplacementMetric({ label, value, note, icon: Icon }: {
     </div>
 
     <strong className="mt-1 block text-2xl font-bold text-[var(--admin-text)]">{value}</strong>
-
-    <span className="mt-0.5 block text-[11px] text-[var(--admin-muted)]">{note}</span>
 
   </div>;
 
