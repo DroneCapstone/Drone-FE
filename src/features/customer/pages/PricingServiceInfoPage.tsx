@@ -65,11 +65,7 @@ export function PricingServiceInfoPage() {
       <section className="overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#111014] shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
         <div className="grid lg:grid-cols-[1.08fr_0.92fr]">
           <div className="p-5 sm:p-7 lg:p-9">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-400">
-              Pricing & services
-            </p>
-
-            <h1 className="mt-3 max-w-[640px] text-[34px] font-semibold leading-[1.02] tracking-[-0.05em] text-white sm:text-[44px]">
+            <h1 className="max-w-[640px] text-[34px] font-semibold leading-[1.02] tracking-[-0.05em] text-white sm:text-[44px]">
               Choose a delivery option that fits your order
             </h1>
 
@@ -123,7 +119,7 @@ export function PricingServiceInfoPage() {
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(17,16,20,0.82),rgba(17,16,20,0.08)_44%,rgba(17,16,20,0.02))]" />
 
             <div className="customer-keep-dark absolute bottom-5 right-5 rounded-2xl border border-white/[0.12] bg-black/50 px-4 py-3 backdrop-blur-md">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/[0.96]">
+              <p className="text-[10px] font-semibold capitalize tracking-normal text-white/[0.96]">
                 Final price
               </p>
 
@@ -139,7 +135,7 @@ export function PricingServiceInfoPage() {
       <section className="mt-8">
         <SectionHeader
           title="Choose your delivery"
-          subtitle="Three options to match your urgency and preferred delivery time."
+          subtitle=""
         />
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -193,7 +189,7 @@ export function PricingServiceInfoPage() {
       <section className="mt-8">
         <SectionHeader
           title="Price at a glance"
-          subtitle="The backend calculates the exact quotation from your selected route and package."
+          subtitle=""
         />
 
         <div className="mt-4 rounded-[22px] border border-white/[0.10] bg-[#151217]/94 p-4 sm:p-5">
@@ -268,7 +264,7 @@ export function PricingServiceInfoPage() {
       >
         <SectionHeader
           title="Package size guide"
-          subtitle="Choose the smallest size that safely fits your package."
+          subtitle=""
         />
 
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -414,7 +410,7 @@ export function PricingServiceInfoPage() {
       <section className="mt-8">
         <SectionHeader
           title="Extra services"
-          subtitle="Add only what your package needs."
+          subtitle=""
         />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -449,7 +445,7 @@ export function PricingServiceInfoPage() {
             </p>
 
             <p className="mt-1.5 max-w-[600px] text-[12px] leading-5 text-white/[0.96]">
-              Enter your route and package details to get the live backend quotation.
+              Enter your route and package details to get the live quotation.
             </p>
           </div>
 

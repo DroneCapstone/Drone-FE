@@ -1,10 +1,15 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { ChevronDown, LoaderCircle, MessageCircle, Send, X } from "lucide-react";
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, LoaderCircle, Send, X } from "lucide-react";
+import brandLogo from "../../../assets/images/home/logo.png";
+import mascotDirections from "../../../assets/mascot/delivery-drone-directions.webp";
 import mascotReactions from "../../../assets/mascot/delivery-drone-reactions.webp";
 import {
   askTechnicianChatbot,
+  getTechnicianQuickQuestions,
+  isVietnameseQuestion,
   type TechnicianChatWorkOrderContext,
 } from "../api/technicianChatbotApi";
+import { TechnicianChatMarkdown } from "./TechnicianChatMarkdown";
 
 type ChatMessage = {
   id: number;
@@ -14,14 +19,38 @@ type ChatMessage = {
 };
 
 type MascotMood = "happy" | "thinking" | "sleep";
+type QuickQuestionsStatus = "idle" | "loading" | "ready" | "error";
+type LookDirection = { row: 0 | 1 | 2; col: 0 | 1 | 2 };
 
-function Mascot({ mood = "happy", size = 40 }: { mood?: MascotMood; size?: number }) {
-  // delivery-drone-reactions.webp is the user's 3x3 sprite sheet.
-  const positions: Record<MascotMood, string> = {
+// These are example input prompts, NOT simulated AI responses.
+// Backend questions take priority when they are in English; if it only
+// returns Vietnamese suggestions, preserve the English-first UI.
+const ENGLISH_STARTER_QUESTIONS = [
+  "How do I troubleshoot a drone that won't power on?",
+  "What should I inspect after telemetry signal loss?",
+  "How can I check battery health safely?",
+  "What should I check before returning a drone to service?",
+];
+
+function Mascot({
+  mood = "happy",
+  size = 42,
+  look,
+}: {
+  mood?: MascotMood;
+  size?: number;
+  look?: LookDirection;
+}) {
+  const reactionPositions: Record<MascotMood, string> = {
     happy: "0% 0%",
     thinking: "50% 50%",
     sleep: "0% 100%",
   };
+  const image = look ? mascotDirections : mascotReactions;
+  const position = look
+    ? `${look.col * 50}% ${look.row * 50}%`
+    : reactionPositions[mood];
+
   return (
     <span
       aria-hidden="true"
@@ -29,36 +58,106 @@ function Mascot({ mood = "happy", size = 40 }: { mood?: MascotMood; size?: numbe
       style={{
         width: size,
         height: size,
-        backgroundImage: `url(${mascotReactions})`,
+        backgroundImage: `url(${image})`,
         backgroundSize: "300% 300%",
-        backgroundPosition: positions[mood],
+        backgroundPosition: position,
       }}
     />
   );
 }
 
-const SUGGESTIONS = [
-  "Drone mất tín hiệu telemetry: cần kiểm tra gì?",
-  "Cách kiểm tra pin yếu hoặc sụt áp an toàn?",
-  "Đề xuất quy trình kiểm tra motor và cánh quạt.",
-  "Checklist trước khi đưa drone về Available?",
-];
+/** Sprite direction follows the global pointer, relative to the robot's launcher. */
+function directionToPointer(dx: number, dy: number): LookDirection {
+  if (Math.hypot(dx, dy) < 22) return { row: 1, col: 1 };
+  return {
+    row: Math.abs(dy) < Math.abs(dx) * 0.45 ? 1 : dy < 0 ? 0 : 2,
+    col: Math.abs(dx) < Math.abs(dy) * 0.45 ? 1 : dx < 0 ? 0 : 2,
+  };
+}
 
 export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrderContext }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [quickQuestions, setQuickQuestions] = useState<string[]>([]);
+  const [quickQuestionsStatus, setQuickQuestionsStatus] = useState<QuickQuestionsStatus>("idle");
+  const [showQuickQuestions, setShowQuickQuestions] = useState(true);
+  const [look, setLook] = useState<LookDirection>({ row: 1, col: 1 });
+
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
+  const quickAbortRef = useRef<AbortController | null>(null);
+  const quickRequestedRef = useRef(false);
+  const quickLoadingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const launcherRef = useRef<HTMLButtonElement | null>(null);
   const contextRef = useRef(context);
   contextRef.current = context;
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
+  const loadQuickQuestions = useCallback(async () => {
+    if (quickLoadingRef.current) return;
+    quickLoadingRef.current = true;
+    quickRequestedRef.current = true;
+    setQuickQuestionsStatus("loading");
+    const controller = new AbortController();
+    quickAbortRef.current = controller;
+    try {
+      const questions = await getTechnicianQuickQuestions(controller.signal);
+      if (controller.signal.aborted) return;
+      // This endpoint has no documented language option. Keep the initial UI
+      // English and use local English prompts only if BE returned no English ones.
+      setQuickQuestions(questions.filter((question) => !isVietnameseQuestion(question)).slice(0, 4));
+      setQuickQuestionsStatus("ready");
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setQuickQuestionsStatus("error");
+    } finally {
+      if (quickAbortRef.current === controller) quickAbortRef.current = null;
+      quickLoadingRef.current = false;
+    }
   }, []);
+
+  // Only one pointer listener regardless of the number of messages/mascots.
+  // The 3x3 directional sheet is already part of src/assets/mascot.
+  useEffect(() => {
+    let animationFrame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    const update = () => {
+      animationFrame = 0;
+      const rect = launcherRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const next = directionToPointer(
+        pointerX - (rect.left + rect.width / 2),
+        pointerY - (rect.top + rect.height / 2),
+      );
+      setLook((previous) =>
+        previous.row === next.row && previous.col === next.col ? previous : next,
+      );
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(update);
+    };
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    };
+  }, []);
+
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    quickAbortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    if (open && !quickRequestedRef.current) void loadQuickQuestions();
+  }, [open, loadQuickQuestions]);
 
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -72,21 +171,24 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
     const question = text.trim();
     if (!question || sending) return;
     setDraft("");
-    setMessages((current) => [...current, { id: nextId.current++, role: "user", text: question }]);
+    setMessages((previous) => [...previous, { id: nextId.current++, role: "user", text: question }]);
     setSending(true);
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const reply = await askTechnicianChatbot(question, contextRef.current, controller.signal);
+      const answer = await askTechnicianChatbot(question, contextRef.current, controller.signal);
       if (controller.signal.aborted) return;
-      setMessages((current) => [...current, { id: nextId.current++, role: "assistant", text: reply }]);
+      setMessages((previous) => [...previous, { id: nextId.current++, role: "assistant", text: answer }]);
     } catch (error) {
       if (controller.signal.aborted) return;
-      setMessages((current) => [...current, {
+      // Keep app UI in English. Do not inject raw server exceptions as chat content.
+      const status = error && typeof error === "object" && "status" in error ? String(error.status) : "";
+      const detail = status ? ` (HTTP ${status})` : "";
+      setMessages((previous) => [...previous, {
         id: nextId.current++,
         role: "assistant",
         error: true,
-        text: error instanceof Error ? error.message : "Không thể gửi câu hỏi đến AI. Vui lòng thử lại.",
+        text: `The maintenance assistant could not answer${detail}. Please try again.`,
       }]);
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -106,123 +208,143 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
     }
   }
 
+  const visibleSuggestions = quickQuestions.length ? quickQuestions : ENGLISH_STARTER_QUESTIONS;
+
   return (
     <div className="fixed bottom-4 right-4 z-[120] sm:bottom-6 sm:right-6">
       {open && (
         <section
           role="dialog"
           aria-modal="false"
-          aria-label="DroneOptAI Maintenance AI Assistant"
-          className="mb-3 flex h-[min(620px,calc(100dvh-115px))] w-[min(420px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-[0_22px_75px_rgba(0,0,0,0.50)]"
+          aria-label="DroneOptAI Maintenance Assistant"
+          className="mb-3 flex h-[min(670px,calc(100dvh-110px))] w-[min(440px,calc(100vw-24px))] flex-col overflow-hidden rounded-[26px] border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-[0_24px_80px_rgba(0,0,0,0.30)]"
         >
-          <div className="flex items-center justify-between border-b border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <Mascot size={47} mood={sending ? "thinking" : "happy"} />
+          {/* Customer-inspired header: soft surfaces, spacious text, rounded corners. */}
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src={brandLogo} alt="DroneOptAI logo" className="h-11 w-12 shrink-0 object-contain" />
               <div className="min-w-0">
-                <h2 className="truncate text-[14px] font-semibold text-[var(--tech-text)]">DroneOptAI Maintenance AI</h2>
-                <p className="truncate text-[11px] text-[var(--tech-muted)]">Tư vấn sự cố · {context.workOrderId}</p>
+                <h2 className="truncate text-[17px] font-semibold text-[var(--tech-text)]">DroneOptAI Maintenance AI</h2>
+                <p className="truncate text-[12px] text-[var(--tech-muted)]">Maintenance support · {context.workOrderId}</p>
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="Đóng chatbot"
+            <button type="button" aria-label="Close assistant" title="Close"
               onClick={() => setOpen(false)}
-              className="rounded-lg p-2 text-[var(--tech-muted)] hover:bg-orange-500/10 hover:text-orange-500"
-            >
-              <X size={17} />
+              className="shrink-0 rounded-full p-2 text-[var(--tech-muted)] hover:bg-orange-500/10 hover:text-orange-500">
+              <X size={19} />
             </button>
           </div>
 
-          <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4" aria-live="polite">
+          <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5" aria-live="polite">
             <div className="flex items-start gap-2.5">
               <Mascot size={37} />
-              <div className="max-w-[85%] rounded-xl rounded-tl-sm bg-[var(--tech-surface-2)] px-3.5 py-3 text-[13px] leading-6 text-[var(--tech-text-secondary)]">
-                Xin chào! Mình có thể hỗ trợ phân tích sự cố và gợi ý quy trình kiểm tra cho <strong>{context.droneId}</strong>. Bạn muốn kiểm tra vấn đề gì?
+              <div className="max-w-[85%] rounded-[22px] rounded-tl-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3 text-[13px] leading-6 text-[var(--tech-text-secondary)]">
+                Hi! I'm your DroneOptAI maintenance assistant. I can help you investigate faults and plan safe inspections for <strong className="font-semibold text-[var(--tech-text)]">{context.droneId}</strong>. What would you like to check?
               </div>
             </div>
-            {messages.length === 0 && (
-              <div className="space-y-2 pl-1">
-                <p className="text-[11px] font-medium text-[var(--tech-muted)]">Câu hỏi gợi ý</p>
-                {SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    disabled={sending}
-                    onClick={() => void sendQuestion(suggestion)}
-                    className="block w-full rounded-lg border border-[var(--tech-border)] px-3 py-2 text-left text-[12px] leading-5 text-[var(--tech-text-secondary)] hover:border-orange-500/40 hover:text-orange-500 disabled:opacity-50"
-                  >
-                    {suggestion}
+
+            {messages.map((message) => (
+              <div key={message.id} className={`flex items-start gap-2 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                {message.role === "assistant" && <Mascot size={32} mood={message.error ? "sleep" : "happy"} />}
+                <div className={`min-w-0 max-w-[86%] rounded-[22px] px-4 py-3 text-[13px] leading-6 ${
+                  message.role === "user"
+                    ? "rounded-tr-md bg-orange-500 text-black"
+                    : message.error
+                      ? "rounded-tl-md border border-red-500/30 bg-red-500/5 text-red-500"
+                      : "rounded-tl-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] text-[var(--tech-text-secondary)]"
+                }`}>
+                  {message.role === "assistant" && !message.error
+                    ? <TechnicianChatMarkdown text={message.text} />
+                    : <p className="whitespace-pre-wrap break-words">{message.text}</p>}
+                </div>
+              </div>
+            ))}
+
+            {sending && (
+              <div className="flex items-center gap-2.5 text-[12px] text-[var(--tech-muted)]">
+                <Mascot mood="thinking" size={32} />
+                <LoaderCircle size={15} className="animate-spin text-orange-500" />
+                Analyzing your question...
+              </div>
+            )}
+          </div>
+
+          {/* Quick prompts stay near the composer, like Customer Assistant. */}
+          <div className="border-t border-[var(--tech-border)] px-4 pb-4 pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold text-[var(--tech-text-secondary)]">Quick questions</span>
+              <div className="flex items-center gap-3">
+                {showQuickQuestions && quickQuestionsStatus === "loading" && (
+                  <LoaderCircle size={13} className="animate-spin text-orange-500" aria-label="Loading questions" />
+                )}
+                {showQuickQuestions && quickQuestionsStatus === "error" && (
+                  <button type="button" onClick={() => void loadQuickQuestions()}
+                    className="text-[11px] font-medium text-orange-500 hover:underline" title="Retry loading questions from Backend">
+                    Retry suggestions
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={showQuickQuestions ? "Hide quick questions" : "Show quick questions"}
+                  aria-expanded={showQuickQuestions}
+                  onClick={() => setShowQuickQuestions((value) => !value)}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--tech-muted)] transition-colors hover:bg-orange-500/10 hover:text-orange-500"
+                >
+                  {showQuickQuestions ? "Hide" : "Show"}
+                  <ChevronDown size={14} className={`transition-transform ${showQuickQuestions ? "" : "-rotate-90"}`} />
+                </button>
+              </div>
+            </div>
+            {showQuickQuestions && (
+              <div id="technician-quick-questions" className="mb-3 flex max-h-[90px] flex-wrap content-start gap-2 overflow-y-auto">
+                {visibleSuggestions.map((question) => (
+                  <button key={question} type="button" disabled={sending}
+                    onClick={() => void sendQuestion(question)}
+                    className="max-w-full rounded-full border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 py-1.5 text-left text-[11px] leading-4 text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500 disabled:opacity-40">
+                    {question}
                   </button>
                 ))}
               </div>
             )}
-            {messages.map((message) => (
-              <div key={message.id} className={`flex items-start gap-2 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                {message.role === "assistant" && <Mascot size={30} mood={message.error ? "sleep" : "happy"} />}
-                <p className={`max-w-[86%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-[13px] leading-6 ${
-                  message.role === "user"
-                    ? "rounded-tr-sm bg-orange-500 text-black"
-                    : message.error
-                      ? "rounded-tl-sm border border-red-500/30 bg-red-500/5 text-red-400"
-                      : "rounded-tl-sm bg-[var(--tech-surface-2)] text-[var(--tech-text-secondary)]"
-                }`}>{message.text}</p>
-              </div>
-            ))}
-            {sending && (
-              <div className="flex items-center gap-2 text-[12px] text-[var(--tech-muted)]">
-                <Mascot size={30} mood="thinking" />
-                <LoaderCircle size={14} className="animate-spin text-orange-500" /> AI đang phân tích...
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-[var(--tech-border)] p-3">
-            <p className="mb-2 text-[11px] leading-4 text-[var(--tech-muted)]">
-              AI chỉ hỗ trợ tham khảo. Technician phải kiểm tra thực tế trước khi quyết định bảo trì.
-            </p>
             <form onSubmit={handleSubmit} className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
-                aria-label="Nhập câu hỏi cho trợ lý AI"
+                aria-label="Ask the maintenance assistant"
                 rows={2}
                 maxLength={2000}
                 value={draft}
                 disabled={sending}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Hỏi AI về sự cố hoặc bảo trì..."
-                className="tech-control min-h-[60px] max-h-28 min-w-0 flex-1 resize-none rounded-lg px-3 py-2.5 text-[13px] leading-5"
+                placeholder="Ask about a fault or maintenance..."
+                className="tech-control min-h-[66px] max-h-28 min-w-0 flex-1 resize-none rounded-[18px] border-[var(--tech-border)] bg-[var(--tech-surface-2)] px-4 py-3 text-[13px] leading-5 text-[var(--tech-text)] placeholder:text-[var(--tech-muted)] focus:border-orange-500"
               />
-              <button
-                type="submit"
-                disabled={!draft.trim() || sending}
-                aria-label="Gửi câu hỏi"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {sending ? <LoaderCircle size={17} className="animate-spin" /> : <Send size={17} />}
+              <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message"
+                className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-[16px] bg-orange-500 text-black transition-colors hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40">
+                {sending ? <LoaderCircle size={19} className="animate-spin" /> : <Send size={20} />}
               </button>
             </form>
-            <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--tech-subtle)]">
-              <span>Enter để gửi · Shift+Enter xuống dòng</span>
+            <div className="mt-2 flex justify-between text-[10px] text-[var(--tech-muted)]">
+              <span>Enter to send · Shift+Enter for a new line</span>
               <span>{draft.length}/2000</span>
             </div>
+            <p className="mt-2 text-[10px] leading-4 text-[var(--tech-muted)]">
+              AI guidance is advisory. Always inspect the drone before making maintenance decisions.
+            </p>
           </div>
         </section>
       )}
 
       <button
+        ref={launcherRef}
         type="button"
-        aria-label={open ? "Thu gọn trợ lý AI" : "Mở trợ lý AI bảo trì"}
+        aria-label={open ? "Minimize maintenance assistant" : "Open maintenance assistant"}
         aria-expanded={open}
-        onClick={() => setOpen((previous) => !previous)}
-        className="ml-auto flex h-[62px] items-center gap-1 rounded-full border border-orange-500/40 bg-[var(--tech-surface)] pl-1.5 pr-4 text-[var(--tech-text)] shadow-[0_12px_36px_rgba(0,0,0,0.4)] transition-transform hover:-translate-y-0.5 hover:border-orange-500"
+        onClick={() => setOpen((value) => !value)}
+        title={open ? "Minimize maintenance assistant" : "Ask the maintenance assistant"}
+        className="ml-auto flex h-[88px] w-[88px] items-center justify-center rounded-full bg-transparent p-0 transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
       >
-        <Mascot size={51} mood={sending ? "thinking" : "happy"} />
-        <span className="flex flex-col items-start leading-tight">
-          <span className="text-[13px] font-semibold">Ask AI</span>
-          <span className="text-[10px] text-[var(--tech-muted)]">Maintenance assistant</span>
-        </span>
-        {open ? <ChevronDown size={15} className="ml-1 text-orange-500" /> : <MessageCircle size={15} className="ml-1 text-orange-500" />}
+        <Mascot look={look} size={84} />
       </button>
     </div>
   );

@@ -37,13 +37,13 @@ type StatusFilter = "ALL" | Status;
 // leaving an unused strip on the right when the viewport is wider than 1240px.
 // Keep practical minimums for order codes, hub/mission names and action buttons.
 const outboundTableGridTemplate = [
-  "minmax(145px, 1.15fr)", // Order / Mode
-  "minmax(135px, 1.05fr)", // Package
-  "minmax(185px, 1.5fr)",  // Destination Hub
-  "minmax(200px, 1.65fr)", // Mission / Drone
-  "minmax(105px, 0.85fr)", // Battery
-  "minmax(170px, 1.25fr)", // Status
-  "minmax(175px, 1.4fr)",  // Action
+  "minmax(160px, 1.15fr)", // Order / Mode
+  "minmax(125px, 0.9fr)",  // Package
+  "minmax(155px, 1.05fr)", // Destination Hub
+  "minmax(190px, 1.4fr)",  // Mission / Drone
+  "minmax(225px, 1.65fr)", // Assigned Battery: keep long IDs fully visible
+  "minmax(165px, 1.15fr)", // Status
+  "minmax(155px, 1.1fr)",  // Action
 ].join(" ");
 
 function display(value?: string | null): string {
@@ -378,7 +378,7 @@ export function OutboundDeliveriesPage() {
         </CardContent>
 
         <div className="overflow-x-auto">
-          <div className="w-full min-w-[1260px]">
+          <div className="w-full min-w-[1320px]">
             <div
               className="grid items-center gap-4 border-b border-[var(--tech-border)] px-5 py-3"
               style={{ gridTemplateColumns: outboundTableGridTemplate }}
@@ -439,9 +439,9 @@ export function OutboundDeliveriesPage() {
                       <div className="flex items-center gap-2">
                         <BatteryFull className="shrink-0 text-orange-500" size={14} />
                         <div className="min-w-0">
-                          <p className="truncate text-[12px] font-semibold text-orange-500" title={delivery.installedBatteryId}>{delivery.installedBatteryId}</p>
+                          <p className="break-all whitespace-normal text-[12px] font-semibold leading-5 text-orange-500" title={delivery.installedBatteryId}>{delivery.installedBatteryId}</p>
                           {delivery.assignedBatteryCode && delivery.assignedBatteryCode !== delivery.installedBatteryId && (
-                            <p className="mt-1 truncate text-[10px] text-[var(--tech-muted)]" title={delivery.assignedBatteryCode}>SN: {delivery.assignedBatteryCode}</p>
+                            <p className="mt-1 break-all whitespace-normal text-[10px] text-[var(--tech-muted)]" title={delivery.assignedBatteryCode}>SN: {delivery.assignedBatteryCode}</p>
                           )}
                           {delivery.batteryChargePct !== undefined && (
                             <p className="mt-1 text-[11px] text-[var(--tech-muted)]">{delivery.batteryChargePct}%</p>
@@ -654,7 +654,6 @@ export function OutboundDeliveriesPage() {
             <div className="flex items-start justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
               <div>
                 <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Outbound history</h2>
-              
               </div>
               <button type="button" aria-label="Close outbound history" onClick={() => setHistoryOpen(false)} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
             </div>

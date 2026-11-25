@@ -186,7 +186,55 @@ export function AdminDashboardPage() {
 
         <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2><p className="mt-1 text-xs text-[#8791A2]"></p></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
         <HubDroneMap hubs={hubs} drones={drones} />
+        <RevenueChartPanel />
       </>}
     </AdminPageShell>
+  );
+}
+
+// ── Revenue Trend Chart (last 30 days) ────────────────────────────────────────
+
+function RevenueChartPanel() {
+  const [chartData, setChartData] = useState<Array<{ date: string; revenue: number; mission_count: number }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    adminOperationsApi.revenueChart(30)
+      .then((res) => { setChartData(res.data ?? []); })
+      .catch(() => {/* silent */})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading || chartData.length === 0) {
+    return (
+      <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
+        <p className="text-xs text-[#8791A2]">{loading ? "Loading…" : "No data available yet."}</p>
+      </ChartPanel>
+    );
+  }
+
+  const maxRevenue = Math.max(...chartData.map((d) => d.revenue), 1);
+
+  return (
+    <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
+      <div className="flex h-40 items-end gap-[3px] overflow-hidden">
+        {chartData.map((d) => {
+          const pct = (d.revenue / maxRevenue) * 100;
+          return (
+            <div key={d.date} className="group relative flex flex-1 flex-col items-center justify-end" title={`${d.date}: ${Number(d.revenue).toLocaleString('vi-VN')} ₫ (${d.mission_count} missions)`}>
+              <div
+                className="w-full rounded-t-sm bg-orange-400 transition-all group-hover:bg-orange-500"
+                style={{ height: `${Math.max(pct, 2)}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[10px] text-[#8791A2]">
+        <span>{chartData[0]?.date}</span>
+        <span>Total: {Number(chartData.reduce((s, d) => s + d.revenue, 0)).toLocaleString('vi-VN')} ₫</span>
+        <span>{chartData[chartData.length - 1]?.date}</span>
+      </div>
+    </ChartPanel>
   );
 }

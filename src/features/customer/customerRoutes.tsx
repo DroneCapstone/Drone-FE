@@ -138,6 +138,15 @@ const OrderRatingPage =
     "OrderRatingPage",
   );
 
+const AddressBookPage =
+  lazyPage(
+    () =>
+      import(
+        "./pages/AddressBookPage"
+      ),
+    "AddressBookPage",
+  );
+
 export const customerRoutes: RouteObject[] =
   [
     {
@@ -236,6 +245,12 @@ export const customerRoutes: RouteObject[] =
       path: "profile",
       element: (
         <CustomerProfilePage />
+      ),
+    },
+    {
+      path: "addresses",
+      element: (
+        <AddressBookPage />
       ),
     },
   ];

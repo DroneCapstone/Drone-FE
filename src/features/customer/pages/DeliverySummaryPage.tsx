@@ -39,11 +39,7 @@ export function DeliverySummaryPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1050px] px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
-      <p className="text-[11px] uppercase tracking-[0.2em] text-orange-500">
-        Order created
-      </p>
-
-      <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.04em] sm:text-4xl">
+      <h1 className="text-[34px] font-semibold tracking-[-0.04em] sm:text-4xl">
         Complete payment
       </h1>
 
@@ -99,7 +95,7 @@ export function DeliverySummaryPage() {
         </section>
 
         <aside className="h-fit rounded-2xl border border-white/[0.10] bg-[#161217]/95 p-5 sm:p-6">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-white/[0.35]">
+          <p className="text-[10px] capitalize tracking-normal text-white/[0.35]">
             Backend quotation
           </p>
 

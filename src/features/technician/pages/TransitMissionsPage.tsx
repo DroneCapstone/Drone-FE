@@ -18,6 +18,8 @@ import {
 
   ArrowRight,
 
+  BatteryFull,
+
   Check,
 
   CircleAlert,
@@ -562,7 +564,8 @@ function canConfirmLandedMission(mission: TransitMission): boolean {
 
 const transitTableGrid =
 
-  "lg:grid-cols-[minmax(176px,1.1fr)_minmax(145px,0.9fr)_minmax(185px,1.1fr)_minmax(104px,0.65fr)_minmax(230px,1.35fr)_minmax(222px,1.3fr)] lg:items-center lg:gap-4";
+  // Balanced columns; battery IDs and handling notes have room to wrap naturally.
+  "lg:grid-cols-[minmax(185px,1.12fr)_minmax(175px,1.05fr)_minmax(170px,1fr)_minmax(170px,1fr)_minmax(260px,1.58fr)_minmax(175px,1.03fr)] lg:items-center lg:gap-5";
 
 
 
@@ -1392,7 +1395,7 @@ export function TransitMissionsPage() {
 
         <div className="lg:overflow-x-auto">
 
-          <div className="lg:min-w-[1190px]">
+          <div className="lg:min-w-[1320px]">
 
         <div className={`
 
@@ -1584,9 +1587,9 @@ export function TransitMissionsPage() {
 
                     {/* BATTERY */}
 
-                    <div>
+                    <div className="min-w-0">
 
-                      <p className="text-[13px] font-semibold text-[var(--tech-text-secondary)]">
+                      <p className="break-all text-[13px] font-semibold leading-5 text-[var(--tech-text-secondary)]">
 
                         {
 
@@ -1678,7 +1681,9 @@ export function TransitMissionsPage() {
 
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
 
-                      {(canConfirmLandedMission(mission) || mission.status === "Incoming") && !arrivalConfirmed && (
+                      {(canConfirmLandedMission(mission) || mission.status === "Incoming") && !arrivalConfirmed &&
+                        !(isContinuationMission(mission) && mission.status === "At Hub" &&
+                          !batterySwappedFor(mission)) && (
 
                         <Button
 
@@ -1744,9 +1749,8 @@ export function TransitMissionsPage() {
 
                       {isContinuationMission(mission) &&
                         (mission.status === "At Hub" || mission.status === "Ready") && (
-                        <div className="flex min-w-[170px] flex-col items-start gap-1 lg:items-end">
-                          {mission.status === "At Hub" && arrivalConfirmed &&
-                            !batterySwappedFor(mission) && (
+                        <div className="flex min-w-0 flex-col items-start gap-2 lg:items-end">
+                          {!batterySwappedFor(mission) && mission.status === "At Hub" ? (
                             <Button
                               type="button"
                               onClick={() => {
@@ -1755,30 +1759,28 @@ export function TransitMissionsPage() {
                                 setSelectedBatteryId("");
                               }}
                               disabled={batterySwapMutation.isPending || !mission.backendMissionId}
-                              className="h-9 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:opacity-50"
-                            >Swap Battery</Button>
-                          )}
-                          <Button
-                            type="button"
-                            onClick={() => void dispatchMission(mission)}
-                            disabled={!mission.backendMissionId || dispatchingKey !== null ||
-                              batterySwapMutation.isPending || dispatchMutation.isPending ||
-                              dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
-                              !arrivalConfirmed ||
-                              (mission.status !== "Ready" && !batterySwappedFor(mission))}
-                            title="Dispatch only after Backend confirms the battery swap"
-                            className="h-9 rounded-md bg-orange-500 px-3 text-[13px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <ArrowRight size={14} />
-                            {dispatchedRelayMissionIds.includes(arrivalKey(mission)) ? "Dispatched · syncing"
-                              : dispatchingKey === arrivalKey(mission) ? "Dispatching..." : "Dispatch"}
-                          </Button>
-                          {mission.status === "At Hub" && (
-                            <span className="text-[11px] text-[var(--tech-muted)] text-right">
-                              {batterySwappedFor(mission)
-                                ? "Battery swap confirmed · ready to dispatch"
-                                : "Select and confirm a compatible 100% battery first"}
-                            </span>
+                              aria-expanded={batteryPickerKey === arrivalKey(mission)}
+                              className="h-9 min-w-[142px] rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
+                            >
+                              <BatteryFull size={15} />
+                              Replace battery
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              onClick={() => void dispatchMission(mission)}
+                              disabled={!mission.backendMissionId || dispatchingKey !== null ||
+                                batterySwapMutation.isPending || dispatchMutation.isPending ||
+                                dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
+                                !arrivalConfirmed ||
+                                (mission.status !== "Ready" && !batterySwappedFor(mission))}
+                              title="Confirm dispatch of the next leg after Backend-verified battery replacement"
+                              className="h-9 min-w-[142px] rounded-md bg-orange-500 px-3 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <ArrowRight size={14} />
+                              {dispatchedRelayMissionIds.includes(arrivalKey(mission)) ? "Dispatched · syncing"
+                                : dispatchingKey === arrivalKey(mission) ? "Dispatching..." : "Confirm dispatch"}
+                            </Button>
                           )}
                         </div>
                       )}
@@ -1853,56 +1855,93 @@ export function TransitMissionsPage() {
                   </div>
 
                   {batteryPickerKey === arrivalKey(mission) && isContinuationMission(mission) &&
-                    mission.status === "At Hub" && arrivalConfirmed &&
-                    !batterySwappedFor(mission) && (
-                    <div className="mt-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-4">
-                      <p className="mb-2 text-[13px] font-semibold text-[var(--tech-text)]">
-                        Swap Battery · {mission.droneModel}
-                      </p>
-                      <label className="block text-[12px] text-[var(--tech-text-secondary)]" htmlFor={`relay-battery-${mission.id}`}>
-                        Select a compatible, Ready battery charged to 100%
-                      </label>
-                      <select
-                        id={`relay-battery-${mission.id}`}
-                        value={selectedBatteryId}
-                        onChange={event => setSelectedBatteryId(event.target.value)}
-                        className="tech-control mt-2 h-10 w-full max-w-xl rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 text-[13px] text-[var(--tech-text)]"
-                      >
-                        <option value="">Select a battery...</option>
-                        {(batteriesQuery.data ?? [])
-                          .filter(battery => isRelayBatteryEligible(battery, mission) &&
-                            ![battery.backendId, battery.id, battery.serialNumber].includes(mission.batteryId))
-                          .map(battery => (
-                            <option key={batteryApiId(battery)} value={batteryApiId(battery)}>
-                              {battery.id}{battery.serialNumber && battery.serialNumber !== battery.id ? ` · ${battery.serialNumber}` : ""} · 100%
-                            </option>
-                          ))}
-                      </select>
-                      {batteriesQuery.isPending && (
-                        <p className="mt-2 text-[12px] text-[var(--tech-muted)]">Loading hub batteries...</p>
-                      )}
-                      {batteriesQuery.isError && (
-                        <p className="mt-2 text-[12px] text-orange-500">Cannot load hub batteries. Check the Battery Management API.</p>
-                      )}
-                      {!batteriesQuery.isPending && !batteriesQuery.isError &&
-                        !(batteriesQuery.data ?? []).some(battery =>
-                          isRelayBatteryEligible(battery, mission) &&
-                          ![battery.backendId, battery.id, battery.serialNumber].includes(mission.batteryId)) && (
-                        <p className="mt-2 text-[12px] text-orange-500">
-                          No verified compatible battery at 100% is available in this hub.
-                        </p>
-                      )}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button type="button"
-                          onClick={() => void replaceRelayBattery(mission)}
-                          disabled={!selectedBatteryId || swappingKey !== null || batterySwapMutation.isPending}
-                          className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600 disabled:opacity-50"
-                        >{swappingKey === arrivalKey(mission) ? "Replacing..." : "Confirm replacement"}</Button>
-                        <Button type="button" variant="outline"
+                    mission.status === "At Hub" && !batterySwappedFor(mission) && (
+                    <div className="mt-4 rounded-xl border border-orange-500/20 bg-[var(--tech-surface-2)] p-4 sm:p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="flex items-center gap-2 text-[14px] font-semibold text-[var(--tech-text)]">
+                            <BatteryFull size={16} className="text-orange-500" />
+                            Replace battery
+                          </p>
+                          <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
+                            {mission.droneModel} · {getMissionDisplayId(mission.missionId)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
                           onClick={() => { setBatteryPickerKey(null); setSelectedBatteryId(""); }}
-                          disabled={batterySwapMutation.isPending}
-                        >Cancel</Button>
+                          disabled={confirmArrivalMutation.isPending || batterySwapMutation.isPending}
+                          className="rounded-md border border-[var(--tech-border)] px-3 py-1.5 text-[12px] text-[var(--tech-text-secondary)] hover:text-orange-500 disabled:opacity-50"
+                        >Close</button>
                       </div>
+                      {!arrivalConfirmed ? (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-3.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-[var(--tech-text)]">1. Confirm physical arrival</p>
+                            <p className="mt-1 text-[12px] leading-5 text-[var(--tech-muted)]">
+                              Backend must record this relay arrival before a battery can be swapped.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => void requestConfirm(mission)}
+                            disabled={!mission.backendMissionId || !canConfirmLandedMission(mission) || confirmArrivalMutation.isPending}
+                            className="h-9 rounded-md bg-orange-500 px-3 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
+                          >
+                            <Check size={14} />
+                            {isConfirmingThisMission ? "Confirming..." : "Confirm arrival"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          <div>
+                            <p className="text-[13px] font-medium text-[var(--tech-text)]">2. Select a compatible replacement</p>
+                            <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Only Ready batteries at 100% from this Hub are eligible.</p>
+                          </div>
+                          <label className="block max-w-[520px] text-[12px] font-medium text-[var(--tech-text-secondary)]" htmlFor={`relay-battery-${mission.id}`}>
+                            Replacement battery
+                            <select
+                              id={`relay-battery-${mission.id}`}
+                              value={selectedBatteryId}
+                              onChange={event => setSelectedBatteryId(event.target.value)}
+                              disabled={batteriesQuery.isPending || batterySwapMutation.isPending}
+                              className="tech-control mt-2 h-10 w-full rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface)] px-3 text-[13px] text-[var(--tech-text)]"
+                            >
+                              <option value="">Select a battery...</option>
+                              {(batteriesQuery.data ?? [])
+                                .filter(battery => isRelayBatteryEligible(battery, mission) &&
+                                  ![battery.backendId, battery.id, battery.serialNumber].includes(mission.batteryId))
+                                .map(battery => (
+                                  <option key={batteryApiId(battery)} value={batteryApiId(battery)}>
+                                    {battery.id}{battery.serialNumber && battery.serialNumber !== battery.id ? ` · ${battery.serialNumber}` : ""} · 100%
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                          {batteriesQuery.isPending && (
+                            <p className="text-[12px] text-[var(--tech-muted)]">Loading hub batteries...</p>
+                          )}
+                          {batteriesQuery.isError && (
+                            <p className="text-[12px] text-orange-500">Cannot load hub batteries. Check the Battery Management API.</p>
+                          )}
+                          {!batteriesQuery.isPending && !batteriesQuery.isError &&
+                            !(batteriesQuery.data ?? []).some(battery =>
+                              isRelayBatteryEligible(battery, mission) &&
+                              ![battery.backendId, battery.id, battery.serialNumber].includes(mission.batteryId)) && (
+                              <p className="text-[12px] text-orange-500">
+                                No verified compatible battery at 100% is available in this hub.
+                              </p>
+                            )}
+                          <Button
+                            type="button"
+                            onClick={() => void replaceRelayBattery(mission)}
+                            disabled={!selectedBatteryId || swappingKey !== null || batterySwapMutation.isPending}
+                            className="h-9 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
+                          >
+                            {swappingKey === arrivalKey(mission) ? "Replacing..." : "Confirm replacement"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
