@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
@@ -142,7 +143,7 @@ export function HubsPage() {
         latitude, longitude, status: newHub.status,
       });
       setCreating(false);
-      setNotice(`Hub ${name} (${code}) created in Backend. Supply compatible batteries before testing relay routes.`);
+      setNotice(`Hub ${name} (${code}) created successfully.`);
       // Existing refresh reloads cards, map and Hub list from Backend.
       void refresh();
     } catch (cause) {
@@ -164,7 +165,7 @@ export function HubsPage() {
         latitude: editing.latitude, longitude: editing.longitude, capacity: editing.capacity,
       });
       setEditing(null);
-      setNotice('Hub updated in Backend.');
+      setNotice('Hub updated successfully.');
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
@@ -185,7 +186,7 @@ export function HubsPage() {
 
       {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
       {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs…</p>}
+      {loading && <OperatorLoadingState label="Loading hubs…" />}
       <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">

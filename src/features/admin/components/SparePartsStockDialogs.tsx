@@ -36,7 +36,7 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
   const label = { TRANSFER: 'Transfer', ADJUST: 'Adjust Stock', DISCARD: 'Discard', THRESHOLD: 'Set Threshold' }[action ?? 'TRANSFER'];
   async function submit(event: FormEvent) {
     event.preventDefault(); if (!part || !action || !valid || saving) return;
-    if (!window.confirm(`${label} ${part.name} at the selected Hub? This changes real inventory and is recorded by Backend.`)) return;
+    if (!window.confirm(`${label} ${part.name} at the selected Hub? This updates inventory and records the change.`)) return;
     setSaving(true); setError('');
     try {
       if (action === 'TRANSFER') await adminOperationsApi.transferStock({ from_hub_id: Number(hub), to_hub_id: Number(destination), part_category_id: part.id, quantity, ...(note.trim() ? { note: note.trim() } : {}) });

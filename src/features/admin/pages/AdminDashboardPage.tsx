@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -96,7 +97,7 @@ function RevenueBars({ today, month }: { today: number; month: number }) {
           <div className="h-3 overflow-hidden rounded-full bg-[#F0F2F5]"><div className="h-full rounded-full" style={{ width: `${(item.value / max) * 100}%`, background: index === 0 ? '#FDBA74' : '#F97316' }} /></div>
         </div>
       ))}
-      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Backend recorded revenue · Values shown by their respective periods</p> */}
+      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Recorded revenue · Values shown by their respective periods</p> */}
     </div>
   );
 }
@@ -138,11 +139,11 @@ export function AdminDashboardPage() {
   return (
     <AdminPageShell title="Dashboard" description="">
       {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-      {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Admin Dashboard…</p>}
+      {loading && <OperatorLoadingState label="Loading dashboard…" />}
       {data && <>
         {/* Four primary KPIs only; secondary figures are presented in charts below. */}
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Backend recorded revenue" icon={Wallet} />
+          <AdminSummaryCard label="Revenue this month" value={money(data.revenue.this_month)} note="Recorded revenue" icon={Wallet} />
           <AdminSummaryCard label="Paid orders" value={data.revenue.paid_orders} note="Payment confirmations" icon={CircleCheck} />
           <AdminSummaryCard label="Total users" value={data.users.total} note={`${data.users.active} active · ${data.users.inactive} inactive`} icon={UsersRound} />
           <AdminSummaryCard label="Total drones" value={data.fleet.total_drones} note="Registered fleet" icon={Plane} />
@@ -208,7 +209,7 @@ function RevenueChartPanel() {
   if (loading || chartData.length === 0) {
     return (
       <ChartPanel title="Revenue trend — last 30 days" subtitle="Daily completed mission revenue" className="mt-4">
-        <p className="text-xs text-[#8791A2]">{loading ? "Loading…" : "No data available yet."}</p>
+        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">No data available yet.</p>}
       </ChartPanel>
     );
   }

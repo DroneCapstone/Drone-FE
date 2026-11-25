@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../../operator/components/OperatorPanel';
@@ -23,8 +24,8 @@ export function RefundsPage() {
   const statusOf = (row: JsonRow) => field(row, 'refund_status', 'status').toUpperCase();
   const visible = useMemo(() => items.filter(row =>
     (status === 'all' || status === statusOf(row)) && JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
-  return <AdminPageShell title="Refunds" description="Refund records returned by Backend. Bank settlement must be verified with the payment provider.">
-    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading refunds from Backend…</p>}
+  return <AdminPageShell title="Refunds" description="Track refund requests and their processing status. Final settlement is confirmed by the payment provider.">
+    {loading && <OperatorLoadingState label="Loading refunds…" />}
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></select>} meta={`${visible.length} refunds`} />
@@ -36,7 +37,7 @@ export function RefundsPage() {
           <td><StatusBadge tone={statusOf(row) === 'COMPLETED' ? 'success' : statusOf(row) === 'FAILED' ? 'danger' : 'warning'}>{statusOf(row)}</StatusBadge></td>
           <td>{timestamp(row, 'refund_at', 'processed_at', 'updated_at')}</td>
         </tr>)}
-        {!loading && !visible.length && <tr><td colSpan={8} className="p-5 text-center">No Backend refunds returned.</td></tr>}
+        {!loading && !error && !visible.length && <tr><td colSpan={8} className="p-5 text-center">No refunds match your filters.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
   </AdminPageShell>;

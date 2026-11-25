@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ReceiptText } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -90,7 +91,7 @@ export function SparePartsPage() {
       } else {
         await adminOperationsApi.updateCategory(editing.id, { name: draft.name.trim(), compatible_drone_models: models, unit_cost: draft.unitCost, is_active: draft.active });
       }
-      setEditing(null); setNotice('Spare Part category saved in Backend.'); await refresh();
+      setEditing(null); setNotice('Spare part category saved successfully.'); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -112,7 +113,7 @@ export function SparePartsPage() {
   </>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Spare Parts...</p>}
+    {loading && <OperatorLoadingState label="Loading spare parts…" />}
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search part, component or drone model…" filters={<>
         <select value={selectedHub} onChange={(event) => setSelectedHub(event.target.value)} aria-label="Inventory Hub"><option value="all">All hubs (total stock)</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
@@ -131,7 +132,7 @@ export function SparePartsPage() {
                   <DropdownMenuItem key={action} onClick={() => setStockAction({ action, part })}>{label}</DropdownMenuItem>)}
               </DropdownMenuContent></DropdownMenu></div></td>
         </tr>)}
-        {!loading && visible.length === 0 && <tr><td colSpan={5}>No spare part categories found.</td></tr>}
+        {!loading && !error && visible.length === 0 && <tr><td colSpan={5}>No spare part categories found.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
 
@@ -161,7 +162,7 @@ export function SparePartsPage() {
           <div className="spare-quantity-cost-row"><span>Reference Unit Price</span><strong>{unitPrice > 0 ? formatVnd(unitPrice) : 'Not configured'}</strong></div>
           <div className="spare-quantity-cost-row"><span>Quantity</span><strong>{added}</strong></div>
           <div className="spare-quantity-cost-row spare-quantity-cost-total"><span>Estimated Total</span><strong>{validQuantity && unitPrice > 0 ? formatVnd(cost) : '—'}</strong></div>
-          {/* <p className="spare-quantity-hint">Confirm only units physically received at the selected Hub. Backend records inventory intake; this is not a PayOS or bank transfer.</p> */}
+          {/* <p className="spare-quantity-hint">Confirm only units physically received at the selected Hub. View detailss inventory intake; this is not a PayOS or bank transfer.</p> */}
         </div>
         {error && <p role="alert" className="spare-quantity-error">{error}</p>}
       </div>

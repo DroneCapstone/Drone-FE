@@ -16,7 +16,7 @@ export function AdminSettingsPage() {
   };
 
   return (
-    <AdminPageShell title="System Settings" description="Configure cross-system operational thresholds and notification policies. Backend remains the final enforcement point." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
+    <AdminPageShell title="System Settings" description="Manage local operational preferences and notification settings. These preferences are saved in this browser only." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
       <div className="mb-3">
         <OperatorPanel title="Mission & fleet" eyebrow="OPERATIONAL THRESHOLDS">
           <div className="fields two">
@@ -48,7 +48,7 @@ export function AdminSettingsPage() {
             </div>
           ))}
         </div>
-        {saved ? <div className="operator-toast">Settings saved successfully.</div> : null}
+        {saved ? <div className="operator-toast">Preferences saved on this device.</div> : null}
       </OperatorPanel>
     </AdminPageShell>
   );

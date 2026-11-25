@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ActionButton } from '../../../components/ui/ActionButton';
@@ -17,10 +18,10 @@ export function BackendPartsRequests() {
   const review=async(approve:boolean)=>{if(!selected||saving)return;setSaving(true);setError('');try{
     if(!approve&&!note.trim())throw new Error('Enter a reason for rejection.');
     await adminBackend.reviewPartRequest(selected.id,approve,note.trim());
-    setNotice(`Part Request #${selected.id} ${approve?'reviewed':'rejected'} in Backend.`);setSelected(null);setNote('');setVersion(v=>v+1);
+    setNotice(`Part request #${selected.id} ${approve?'reviewed':'rejected'} successfully.`);setSelected(null);setNote('');setVersion(v=>v+1);
   }catch(e){setError(messageOf(e));}finally{setSaving(false);}};
-  return <OperatorPanel className="flush-panel" title="Spare Part Requests · Backend">
-    {loading&&<p className="p-3 text-sm text-muted-foreground">Loading Part Requests…</p>}
+  return <OperatorPanel className="flush-panel" title="Spare Part Requests">
+    {loading&&<OperatorLoadingState label="Loading part requests…" />}
     {error&&!selected&&<p role="alert" className="p-3 text-sm text-red-500">{error}<button type="button" className="ml-2 underline" onClick={()=>setVersion(v=>v+1)}>Retry</button></p>}
     {notice&&<p role="status" className="p-3 text-sm text-emerald-600">{notice}</p>}
     <div className="table-wrap"><table><thead><tr><th>Request</th><th>Component</th><th>Receiving Hub</th><th>Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
@@ -37,7 +38,7 @@ export function BackendPartsRequests() {
       <div><strong>Status:</strong> {selected.status}</div><div><strong>Reported issue:</strong> {selected.description}</div>
       {selected.actual_cost!==null&&<div><strong>Recorded Cost:</strong> {selected.actual_cost.toLocaleString('vi-VN')}đ</div>}
       {['PENDING','WAITING_STOCK'].includes(selected.status.toUpperCase())&&<><label className="block"><span className="block mb-1">Admin note / reason</span><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} className="w-full rounded-md border border-border p-2"/></label>
-      <p className="text-xs text-muted-foreground">Approve checks Hub stock in Backend. If insufficient, BE may return WAITING_STOCK; transfer/receive stock before approving again.</p>
+      <p className="text-xs text-muted-foreground">Approval depends on available Hub stock. If stock is insufficient, receive or transfer stock before trying again.</p>
       <Link className="text-button" to="/admin/network/spare-parts" onClick={()=>setSelected(null)}>Manage stock</Link></>}
       {error&&<p role="alert" className="text-red-500">{error}</p>}
     </div><div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={()=>setSelected(null)}>Close</ActionButton>

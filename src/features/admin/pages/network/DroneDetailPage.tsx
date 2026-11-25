@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil } from 'lucide-react';
@@ -68,7 +69,7 @@ export function DroneDetailPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.updateDrone(drone.id, { name: draft.name.trim(), payload_capacity_kg: draft.payload, max_speed: draft.speed, current_hub_id: hub.id });
-      setEditing(false); setNotice('Drone updated in Backend.'); await refresh();
+      setEditing(false); setNotice('Drone updated successfully.'); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -79,7 +80,7 @@ export function DroneDetailPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.setDroneActive(drone.id, !adminActive(drone.admin_state));
-      setNotice('Drone administrative state updated by Backend.'); await refresh();
+      setNotice('Drone availability updated successfully.'); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -97,12 +98,12 @@ export function DroneDetailPage() {
     actions={drone ? <ActionButton variant={adminActive(drone.admin_state) ? 'danger' : 'secondary'} disabled={saving || (adminActive(drone.admin_state) && flying(drone.status))} onClick={() => void toggleActive()}>{adminActive(drone.admin_state) ? 'Deactivate' : 'Activate'}</ActionButton> : undefined}>
     <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/drones"><ArrowLeft size={15}/>Back to Drones</Link>
     <div className="admin-drone-detail">
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drone Detail from Backend…</p>}
+      {loading && <OperatorLoadingState label="Loading drone details…" compact />}
       {error && <p role="alert" className="dd-error">{error}</p>}
       {notice && <p role="status" className="dd-notice">{notice}</p>}
       {drone && <>
         <div className="dd-tabs" role="tablist" aria-label="Drone detail tabs">{detailTabs.map(({ id, label }) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'dd-tab is-active' : 'dd-tab'} onClick={() => setTab(id)}>{label}</button>)}</div>
-        {tabLoading && <p className="mb-3 text-xs text-muted-foreground">Loading tab from Backend…</p>}
+        {tabLoading && <OperatorLoadingState label="Loading details…" compact />}
         <div role="tabpanel">
         {tab === 'overview' && <div className="dd-overview">
           <DetailCard title="Drone information" action={<button type="button" className="dd-edit-btn" onClick={() => setEditing(true)}><Pencil size={15}/> Edit</button>}>
@@ -139,7 +140,7 @@ export function DroneDetailPage() {
       </>}
     </div>
     <Dialog open={editing} onOpenChange={(open) => !open && setEditing(false)}>{drone && editing && <DialogContent><form onSubmit={(event) => void save(event)}>
-      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle><p className="mt-1 text-xs text-muted-foreground">Serial number is read-only: Backend update does not support modifying it.</p></div>
+      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle><p className="mt-1 text-xs text-muted-foreground">The serial number cannot be changed.</p></div>
       <div className="fields two p-5">
         <label><span>Drone name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/></label>
         <label><span>Serial number</span><input readOnly value={drone.serial_number}/></label>

@@ -1,3 +1,5 @@
+import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -31,7 +33,7 @@ export function ActivityLogPage() {
     void adminLogsApi.activity({ ...filters, page, page_size: PAGE_SIZE })
       .then(response => { if (live) { setItems(response.items); setTotal(response.total); } })
       .catch((cause: unknown) => {
-        if (live) { setItems([]); setTotal(0); setError(cause instanceof Error ? cause.message : 'Unable to load Activity Logs.'); }
+        if (live) { setItems([]); setTotal(0); setError(adminErrorText(cause, 'Unable to load activity logs. Please try again.')); }
       })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
@@ -45,7 +47,7 @@ export function ActivityLogPage() {
 
   return <AdminPageShell
     title="Activity Logs"
-    description=""
+    description="Review user actions and their outcomes."
     actions={<ActionButton variant="secondary" disabled={loading} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={15} /> Refresh</ActionButton>}
   >
     <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]">
@@ -81,20 +83,20 @@ export function ActivityLogPage() {
         />
       </form>
       {error && <p role="alert" className="border-b border-[var(--admin-border)] p-4 text-sm text-red-600">{error}</p>}
-      {loading && <p role="status" className="p-5 text-sm text-[var(--admin-muted)]"></p>}
+      {loading && <OperatorLoadingState label="Loading activity logs…" />}
       {!loading && !error && <div className="table-wrap"><table>
         <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Role</th><th>Resource</th><th>Status</th><th>Description</th></tr></thead>
         <tbody>
           {items.map(log => <tr key={log.id}>
             <td className="whitespace-nowrap">{formatDate(log.created_at)}</td>
             <td><strong>{log.user_email || '—'}</strong><small>{log.user_id || 'System / unknown user'}</small></td>
-            <td>{log.action.replace(/_/g, ' ')}</td>
+            <td>{adminDisplayText(log.action.replace(/_/g, ' '))}</td>
             <td>{log.role ?? '—'}</td>
-            <td><strong>{log.resource_type ?? '—'}</strong><small>{log.resource_id ?? ''}</small></td>
+            <td><strong>{adminDisplayText(log.resource_type)}</strong><small>{log.resource_id ?? ''}</small></td>
             <td><StatusBadge tone={log.status.toLowerCase() === 'success' ? 'success' : log.status.toLowerCase() === 'failed' ? 'danger' : 'neutral'}>{log.status}</StatusBadge></td>
-            <td className="min-w-[220px] max-w-md"><small className="whitespace-normal break-words">{log.description || '—'}</small></td>
+            <td className="min-w-[220px] max-w-md"><small className="whitespace-normal break-words">{adminDisplayText(log.description)}</small></td>
           </tr>)}
-          {items.length === 0 && <tr><td colSpan={7} className="p-5 text-center">No Activity Logs match these filters.</td></tr>}
+          {items.length === 0 && <tr><td colSpan={7} className="p-5 text-center">No activity logs match your filters.</td></tr>}
         </tbody>
       </table></div>}
       {!error && !loading && <LogsPagination page={page} pageSize={PAGE_SIZE} total={total} loading={loading} onPageChange={setPage} />}

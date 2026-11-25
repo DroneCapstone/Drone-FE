@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Boxes, MapPin, UsersRound } from 'lucide-react';
@@ -35,7 +36,7 @@ export function HubDetailPage() {
 
   return <AdminPageShell title={hub?.name ?? `Hub ${hubId ?? ''}`} description="" actions={hub ? <StatusBadge tone={hub.status?.toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{hub.status ?? '—'}</StatusBadge> : undefined}>
     <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/hubs"><ArrowLeft size={15} />Back to Hubs</Link>
-    {loading && <p className="mb-4 text-sm text-muted-foreground">Loading Hub Detail…</p>}
+    {loading && <OperatorLoadingState label="Loading hub details…" compact />}
     {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
     {hub && <div className="admin-hub-detail">
       <section className="admin-hub-section" aria-labelledby="hub-information">

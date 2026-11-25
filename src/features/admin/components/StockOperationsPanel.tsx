@@ -1,3 +1,5 @@
+import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
+import { adminDisplayText } from '../utils/adminDisplayText';
 import { useEffect, useState } from 'react';
 import { ActionButton } from '../../../components/ui/ActionButton';
 import { OperatorPanel } from '../../operator/components/OperatorPanel';
@@ -19,7 +21,8 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
   const [notice,setNotice]=useState('');
   const [logs,setLogs]=useState<StockTransactionApi[]>([]);
   const [logError,setLogError]=useState('');
-  async function loadLogs(){try{setLogs(await adminOperationsApi.stockTransactions());setLogError('');}catch(e){setLogError(apiError(e));}}
+  const [logsLoading,setLogsLoading]=useState(true);
+  async function loadLogs(){setLogsLoading(true);try{setLogs(await adminOperationsApi.stockTransactions());setLogError('');}catch(e){setLogError(apiError(e));}finally{setLogsLoading(false);}}
   useEffect(()=>{void loadLogs();},[]);
   const hub=Number(hubId), destination=Number(toHub), part=Number(partId), qty=Number(number);
   const knownHub=hubs.some(h=>h.id===hub),knownPart=parts.some(p=>p.id===part);
@@ -33,7 +36,7 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
     kind==='ADJUST'?Number.isSafeInteger(qty)&&qty!==0 : Number.isSafeInteger(qty)&&qty>0))
     &&(kind!=='TRANSFER'||hubs.some(h=>h.id===destination&&h.id!==hub));
   async function submit(){if(!valid||saving)return;
-    if(!window.confirm(`${kind}: submit physical stock change to Backend? This operation is audit-logged.`))return;
+    if(!window.confirm(`Confirm ${kind.toLowerCase()}? This stock change will be recorded.`))return;
     setSaving(true);setError('');setNotice('');
     try {
       if(kind==='TRANSFER')await adminOperationsApi.transferStock({from_hub_id:hub,to_hub_id:destination,part_category_id:part,quantity:qty,...(note.trim()?{note:note.trim()}:{})});
@@ -41,13 +44,13 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
       else if(kind==='DISCARD')await adminOperationsApi.discardStock(hub,{part_category_id:part,quantity:qty,...(note.trim()?{note:note.trim()}:{})});
       else if(kind==='THRESHOLD')await adminOperationsApi.setStockThreshold(hub,{part_category_id:part,min_stock_threshold:qty});
       else await adminOperationsApi.bulkReceive(hub,parsedBulk);
-      setNotice(`${kind} recorded by Backend.`);await onChanged();await loadLogs();
+      setNotice(`${kind} recorded successfully.`);await onChanged();await loadLogs();
     }catch(e){setError(apiError(e));}finally{setSaving(false);}
   }
   return <div className="mt-4 space-y-4">
-    <OperatorPanel title="Hub stock operations" eyebrow="BACKEND INVENTORY CONTROLS">
+    <OperatorPanel title="Hub stock operations" eyebrow="INVENTORY MANAGEMENT">
       <div className="p-4">
-        <p className="mb-3 text-xs text-muted-foreground">Import from supplier is available via Add quantity above. These additional operations update Backend immediately after confirmation.</p>
+        <p className="mb-3 text-xs text-muted-foreground">Use Add quantity to receive new stock. Confirmed stock changes take effect immediately.</p>
         <div className="fields two">
           <label><span>Operation</span><select value={kind} onChange={e=>{setKind(e.target.value as typeof kind);setError('');setNumber('1');}}>
             <option value="TRANSFER">Transfer between Hubs</option><option value="ADJUST">Inventory adjustment (+ / -)</option><option value="DISCARD">Discard damaged / expired items</option><option value="THRESHOLD">Set low-stock threshold</option><option value="BULK">Bulk supplier receipt</option>
@@ -64,13 +67,13 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
         <div className="mt-4"><ActionButton disabled={saving||!valid} onClick={()=>void submit()}>{saving?'Submitting…':`Confirm ${kind.toLowerCase()}`}</ActionButton></div>
       </div>
     </OperatorPanel>
-    <OperatorPanel title="Stock movement history" eyebrow="BACKEND SUPPLY TRANSACTIONS">
+    <OperatorPanel title="Stock movement history" eyebrow="STOCK HISTORY">
       {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>void loadLogs()}>Retry</button></p>}
-      <div className="table-wrap"><table><thead><tr><th>When</th><th>Hub</th><th>Part</th><th>Change</th><th>Reason</th><th>Reference</th></tr></thead><tbody>
+      {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Hub</th><th>Part</th><th>Change</th><th>Reason</th><th>Reference</th></tr></thead><tbody>
         {logs.slice(0,100).map(l=><tr key={l.id}><td>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</td>
-          <td>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</td><td>{l.part_name??l.part_category_id}</td><td>{l.quantity_delta}</td><td>{l.reason}</td><td>{l.reference_id??'—'}</td></tr>)}
-        {!logs.length&&<tr><td colSpan={6}>No transactions returned.</td></tr>}
-      </tbody></table></div>
+          <td>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</td><td>{l.part_name??l.part_category_id}</td><td>{l.quantity_delta}</td><td>{adminDisplayText(l.reason)}</td><td>{l.reference_id??'—'}</td></tr>)}
+        {!logError&&!logs.length&&<tr><td colSpan={6}>No stock movements recorded.</td></tr>}
+      </tbody></table></div>}
     </OperatorPanel>
   </div>;
 }

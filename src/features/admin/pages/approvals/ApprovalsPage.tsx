@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Link, useSearchParams } from 'react-router-dom';
@@ -253,12 +254,12 @@ export function ApprovalsPage() {
   }
   async function confirmSupply() {
     if (!request || !rawRequest || !actionable || !canSupply || saving) return;
-    if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Backend supports one supplied battery ID per request; batch replacement needs Backend changes.'); return; }
-    if (!window.confirm(`Confirm supply for replacement ${request.id}? Backend will update stock and notify Technician.`)) return;
+    if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Only one replacement battery can be supplied per request.'); return; }
+    if (!window.confirm(`Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`)) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.supplyReplacement(rawRequest.request_id, request.type === 'BATTERY' ? chosenId : undefined);
-      closeRequest(); setNotice(`Replacement ${request.id} supplied by Backend.`); await refresh();
+      closeRequest(); setNotice(`Replacement ${request.id} supplied successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -269,7 +270,7 @@ export function ApprovalsPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.rejectReplacement(rawRequest.request_id, reason);
-      closeRequest(); setNotice(`Replacement ${request.id} rejected by Backend.`); await refresh();
+      closeRequest(); setNotice(`Replacement ${request.id} rejected successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -291,8 +292,8 @@ export function ApprovalsPage() {
 
     </div>
 
-    {loading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement records…</p>}
-    {detailLoading && <p className="mb-2 text-xs text-[var(--admin-muted)]">Loading replacement detail…</p>}
+    {loading && <OperatorLoadingState label="Loading replacement records…" />}
+    {detailLoading && <OperatorLoadingState label="Loading replacement detail…" compact />}
     {error && !request && <div role="alert" className="mb-3 text-sm text-red-500">{error}</div>}
     {notice && <div role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 px-3 py-2 text-sm text-emerald-700">{notice}</div>}
 

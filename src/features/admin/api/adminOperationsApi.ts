@@ -1,3 +1,4 @@
+import { adminErrorText } from '../utils/adminDisplayText';
 import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
 import { authService } from '../../auth/services/authService';
 
@@ -53,7 +54,7 @@ export function apiList<T>(value: unknown, label: string): T[] {
   if (object(data) && Array.isArray(data.items)) return data.items as T[];
   throw new Error(`${label} returned an unexpected list shape; no demo data was substituted.`);
 }
-export const apiError = (error: unknown) => error instanceof Error ? error.message : 'Unexpected API error.';
+export const apiError = (error: unknown) => adminErrorText(error);
 
 export interface HubApi {
   id: number; name: string; code?: string | null; area?: string | null; address?: string | null;

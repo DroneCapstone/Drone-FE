@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CircleCheck, Plane, RadioTower, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -85,7 +86,7 @@ export function DronesPage() {
       };
       await adminOperationsApi.createDrone(body);
       setAdding(false);
-      setNotice(`Drone ${serial} added successfully. List reloaded from Backend.`);
+      setNotice(`Drone ${serial} added successfully.`);
       await refresh();
     } catch (cause) {
       setAddError(apiError(cause));
@@ -114,7 +115,7 @@ export function DronesPage() {
   return <AdminPageShell title="Drones" description="Registered physical drones and their administrative availability."
     actions={<ActionButton icon="plus" onClick={openAddDrone}>Add Drone</ActionButton>}>
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
-    {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drones...</p>}
+    {loading && <OperatorLoadingState label="Loading drones…" />}
     {notice && <p role="status" className="mb-4 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Total drones" value={summary?.total_drones ?? drones.length} note="Registered drones" icon={Plane} />
@@ -139,7 +140,7 @@ export function DronesPage() {
           <td>{d.payload_capacity_kg} kg</td>
           <td><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></td>
         </tr>)}
-        {!loading && visible.length === 0 && <tr><td colSpan={8}>No drones found.</td></tr>}
+        {!loading && !error && visible.length === 0 && <tr><td colSpan={8}>No drones found.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
     <Dialog open={adding} onOpenChange={(open) => { if (!open && !addSaving) setAdding(false); }}>

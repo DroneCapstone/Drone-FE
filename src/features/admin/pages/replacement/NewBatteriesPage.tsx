@@ -1,3 +1,4 @@
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BatteryCharging, Box, CalendarDays, Pencil, ReceiptText, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -110,7 +111,7 @@ export function NewBatteriesPage() {
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving || !activeModel || !validSerials) {
-      setError('Select an active Backend battery model and enter exactly one unique serial for each physical battery.'); return;
+      setError('Select an active battery model and enter exactly one unique serial for each physical battery.'); return;
     }
     if (!window.confirm(`Add ${quantity} real ${model} batteries into Admin warehouse?`)) return;
     setSaving(true); setError('');
@@ -120,7 +121,7 @@ export function NewBatteriesPage() {
         ...(quantity === 1 ? { serial_number: serialLines[0] } : { serial_numbers: serialLines }),
         status: 'Active', charge_level_pct: 100,
       });
-      setCreating(false); setExpandedModel(model); setNotice(`${quantity} ${model} batteries registered by Backend.`);
+      setCreating(false); setExpandedModel(model); setNotice(`${quantity} ${model} batteries registered successfully.`);
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
@@ -137,18 +138,18 @@ export function NewBatteriesPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.updateBattery(editing.id, { serial_number: value });
-      setEditing(null); setNotice(`Battery ${editing.id} updated by Backend.`); await refresh();
+      setEditing(null); setNotice(`Battery ${editing.id} updated successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
   async function remove() {
     if (!removing || saving || !removalReason.trim()) return;
     // OpenAPI DELETE /batteries/{id} has NO reason field. Do not pretend the reason is recorded.
-    if (!window.confirm(`Permanently delete battery ${removing.id} from Backend? The reason entered here cannot be stored because the DELETE API has no reason parameter.`)) return;
+    if (!window.confirm(`Permanently remove battery ${removing.id}? The removal reason cannot be saved.`)) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.deleteBattery(removing.id);
-      setRemoving(null); setRemovalReason(''); setNotice(`Battery ${removing.id} deleted by Backend. The deletion reason was not transmitted.`);
+      setRemoving(null); setRemovalReason(''); setNotice(`Battery ${removing.id} removed successfully. The removal reason was not saved.`);
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
@@ -160,10 +161,10 @@ export function NewBatteriesPage() {
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <CompactMetric label="Total new batteries" value={available.length} note="Unassigned · available for supply" icon={BatteryCharging} />
       <CompactMetric label="Battery models" value={modelSummary.filter((item) => item.quantity > 0).length} note="Models currently in stock" icon={Box} />
-      <CompactMetric label="Added this week" value="—" note="Backend does not expose registration dates" icon={CalendarDays} />
+      <CompactMetric label="Added this week" value="—" note="Registration dates unavailable" icon={CalendarDays} />
     </div>
     {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
-    {loading && <p className="mb-3 text-xs text-[var(--admin-muted)]">Loading batteries and catalog...</p>}
+    {loading && <OperatorLoadingState label="Loading new batteries…" />}
     {error && !creating && !editing && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {/* Browser-only demo stock is intentionally disabled. This table reads the Backend catalog and physical battery units. */}
     <OperatorPanel className="flush-panel">
@@ -247,7 +248,7 @@ export function NewBatteriesPage() {
 
     <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
       {editing && <DialogContent className="new-batteries-quantity-dialog"><form onSubmit={saveEdit}>
-        <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle><p>Update the physical battery serial in Backend.</p></div>
+        <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle><p>Update the serial number of this battery.</p></div>
         <div className="new-batteries-quantity-body space-y-4"><label className="block text-sm"><span>Battery Model</span><input readOnly className={`${field} mt-2`} value={editing.battery_model ?? '—'} /></label>
           <label className="block text-sm"><span>Serial Number *</span><input className={`${field} mt-2`} value={editSerial} onChange={(event) => setEditSerial(event.target.value)} placeholder="Required" required /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
@@ -257,7 +258,7 @@ export function NewBatteriesPage() {
     </Dialog>
 
     <Dialog open={Boolean(removing)} onOpenChange={(open) => { if (!open) { setRemoving(null); setRemovalReason(''); setError(''); } }}>
-      {removing && <DialogContent className="new-batteries-quantity-dialog"><div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Remove {removing.id}?</DialogTitle><p>Only warehouse units are shown here. Backend DELETE is permanent; its API does not store the removal reason.</p></div>
+      {removing && <DialogContent className="new-batteries-quantity-dialog"><div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Remove {removing.id}?</DialogTitle><p>Only warehouse units can be removed here. Removal is permanent and the reason cannot be saved.</p></div>
         <div className="new-batteries-quantity-body"><label className="block text-sm" htmlFor="new-battery-removal-reason"><span>Reason for removal <span className="text-red-500">*</span></span>
           <textarea id="new-battery-removal-reason" className={`${field} mt-2 !h-auto resize-none py-2`} rows={3} maxLength={500} required placeholder="Enter reason…" value={removalReason} onChange={(event) => setRemovalReason(event.target.value)} /></label>
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}

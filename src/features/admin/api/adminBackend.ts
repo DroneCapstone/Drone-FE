@@ -1,3 +1,4 @@
+import { adminErrorText } from '../utils/adminDisplayText';
 import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
 import { authService } from '../../auth/services/authService';
 
@@ -6,7 +7,7 @@ export class AdminBackendError extends Error {
   status: number;
   constructor(message: string, status = 0) { super(message); this.name = 'AdminBackendError'; this.status = status; }
 }
-export function messageOf(error: unknown): string { return error instanceof Error ? error.message : 'Unexpected Backend error.'; }
+export function messageOf(error: unknown): string { return adminErrorText(error); }
 export function objectOf(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
