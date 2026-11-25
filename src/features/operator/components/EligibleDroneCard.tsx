@@ -8,9 +8,11 @@ interface EligibleDroneCardProps {
   eligibility: DroneEligibilityResult;
   selected?: boolean;
   onSelect?: () => void;
+  /** Show the same check-circle selection cue used by Route cards. */
+  routeSelectionIndicator?: boolean;
 }
 
-export function EligibleDroneCard({ drone, eligibility, selected = false, onSelect }: EligibleDroneCardProps) {
+export function EligibleDroneCard({ drone, eligibility, selected = false, onSelect, routeSelectionIndicator = false }: EligibleDroneCardProps) {
   return (
     <button
       type="button"
@@ -20,14 +22,22 @@ export function EligibleDroneCard({ drone, eligibility, selected = false, onSele
       aria-pressed={selected}
     >
       <div className="eligible-drone-head">
-        <span className="eligible-drone-icon"><Icon name="drone" size={18} /></span>
+        <span className={routeSelectionIndicator ? 'mission-resource-editor-drone-icon' : 'eligible-drone-icon'}>
+          {routeSelectionIndicator ? (
+            <span className={`mission-resource-editor-choice-radio${selected ? ' is-checked' : ''}`} aria-hidden="true">
+              {selected && <Icon name="check" size={12} />}
+            </span>
+          ) : <Icon name="drone" size={18} />}
+        </span>
         <div>
           <strong>{drone.id}</strong>
           <small>{drone.model}</small>
         </div>
-        <StatusBadge tone={!eligibility.eligible ? 'neutral' : selected ? 'warning' : 'success'}>
-          {!eligibility.eligible ? 'Unavailable' : selected ? 'Selected' : 'Available'}
-        </StatusBadge>
+        {(!routeSelectionIndicator || !eligibility.eligible) && (
+          <StatusBadge tone={!eligibility.eligible ? 'neutral' : selected ? 'warning' : 'success'}>
+            {!eligibility.eligible ? 'Unavailable' : selected ? 'Selected' : 'Available'}
+          </StatusBadge>
+        )}
       </div>
 
       <div className="eligible-drone-meta" style={{ gridTemplateColumns: '1fr 1fr' }}>

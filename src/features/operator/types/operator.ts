@@ -268,6 +268,18 @@ export interface PlannedRelayBattery {
   selectedBatteryCapacityWh?: number;
 }
 
+/** Analyze weather is optional and may differ by route and by flight leg. */
+export interface RouteWeatherConditions {
+  temperatureC?: number;
+  windSpeedMs?: number;
+  windGustMs?: number;
+  humidityPct?: number;
+  precipitationMm?: number;
+  conditionLabel?: string;
+  isBadWeather?: boolean;
+  warningMessage?: string;
+}
+
 /** Snapshot of the exact BE leg geometry used for Create Mission and Mission Detail. */
 export interface RouteLegSnapshot {
   from_hub_code: string;
@@ -295,6 +307,7 @@ export interface RouteLegSnapshot {
   energy_wh?: number;
   battery_consumption_pct?: number;
   remaining_battery_pct?: number;
+  weather?: RouteWeatherConditions;
 }
 
 /** Explicit AI explanation returned for one Analyze route; arrays have undocumented item shapes. */
@@ -347,6 +360,7 @@ export interface RouteOption {
   confidencePct: number;
   risk: 'Low' | 'Medium' | 'High';
   weatherImpact: string;
+  weather?: RouteWeatherConditions;
   /** Optional intermediate Hub(s) selected by route planning for long-distance Missions. */
   relayHubIds?: string[];
   relayStopMinutes?: number;

@@ -1207,3 +1207,118 @@
   .mission-resource-popup-backdrop { padding: 9px; }
   .mission-resource-popup-identity { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* Combined Create Mission stage: inline manual Drone/Battery editor.
+   Isolated styles; existing Flight Plan Overview and Route Card styles unchanged. */
+.page-content .mission-builder .mission-resource-editor-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.page-content .mission-builder .mission-resource-editor-group { min-width: 0; }
+.page-content .mission-builder .mission-resource-editor-group h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #1d2735);
+  margin: 0 0 12px;
+}
+.page-content .mission-builder .mission-resource-editor-drone-grid,
+.page-content .mission-builder .mission-resource-editor-battery-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  max-height: 330px;
+  overflow-y: auto;
+  padding: 2px 4px 2px 2px;
+}
+.page-content .mission-builder .mission-resource-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border, #e2e5eb);
+}
+@media (max-width: 1100px) {
+  .page-content .mission-builder .mission-resource-editor-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 620px) {
+  .page-content .mission-builder .mission-resource-editor-drone-grid,
+  .page-content .mission-builder .mission-resource-editor-battery-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: none;
+  }
+}
+
+/* Inline manual resource editor: use the Route card's check-circle selection language.
+   All overrides are scoped to this editor; normal Drone/Battery cards remain unchanged. */
+.page-content .mission-builder .mission-resource-editor-choice-radio,
+.page-content .mission-builder .mission-resource-editor-drone-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.page-content .mission-builder .mission-resource-editor-choice-radio {
+  width: 19px;
+  height: 19px;
+  border: 1px solid #b8bfca;
+  border-radius: 50%;
+  color: #fff;
+  box-sizing: border-box;
+}
+.page-content .mission-builder .mission-resource-editor-choice-radio.is-checked {
+  background: var(--orange, #f97316);
+  border-color: var(--orange, #f97316);
+}
+.page-content .mission-builder .mission-resource-editor-drone-icon { width: 19px; height: 19px; }
+.page-content .mission-builder .mission-resource-editor-drone-grid .eligible-drone-head {
+  grid-template-columns: 19px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.page-content .mission-builder .mission-resource-editor-drone-grid .eligible-drone-card.active .eligible-drone-head strong {
+  color: var(--orange, #f97316);
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card {
+  background: var(--surface, #fff);
+  border-color: var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card.is-selected,
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card.is-selected:hover,
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card.is-selected:active {
+  background: var(--surface-2, #f8f9fa);
+  border-color: var(--border, #e2e5eb);
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card:not(.is-selected):hover {
+  border-color: var(--orange, #f97316);
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-head {
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 30px;
+}
+.page-content .mission-builder .mission-resource-editor-battery-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-id {
+  display: block;
+  color: var(--text, #17212f);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-card.is-selected .mission-origin-battery-id {
+  color: var(--orange, #f97316);
+}
+.page-content .mission-builder .mission-resource-editor-battery-grid .mission-origin-battery-model {
+  color: var(--muted, #8893a7);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
