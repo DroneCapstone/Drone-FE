@@ -381,6 +381,7 @@ export function LiveTrackingPage() {
               histories={mapHistories}
               plannedRoutes={plannedRoutes}
               arrivedMissionIds={arrivedMissionIds}
+              connectionHealthy={!error}
               mapStyle={mapStyle}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
