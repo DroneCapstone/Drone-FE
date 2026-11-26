@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
@@ -166,9 +167,9 @@ export function HubSuppliesPage() {
                 ))}
                 {visible.length === 0 && (
                   <tr>
-                    <td colSpan={4} className={`px-4 py-14 text-center text-[13px] ${subtle}`}>
-                      {inventoryQuery.isPending
-                        ? "Loading hub inventory..."
+                    <td colSpan={4} className={`px-4 text-center text-[13px] ${subtle} ${inventoryQuery.isPending || supplies.some((row, index) => !row.partCategory && detailQueries[index]?.isPending) ? "py-0" : "py-14"}`}>
+                      {inventoryQuery.isPending || supplies.some((row, index) => !row.partCategory && detailQueries[index]?.isPending)
+                        ? <TechnicianLoadingState label="Loading hub inventory..." />
                         : inventoryQuery.isError && !inventoryQuery.data
                           ? "Unable to load hub inventory."
                           : "No spare parts match the current search or filter."}

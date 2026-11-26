@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   type ReactNode,
   useEffect,
@@ -117,9 +118,7 @@ export function BatteryDetailPage() {
 
       {batteriesQuery.isPending && !battery && (
         <Card className="rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
-          <CardContent className="px-6 py-14 text-center text-[14px] text-[var(--tech-muted)]">
-            Loading battery details...
-          </CardContent>
+          <CardContent className="p-0"><TechnicianLoadingState label="Loading battery details..." /></CardContent>
         </Card>
       )}
 

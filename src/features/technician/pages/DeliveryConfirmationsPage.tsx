@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -174,9 +175,9 @@ export function DeliveryConfirmationsPage() {
                   );
                 })}
                 {visible.length === 0 && (
-                  <div className="px-5 py-14 text-center text-[13px] text-[var(--tech-muted)]">
+                  <div className={confirmationsQuery.isPending ? "" : "px-5 py-14 text-center text-[13px] text-[var(--tech-muted)]"}>
                     {confirmationsQuery.isPending
-                      ? "Loading delivery confirmations..."
+                      ? <TechnicianLoadingState label="Loading delivery confirmations..." />
                       : confirmationsQuery.isError && !confirmationsQuery.data
                         ? "Unable to load delivery confirmations."
                         : "No delivery confirmations available."}

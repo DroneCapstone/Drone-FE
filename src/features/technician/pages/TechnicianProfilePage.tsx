@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   useEffect,
   useRef,
@@ -186,6 +187,7 @@ export function TechnicianProfilePage() {
   ] = useState(false);
 
   const [apiError, setApiError] = useState("");
+  const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
 
   useEffect(() => {
     if (!profileQuery.data) {
@@ -222,6 +224,7 @@ export function TechnicianProfilePage() {
 
     setProfile(nextProfile);
     setDraft(nextProfile);
+    setHasLoadedProfile(true);
 
     localStorage.setItem(
       PROFILE_STORAGE_KEY,
@@ -376,6 +379,14 @@ export function TechnicianProfilePage() {
   /* =========================================================
      RENDER
   ========================================================= */
+
+  if (!hasLoadedProfile && (profileQuery.isPending || Boolean(profileQuery.data && !profileQuery.isError))) {
+    return (
+      <TechnicianPageShell title="Profile" description="">
+        <TechnicianLoadingState label="Loading profile..." panel />
+      </TechnicianPageShell>
+    );
+  }
 
   return (
     <TechnicianPageShell

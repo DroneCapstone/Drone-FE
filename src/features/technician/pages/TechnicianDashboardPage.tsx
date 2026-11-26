@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   ArrowRight,
   BatteryCharging,
@@ -233,6 +234,18 @@ export function TechnicianDashboardPage() {
     },
   ];
 
+  const dashboardQueries = [fleetQuery, batteriesQuery, alertsQuery, workOrdersQuery,
+    transitQuery, outboundQuery, confirmationsQuery, suppliesQuery];
+  const initialDashboardLoading = dashboardQueries.every((query) => query.data === undefined) &&
+    dashboardQueries.some((query) => query.isPending) && !dashboardQueries.some((query) => query.isError);
+  if (initialDashboardLoading) {
+    return (
+      <TechnicianPageShell title="Technician dashboard" description="">
+        <TechnicianLoadingState label="Loading dashboard..." panel />
+      </TechnicianPageShell>
+    );
+  }
+
   return (
     <TechnicianPageShell
       title="Technician dashboard"
@@ -367,7 +380,7 @@ export function TechnicianDashboardPage() {
           </div>
           <CardContent className="p-0">
             {fleetQuery.data === undefined && !fleetQuery.isError ? (
-              <EmptyMessage message="Loading hub fleet..." />
+              <TechnicianLoadingState label="Loading hub fleet..." />
             ) : maintenanceDrones.length === 0 ? (
               <EmptyMessage message={fleetQuery.data === undefined ? "Fleet data unavailable." : "No drones currently require technician attention."} />
             ) : (
@@ -405,7 +418,7 @@ export function TechnicianDashboardPage() {
           </div>
           <CardContent className="p-0">
             {alertsQuery.data === undefined && !alertsQuery.isError ? (
-              <EmptyMessage message="Loading maintenance alerts..." />
+              <TechnicianLoadingState label="Loading maintenance alerts..." />
             ) : activeAlerts.length === 0 ? (
               <EmptyMessage message={alertsQuery.data === undefined ? "Maintenance alerts unavailable." : "No active maintenance alerts."} />
             ) : (
@@ -446,7 +459,7 @@ export function TechnicianDashboardPage() {
         </div>
         <CardContent className="p-0">
           {workOrdersQuery.data === undefined && !workOrdersQuery.isError ? (
-            <EmptyMessage message="Loading work orders..." />
+            <TechnicianLoadingState label="Loading work orders..." />
           ) : activeWorkOrders.length === 0 ? (
             <EmptyMessage message={workOrdersQuery.data === undefined ? "Work orders unavailable." : "No active work orders."} />
           ) : (

@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   ArrowLeft,
   Check,
@@ -330,7 +331,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
   if (loading) {
     return (
       <TechnicianPageShell title="Work order" description="">
-        <p className="text-[14px] text-[var(--tech-muted)]">Loading work order...</p>
+        <TechnicianLoadingState label="Loading work order..." panel />
       </TechnicianPageShell>
     );
   }
@@ -767,8 +768,12 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
                     ? `Showing parts compatible with: ${workOrderDroneModel}`
                     : "Drone model unavailable. Parts cannot be selected until the model is known."}
                 </p>
+                {(inventoryQuery.isPending || partDetails.some((query) => query.isPending)) &&
+                  compatibleInventoryParts.length === 0 && (
+                    <TechnicianLoadingState label="Loading compatible parts..." />
+                  )}
                 {workOrderDroneModel && compatibleInventoryParts.length === 0 &&
-                  !inventoryQuery.isPending && !partDetails.some((query) => query.isPending) && (
+                  !inventoryQuery.isPending && !inventoryQuery.isError && !partDetails.some((query) => query.isPending || query.isError) && (
                     <p className="text-[12px] text-[var(--tech-muted)]">
                       No in-stock parts registered as compatible with this model at your Hub.
                     </p>
