@@ -50,6 +50,5 @@ export const operatorNavigation: OperatorNavItem[] = [
   // REPORT FEATURE DISABLED — keep this code for future re-enable.
   // { label: 'Reports', path: '/operator/reports', icon: 'file' },
 
-  { label: 'Notifications', path: '/operator/notifications', icon: 'bell' },
   { label: 'Profile', path: '/operator/profile', icon: 'user' },
 ];

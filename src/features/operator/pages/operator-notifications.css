@@ -1,0 +1,114 @@
+/* Admin Notifications layout, isolated to Operator and its existing design tokens. */
+.operator-app .operator-notifications {
+  --opn-border: var(--border, #e3e5e8);
+  --opn-surface: var(--surface, #fff);
+  --opn-active: var(--surface-3, #eef0f3);
+  --opn-text: var(--text, #17181b);
+  --opn-muted: var(--muted, #6c727e);
+  --opn-unread: #fff0e5;
+  --opn-accent: var(--orange, #ff6b00);
+  --opn-radius: var(--op-control-radius, 6px);
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
+  color: var(--opn-text);
+  min-width: 0;
+}
+:root[data-theme='dark'] .operator-app .operator-notifications {
+  --opn-unread: color-mix(in srgb, var(--opn-surface) 94%, #ff6b00 6%);
+}
+.operator-notifications .opn-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+}
+.operator-notifications .opn-tabs {
+  display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px;
+  background: var(--opn-surface); border: 1px solid var(--opn-border);
+  border-radius: var(--opn-radius);
+}
+.operator-notifications .opn-tab {
+  min-height: 32px; padding: 5px 15px; border: 1px solid transparent;
+  border-radius: var(--opn-radius); background: transparent; color: var(--opn-muted);
+  font: inherit; font-size: var(--op-body, 13px); font-weight: 500; cursor: pointer;
+}
+.operator-notifications .opn-tab[aria-pressed='true'] {
+  color: var(--opn-text); background: var(--opn-active);
+  border-color: var(--opn-border); font-weight: 600;
+}
+.operator-notifications .opn-type-filter {
+  min-width: 150px; max-width: 100%; height: var(--op-control, 40px);
+  border-radius: var(--opn-radius); font-size: var(--op-body, 13px);
+}
+.operator-notifications .opn-list {
+  overflow: hidden; border: 1px solid var(--opn-border);
+  border-radius: var(--opn-radius); background: var(--opn-surface);
+}
+.operator-notifications .opn-rows {
+  display: flex; flex-direction: column; gap: 12px; padding: 6px;
+}
+.operator-notifications .opn-row {
+  position: relative; display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: 4px; background: transparent;
+}
+.operator-notifications .opn-row + .opn-row::before {
+  content: ''; position: absolute; top: -6px; left: -6px; right: -6px;
+  height: 1px; background: var(--opn-border); pointer-events: none;
+}
+.operator-notifications .opn-row.is-unread { background: var(--opn-unread); }
+.operator-notifications .opn-row.is-navigable { cursor: pointer; }
+.operator-notifications .opn-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.operator-notifications .opn-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.operator-notifications .opn-heading strong,
+.operator-notifications .opn-title-action {
+  color: var(--opn-text); font-size: var(--op-section-title, 14px); font-weight: 600; line-height: 1.4;
+}
+.operator-notifications .opn-title-action {
+  text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; max-width: 100%; overflow-wrap: anywhere;
+}
+.operator-notifications .opn-title-action:hover:not(:disabled) { color: var(--opn-accent); }
+.operator-notifications .opn-unread-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--opn-accent); }
+.operator-notifications .opn-message {
+  margin: 4px 0 0; white-space: pre-wrap; color: var(--opn-text); font-size: var(--op-body, 13px); line-height: 1.45;
+}
+.operator-notifications .opn-message.is-clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.operator-notifications .opn-meta { margin: 7px 0 0; color: var(--opn-muted); font-size: var(--op-secondary, 12px); line-height: 1.4; }
+.operator-notifications .opn-text-action {
+  margin-top: 6px; padding: 3px 6px; border: 1px solid transparent; border-radius: var(--opn-radius);
+  background: transparent; color: var(--opn-muted); font-size: var(--op-body, 13px); font-weight: 500; cursor: pointer;
+}
+.operator-notifications .opn-actions { display: flex; align-items: center; justify-content: flex-end; flex-shrink: 0; gap: 6px; }
+.operator-notifications .opn-icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--op-table-action, 32px); height: var(--op-table-action, 32px); min-height: 0; padding: 0;
+  border: 1px solid var(--opn-border); border-radius: var(--opn-radius);
+  background: var(--opn-surface); color: var(--opn-muted); cursor: pointer;
+}
+.operator-notifications :is(.opn-tab, .opn-icon-button, .opn-text-action):hover:not(:disabled) {
+  color: #fff; border-color: var(--opn-accent); background: var(--opn-accent);
+}
+.operator-notifications :is(.opn-tab, .opn-icon-button, .opn-text-action) { transition: color .15s, border-color .15s, background-color .15s; }
+.operator-notifications button:focus-visible { outline: 2px solid var(--opn-accent); outline-offset: 2px; }
+.operator-notifications button:disabled { cursor: not-allowed; opacity: .55; }
+.operator-notifications .opn-type-icon {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 50%; color: #fff;
+}
+.operator-notifications .opn-type-icon svg { width: 16px; height: 16px; }
+.operator-notifications .opn-icon-payment { background: #15803d; }
+.operator-notifications .opn-icon-mission { background: #2563eb; }
+.operator-notifications .opn-icon-maintenance { background: #ea580c; }
+.operator-notifications .opn-icon-warning { background: #a16207; }
+.operator-notifications .opn-icon-alert { background: #dc2626; }
+.operator-notifications .opn-icon-default { background: #6b7280; }
+.operator-notifications .opn-pagination {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 12px; padding: 12px 16px; border-top: 1px solid var(--opn-border);
+  background: var(--opn-surface); color: var(--opn-muted); font-size: var(--op-body, 13px);
+}
+.operator-notifications .opn-page-controls { display: flex; align-items: center; gap: 8px; }
+.operator-notifications .opn-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 40px 16px; text-align: center; color: var(--opn-muted); font-size: var(--op-body, 13px); }
+.operator-notifications .opn-error { margin: 0 0 12px; color: #dc2626; font-size: var(--op-body, 13px); }
+:root[data-theme='dark'] .operator-notifications .opn-error { color: #fca5a5; }
+.operator-notifications .opn-notice { margin: 0 0 12px; color: var(--opn-text); font-size: var(--op-body, 13px); }
+@media (max-width: 520px) {
+  .operator-notifications .opn-row { gap: 9px; padding: 12px; }
+  .operator-notifications .opn-actions { flex-direction: column; }
+  .operator-notifications .opn-tab { padding-inline: 10px; }
+}

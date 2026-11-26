@@ -10,15 +10,16 @@ import {
   listOperatorNotificationsApi,
   markAllOperatorNotificationsReadApi,
   markOperatorNotificationReadApi,
+  type OperatorNotificationFilters,
 } from '../api/notificationApi';
 import { operatorQueryKeys } from '../query/queryKeys';
 
-export const OPERATOR_NOTIFICATION_PAGE_SIZE = 50;
+export const OPERATOR_NOTIFICATION_PAGE_SIZE = 20;
 
-export function useOperatorNotificationsQuery() {
+export function useOperatorNotificationsQuery(page = 1, filters: OperatorNotificationFilters = {}) {
   return useQuery({
-    queryKey: operatorQueryKeys.notificationList(),
-    queryFn: () => listOperatorNotificationsApi(1, OPERATOR_NOTIFICATION_PAGE_SIZE),
+    queryKey: [...operatorQueryKeys.notificationList(), page, OPERATOR_NOTIFICATION_PAGE_SIZE, filters],
+    queryFn: ({ signal }) => listOperatorNotificationsApi(page, OPERATOR_NOTIFICATION_PAGE_SIZE, filters, signal),
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
@@ -38,10 +39,10 @@ export function useOperatorUnreadCountQuery() {
 function useInvalidateOperatorNotifications() {
   const queryClient = useQueryClient();
   return () => {
-    void Promise.allSettled([
+    return Promise.allSettled([
       queryClient.invalidateQueries({ queryKey: operatorQueryKeys.notificationList() }),
       queryClient.invalidateQueries({ queryKey: operatorQueryKeys.notificationUnreadCount() }),
-    ]);
+    ]).then(() => undefined);
   };
 }
 
