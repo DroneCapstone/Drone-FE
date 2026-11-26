@@ -12,7 +12,7 @@ import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser } from '../../api/adminUsersApi';
-import { AdminTechnicianHubField, activeHub, saveTechnicianHub, useTechnicianHub } from '../../components/AdminTechnicianHubField';
+import { AdminTechnicianHubField, isTechnicianRole, canChooseTechnicianHub, saveTechnicianHub, useTechnicianHub } from '../../components/AdminTechnicianHubField';
 import './AdminUsers.css';
 
 type InternalRole = Exclude<AdminApiRole, 'Customer'>;
@@ -35,8 +35,9 @@ export function AdminUsersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [hubId, setHubId] = useState('');
   const [assignmentIssue, setAssignmentIssue] = useState<{ id: string; message: string } | null>(null);
-  const hubState = useTechnicianHub(creating?.role === 'Technician', undefined, true, reload);
-  const validHub = creating?.role !== 'Technician' || Boolean(hubState.data?.hubs.some(hub => activeHub(hub) && String(hub.id) === hubId));
+  const creatingTechnician = isTechnicianRole(creating?.role);
+  const hubState = useTechnicianHub(creatingTechnician, undefined, true, reload);
+  const validHub = !creatingTechnician || canChooseTechnicianHub(hubState.data, hubId);
 
   // Always load the full list for accurate KPI cards, plus a server-filtered list
   // when the user selects Active/Inactive (GET ?is_active=true|false).
@@ -75,7 +76,7 @@ export function AdminUsersPage() {
     if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setFormError('Enter a valid full name and email address.'); return;
     }
-    if (!validHub) { setFormError('Select an active hub for this technician.'); return; }
+    if (!validHub) { setFormError('Select an available hub for this technician.'); return; }
     if (!creating.password) { setFormError('Enter an initial password.'); return; }
     if (allUsers.some((user) => user.is_active && user.email.toLowerCase() === email)) {
       setFormError('An active user with this email already exists.'); return;
@@ -89,7 +90,7 @@ export function AdminUsersPage() {
         full_name: fullName, email, role: creating.role, password: creating.password,
       });
       // Do not retry account creation if the separate assignment request fails.
-      if (creating.role === 'Technician') {
+      if (creatingTechnician) {
         try {
           await saveTechnicianHub(created.id, null, Number(hubId));
           setNotice(`Account ${created.email} was created and assigned successfully.`);
@@ -198,7 +199,7 @@ export function AdminUsersPage() {
                 </AdminSelect></label>
               <label><span>Initial password <b aria-hidden="true">*</b></span>
                 <input disabled={submitting} required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
-              {creating.role === 'Technician' && <AdminTechnicianHubField state={hubState} value={hubId} onChange={setHubId} required disabled={submitting} />}
+              {creatingTechnician && <AdminTechnicianHubField state={hubState} value={hubId} onChange={setHubId} wide required disabled={submitting} />}
             </div>
             {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
           </div>

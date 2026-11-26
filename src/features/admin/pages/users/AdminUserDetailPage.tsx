@@ -11,7 +11,7 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { authService } from '../../../auth/services/authService';
 import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser, type AdminUserActivityItem } from '../../api/adminUsersApi';
-import { AdminTechnicianHubField, activeHub, saveTechnicianHub, useTechnicianHub } from '../../components/AdminTechnicianHubField';
+import { AdminTechnicianHubField, isTechnicianRole, canChooseTechnicianHub, saveTechnicianHub, useTechnicianHub } from '../../components/AdminTechnicianHubField';
 import './AdminUsers.css';
 
 type EditDraft = { full_name: string; email: string; role: AdminApiRole };
@@ -42,14 +42,16 @@ export function AdminUserDetailPage() {
   const [activity, setActivity] = useState<AdminUserActivityItem[]>([]);
   const [hubDraft, setHubDraft] = useState<string | null>(null);
   const [assignmentIssue, setAssignmentIssue] = useState('');
-  const needsHub = !!user && (user.role === 'Technician' || (editing && draft?.role === 'Technician'));
-  const hubState = useTechnicianHub(needsHub, user?.role === 'Technician' ? user.id : undefined, user?.is_active ?? true, reload);
+  const isCurrentTechnician = isTechnicianRole(user?.role);
+  const editingTechnician = isTechnicianRole(draft?.role);
+  const needsHub = !!user && (isCurrentTechnician || (editing && editingTechnician));
+  const hubState = useTechnicianHub(needsHub, isCurrentTechnician ? user?.id : undefined, user?.is_active ?? true, reload);
   const currentHubId = hubState.data?.currentHubId ?? null;
   const hubValue = hubDraft ?? (currentHubId === null ? '' : String(currentHubId));
   const currentHub = hubState.data?.hubs.find(hub => hub.id === currentHubId);
-  const becomingTechnician = draft?.role === 'Technician' && user?.role !== 'Technician';
+  const becomingTechnician = editingTechnician && !isCurrentTechnician;
   const validHub = !needsHub || (!!hubState.data && (
-    draft?.role !== 'Technician' || (!hubValue ? !becomingTechnician : hubState.data.hubs.some(hub => String(hub.id) === hubValue && (activeHub(hub) || hub.id === currentHubId)))
+    !editingTechnician || (!hubValue ? !becomingTechnician : canChooseTechnicianHub(hubState.data, hubValue))
   ));
 
   useEffect(() => {
@@ -106,12 +108,12 @@ export function AdminUserDetailPage() {
     }
     if (isArchivedUser(user)) { setError('Archived accounts cannot be edited here.'); return; }
     if (!validHub) { setError('Select a valid hub or retry loading the hub assignment.'); return; }
-    if (user.role === 'Technician' && draft.role !== 'Technician' && currentHubId !== null) {
+    if (isCurrentTechnician && !editingTechnician && currentHubId !== null) {
       setError('Set Assigned Hub to Unassigned and save before changing this role.'); return;
     }
     if (becomingTechnician && !user.is_active) { setError('Restore this account before assigning a hub.'); return; }
-    const destination = draft.role === 'Technician' && hubValue ? Number(hubValue) : null;
-    const assignmentChanged = draft.role === 'Technician' && currentHubId !== destination;
+    const destination = editingTechnician && hubValue ? Number(hubValue) : null;
+    const assignmentChanged = editingTechnician && currentHubId !== destination;
     if (assignmentChanged && !user.is_active) { setError('Restore this account before changing its hub.'); return; }
     setError('');
     setAssignmentIssue('');
@@ -221,7 +223,7 @@ export function AdminUserDetailPage() {
           <dl className="admin-ud-kv">
             <Field label="Account status"><StatusBadge tone={user.is_active ? 'success' : 'neutral'}>{statusText}</StatusBadge></Field>
             <Field label="Access scope">{scope}</Field>
-            {user.role === 'Technician' && <Field label="Assigned Hub">{hubState.loading ? 'Loading...' : hubState.error ? <span>Unavailable <button type="button" className="text-button" onClick={hubState.retry}>Retry</button></span> : currentHub ? <Link className="admin-ud-link" to={`/admin/network/hubs/${currentHub.id}`}>{currentHub.name}</Link> : currentHubId !== null ? `Hub ${currentHubId}` : 'Unassigned'}</Field>}
+            {isCurrentTechnician && <Field label="Assigned Hub">{hubState.loading ? 'Loading...' : hubState.error ? <span>Unavailable <button type="button" className="text-button" onClick={hubState.retry}>Retry</button></span> : currentHub ? <Link className="admin-ud-link" to={`/admin/network/hubs/${currentHub.id}`}>{currentHub.name}</Link> : currentHubId !== null ? `Hub ${currentHubId}` : 'Unassigned'}</Field>}
             <Field label="Sign-in access">{user.is_active ? 'Allowed' : 'Blocked'}</Field>
             {archived && <Field label="Restore eligibility">Not restorable</Field>}
           </dl>
@@ -255,16 +257,16 @@ export function AdminUserDetailPage() {
                     <option value="Admin">Admin</option><option value="Operator">Operator</option><option value="Technician">Technician</option>
                   </AdminSelect>}
               </label>
-              {draft.role === 'Technician' && <AdminTechnicianHubField state={hubState} value={hubValue} onChange={setHubDraft} required={becomingTechnician} disabled={submitting || !user.is_active} />}
+              {editingTechnician && <AdminTechnicianHubField state={hubState} value={hubValue} onChange={setHubDraft} required={becomingTechnician} disabled={submitting || !user.is_active} />}
             </div>
-            {user.role === 'Technician' && draft.role !== 'Technician' && currentHubId !== null && <p className="admin-ud-error">Unassign this technician before changing the role.</p>}
-            {needsHub && draft.role !== 'Technician' && hubState.error && <p className="admin-ud-error">{hubState.error} <button type="button" className="text-button" onClick={hubState.retry}>Retry</button></p>}
+            {isCurrentTechnician && !editingTechnician && currentHubId !== null && <p className="admin-ud-error">Unassign this technician before changing the role.</p>}
+            {needsHub && !editingTechnician && hubState.error && <p className="admin-ud-error">{hubState.error} <button type="button" className="text-button" onClick={hubState.retry}>Retry</button></p>}
             {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Check pending responsibilities.</p>}
             {error && <p className="admin-ud-error" role="alert">{error}</p>}
           </div>
           <div className="admin-ud-modal-foot">
             <ActionButton variant="secondary" disabled={submitting} onClick={closeEdit}>Cancel</ActionButton>
-            <ActionButton type="submit" disabled={submitting || !validHub || (user.role === 'Technician' && draft.role !== 'Technician' && currentHubId !== null)}>{submitting ? 'Saving…' : 'Save changes'}</ActionButton>
+            <ActionButton type="submit" disabled={submitting || !validHub || (isCurrentTechnician && !editingTechnician && currentHubId !== null)}>{submitting ? 'Saving…' : 'Save changes'}</ActionButton>
           </div>
         </form>}
       </DialogContent>
