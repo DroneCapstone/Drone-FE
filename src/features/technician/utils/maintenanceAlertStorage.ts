@@ -243,7 +243,8 @@ export function mapApiMaintenanceAlert(value: unknown): MaintenanceAlert | null 
   if (!rawId || !rawDroneId) return null;
 
   const droneName = pickString(value, ["drone_name", "drone_code", "name"], "");
-  const droneId = alertDisplayId("DR", rawDroneId, 3);
+  // Drone IDs are opaque Backend identifiers, including model prefixes.
+  const droneId = rawDroneId.trim();
 
   return {
     id: alertDisplayId("ALT", rawId, 3),

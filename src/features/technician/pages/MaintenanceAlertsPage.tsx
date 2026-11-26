@@ -6,25 +6,20 @@ import {
   Search,
   X,
 } from "lucide-react";
-
 import {
   useMemo,
   useState,
 } from "react";
-
 import {
   useNavigate,
 } from "react-router-dom";
-
 import {
   Card,
   CardContent,
 } from "@/components/shadcn/ui/card";
-
 import {
   TechnicianPageShell,
 } from "../components/TechnicianPageShell";
-
 import {
   type AlertSource,
   type AlertStatus,
@@ -32,14 +27,12 @@ import {
   mapApiMaintenanceAlert,
 } from "../utils/maintenanceAlertStorage";
 import { formatApiDateTime, isRecord, pickString, unwrapList, unwrapObject } from "../api/httpClient";
-
 import {
   useMaintenanceAlertsQuery,
   useMaintenanceAlertsHistoryQuery,
   useMaintenanceAlertQuery,
   useSyncBatteryOverdueAlertsMutation,
 } from "../hooks/useMaintenanceQueries";
-
 type AlertLog = {
   id: string;
   alertId: string;
@@ -50,7 +43,6 @@ type AlertLog = {
   workOrderId: string;
   handledAt: string;
 };
-
 function mapAlertHistoryRow(raw: unknown, index: number): AlertLog | null {
   if (!isRecord(raw)) return null;
   const combined = isRecord(raw.alert) ? { ...raw.alert, ...raw } : raw;
@@ -61,7 +53,7 @@ function mapAlertHistoryRow(raw: unknown, index: number): AlertLog | null {
   return {
     id: `${alertId}-${pickString(raw, ["history_id", "id"], String(index))}`,
     alertId,
-    drone: alert?.droneId ?? pickString(combined, ["drone_id"], "—"),
+    drone: alert?.droneId ?? pickString(combined, ["drone_id", "droneId"], "—"),
     title: alert?.title ?? pickString(combined, ["title", "message", "issue_description"], "—"),
     source: alert?.source ?? "Schedule",
     status: alert?.status ?? "Handled",
@@ -70,10 +62,8 @@ function mapAlertHistoryRow(raw: unknown, index: number): AlertLog | null {
       ["acknowledged_at", "resolved_at", "handled_at", "updated_at"], ""), "—"),
   };
 }
-
 // Stable empty list while the first API request is pending.
 const EMPTY_MAINTENANCE_ALERTS: MaintenanceAlert[] = [];
-
 /*
  * Active alerts come from the shared maintenance alert store.
  *
@@ -84,36 +74,27 @@ const EMPTY_MAINTENANCE_ALERTS: MaintenanceAlert[] = [];
  *   Technician discovers a technical issue during a battery-stop
  *   readiness check and the system creates the alert.
  */
-
-
 export function MaintenanceAlertsPage() {
   const navigate = useNavigate();
-
   const alertsQuery =
     useMaintenanceAlertsQuery();
-
   const maintenanceAlerts: MaintenanceAlert[] =
     alertsQuery.data ?? EMPTY_MAINTENANCE_ALERTS;
-
   // Never display a 'no alerts' state before the first API result is known.
   const alertsLoading = alertsQuery.isPending;
   const alertsFailed = alertsQuery.isError && !alertsQuery.data;
-
   const [query, setQuery] =
     useState("");
-
   const [
     historyOpen,
     setHistoryOpen,
   ] = useState(false);
-
   const [
     sourceFilter,
     setSourceFilter,
   ] = useState<
     "all" | AlertSource
   >("all");
-
   const [selectedAlertId, setSelectedAlertId] = useState<string | undefined>();
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -126,7 +107,6 @@ export function MaintenanceAlertsPage() {
   const selectedAlert = selectedAlertId
     ? mapApiMaintenanceAlert(unwrapObject(alertDetailQuery.data))
     : null;
-
   const syncOverdueBatteries = async () => {
     if (!window.confirm("Run the Backend overdue-battery alert check now? This may generate notifications.")) return;
     try {
@@ -138,20 +118,15 @@ export function MaintenanceAlertsPage() {
       setActionError(error instanceof Error ? error.message : "Unable to check overdue batteries.");
     }
   };
-
-
-
   const normalizedQuery = query
     .trim()
     .toLowerCase();
-
   // BE filters by Technician hub and is authoritative for alert status.
   // Never suppress a pending Backend alert because localStorage says a WO was created.
   const activeAlerts = useMemo(
     () => maintenanceAlerts.filter((alert) => alert.status !== "Handled"),
     [maintenanceAlerts],
   );
-
   const filteredAlerts = useMemo(
     () =>
       activeAlerts.filter(
@@ -163,7 +138,7 @@ export function MaintenanceAlertsPage() {
               .includes(
                 normalizedQuery,
               ) ||
-            alert.drone
+            alert.droneId
               .toLowerCase()
               .includes(
                 normalizedQuery,
@@ -178,12 +153,10 @@ export function MaintenanceAlertsPage() {
               .includes(
                 normalizedQuery,
               );
-
           const matchesSource =
             sourceFilter === "all" ||
             alert.source ===
               sourceFilter;
-
           return (
             matchesSearch &&
             matchesSource
@@ -196,38 +169,33 @@ export function MaintenanceAlertsPage() {
       sourceFilter,
     ],
   );
-
   const createWorkOrder = (
     alert: MaintenanceAlert,
   ) => {
     const params =
       new URLSearchParams({
         alertId: alert.id,
-        drone: alert.drone,
+        drone: alert.droneId,
         droneId: alert.droneId,
         title: alert.title,
         source: alert.source,
       });
-
     if (alert.missionId) {
       params.set(
         "missionId",
         alert.missionId,
       );
     }
-
     if (alert.legId) {
       params.set(
         "legId",
         alert.legId,
       );
     }
-
     navigate(
       `/technician/maintenance/work-orders?${params.toString()}`,
     );
   };
-
   return (
     <TechnicianPageShell
       title="Maintenance alerts"
@@ -248,7 +216,6 @@ export function MaintenanceAlertsPage() {
               size={16}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--tech-subtle)]"
             />
-
             <input
               type="search"
               value={query}
@@ -261,7 +228,6 @@ export function MaintenanceAlertsPage() {
               className="tech-control h-10 w-full pl-9 pr-3 !text-[14px]"
             />
           </div>
-
           <select
             value={sourceFilter}
             onChange={(event) =>
@@ -288,13 +254,11 @@ export function MaintenanceAlertsPage() {
             </option>
           </select>
         </CardContent>
-
         {/* TABLE TITLE */}
         <div className="flex items-center justify-between border-b border-[var(--tech-border)] px-5 py-5">
           <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
             Active alerts
           </h2>
-
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => void syncOverdueBatteries()}
               disabled={batteryOverdueMutation.isPending}
@@ -309,7 +273,6 @@ export function MaintenanceAlertsPage() {
                   ? "—"
                   : `${filteredAlerts.length} alerts`}
             </span>
-
             <button
               type="button"
               onClick={() =>
@@ -328,41 +291,36 @@ export function MaintenanceAlertsPage() {
             </button>
           </div>
         </div>
-
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+            <div className="min-w-[1130px]">
+              <div className="grid grid-cols-[110px_175px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
                 <span>Alert</span>
-                <span>Drone</span>
+                <span>Drone ID</span>
                 <span>Issue</span>
                 <span>Source</span>
                 <span>Status</span>
                 <span>Created</span>
                 <span>Action</span>
               </div>
-
               {filteredAlerts.map(
                 (alert) => (
                   <div
                     key={alert.id}
-                    className="grid grid-cols-[110px_110px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
+                    className="grid grid-cols-[110px_175px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
                   >
                     <button type="button" onClick={() => setSelectedAlertId(alert.id)}
                       title="View alert details from Backend"
                       className="text-center text-[14px] font-medium text-orange-500 hover:underline">
                       {alert.id}
                     </button>
-
-                    <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
-                      {alert.drone}
+                    <span className="min-w-0 break-words px-1 text-center text-[15px] font-medium text-[var(--tech-text)]">
+                      {alert.droneId}
                     </span>
-
                     <div className="px-4">
                       <p className="text-[14px] text-[var(--tech-text-secondary)]">
                         {alert.title}
                       </p>
-
                       {alert.missionId && (
                         <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
                           Mission{" "}
@@ -374,7 +332,6 @@ export function MaintenanceAlertsPage() {
                             : ""}
                         </p>
                       )}
-
                       {alert.reportedBy && (
                         <p className="mt-1 text-[12px] text-[var(--tech-muted)]">
                           Reported by{" "}
@@ -384,7 +341,6 @@ export function MaintenanceAlertsPage() {
                         </p>
                       )}
                     </div>
-
                     <div className="flex justify-center">
                       <SourceText
                         source={
@@ -392,17 +348,14 @@ export function MaintenanceAlertsPage() {
                         }
                       />
                     </div>
-
                     <div className="flex justify-center">
                       <AlertStatusText
                         status="Pending"
                       />
                     </div>
-
                     <span className="text-center text-[13px] text-[var(--tech-muted)]">
                       {alert.createdAt}
                     </span>
-
                     <div className="flex items-center justify-center gap-3">
                       <button type="button" title="View details" onClick={() => setSelectedAlertId(alert.id)}
                         className="text-[var(--tech-muted)] hover:text-orange-500"><Eye size={15} /></button>
@@ -440,7 +393,6 @@ export function MaintenanceAlertsPage() {
                   </div>
                 ),
               )}
-
               {alertsLoading ? (
                 <div role="status" aria-live="polite" className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
                   Loading maintenance alerts...
@@ -467,8 +419,6 @@ export function MaintenanceAlertsPage() {
           </div>
         </CardContent>
       </Card>
-
-
       {historyOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 px-4">
           <div className="flex max-h-[80vh] w-full max-w-[1100px] flex-col overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
@@ -477,10 +427,7 @@ export function MaintenanceAlertsPage() {
                 <h2 className="text-[20px] font-semibold text-[var(--tech-text)]">
                   Alert history
                 </h2>
-
-               
               </div>
-
               <button
                 type="button"
                 onClick={() =>
@@ -491,19 +438,17 @@ export function MaintenanceAlertsPage() {
                 <X size={18} />
               </button>
             </div>
-
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[980px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[110px_110px_1fr_140px_130px_130px_170px] items-center border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
+              <div className="min-w-[1130px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[110px_175px_1fr_140px_130px_130px_170px] items-center border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-center text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-muted)]">
                   <span>Alert</span>
-                  <span>Drone</span>
+                  <span>Drone ID</span>
                   <span>Issue</span>
                   <span>Source</span>
                   <span>Status</span>
                   <span>Work order</span>
                   <span>Handled at</span>
                 </div>
-
                 {alertHistoryQuery.isPending && (
                   <div role="status" className="px-5 py-8 text-center text-[13px] text-[var(--tech-muted)]">Loading alert history...</div>
                 )}
@@ -517,21 +462,18 @@ export function MaintenanceAlertsPage() {
                   (log) => (
                     <div
                       key={log.id}
-                      className="grid grid-cols-[110px_110px_1fr_140px_130px_130px_170px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
+                      className="grid grid-cols-[110px_175px_1fr_140px_130px_130px_170px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
                     >
                       <button type="button" onClick={() => setSelectedAlertId(log.alertId)}
                         className="text-center text-[14px] font-medium text-orange-500 hover:underline">
                         {log.alertId}
                       </button>
-
-                      <span className="text-center text-[15px] font-medium text-[var(--tech-text)]">
+                      <span className="min-w-0 break-words px-1 text-center text-[15px] font-medium text-[var(--tech-text)]">
                         {log.drone}
                       </span>
-
                       <span className="px-4 text-[14px] text-[var(--tech-text-secondary)]">
                         {log.title}
                       </span>
-
                       <div className="flex justify-center">
                         <SourceText
                           source={
@@ -539,7 +481,6 @@ export function MaintenanceAlertsPage() {
                           }
                         />
                       </div>
-
                       <div className="flex justify-center">
                         <AlertStatusText
                           status={
@@ -547,18 +488,15 @@ export function MaintenanceAlertsPage() {
                           }
                         />
                       </div>
-
                       <span className="text-center text-[13px] font-medium text-orange-500">
                         {log.workOrderId}
                       </span>
-
                       <span className="text-center text-[13px] text-[var(--tech-muted)]">
                         {log.handledAt}
                       </span>
                     </div>
                   ),
                 )}
-
                 {!alertHistoryQuery.isPending && !alertHistoryQuery.isError && alertLogs.length === 0 && (
                   <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
                     No handled alert history yet.
@@ -569,7 +507,6 @@ export function MaintenanceAlertsPage() {
           </div>
         </div>
       )}
-
       {selectedAlertId && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-[600px] rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-5 shadow-2xl">
@@ -588,7 +525,7 @@ export function MaintenanceAlertsPage() {
             ) : selectedAlert ? (
               <div className="mt-5 space-y-3 text-[14px] text-[var(--tech-text-secondary)]">
                 <p><strong>Alert:</strong> {selectedAlert.id}</p>
-                <p><strong>Drone:</strong> {selectedAlert.droneId}</p>
+                <p><strong>Drone ID:</strong> {selectedAlert.droneId}</p>
                 <p><strong>Issue:</strong> {selectedAlert.title}</p>
                 <p className="whitespace-pre-wrap"><strong>Description:</strong> {pickString(unwrapObject(alertDetailQuery.data), ["description"], "—").trim() || "—"}</p>
                 <p><strong>Source:</strong> {selectedAlert.source}</p>
@@ -604,11 +541,9 @@ export function MaintenanceAlertsPage() {
           </div>
         </div>
       )}
-
     </TechnicianPageShell>
   );
 }
-
 function SourceText({
   source,
 }: {
@@ -620,7 +555,6 @@ function SourceText({
       : source === "Incident"
         ? "text-[var(--tech-text-secondary)]"
         : "text-[var(--tech-muted)]";
-
   return (
     <span
       className={`text-[13px] font-semibold ${style}`}
@@ -629,7 +563,6 @@ function SourceText({
     </span>
   );
 }
-
 function AlertStatusText({
   status,
 }: {
