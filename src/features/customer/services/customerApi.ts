@@ -629,8 +629,25 @@ export const customerApi = {
     );
   },
 
-  getNotifications() {
-    return apiRequest<unknown>("/api/v1/notifications/");
+  getNotifications(page = 1, pageSize = 50) {
+    return apiRequest<unknown>(
+      `/api/v1/notifications?page=${page}&page_size=${pageSize}`,
+    );
+  },
+
+  deleteNotification(notificationId: string | number) {
+    return apiRequest<unknown>(
+      `/api/v1/notifications/${encodeURIComponent(String(notificationId))}`,
+      {
+        method: "DELETE",
+      },
+    );
+  },
+
+  clearReadNotifications() {
+    return apiRequest<unknown>("/api/v1/notifications/clear-read", {
+      method: "DELETE",
+    });
   },
 
   getUnreadCount() {
