@@ -7,13 +7,12 @@
   --notification-muted: var(--muted, #6c727e);
   --notification-unread: #fff0e5;
   --notification-accent: var(--orange, #ff6b00);
-  --notification-hover: #fff0e4;
+  --notification-hover: #ff6b00;
   color: var(--notification-text);
   min-width: 0;
 }
 :root[data-theme='dark'] .admin-notifications {
   --notification-unread: color-mix(in srgb, var(--notification-surface) 94%, #ff6b00 6%);
-  --notification-hover: color-mix(in srgb, var(--notification-surface) 85%, #ff6b00 15%);
 }
 .admin-notifications .notification-toolbar {
   display: flex;
@@ -126,8 +125,8 @@
   background: var(--notification-surface);
 }
 .admin-notifications button:not(:disabled):hover {
-  color: var(--notification-accent);
-  border-color: color-mix(in srgb, var(--notification-accent) 45%, var(--notification-border));
+  color: #fff;
+  border-color: var(--notification-hover);
   background: var(--notification-hover);
 }
 .admin-notifications .notification-text-action {
@@ -171,9 +170,9 @@
 .admin-notifications .notification-tab:hover:not(:disabled),
 .admin-notifications .notification-actions .button:hover:not(:disabled),
 .admin-notifications .notification-pagination .button:hover:not(:disabled) {
-  color: var(--notification-accent);
+  color: #fff;
   background: var(--notification-hover);
-  border-color: color-mix(in srgb, var(--notification-accent) 45%, var(--notification-border));
+  border-color: var(--notification-hover);
 }
 
 /* Compact filled icons match the Mission Detail heading icon proportions. */
@@ -205,4 +204,9 @@
 }
 @media (max-width: 520px) {
   .admin-notifications .notification-row { gap: 9px; padding: 12px; }
+}
+
+/* Match the solid orange Operator primary button on all enabled button hovers. */
+.admin-notifications button:not(:disabled):hover svg {
+  color: inherit;
 }
