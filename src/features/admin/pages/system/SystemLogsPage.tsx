@@ -1,6 +1,9 @@
 import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
+import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../operator/components/OperatorTable';
+import './AdminLogsTable.css';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -41,14 +44,13 @@ export function SystemLogsPage() {
   }, [page, filters, refreshKey]);
 
   function apply(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPage(1); setFilters({ ...draft }); }
-  function reset() { const empty = blankFilters(); setDraft(empty); setFilters(empty); setPage(1); }
   const tone = (level: string): 'info' | 'warning' | 'danger' | 'neutral' =>
     ['ERROR', 'CRITICAL'].includes(level.toUpperCase()) ? 'danger' : level.toUpperCase() === 'WARNING' ? 'warning' : level.toUpperCase() === 'INFO' ? 'info' : 'neutral';
 
   return <AdminPageShell title="System Logs" description="Monitor system events, warnings and errors."
     actions={<ActionButton variant="secondary" disabled={loading} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={15} /> Refresh</ActionButton>}
   >
-    <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+    <OperatorPanel className="flush-panel admin-logs-panel">
       <form onSubmit={apply}>
         <AdminToolbar
           searchValue={draft.source ?? ''}
@@ -58,34 +60,26 @@ export function SystemLogsPage() {
             <AdminSelect aria-label="Filter by level" value={draft.level ?? ''} onChange={event => setDraft(current => ({ ...current, level: (event.target.value || undefined) as SystemLogFilters['level'] }))}>
               <option value="">All levels</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option>
             </AdminSelect>
-            {/* <input
-              className="h-[37px] min-w-[180px] px-3 text-[13px]"
-              aria-label="Filter by event"
-              placeholder="Event…"
-              value={draft.event ?? ''}
-              onChange={event => setDraft(current => ({ ...current, event: event.target.value }))}
-            /> */}
-            {/* <ActionButton type="button" variant="secondary" onClick={reset} disabled={loading}>Reset</ActionButton> */}
             <ActionButton type="submit" disabled={loading}>Apply filters</ActionButton>
           </>}
         />
       </form>
-      {error && <p role="alert" className="border-b border-[var(--admin-border)] p-4 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="border-b border-[var(--border)] p-4 text-sm text-red-600">{error}</p>}
       {loading && <OperatorLoadingState label="Loading system logs…" />}
-      {!loading && !error && <div className="table-wrap"><table>
-        <thead><tr><th>Time</th><th>Source</th><th>Event</th><th>Level</th><th>Message</th></tr></thead>
-        <tbody>
-          {items.map(log => <tr key={log.id}>
-            <td className="whitespace-nowrap">{formatDate(log.created_at)}</td>
-            <td><strong>{adminDisplayText(log.source)}</strong></td>
-            <td>{adminDisplayText(log.event.replace(/_/g, ' '))}</td>
-            <td><StatusBadge tone={tone(log.level)}>{log.level}</StatusBadge></td>
-            <td className="min-w-[260px] max-w-2xl"><small className="whitespace-normal break-words">{adminDisplayText(log.message)}</small></td>
-          </tr>)}
-          {items.length === 0 && <tr><td colSpan={5} className="p-5 text-center">No system logs match your filters.</td></tr>}
-        </tbody>
-      </table></div>}
+      {!loading && !error && <OperatorTable className="admin-logs-table" aria-label="System logs">
+        <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Source</TableHead><TableHead>Event</TableHead><TableHead>Message</TableHead><TableHead className="admin-log-pinned">Level</TableHead></TableRow></TableHeader>
+        <TableBody>
+          {items.map(log => <TableRow key={log.id}>
+            <TableCell className="whitespace-nowrap">{formatDate(log.created_at)}</TableCell>
+            <TableCell><span className="admin-log-primary">{adminDisplayText(log.source)}</span></TableCell>
+            <TableCell>{adminDisplayText(log.event.replace(/_/g, ' '))}</TableCell>
+            <TableCell className="admin-log-message-cell"><span className="admin-log-message" title={adminDisplayText(log.message)}>{adminDisplayText(log.message)}</span></TableCell>
+            <TableCell className="admin-log-pinned"><StatusBadge tone={tone(log.level)}>{log.level}</StatusBadge></TableCell>
+          </TableRow>)}
+          {items.length === 0 && <TableRow><TableCell colSpan={5} className="admin-log-empty">{Object.values(filters).some(Boolean) ? 'No system logs match your filters.' : 'No system logs yet.'}</TableCell></TableRow>}
+        </TableBody>
+      </OperatorTable>}
       {!error && !loading && <LogsPagination page={page} pageSize={PAGE_SIZE} total={total} loading={loading} onPageChange={setPage} />}
-    </div>
+    </OperatorPanel>
   </AdminPageShell>;
 }
