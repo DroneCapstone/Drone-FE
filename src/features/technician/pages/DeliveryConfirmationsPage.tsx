@@ -1,7 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  Clock3,
   PackageCheck,
   RefreshCw,
   XCircle,
@@ -16,12 +15,10 @@ import {
   useConfirmPickupMutation,
   useDeliveryConfirmationsQuery,
 } from "../hooks/useDeliveryQueries";
-
 type Remaining = {
   expired: boolean;
   label: string;
 };
-
 function remainingUntil(deadline: string, now: number): Remaining | null {
   if (!deadline) return null;
   const end = Date.parse(deadline);
@@ -39,22 +36,21 @@ function remainingUntil(deadline: string, now: number): Remaining | null {
     label: `${days}d ${fmt(hours)}h ${fmt(minutes)}m ${fmt(seconds)}s`,
   };
 }
-
 export function DeliveryConfirmationsPage() {
   const confirmationsQuery = useDeliveryConfirmationsQuery();
   const confirmPickupMutation = useConfirmPickupMutation();
   const deliveries = confirmationsQuery.data ?? [];
   const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState("");
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
+  // Track confirmation requests independently, without disabling other orders.
+  const confirmingOrdersRef = useRef<Set<string>>(new Set());
+  const [confirmingOrderIds, setConfirmingOrderIds] = useState<string[]>([]);
   const expiredRefetchDone = useRef<Set<string>>(new Set());
-
-  // The countdown runs in the UI. It does NOT change the order status.
+  // Track pickup deadlines for Backend-controlled expiration (not shown in the table).
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(id);
   }, []);
-
   // Refetch once on reaching the deadline. BE must perform the actual cancellation.
   useEffect(() => {
     for (const delivery of deliveries) {
@@ -67,18 +63,17 @@ export function DeliveryConfirmationsPage() {
       void confirmationsQuery.refetch();
     }
   }, [deliveries, now, confirmationsQuery.refetch]);
-
   // With the filter tabs removed, display all statuses from Backend.
   const visible: DeliveryConfirmation[] = deliveries;
-
   async function handleConfirm(delivery: DeliveryConfirmation) {
-    if (!delivery.backendOrderId || confirmPickupMutation.isPending) return;
+    if (!delivery.backendOrderId || confirmingOrdersRef.current.has(delivery.orderId)) return;
     if (remainingUntil(delivery.pickupDeadlineAtIso, Date.now())?.expired) {
       setMessage("Pickup window expired. Wait for Backend to cancel the order, then refresh.");
       return;
     }
     setMessage("");
-    setConfirmingOrderId(delivery.orderId);
+    confirmingOrdersRef.current.add(delivery.orderId);
+    setConfirmingOrderIds((ids) => [...ids, delivery.orderId]);
     try {
       await confirmPickupMutation.mutateAsync(delivery.backendOrderId);
       // Only BE can complete the order. The invalidated list is the source of truth.
@@ -88,10 +83,10 @@ export function DeliveryConfirmationsPage() {
       setMessage(`${detail} — If Backend rejects ${delivery.backendOrderId}, ask BE to return the actual order_id.`);
       void confirmationsQuery.refetch();
     } finally {
-      setConfirmingOrderId(null);
+      confirmingOrdersRef.current.delete(delivery.orderId);
+      setConfirmingOrderIds((ids) => ids.filter((id) => id !== delivery.orderId));
     }
   }
-
   return (
     <TechnicianPageShell
       title="Delivery confirmations"
@@ -109,7 +104,6 @@ export function DeliveryConfirmationsPage() {
           <button type="button" onClick={() => void confirmationsQuery.refetch()} className="ml-3 font-semibold underline">Retry</button>
         </div>
       )}
-
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
@@ -121,16 +115,14 @@ export function DeliveryConfirmationsPage() {
           {confirmationsQuery.isFetching && !confirmationsQuery.isPending ? "Updating..." : "Refresh"}
         </button>
       </div>
-
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <div className="min-w-[1050px]">
-              <div className="grid grid-cols-[minmax(160px,1.1fr)_minmax(155px,1fr)_minmax(150px,1fr)_minmax(180px,1.2fr)_minmax(180px,1.2fr)_minmax(175px,1fr)] items-center gap-3 border-b border-[var(--tech-border)] px-5 py-3">
+            <div className="min-w-[920px]">
+              <div className="grid grid-cols-[minmax(175px,1.3fr)_minmax(170px,1.2fr)_minmax(165px,1.15fr)_minmax(205px,1.5fr)_minmax(165px,1.1fr)] items-center gap-3 border-b border-[var(--tech-border)] px-5 py-3">
                 <Header>Order</Header>
                 <Header>Mission</Header>
                 <Header>Arrival hub</Header>
-                <Header>Pickup countdown</Header>
                 <Header>Status</Header>
                 <Header alignRight>Action</Header>
               </div>
@@ -139,11 +131,11 @@ export function DeliveryConfirmationsPage() {
                   const time = remainingUntil(delivery.pickupDeadlineAtIso, now);
                   const pending = delivery.status === "Delivered";
                   const blockConfirm = !delivery.backendOrderId || Boolean(time?.expired);
-                  const submitting = confirmPickupMutation.isPending && confirmingOrderId === delivery.orderId;
+                  const submitting = confirmingOrderIds.includes(delivery.orderId);
                   return (
                     <div
                       key={`${delivery.orderId}:${delivery.missionId}`}
-                      className="grid grid-cols-[minmax(160px,1.1fr)_minmax(155px,1fr)_minmax(150px,1fr)_minmax(180px,1.2fr)_minmax(180px,1.2fr)_minmax(175px,1fr)] items-center gap-3 px-5 py-4"
+                      className="grid grid-cols-[minmax(175px,1.3fr)_minmax(170px,1.2fr)_minmax(165px,1.15fr)_minmax(205px,1.5fr)_minmax(165px,1.1fr)] items-center gap-3 px-5 py-4"
                     >
                       <div className="min-w-0">
                         <p className="break-words text-[13px] font-semibold text-[var(--tech-text)]">{delivery.orderCode}</p>
@@ -153,22 +145,6 @@ export function DeliveryConfirmationsPage() {
                         <p className="break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.missionCode || "—"}</p>
                       </div>
                       <span className="min-w-0 break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.destination}</span>
-                      <div className="min-w-0">
-                        {pending ? (
-                          time ? (
-                            <>
-                              <p className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${time.expired ? "text-red-500" : "text-orange-500"}`}>
-                                <Clock3 size={14} />{time.label}
-                              </p>
-                              <p className="mt-1 text-[10px] text-[var(--tech-muted)]">Deadline: {delivery.pickupDeadlineAt}</p>
-                            </>
-                          ) : (
-                            <p className="text-[11px] text-[var(--tech-muted)]">Arrival time not provided</p>
-                          )
-                        ) : (
-                          <p className="text-[12px] text-[var(--tech-muted)]">—</p>
-                        )}
-                      </div>
                       <div>
                         <StatusCell delivery={delivery} />
                       </div>
@@ -177,7 +153,7 @@ export function DeliveryConfirmationsPage() {
                           <Button
                             type="button"
                             onClick={() => void handleConfirm(delivery)}
-                            disabled={blockConfirm || confirmPickupMutation.isPending}
+                            disabled={blockConfirm || submitting}
                             title={!delivery.backendOrderId
                               ? "Backend must provide order_id or an ORD-... code."
                               : time?.expired
@@ -211,13 +187,10 @@ export function DeliveryConfirmationsPage() {
           </div>
         </CardContent>
       </Card>
-      <p className="mt-3 text-[11px] text-[var(--tech-muted)]">
-        Countdown = arrival at destination hub + 72 hours (or Backend pickup_deadline). Backend owns auto-cancellation and final order status.
-      </p>
+      
     </TechnicianPageShell>
   );
 }
-
 function StatusCell({ delivery }: { delivery: DeliveryConfirmation }) {
   if (delivery.status === "Completed") {
     return <div><p className="text-[12px] font-medium text-orange-500">Completed</p><p className="mt-1 text-[11px] text-[var(--tech-muted)]">{delivery.receivedConfirmedAt || "Pickup confirmed"}</p></div>;
@@ -227,7 +200,6 @@ function StatusCell({ delivery }: { delivery: DeliveryConfirmation }) {
   }
   return <p className="text-[12px] font-medium text-[var(--tech-text-secondary)]">Awaiting customer pickup</p>;
 }
-
 function Header({ children, alignRight = false }: { children: ReactNode; alignRight?: boolean }) {
   return <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tech-subtle)] ${alignRight ? "text-right" : ""}`}>{children}</span>;
 }
