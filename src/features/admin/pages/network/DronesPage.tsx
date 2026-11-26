@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CircleCheck, Plane, RadioTower, Wrench } from 'lucide-react';
@@ -119,9 +120,9 @@ export function DronesPage() {
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search drone, model or serial…" filters={<>
-        <select value={hub} onChange={(event) => setHub(event.target.value)}><option value="all">All hubs</option>{hubs.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All status</option><option value="AVAILABLE">Available</option><option value="MAINTENANCE">Maintenance</option><option value="IN_FLIGHT">In flight</option><option value="RETIRED">Retired</option></select>
-        <select value={active} onChange={(event) => setActive(event.target.value)}><option value="all">All admin states</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>
+        <AdminSelect value={hub} onChange={(event) => setHub(event.target.value)}><option value="all">All hubs</option>{hubs.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</AdminSelect>
+        <AdminSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All status</option><option value="AVAILABLE">Available</option><option value="MAINTENANCE">Maintenance</option><option value="IN_FLIGHT">In flight</option><option value="RETIRED">Retired</option></AdminSelect>
+        <AdminSelect value={active} onChange={(event) => setActive(event.target.value)}><option value="all">All admin states</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect>
       </>} meta={`${visible.length} of ${drones.length} drones`} />
       <div className="table-wrap"><table><thead><tr><th>Drone</th><th>Model</th><th>Hub</th><th>Battery</th><th>Status</th><th>Admin state</th><th>Payload</th><th>Action</th></tr></thead><tbody>
         {visible.map((d) => <tr key={d.id}>
@@ -149,13 +150,13 @@ export function DronesPage() {
             <label className="sm:col-span-2"><span>Serial number *</span><input required value={addDraft.serialNumber} onChange={(e) => setAddDraft({ ...addDraft, serialNumber: e.target.value })} /></label>
             <label><span>Payload capacity (kg) *</span><input required type="number" min="0.001" step="any" value={addDraft.payloadKg} onChange={(e) => setAddDraft({ ...addDraft, payloadKg: e.target.value })} /></label>
             <label><span>Max speed *</span><input required type="number" min="0.001" step="any" value={addDraft.maxSpeed} onChange={(e) => setAddDraft({ ...addDraft, maxSpeed: e.target.value })} /></label>
-            <label><span>Hub (optional)</span><select value={addDraft.hubId} onChange={(e) => setAddDraft({ ...addDraft, hubId: e.target.value })}>
+            <label><span>Hub (optional)</span><AdminSelect value={addDraft.hubId} onChange={(e) => setAddDraft({ ...addDraft, hubId: e.target.value })}>
               <option value="">Unassigned</option>
               {hubs.filter((item) => String(item.status ?? '').toUpperCase() === 'ACTIVE').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select></label>
-            <label><span>Status</span><select value={addDraft.status} onChange={(e) => setAddDraft({ ...addDraft, status: e.target.value as AddDroneDraft['status'] })}>
+            </AdminSelect></label>
+            <label><span>Status</span><AdminSelect value={addDraft.status} onChange={(e) => setAddDraft({ ...addDraft, status: e.target.value as AddDroneDraft['status'] })}>
               <option value="Available">Available</option><option value="Maintenance">Maintenance</option><option value="Retired">Retired</option>
-            </select></label>
+            </AdminSelect></label>
             {addError && <p className="sm:col-span-2 text-sm text-red-500" role="alert">{addError}</p>}
           </div>
           <div className="form-actions border-t border-border p-5">

@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -218,9 +219,9 @@ export function AdminUserDetailPage() {
                 <input required type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
               <label><span>Role <b aria-hidden="true">*</b></span>
                 {user.role === 'Customer' ? <input readOnly value="Customer" />
-                  : <select value={draft.role} disabled={lastActiveAdmin} onChange={(event) => setDraft({ ...draft, role: event.target.value as AdminApiRole })}>
+                  : <AdminSelect value={draft.role} disabled={lastActiveAdmin} onChange={(event) => setDraft({ ...draft, role: event.target.value as AdminApiRole })}>
                     <option value="Admin">Admin</option><option value="Operator">Operator</option><option value="Technician">Technician</option>
-                  </select>}
+                  </AdminSelect>}
               </label>
             </div>
             {draft.role !== user.role && <p className="admin-ud-helper">Role change: {user.role} → {draft.role}. Check pending responsibilities.</p>}

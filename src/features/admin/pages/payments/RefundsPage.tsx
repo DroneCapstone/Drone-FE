@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
@@ -32,7 +33,7 @@ export function RefundsPage() {
     {loading && <OperatorLoadingState label="Loading refunds…" />}
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     <OperatorPanel className="flush-panel">
-      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></select>} meta={`${visible.length} refunds`} />
+      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<AdminSelect value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></AdminSelect>} meta={`${visible.length} refunds`} />
       <div className="table-wrap"><table><thead><tr><th>Refund</th><th>Payment</th><th>Order</th><th>Customer</th><th>Amount</th><th>Reason</th><th>Status</th><th>Processed</th></tr></thead><tbody>
         {visible.map((row, i) => <tr key={`${field(row, 'id', 'refund_id', 'order_id')}-${i}`}>
           <td><strong>{field(row, 'id', 'refund_id')}</strong><small>{timestamp(row, 'requested_at', 'created_at')}</small></td>

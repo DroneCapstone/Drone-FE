@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { adminDetailText, adminDisplayText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -75,7 +76,7 @@ export function TransactionsPage() {
       <AdminSummaryCard label="Failed / refunded" value={items.filter(row => ['FAILED', 'REFUNDED'].includes(statusOf(row))).length} note="Failed or refunded payments" icon={CircleX} />
     </div>
     <OperatorPanel className="flush-panel">
-      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search transaction, order or customer…" filters={<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="REFUNDED">Refunded</option></select>} meta={`${visible.length} of ${items.length} transactions`} />
+      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search transaction, order or customer…" filters={<AdminSelect value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="REFUNDED">Refunded</option></AdminSelect>} meta={`${visible.length} of ${items.length} transactions`} />
       <div className="table-wrap"><table><thead><tr><th>Transaction</th><th>Order</th><th>Customer</th><th>Amount</th><th>Status</th><th>Method</th><th>Paid at</th><th>Action</th></tr></thead><tbody>
         {visible.map((row, index) => <tr key={`${field(row, 'id', 'transaction_id', 'payment_id')}-${index}`}>
           <td><strong>{field(row, 'id', 'transaction_id', 'payment_id')}</strong><small>{field(row, 'provider_reference', 'provider_transaction_id', 'provider_payment_id')}</small></td>

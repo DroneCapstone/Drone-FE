@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -169,9 +170,9 @@ export function NewBatteriesPage() {
       <AdminToolbar
         searchValue={search} onSearchChange={setSearch}
         placeholder="Search Battery Model, Battery ID or serial…"
-        filters={<select aria-label="Filter by battery model" value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
+        filters={<AdminSelect aria-label="Filter by battery model" value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
           <option value="ALL">All battery models</option>{models.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>}
+        </AdminSelect>}
         meta={`${shown.length} of ${modelSummary.length} battery models`}
       />
       <div className="table-wrap"><table><thead><tr><th>Battery Model</th><th>Current Quantity</th><th>Actions</th></tr></thead>
@@ -215,9 +216,9 @@ export function NewBatteriesPage() {
         </div>
         <div className="new-batteries-quantity-body">
           <label className="block text-sm"><span>Battery Model <span className="text-red-500">*</span></span>
-            <select required className={`${field} mt-2`} value={model} onChange={(event) => setModel(event.target.value)}>
+            <AdminSelect required className={`${field} mt-2`} value={model} onChange={(event) => setModel(event.target.value)}>
               <option value="">Select Battery Model</option>{catalog.filter(m => m.is_active).map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-            </select>
+            </AdminSelect>
           </label>
           <div className="new-batteries-quantity-fields">
             <label><span>Current Quantity</span><input className="new-batteries-quantity-input is-readonly" type="text" readOnly tabIndex={-1} value={existingQuantity} /></label>

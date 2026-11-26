@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { Bell, CheckCheck, ChevronLeft, ChevronRight, CreditCard, Plane, ShieldAlert, TriangleAlert, Trash2, Wrench, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { notificationTarget } from '../../utils/adminNotificationTarget';
@@ -123,9 +124,9 @@ export function AdminNotificationsPage() {
       <div className="notification-tabs" aria-label="Read status">
         {(['all', 'unread', 'read'] as const).map(value => <button key={value} type="button" disabled={saving} aria-pressed={filter === value} onClick={() => changeFilter(value)} className="notification-tab">{value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}</button>)}
       </div>
-      <select aria-label="Notification type" value={type} disabled={saving} onChange={event => { setType(event.target.value as NotificationType | ''); setPage(1); setExpanded([]); setActionError(''); setNotice(''); }} className="notification-type-filter">
+      <AdminSelect aria-label="Notification type" value={type} disabled={saving} onChange={event => { setType(event.target.value as NotificationType | ''); setPage(1); setExpanded([]); setActionError(''); setNotice(''); }} className="notification-type-filter">
         <option value="">All types</option>{types.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-      </select>
+      </AdminSelect>
     </div>
     {actionError && <p role="alert" className="mb-3 text-sm text-red-500">{actionError}</p>}
     {notice && <p role="status" className="mb-3 text-sm text-[var(--text)]">{notice}</p>}

@@ -18,13 +18,18 @@ import { cn } from "@/lib/utils";
 export interface DropdownSelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface DropdownSelectProps {
   value: string;
   options: readonly (string | DropdownSelectOption)[];
   onChange: (value: string) => void;
-  ariaLabel: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  required?: boolean;
+  id?: string;
+  menuClassName?: string;
   className?: string;
   placeholder?: string;
 }
@@ -75,6 +80,10 @@ export function DropdownSelect({
   ariaLabel,
   className,
   placeholder,
+  disabled,
+  required,
+  id,
+  menuClassName,
 }: DropdownSelectProps) {
   const scopeRef = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
@@ -149,11 +158,14 @@ export function DropdownSelect({
     <span ref={scopeRef} className="contents" style={dropdownThemeStyle}>
       <Select
         value={value}
+        disabled={disabled}
+        required={required}
         onValueChange={onChange}
         open={open}
         onOpenChange={handleOpenChange}
       >
         <SelectTrigger
+          id={id}
           aria-label={ariaLabel}
           className={cn(
             `
@@ -209,7 +221,7 @@ export function DropdownSelect({
           sideOffset={7}
           align="start"
           style={portalStyle}
-          className="
+          className={cn(`
             z-[120]
             w-[var(--radix-select-trigger-width)]
             min-w-[var(--radix-select-trigger-width)]
@@ -219,7 +231,7 @@ export function DropdownSelect({
             !bg-[var(--dropdown-surface)]
             !text-[var(--dropdown-text)]
             shadow-xl
-          "
+          `, menuClassName)}
         >
           {options.map((option) => {
             const optionValue =
@@ -236,6 +248,7 @@ export function DropdownSelect({
               <SelectItem
                 key={optionValue}
                 value={optionValue}
+                disabled={typeof option === "string" ? undefined : option.disabled}
                 className="
                   cursor-pointer
                   rounded-sm

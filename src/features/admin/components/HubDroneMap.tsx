@@ -1,3 +1,4 @@
+import { AdminSelect } from './AdminSelect';
 import { Link } from "react-router-dom";
 import { MapPin, Plane, Plus, Minus, LocateFixed, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -205,7 +206,7 @@ export function HubDroneMap({
             />
           </div>
 
-          <select
+          <AdminSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
             aria-label="Filter hub status"
@@ -213,9 +214,9 @@ export function HubDroneMap({
             <option value="all">All hubs</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
+          </AdminSelect>
 
-          <select
+          <AdminSelect
             value={mapStyle}
             onChange={(event) => setMapStyle(event.target.value as MapStyleChoice)}
             aria-label="Map type"
@@ -223,7 +224,7 @@ export function HubDroneMap({
             <option value="default">Default map</option>
             <option value="streets">Streets</option>
             <option value="satellite">Satellite</option>
-          </select>
+          </AdminSelect>
 
           <div className="admin-hub-network-map__controls">
             <button type="button" onClick={() => mapRef.current?.zoomIn({ duration: 250 })} aria-label="Zoom in" title="Zoom in">

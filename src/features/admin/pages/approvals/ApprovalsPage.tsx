@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -305,19 +306,19 @@ export function ApprovalsPage() {
 
         filters={<>
 
-          <select value={type} onChange={(event) => setType(event.target.value)}>
+          <AdminSelect value={type} onChange={(event) => setType(event.target.value)}>
 
             <option value="ALL">All types</option><option value="PART">Spare parts</option><option value="BATTERY">Batteries</option>
 
-          </select>
+          </AdminSelect>
 
-          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+          <AdminSelect value={filter} onChange={(event) => setFilter(event.target.value)}>
 
             <option value="ALL">All status</option>
 
             {(Object.keys(labels) as AdminEffectiveStatus[]).map((state) => <option key={state} value={state}>{labels[state]}</option>)}
 
-          </select>
+          </AdminSelect>
 
         </>}
 
@@ -491,7 +492,7 @@ export function ApprovalsPage() {
 
                 </label>
 
-                <select id="replacement-item-select" className={`${selectClass} mt-2`} value={chosenId}
+                <AdminSelect id="replacement-item-select" className={`${selectClass} mt-2`} value={chosenId}
 
                   onChange={(event) => { setSelectedItemId(event.target.value); setError(''); }}>
 
@@ -507,7 +508,7 @@ export function ApprovalsPage() {
 
                   </option>)}
 
-                </select>
+                </AdminSelect>
 
                 {request.type === 'PART' && chosenPart && <div className="mt-3 grid grid-cols-3 gap-2 rounded-md bg-[var(--admin-surface-2)] p-3 text-xs">
 

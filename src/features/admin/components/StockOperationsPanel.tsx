@@ -1,3 +1,4 @@
+import { AdminSelect } from './AdminSelect';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { adminDisplayText } from '../utils/adminDisplayText';
 import { useEffect, useState } from 'react';
@@ -51,12 +52,12 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
     <OperatorPanel title="Hub stock operations" eyebrow="INVENTORY MANAGEMENT">
       <div className="p-4">
         <div className="fields two">
-          <label><span>Operation</span><select value={kind} onChange={e=>{setKind(e.target.value as typeof kind);setError('');setNumber('1');}}>
+          <label><span>Operation</span><AdminSelect value={kind} onChange={e=>{setKind(e.target.value as typeof kind);setError('');setNumber('1');}}>
             <option value="TRANSFER">Transfer between Hubs</option><option value="ADJUST">Inventory adjustment (+ / -)</option><option value="DISCARD">Discard damaged / expired items</option><option value="THRESHOLD">Set low-stock threshold</option>{/* <option value="BULK">Bulk supplier receipt</option> */}
-          </select></label>
-          <label><span>{kind==='TRANSFER'?'Origin Hub':'Affected Hub'}</span><select value={hubId} onChange={e=>setHubId(e.target.value)}><option value="">Select Hub</option>{hubs.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
-          {kind!=='BULK'&&<label><span>Part category</span><select value={partId} onChange={e=>setPartId(e.target.value)}><option value="">Select part category</option>{parts.map(p=><option key={p.id} value={p.id}>{p.name} (#{p.id})</option>)}</select></label>}
-          {kind==='TRANSFER'&&<label><span>Destination Hub</span><select value={toHub} onChange={e=>setToHub(e.target.value)}><option value="">Select another Hub</option>{hubs.filter(h=>String(h.id)!==hubId).map(h=><option key={h.id} value={h.id}>{h.name}</option>)}</select></label>}
+          </AdminSelect></label>
+          <label><span>{kind==='TRANSFER'?'Origin Hub':'Affected Hub'}</span><AdminSelect value={hubId} onChange={e=>setHubId(e.target.value)}><option value="">Select Hub</option>{hubs.map(h=><option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>
+          {kind!=='BULK'&&<label><span>Part category</span><AdminSelect value={partId} onChange={e=>setPartId(e.target.value)}><option value="">Select part category</option>{parts.map(p=><option key={p.id} value={p.id}>{p.name} (#{p.id})</option>)}</AdminSelect></label>}
+          {kind==='TRANSFER'&&<label><span>Destination Hub</span><AdminSelect value={toHub} onChange={e=>setToHub(e.target.value)}><option value="">Select another Hub</option>{hubs.filter(h=>String(h.id)!==hubId).map(h=><option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>}
           {kind==='BULK'?<label><span>Items · one per line: category ID, quantity</span><textarea rows={4} placeholder="1, 3\n2, 5" value={bulkText} onChange={e=>setBulkText(e.target.value)}/></label>:<label><span>{kind==='THRESHOLD'?'Minimum stock threshold':kind==='ADJUST'?'Quantity change (signed)':'Quantity'}</span><input type="number" step={1} value={number} onChange={e=>setNumber(e.target.value)}/></label>}
           <label><span>Note (optional)</span><input value={note} onChange={e=>setNote(e.target.value)}/></label>
         </div>

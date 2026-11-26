@@ -108,27 +108,349 @@
   font-size: var(--admin-detail-text-size);
 }
 
-/* Admin modal dropdowns match the existing quantity inputs. */
-.admin-dialog-typography select {
+/* Admin controls — matches operator-tokens.css and operator-components.css.
+ * Scope to Admin page content and Admin Radix dialogs (portaled to body).
+ * No shared component changes, no global input reset. */
+.admin-typography,
+.admin-dialog-typography,
+.admin-workspace .topbar {
+  --admin-control-font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --admin-control-height: 40px;
+  --admin-control-radius: var(--radius-control, 6px);
+  --admin-control-size: 13px;
+  --admin-control-label-size: 12px;
+  --admin-control-accent: var(--orange, #ff6b00);
+}
+
+/* Specificity intentionally beats local Admin form styles, including lazy CSS.
+ * Keep local widths, flex/grid arrangements, icon padding and field validation. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, textarea, button[role="combobox"]
+) {
   box-sizing: border-box;
-  width: 100%;
-  height: 44px;
-  min-height: 44px;
-  border: 1px solid var(--admin-border, #dfe2e7);
-  border-radius: 8px;
-  padding: 0 12px;
-  background-color: var(--admin-surface, #fff);
-  color: var(--admin-text, #18181b);
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-size);
+  font-weight: 400;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  border-radius: var(--admin-control-radius);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+  select, button[role="combobox"]
+) {
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  max-width: 100%;
+  padding: 0 11px;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) select {
+  padding-inline-end: 28px;
   cursor: pointer;
 }
-.admin-dialog-typography select:focus {
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) textarea {
+  min-height: 84px;
+  max-width: 100%;
+  padding: 9px 11px;
+  resize: vertical;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(.fields input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), .fields select, .fields textarea, .select-field select, .fields button[role="combobox"]) {
+  width: 100%;
+}
+.admin-dialog-typography select { width: 100%; }
+
+/* Search with a leading icon: draw only one border on the wrapper. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) :is(.filter-search, .dd-search, .telemetry-search) {
+  box-sizing: border-box;
+  height: var(--admin-control-height);
+  min-height: var(--admin-control-height);
+  border: 1px solid var(--border);
+  border-radius: var(--admin-control-radius);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 0 11px;
+  gap: 8px;
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-size);
+  box-shadow: none;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) :is(.filter-search, .dd-search, .telemetry-search) input {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   outline: none;
+  box-shadow: none;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) :is(.filter-search, .dd-search, .telemetry-search) svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+/* Map search icon is absolutely positioned, so preserve its leading space. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) .admin-hub-network-map__search input {
+  padding-inline-start: 38px;
+  width: 100%;
+}
+
+/* Shared header search: keep the responsive icon-only rule from index.css. */
+.admin-workspace .topbar .header-search-control {
+  height: var(--admin-control-height);
+  border-radius: var(--admin-control-radius);
+  border-color: var(--border);
+  background: var(--surface);
+}
+.admin-workspace .topbar .header-search-control > input {
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-size);
+  font-weight: 400;
+}
+.admin-workspace .topbar .header-search-control > svg { color: var(--muted); }
+
+/* Form labels and placeholders: same hierarchy as Operator. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(.fields label > span, .select-field > span, .dd-dialog-form label > span, .admin-ud-modal-fields label > span) {
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-label-size);
+  font-weight: 500;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(input, textarea)::placeholder {
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-size);
+  font-weight: 400;
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Focus and hover: orange outline, NOT orange fill on editable controls. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), select, textarea, button[role="combobox"]
+):not(:disabled):not([readonly]):hover {
+  border-color: color-mix(in srgb, var(--admin-control-accent) 40%, var(--border));
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]), select, textarea, button[role="combobox"]
+):is(:focus, :focus-visible, [data-state="open"]) {
+  border-color: var(--admin-control-accent);
+  outline: none;
+  box-shadow: none;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) :is(.filter-search, .dd-search, .telemetry-search):focus-within,
+.admin-workspace .topbar .header-search-control:focus-within {
+  border-color: var(--admin-control-accent);
+  box-shadow: none;
+}
+/* A wrapper search must never acquire a second border on focus or hover. */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) :is(.filter-search, .dd-search, .telemetry-search) input:is(:focus, :focus-visible, :hover) {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(input, textarea)[readonly] {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(input, select, textarea, button[role="combobox"]):disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) :is(input, select, textarea, button[role="combobox"])[aria-invalid="true"] {
+  border-color: var(--red, #e74f4f);
+}
+
+/* Standard form/toolbar action buttons follow the Operator density.
+ * Preserve the existing primary/secondary/destructive colors and specialized
+ * map, pagination and notification controls (including their orange hover). */
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography, :root:has(.admin-typography) .admin-dialog-typography) .button {
+  min-height: var(--admin-control-height);
+  border-radius: var(--admin-control-radius);
+  font-family: var(--admin-control-font);
+  font-size: var(--admin-control-size);
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: none;
+}
+:is(.admin-workspace .main-column .admin-typography, .page-content.admin-typography) .row-action {
+  min-height: 32px;
+  border-radius: var(--admin-control-radius);
+  font-family: var(--admin-control-font);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* Shared Radix menu portals: Operator also scopes the listbox at the root. */
+:root:has(.admin-typography) [role="listbox"] {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 13px;
+  border-radius: var(--radius-control, 6px);
+}
+:root:has(.admin-typography) [role="listbox"] [role="option"] {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+
+/* Shared Admin action geometry — align Cancel / Save / Confirm with Operator.
+ * Explicit dimensions prevent local modal and utility styles from giving
+ * secondary buttons a different height or pill radius. Scoped to Admin only. */
+:is(.admin-typography, .admin-dialog-typography) :is(.button-primary, .button-secondary, .button-danger, .button-ghost) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 15px !important;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 6px !important;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  white-space: nowrap;
+  box-shadow: none;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.button-primary, .button-secondary, .button-ghost):not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) {
+  background: #ff6b00;
+  border-color: #ff6b00;
+  color: #fff;
+  transform: none;
+}
+:is(.admin-typography, .admin-dialog-typography) .button-secondary {
+  background: var(--surface, #fff);
+  border-color: var(--border, #e3e5e8);
+  color: var(--text, #17181b);
+}
+/* Preserve the shared 32px compact table actions where applicable. */
+.admin-typography .table-wrap :is(.row-action, .table-action):is(.button-primary, .button-secondary, .button-danger, .button-ghost) {
+  height: 32px !important;
+  min-height: 32px !important;
+  font-size: 12px !important;
+  padding: 0 10px !important;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.form-actions, .dd-dialog-actions, .admin-ud-modal-foot, .admin-user-form-actions, .new-batteries-quantity-footer, .spare-quantity-footer, .admin-inventory-dialog__footer) {
+  align-items: center;
+}
+
+/* Operator control parity: only the search wrapper owns a border.
+ * The earlier generic input selector has more specificity than .filter-search
+ * because of its type exclusions. These resets deliberately beat it. */
+:is(.admin-typography, .admin-dialog-typography) :is(.filter-search, .dd-search, .telemetry-search) {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  height: 40px;
+  border-radius: 6px;
+  gap: 8px;
+  padding: 0 11px;
+  background: var(--surface-2, #f8f9fa);
+  border: 1px solid var(--border, #e2e5e9);
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.filter-search, .dd-search, .telemetry-search) > input {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  font: 400 13px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.filter-search, .dd-search, .telemetry-search):is(:hover, :focus-within) {
   border-color: #ff6b00;
 }
-.admin-dialog-typography select:disabled { cursor: not-allowed; opacity: .7; }
 
-.admin-dialog-typography .fields input:not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
+/* AdminSelect uses the same shared DropdownSelect component as Operator.
+ * Only normalize trigger dimensions and its placement in Admin layouts. */
+:is(.admin-typography, .admin-dialog-typography) button.admin-select-control[role="combobox"] {
   box-sizing: border-box;
-  min-height: 44px;
-  border-radius: 8px;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 6px !important;
+  padding: 0 12px !important;
+  font: 400 13px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif !important;
+  text-align: left;
+  box-shadow: none !important;
+}
+:is(.admin-typography, .admin-dialog-typography) button.admin-select-control[role="combobox"] > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-dialog-typography button.admin-select-control[role="combobox"],
+.admin-typography .fields button.admin-select-control[role="combobox"] {
+  width: 100%;
+}
+.admin-typography :is(.toolbar, .dd-toolbar, .notification-toolbar, .report-range, .admin-hub-network-map__toolbar) button.admin-select-control[role="combobox"] {
+  width: auto;
+  flex-shrink: 0;
+}
+.admin-typography :is(.notification-toolbar, .report-performance-range, .admin-hub-network-map__toolbar) button.admin-select-control[role="combobox"] {
+  min-width: 144px;
+}
+.admin-select-menu[role="listbox"] {
+  font: 400 13px/1.45 "IBM Plex Sans", "Segoe UI", sans-serif;
+  border-radius: 6px;
+  max-width: calc(100vw - 24px);
+  z-index: 10001;
+}
+.admin-select-menu [role="option"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Override notification-specific solid hover for comboboxes: these are inputs,
+ * and follow Operator's outline-only interaction, not action button styling. */
+.admin-typography .admin-notifications button.admin-select-control[role="combobox"]:hover:not(:disabled) {
+  background: var(--surface-2, #f8f9fa) !important;
+  color: var(--text, #202124) !important;
+  border-color: #ff6b00 !important;
+}
+
+/* Admin action buttons: normal = neutral surface, hover = solid orange.
+ * Keep their semantics, disabled states, and compact table sizing. */
+:is(.admin-typography, .admin-dialog-typography) :is(.button, .row-action, .dd-edit-btn, .table-action),
+.admin-workspace .topbar .icon-button,
+.admin-typography .admin-hub-network-map__controls button {
+  background: var(--surface, #fff) !important;
+  color: var(--text, #202124) !important;
+  border: 1px solid var(--border, #e2e5e9) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+:is(.admin-typography, .admin-dialog-typography) .button-danger {
+  color: var(--red, #dc2626) !important;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.button, .row-action, .dd-edit-btn, .table-action):hover:not(:disabled):not([aria-disabled="true"]),
+.admin-workspace .topbar .icon-button:hover:not(:disabled):not([aria-disabled="true"]),
+.admin-typography .admin-hub-network-map__controls button:hover:not(:disabled) {
+  background: #ff6b00 !important;
+  color: #fff !important;
+  border-color: #ff6b00 !important;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.button, .row-action, .dd-edit-btn, .table-action):focus-visible,
+.admin-workspace .topbar .icon-button:focus-visible {
+  outline: 2px solid #ff6b00;
+  outline-offset: 2px;
+}
+:is(.admin-typography, .admin-dialog-typography) :is(.button, .row-action, .dd-edit-btn, .table-action):disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }

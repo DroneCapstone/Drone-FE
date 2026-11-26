@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -118,8 +119,8 @@ export function SparePartsPage() {
     {loading && <OperatorLoadingState label="Loading spare parts…" />}
     {!loading && inventoryReady && <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search part, component or drone model…" filters={<>
-        <select value={selectedHub} onChange={(event) => setSelectedHub(event.target.value)} aria-label="Inventory Hub"><option value="all">All hubs (total stock)</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select>
-        <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Stock filter"><option value="ALL">All parts</option><option value="LOW">Low quantity</option><option value="OUT">Out of parts</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select>
+        <AdminSelect value={selectedHub} onChange={(event) => setSelectedHub(event.target.value)} aria-label="Inventory Hub"><option value="all">All hubs (total stock)</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect>
+        <AdminSelect value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Stock filter"><option value="ALL">All parts</option><option value="LOW">Low quantity</option><option value="OUT">Out of parts</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect>
       </>} meta={`${visible.length} of ${parts.length} part categories`} />
       <div className="table-wrap"><table><thead><tr><th>Part ID</th><th>Component</th><th>Drone model</th><th>Quantity</th><th>Actions</th></tr></thead><tbody>
         {visible.map((part) => <tr key={part.id}>
@@ -142,9 +143,9 @@ export function SparePartsPage() {
       <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{editing === 'new' ? 'Add spare part category' : 'Edit spare part category'}</DialogTitle></div>
       <div className="admin-inventory-dialog__body fields two p-5">
         <label><span>Component name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
-        <label><span>Component type</span><select value={draft.categoryType} disabled={editing !== 'new'} onChange={(e) => setDraft({ ...draft, categoryType: e.target.value })}>{TYPES.map((v) => <option key={v}>{v}</option>)}</select></label>
+        <label><span>Component type</span><AdminSelect value={draft.categoryType} disabled={editing !== 'new'} onChange={(e) => setDraft({ ...draft, categoryType: e.target.value })}>{TYPES.map((v) => <option key={v}>{v}</option>)}</AdminSelect></label>
         <label><span>Compatible Drone models (comma separated)</span><input value={draft.compatible} onChange={(e) => setDraft({ ...draft, compatible: e.target.value })} /></label>
-        {editing !== 'new' && <label><span>Status</span><select value={draft.active ? 'ACTIVE' : 'INACTIVE'} onChange={(e) => setDraft({ ...draft, active: e.target.value === 'ACTIVE' })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>}
+        {editing !== 'new' && <label><span>Status</span><AdminSelect value={draft.active ? 'ACTIVE' : 'INACTIVE'} onChange={(e) => setDraft({ ...draft, active: e.target.value === 'ACTIVE' })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect></label>}
       </div>
       {error && <p role="alert" className="mx-5 text-xs text-red-500">{error}</p>}
       <div className="admin-inventory-dialog__footer form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save category'}</ActionButton></div>
@@ -153,7 +154,7 @@ export function SparePartsPage() {
     <Dialog open={!!restocking} onOpenChange={(open) => !open && setRestocking(null)}>{restocking && <DialogContent className="admin-inventory-dialog spare-quantity-dialog"><form onSubmit={(e) => void restock(e)}>
       <div className="admin-inventory-dialog__header spare-quantity-header"><DialogTitle>Add Quantity</DialogTitle><p>{restocking.name} · PART-{restocking.id}</p><span className="spare-quantity-model">{(restocking.compatible_drone_models ?? []).join(', ') || 'All compatible models'}</span></div>
       <div className="admin-inventory-dialog__body spare-quantity-body">
-        <label className="block text-xs font-semibold mb-3"><span>Receiving Hub *</span><select className="spare-quantity-input mt-2 w-full" required value={restockHub} onChange={(e) => setRestockHub(e.target.value)}><option value="">Select receiving Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE').map((h) => <option value={h.id} key={h.id}>{h.name}</option>)}</select></label>
+        <label className="block text-xs font-semibold mb-3"><span>Receiving Hub *</span><AdminSelect className="spare-quantity-input mt-2 w-full" required value={restockHub} onChange={(e) => setRestockHub(e.target.value)}><option value="">Select receiving Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE').map((h) => <option value={h.id} key={h.id}>{h.name}</option>)}</AdminSelect></label>
         <div className="spare-quantity-fields">
           <label><span>Current quantity (at Hub)</span><input className={`spare-quantity-input spare-quantity-input--readonly${selectedLow ? ' is-low-stock' : ''}`} readOnly value={chosenHub ? currentFor(restocking, chosenHub.id) : '—'} /></label>
           <label><span>Quantity to Add *</span><input className="spare-quantity-input" type="number" min={1} step={1} required value={added} onChange={(e) => setAdded(Number(e.target.value))} /></label>

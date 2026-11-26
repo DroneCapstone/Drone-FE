@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, BatteryCharging, CircleCheck, ClipboardCheck } from 'lucide-react';
@@ -49,8 +50,8 @@ export function BatteriesPage() {
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search battery, model, serial or Hub…" filters={<>
-        <select value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option>{operationalValues.map((v) => <option key={v}>{v}</option>)}</select>
-        <select value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option>{lifecycleValues.map((v) => <option key={v}>{v}</option>)}</select>
+        <AdminSelect value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option>{operationalValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
+        <AdminSelect value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option>{lifecycleValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
       </>} meta={`${visible.length} of ${batteries.length} batteries`} />
       <div className="table-wrap"><table><thead><tr><th>Battery</th><th>Serial number</th><th>Hub</th><th>Operational status</th><th>Lifecycle</th><th>Action</th></tr></thead><tbody>
         {visible.map((b) => <tr key={b.id}><td><strong>{b.id}</strong><small>{b.battery_model ?? 'Model unavailable'}</small></td><td>{b.serial_number}</td><td>{hubName(b.current_hub_id)}</td>

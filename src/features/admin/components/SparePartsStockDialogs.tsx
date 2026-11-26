@@ -1,3 +1,4 @@
+import { AdminSelect } from './AdminSelect';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../components/ui/Dialog';
@@ -50,8 +51,8 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
     {part && action && <DialogContent className="admin-inventory-dialog"><form onSubmit={e => void submit(e)}>
       <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">{label}</DialogTitle><p className="mt-1 text-xs text-muted-foreground">{part.name} · PART-{part.id}</p></div>
       <div className="admin-inventory-dialog__body fields two p-5">
-        <label><span>{action === 'TRANSFER' ? 'From Hub' : 'Hub'} *</span><select value={hub} required onChange={e => { setHub(e.target.value); setDestination(''); }}><option value="">Select Hub</option>{activeHubs.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
-        {action === 'TRANSFER' && <label><span>To Hub *</span><select value={destination} required onChange={e => setDestination(e.target.value)}><option value="">Select destination</option>{activeHubs.filter(h => String(h.id) !== hub).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>}
+        <label><span>{action === 'TRANSFER' ? 'From Hub' : 'Hub'} *</span><AdminSelect value={hub} required onChange={e => { setHub(e.target.value); setDestination(''); }}><option value="">Select Hub</option>{activeHubs.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>
+        {action === 'TRANSFER' && <label><span>To Hub *</span><AdminSelect value={destination} required onChange={e => setDestination(e.target.value)}><option value="">Select destination</option>{activeHubs.filter(h => String(h.id) !== hub).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>}
         <label><span>{action === 'THRESHOLD' ? 'Minimum stock threshold' : action === 'ADJUST' ? 'Quantity change (+ / −)' : 'Quantity'} *</span><input type="number" step={1} min={action === 'ADJUST' ? undefined : action === 'THRESHOLD' ? 0 : 1} required value={quantity} onChange={e => setQuantity(Number(e.target.value))}/></label>
         {action !== 'THRESHOLD' && <label><span>Note (optional)</span><input value={note} onChange={e => setNote(e.target.value)}/></label>}
         <p className="text-xs text-muted-foreground">Current Hub stock: <strong>{available}</strong> · Low-stock threshold: {source?.min_stock_threshold ?? 0}.</p>
@@ -90,9 +91,9 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
     <DialogContent className="admin-inventory-dialog"><form onSubmit={e => void submit(e)}>
       <div className="admin-inventory-dialog__header border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Bulk Receive</DialogTitle></div>
       <div className="admin-inventory-dialog__body p-5 space-y-3">
-        <label className="block text-sm"><span>Receiving Hub *</span><select className="mt-1 w-full" value={hub} required onChange={e => setHub(e.target.value)}><option value="">Select Hub</option>{activeHubs.map(h => <option value={h.id} key={h.id}>{h.name}</option>)}</select></label>
+        <label className="block text-sm"><span>Receiving Hub *</span><AdminSelect className="mt-1 w-full" value={hub} required onChange={e => setHub(e.target.value)}><option value="">Select Hub</option>{activeHubs.map(h => <option value={h.id} key={h.id}>{h.name}</option>)}</AdminSelect></label>
         {rows.map((row, i) => <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 sm:grid-cols-2" key={i}>
-          <label><span className="text-xs">Spare part *</span><select className="w-full" required value={row.partId} onChange={e => edit(i, { partId: e.target.value })}><option value="">Select part</option>{parts.filter(p => p.is_active !== false).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <label><span className="text-xs">Spare part *</span><AdminSelect className="w-full" required value={row.partId} onChange={e => edit(i, { partId: e.target.value })}><option value="">Select part</option>{parts.filter(p => p.is_active !== false).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</AdminSelect></label>
           <label><span className="text-xs">Quantity *</span><input className="w-full" type="number" min={1} step={1} required value={row.quantity} onChange={e => edit(i, { quantity: Number(e.target.value) })}/></label>
           <button type="button" className="text-button text-xs sm:col-span-2" disabled={rows.length === 1} onClick={() => setRows(old => old.filter((_, index) => i !== index))}>Remove item</button>
         </div>)}

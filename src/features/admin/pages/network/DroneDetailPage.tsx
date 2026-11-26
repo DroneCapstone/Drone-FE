@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -153,7 +154,7 @@ export function DroneDetailPage() {
         <label><span>Serial number</span><input readOnly value={drone.serial_number}/></label>
         <label><span>Maximum payload (kg)</span><input type="number" min={0.01} step="any" required value={draft.payload} onChange={(e) => setDraft({ ...draft, payload: Number(e.target.value) })}/></label>
         <label><span>Maximum speed</span><input type="number" min={0.01} step="any" required value={draft.speed} onChange={(e) => setDraft({ ...draft, speed: Number(e.target.value) })}/></label>
-        <label><span>Assigned Hub</span><select required value={draft.hub} onChange={(e) => setDraft({ ...draft, hub: e.target.value })}><option value="">Select Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE' || String(h.id) === draft.hub).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+        <label><span>Assigned Hub</span><AdminSelect required value={draft.hub} onChange={(e) => setDraft({ ...draft, hub: e.target.value })}><option value="">Select Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE' || String(h.id) === draft.hub).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>
       </div>
       {error && <p className="px-5 text-xs text-red-500" role="alert">{error}</p>}
       <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</ActionButton></div>
