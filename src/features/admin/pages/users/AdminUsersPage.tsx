@@ -12,6 +12,7 @@ import { OperatorPanel } from '../../../operator/components/OperatorPanel';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { AdminToolbar } from '../../components/AdminToolbar';
 import { adminUsersApi, apiErrorText, isArchivedUser, type AdminApiRole, type AdminApiUser } from '../../api/adminUsersApi';
+import { AdminTechnicianHubField, isTechnicianRole, canChooseTechnicianHub, saveTechnicianHub, useTechnicianHub } from '../../components/AdminTechnicianHubField';
 import './AdminUsers.css';
 
 type InternalRole = Exclude<AdminApiRole, 'Customer'>;
@@ -32,6 +33,11 @@ export function AdminUsersPage() {
   const [creating, setCreating] = useState<CreateDraft | null>(null);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hubId, setHubId] = useState('');
+  const [assignmentIssue, setAssignmentIssue] = useState<{ id: string; message: string } | null>(null);
+  const creatingTechnician = isTechnicianRole(creating?.role);
+  const hubState = useTechnicianHub(creatingTechnician, undefined, true, reload);
+  const validHub = !creatingTechnician || canChooseTechnicianHub(hubState.data, hubId);
 
   // Always load the full list for accurate KPI cards, plus a server-filtered list
   // when the user selects Active/Inactive (GET ?is_active=true|false).
@@ -70,18 +76,29 @@ export function AdminUsersPage() {
     if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setFormError('Enter a valid full name and email address.'); return;
     }
+    if (!validHub) { setFormError('Select an available hub for this technician.'); return; }
     if (!creating.password) { setFormError('Enter an initial password.'); return; }
     if (allUsers.some((user) => user.is_active && user.email.toLowerCase() === email)) {
       setFormError('An active user with this email already exists.'); return;
     }
     setSubmitting(true);
     setFormError('');
+    setAssignmentIssue(null);
+    setNotice('');
     try {
       const created = await adminUsersApi.createUser({
         full_name: fullName, email, role: creating.role, password: creating.password,
       });
+      // Do not retry account creation if the separate assignment request fails.
+      if (creatingTechnician) {
+        try {
+          await saveTechnicianHub(created.id, null, Number(hubId));
+          setNotice(`Account ${created.email} was created and assigned successfully.`);
+        } catch (cause) {
+          setAssignmentIssue({ id: created.id, message: `Account created, but hub assignment could not be confirmed: ${apiErrorText(cause)}` });
+        }
+      } else setNotice(`Account ${created.email} was created successfully.`);
       setCreating(null); // Clear password from UI memory.
-      setNotice(`Account ${created.email} was created successfully.`);
       setReload((count) => count + 1);
     } catch (error) {
       setFormError(apiErrorText(error));
@@ -93,7 +110,7 @@ export function AdminUsersPage() {
   return <AdminPageShell
     title="Users"
     description="Manage accounts, internal roles and access status."
-    actions={<ActionButton icon="plus" onClick={() => { setFormError(''); setCreating(emptyDraft()); }}>Create internal user</ActionButton>}
+    actions={<ActionButton icon="plus" onClick={() => { setFormError(''); setHubId(''); setCreating(emptyDraft()); }}>Create internal user</ActionButton>}
   >
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Total users" value={loading || listError ? '—' : allUsers.length} note="All system users" icon={Users} />
@@ -102,6 +119,7 @@ export function AdminUsersPage() {
       <AdminSummaryCard label="Inactive" value={loading || listError ? '—' : inactiveCount} note="Cannot sign in" icon={UserX} />
     </div>
     {notice && <p className="admin-ud-notice" role="status">{notice}</p>}
+    {assignmentIssue && <div className="admin-ud-list-error" role="alert"><span>{assignmentIssue.message}</span><Link to={`/admin/users/${encodeURIComponent(assignmentIssue.id)}?edit=1`}>Edit user</Link></div>}
     <OperatorPanel className="flush-panel">
       <AdminToolbar
         searchValue={query}
@@ -172,21 +190,22 @@ export function AdminUsersPage() {
           <div className="admin-ud-modal-body">
             <div className="fields two admin-ud-modal-fields">
               <label><span>Full name <b aria-hidden="true">*</b></span>
-                <input required autoComplete="name" value={creating.full_name} onChange={(event) => setCreating({ ...creating, full_name: event.target.value })}/></label>
+                <input disabled={submitting} required autoComplete="name" value={creating.full_name} onChange={(event) => setCreating({ ...creating, full_name: event.target.value })}/></label>
               <label><span>Email <b aria-hidden="true">*</b></span>
-                <input required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })}/></label>
+                <input disabled={submitting} required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })}/></label>
               <label><span>Role <b aria-hidden="true">*</b></span>
-                <AdminSelect value={creating.role} onChange={(event) => setCreating({ ...creating, role: event.target.value as InternalRole })}>
+                <AdminSelect value={creating.role} disabled={submitting} onChange={(event) => { setHubId(''); setCreating({ ...creating, role: event.target.value as InternalRole }); }}>
                   <option value="Operator">Operator</option><option value="Technician">Technician</option><option value="Admin">Admin</option>
                 </AdminSelect></label>
               <label><span>Initial password <b aria-hidden="true">*</b></span>
-                <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
+                <input disabled={submitting} required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
+              {creatingTechnician && <AdminTechnicianHubField state={hubState} value={hubId} onChange={setHubId} wide required disabled={submitting} />}
             </div>
             {formError && <p className="admin-ud-error" role="alert">{formError}</p>}
           </div>
           <div className="admin-ud-modal-foot">
             <ActionButton variant="secondary" disabled={submitting} onClick={() => setCreating(null)}>Cancel</ActionButton>
-            <ActionButton type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create account'}</ActionButton>
+            <ActionButton type="submit" disabled={submitting || !validHub}>{submitting ? 'Creating…' : 'Create account'}</ActionButton>
           </div>
         </form>
       </DialogContent>}

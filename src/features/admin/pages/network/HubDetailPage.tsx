@@ -1,11 +1,12 @@
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Boxes, MapPin, UsersRound } from 'lucide-react';
+import { ArrowLeft, Boxes, MapPin } from 'lucide-react';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { adminOperationsApi, apiError, type HubDetailApi, type StockApi } from '../../api/adminOperationsApi';
 import './HubDetailPage.css';
+import { AdminHubTechnicians } from '../../components/AdminHubTechnicians';
 
 export function HubDetailPage() {
   const { hubId } = useParams();
@@ -30,7 +31,6 @@ export function HubDetailPage() {
   }, [hubId]);
   const drones = hub?.assigned_drones ?? [];
   const batteries = hub?.assigned_batteries ?? [];
-  const technicians = hub?.assigned_technicians?.length ? hub.assigned_technicians : hub?.assigned_technician ? [hub.assigned_technician] : [];
   const date = hub?.updated_at ? new Date(hub.updated_at) : null;
   const dateLabel = date && !Number.isNaN(date.getTime()) ? date.toLocaleString('en-GB') : '—';
 
@@ -51,10 +51,8 @@ export function HubDetailPage() {
             <div className="admin-hub-info-row"><span className="admin-hub-info-label">Last updated</span><strong>{dateLabel}</strong></div>
           </div>
         </div>
-        <div className="admin-hub-technician-row"><UsersRound size={17} aria-hidden="true" /><span className="admin-hub-technician-label">Assigned technicians</span>
-          <div className="admin-hub-technician-person">{technicians.length ? technicians.map((t) => <span key={t.id}><strong>{t.full_name}</strong> · {t.email} </span>) : <span className="admin-hub-technician-email">Not assigned</span>}</div>
-        </div>
       </section>
+      <AdminHubTechnicians key={hub.id} hub={hub} />
       <section className="admin-hub-section" aria-labelledby="hub-assets">
         <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Assigned assets</h2>
           <div className="admin-hub-switch" role="tablist" aria-label="Assigned assets">
