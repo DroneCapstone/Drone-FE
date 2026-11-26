@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -80,7 +81,7 @@ export function HubsPage() {
       }])));
       setDrones(d.map((item) => ({
         id: item.id, name: item.name, displayId: item.id, model: item.model,
-        serialNumber: item.serial_number, hubId: item.hub_id == null ? '' : String(item.hub_id),
+        hubId: item.hub_id == null ? '' : String(item.hub_id),
         status: (item.status.toUpperCase() === 'AVAILABLE' ? 'AVAILABLE' : item.status.toUpperCase() === 'IN FLIGHT' ? 'IN_FLIGHT' : 'MAINTENANCE') as AdminDrone['status'],
         isActive: item.admin_state.toUpperCase() === 'ACTIVE', batteryPct: item.battery_level_pct ?? 0,
         maxPayloadKg: item.payload_capacity_kg, createdAt: '', updatedAt: '',
@@ -195,11 +196,11 @@ export function HubsPage() {
           onSearchChange={setQuery}
           placeholder="Search hub name, code, area or address…"
           filters={
-            <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Hub status filter">
+            <AdminSelect value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Hub status filter">
               <option value="all">All status</option>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
-            </select>
+            </AdminSelect>
           }
           meta={`${visible.length} of ${hubs.length} hubs`}
         />
@@ -240,7 +241,7 @@ export function HubsPage() {
               <div className="fields two max-h-[65vh] overflow-y-auto p-5">
                 <label className="sm:col-span-2">
                   <span>Use a hub from the guide (optional)</span>
-                  <select
+                  <AdminSelect
                     value={hubCreationPresets.some((preset) => preset.code === newHub.code) ? newHub.code : ''}
                     onChange={(event) => {
                       const preset = hubCreationPresets.find((item) => item.code === event.target.value);
@@ -254,12 +255,12 @@ export function HubsPage() {
                         {preset.name} ({preset.code})
                       </option>
                     ))}
-                  </select>
+                  </AdminSelect>
                 </label>
                 <label><span>Hub name</span><input required value={newHub.name} onChange={(event) => setNewHub((current) => ({ ...current, name: event.target.value }))} /></label>
                 <label><span>Hub code</span><input required value={newHub.code} onChange={(event) => setNewHub((current) => ({ ...current, code: event.target.value }))} /></label>
                 <label><span>Area (optional)</span><input value={newHub.area} onChange={(event) => setNewHub((current) => ({ ...current, area: event.target.value }))} /></label>
-                <label><span>Status</span><select value={newHub.status} onChange={(event) => setNewHub((current) => ({ ...current, status: event.target.value as HubCreateApi['status'] }))}><option value="Active">Active</option><option value="Inactive">Inactive</option></select></label>
+                <label><span>Status</span><AdminSelect value={newHub.status} onChange={(event) => setNewHub((current) => ({ ...current, status: event.target.value as HubCreateApi['status'] }))}><option value="Active">Active</option><option value="Inactive">Inactive</option></AdminSelect></label>
                 <label className="sm:col-span-2"><span>Address</span><input required value={newHub.address} onChange={(event) => setNewHub((current) => ({ ...current, address: event.target.value }))} /></label>
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={newHub.latitude} onChange={(event) => setNewHub((current) => ({ ...current, latitude: event.target.value }))} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={newHub.longitude} onChange={(event) => setNewHub((current) => ({ ...current, longitude: event.target.value }))} /></label>
@@ -287,7 +288,7 @@ export function HubsPage() {
                 <label><span>Hub name</span><input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
                 <label><span>Hub code</span><input required value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} /></label>
                 <label><span>Area</span><input required value={editing.area} onChange={(e) => setEditing({ ...editing, area: e.target.value })} /></label>
-                <label><span>Status</span><select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as AdminHub["status"] })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+                <label><span>Status</span><AdminSelect value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as AdminHub["status"] })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect></label>
                 <label className="sm:col-span-2"><span>Address</span><input required value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></label>
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={editing.latitude} onChange={(e) => setEditing({ ...editing, latitude: Number(e.target.value) })} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={editing.longitude} onChange={(e) => setEditing({ ...editing, longitude: Number(e.target.value) })} /></label>

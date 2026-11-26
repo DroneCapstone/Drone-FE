@@ -1,3 +1,6 @@
+import { adminResourceJson } from '../../utils/adminAssetFields';
+import { AdminSelect } from '../../components/AdminSelect';
+import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
@@ -9,11 +12,14 @@ import { extractRows, field, amount, money, timestamp, type JsonRow } from '../.
 
 // GET /payments/refunds is the only data source. Previous prototype refunds are unused.
 export function RefundsPage() {
+  const [params] = useSearchParams();
+  const initialQuery = params.get('q') ?? '';
   const [items, setItems] = useState<JsonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState('all');
+  useEffect(() => { setQuery(initialQuery); setStatus('all'); }, [initialQuery]);
   async function refresh() {
     setLoading(true);
     try { setItems(extractRows(await adminOperationsApi.refunds(), ['refunds'])); setError(''); }
@@ -22,13 +28,14 @@ export function RefundsPage() {
   }
   useEffect(() => { void refresh(); }, []);
   const statusOf = (row: JsonRow) => field(row, 'refund_status', 'status').toUpperCase();
+  const hasFilters = query.trim().length > 0 || status !== 'all';
   const visible = useMemo(() => items.filter(row =>
-    (status === 'all' || status === statusOf(row)) && JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
+    (status === 'all' || status === statusOf(row)) && adminResourceJson(row).toLowerCase().includes(query.trim().toLowerCase())), [items, query, status]);
   return <AdminPageShell title="Refunds" description="Track refund requests and their processing status. Final settlement is confirmed by the payment provider.">
     {loading && <OperatorLoadingState label="Loading refunds…" />}
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
-    <OperatorPanel className="flush-panel">
-      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<select value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></select>} meta={`${visible.length} refunds`} />
+    {!loading && !error && <OperatorPanel className="flush-panel">
+      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<AdminSelect value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></AdminSelect>} meta={`${visible.length} ${visible.length === 1 ? 'refund' : 'refunds'}`} />
       <div className="table-wrap"><table><thead><tr><th>Refund</th><th>Payment</th><th>Order</th><th>Customer</th><th>Amount</th><th>Reason</th><th>Status</th><th>Processed</th></tr></thead><tbody>
         {visible.map((row, i) => <tr key={`${field(row, 'id', 'refund_id', 'order_id')}-${i}`}>
           <td><strong>{field(row, 'id', 'refund_id')}</strong><small>{timestamp(row, 'requested_at', 'created_at')}</small></td>
@@ -37,8 +44,8 @@ export function RefundsPage() {
           <td><StatusBadge tone={statusOf(row) === 'COMPLETED' ? 'success' : statusOf(row) === 'FAILED' ? 'danger' : 'warning'}>{statusOf(row)}</StatusBadge></td>
           <td>{timestamp(row, 'refund_at', 'processed_at', 'updated_at')}</td>
         </tr>)}
-        {!loading && !error && !visible.length && <tr><td colSpan={8} className="p-5 text-center">No refunds match your filters.</td></tr>}
+        {!loading && !error && !visible.length && <tr><td colSpan={8} className="p-5 text-center">{hasFilters ? 'No refunds match your filters.' : 'No refunds yet.'}</td></tr>}
       </tbody></table></div>
-    </OperatorPanel>
+    </OperatorPanel>}
   </AdminPageShell>;
 }

@@ -1,3 +1,5 @@
+import { AdminDateRangePicker } from '../../components/AdminDateRangePicker';
+import { AdminSelect } from '../../components/AdminSelect';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Download, FileSpreadsheet, MessageSquare, Plane, RotateCw, Star, Wallet } from 'lucide-react';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -135,7 +137,7 @@ export function AdminReportsPage() {
         {([{ id: 'performance', label: 'Performance' }, { id: 'feedback', label: 'Customer Feedback' }] as const).map(item => <button key={item.id} type="button" className={tab === item.id ? 'active' : undefined} aria-pressed={tab === item.id} onClick={() => setTab(item.id)}>{item.label}</button>)}
       </nav>
       {tab === 'performance' && <>
-      <div className="report-section-head"><h2>Performance</h2><div className="report-range report-performance-range"><label className="report-inline-field">Period<select value={period} onChange={e => setPeriod(e.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="custom">Custom range</option></select></label>{custom && <><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={chartFrom} max={today} onChange={e => setChartFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={chartTo} max={today} onChange={e => setChartTo(e.target.value)} /></label></>}</div></div>
+      <div className="report-section-head"><h2>Performance</h2><div className="report-range report-performance-range"><label className="report-inline-field">Period<AdminSelect value={period} onChange={e => setPeriod(e.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="custom">Custom range</option></AdminSelect></label>{custom && <AdminDateRangePicker label="Performance date range" from={chartFrom} to={chartTo} max={today} onChange={(start, end) => { setChartFrom(start); setChartTo(end); }} />}</div></div>
       {chartRangeError && <p className="report-validation" role="alert">{chartRangeError}</p>}
       <div className="report-grid">
         <Panel title="Revenue">{chartRangeError ? <p className="report-message">Select a valid date range.</p> : <ReportContent state={revenue} label="revenue">{data => <>
@@ -147,7 +149,7 @@ export function AdminReportsPage() {
           <DailyChart rows={data.map(row => ({ date: row.date, values: [row.completed, row.failed, row.cancelled] }))} labels={series} />
         </>}</ReportContent>}</Panel>
       </div>
-      <div className="report-section-head report-range-head"><h2>Cancellation statistics</h2><div className="report-range"><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={to} onChange={e => setTo(e.target.value)} /></label><button type="button" className="button button-secondary" onClick={() => { setFrom(''); setTo(''); }}>Clear</button></div></div>
+      <div className="report-section-head report-range-head"><h2>Cancellation statistics</h2><div className="report-range"><AdminDateRangePicker label="Cancellation date range" from={from} to={to} onChange={(start, end) => { setFrom(start); setTo(end); }} /><button type="button" className="button button-secondary" onClick={() => { setFrom(''); setTo(''); }}>Clear</button></div></div>
       {invalidRange && <p className="report-validation" role="alert">End date must be on or after the start date.</p>}
       <div>
         <Panel title="Cancellation reasons">{invalidRange ? <p className="report-message">Select a valid date range.</p> : <ReportContent state={cancellations} label="cancellation statistics">{data => <>
@@ -156,10 +158,10 @@ export function AdminReportsPage() {
           {data.reasons.length > 5 && <details className="report-details"><summary>All cancellation reasons</summary><div className="report-table-scroll"><table><thead><tr><th>Reason</th><th>Orders</th></tr></thead><tbody>{data.reasons.map((row, i) => <tr key={`${row.reason}-${i}`}><td>{adminDisplayText(row.reason).replace(/_/g, ' ')}</td><td>{count(row.count)}</td></tr>)}</tbody></table></div></details>}
         </>}</ReportContent>}</Panel>
       </div>
-        <div className="report-section-head"><h2>Export reports</h2><div className="report-range"><label className="report-inline-field">From Date<input lang="en-GB" type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)} /></label><label className="report-inline-field">To Date<input lang="en-GB" type="date" value={exportTo} onChange={e => setExportTo(e.target.value)} /></label><button type="button" className="button button-secondary" onClick={() => { setExportFrom(''); setExportTo(''); setStatus(''); }}>Clear</button></div></div>
+        <div className="report-section-head"><h2>Export reports</h2><div className="report-range"><AdminDateRangePicker label="Export date range" from={exportFrom} to={exportTo} onChange={(start, end) => { setExportFrom(start); setExportTo(end); }} /><button type="button" className="button button-secondary" onClick={() => { setExportFrom(''); setExportTo(''); setStatus(''); }}>Clear</button></div></div>
         {invalidExportRange && <p className="report-validation" role="alert">End date must be on or after the start date.</p>}
         <Panel title="CSV reports">
-          <div className="report-exports">{exports.map(({ kind, label, icon: Icon }) => <div key={kind} className="report-export-row"><Icon size={19} className="report-export-icon" /><div className="report-export-name"><strong>{label}</strong>{kind === 'fleet' && <span>All drones</span>}{kind === 'missions' && <label className="report-status-filter"><span>Status</span><select aria-label="Mission status" value={status} onChange={e => setStatus(e.target.value as MissionReportStatus)}><option value="">All statuses</option><option value="Completed">Completed</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></select></label>}</div><button type="button" className="button button-secondary report-download" aria-label={`Download ${label.toLowerCase()} as CSV`} disabled={downloading !== null || (invalidExportRange && kind !== 'fleet')} onClick={() => void download(kind)}><Download size={15} />{downloading === kind ? 'Downloading…' : 'CSV'}</button></div>)}</div>
+          <div className="report-exports">{exports.map(({ kind, label, icon: Icon }) => <div key={kind} className="report-export-row"><Icon size={19} className="report-export-icon" /><div className="report-export-name"><strong>{label}</strong>{kind === 'fleet' && <span>All drones</span>}{kind === 'missions' && <label className="report-status-filter"><span>Status</span><AdminSelect aria-label="Mission status" value={status} onChange={e => setStatus(e.target.value as MissionReportStatus)}><option value="">All statuses</option><option value="Completed">Completed</option><option value="Failed">Failed</option><option value="Cancelled">Cancelled</option></AdminSelect></label>}</div><button type="button" className="button button-secondary report-download" aria-label={`Download ${label.toLowerCase()} as CSV`} disabled={downloading !== null || (invalidExportRange && kind !== 'fleet')} onClick={() => void download(kind)}><Download size={15} />{downloading === kind ? 'Downloading…' : 'CSV'}</button></div>)}</div>
           {downloadError && <p className="report-validation" role="alert">{downloadError}</p>}
         </Panel>
       </>}
@@ -175,7 +177,7 @@ export function AdminReportsPage() {
             </div>}
           </Panel>
         </>}</ReportContent>
-        <Panel title="Customer Reviews" action={<select aria-label="Filter by rating" value={rating} onChange={e => changeRating(e.target.value as RatingFilter)}><option value="">All ratings</option>{[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} {n === 1 ? 'star' : 'stars'}</option>)}</select>}>
+        <Panel title="Customer Reviews" action={<AdminSelect aria-label="Filter by rating" value={rating} onChange={e => changeRating(e.target.value as RatingFilter)}><option value="">All ratings</option>{[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} {n === 1 ? 'star' : 'stars'}</option>)}</AdminSelect>}>
           <ReportContent state={ratingRows} label="customer reviews">{data => {
             const visible = data.ratings.slice(0, ratingPageSize);
             const hasNext = data.ratings.length > ratingPageSize;

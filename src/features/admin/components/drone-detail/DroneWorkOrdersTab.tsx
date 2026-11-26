@@ -1,3 +1,4 @@
+import { AdminSelect } from '../AdminSelect';
 import { useState } from 'react';
 import { Search, ArrowRight } from 'lucide-react';
 import type { DroneWorkOrder } from './droneDetailData';
@@ -35,9 +36,9 @@ export function DroneWorkOrdersTab({ orders, onOpen }: { orders: DroneWorkOrder[
       <div className="dd-toolbar">
         <label className="dd-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search work orders</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search Work Order or issue…" /></label>
-        <select aria-label="Filter work orders" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <AdminSelect aria-label="Filter work orders" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="ALL">All status</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option>
-        </select>
+        </AdminSelect>
         <span className="dd-toolbar-meta">{list.length} work order(s) · View only</span>
       </div>
       <WorkOrdersTable orders={list} onOpen={onOpen} showAction />

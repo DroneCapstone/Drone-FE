@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Users, UserCog, UserRound, UserX, Eye, Pencil } from 'lucide-react';
@@ -107,18 +108,18 @@ export function AdminUsersPage() {
         onSearchChange={setQuery}
         placeholder="Search name or email…"
         filters={<>
-          <select value={role} onChange={(event) => setRole(event.target.value)}>
+          <AdminSelect value={role} onChange={(event) => setRole(event.target.value)}>
             <option value="all">All roles</option>
             <option value="admin">Admin</option>
             <option value="operator">Operator</option>
             <option value="technician">Technician</option>
             <option value="customer">Customer</option>
-          </select>
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          </AdminSelect>
+          <AdminSelect value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="all">All status</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
+          </AdminSelect>
         </>}
         meta={loading ? 'Loading users…' : `${visible.length} of ${statusUsers.length} users`}
       />
@@ -175,9 +176,9 @@ export function AdminUsersPage() {
               <label><span>Email <b aria-hidden="true">*</b></span>
                 <input required type="email" autoComplete="off" value={creating.email} onChange={(event) => setCreating({ ...creating, email: event.target.value })}/></label>
               <label><span>Role <b aria-hidden="true">*</b></span>
-                <select value={creating.role} onChange={(event) => setCreating({ ...creating, role: event.target.value as InternalRole })}>
+                <AdminSelect value={creating.role} onChange={(event) => setCreating({ ...creating, role: event.target.value as InternalRole })}>
                   <option value="Operator">Operator</option><option value="Technician">Technician</option><option value="Admin">Admin</option>
-                </select></label>
+                </AdminSelect></label>
               <label><span>Initial password <b aria-hidden="true">*</b></span>
                 <input required type="password" autoComplete="new-password" value={creating.password} onChange={(event) => setCreating({ ...creating, password: event.target.value })}/></label>
             </div>

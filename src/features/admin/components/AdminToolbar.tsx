@@ -16,10 +16,10 @@ export function AdminToolbar({
 }) {
   return (
     <div className="toolbar">
-      <label className="filter-search">
-        <Search size={15} />
-        <input value={searchValue} onChange={(event) => onSearchChange(event.target.value)} placeholder={placeholder} />
-      </label>
+      <div className="filter-search">
+        <Search size={16} aria-hidden="true" />
+        <input value={searchValue} onChange={(event) => onSearchChange(event.target.value)} placeholder={placeholder} aria-label={placeholder} />
+      </div>
       {filters}
       <span className="toolbar-spacer" />
       {meta ? <small>{meta}</small> : null}

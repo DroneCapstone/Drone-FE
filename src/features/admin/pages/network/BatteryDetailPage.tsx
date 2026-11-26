@@ -36,7 +36,6 @@ export function BatteryDetailPage() {
         <section className="abd-card"><h2>Battery information</h2><dl className="abd-data">
           <div><dt>Battery ID</dt><dd>{battery.id}</dd></div>
           <div><dt>Battery model</dt><dd>{battery.battery_model ?? 'Not available'}</dd></div>
-          <div><dt>Serial number</dt><dd>{battery.serial_number}</dd></div>
           <div><dt>Energy capacity</dt><dd>{battery.capacity_wh} Wh</dd></div>
           <div><dt>Assigned Hub</dt><dd>{hub ? <Link className="abd-link" to={`/admin/network/hubs/${hub.id}`}>{hub.name}<ExternalLink size={12}/></Link> : 'Not assigned'}</dd></div>
         </dl></section>

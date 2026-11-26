@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { RefreshCw } from 'lucide-react';
@@ -54,9 +55,9 @@ export function SystemLogsPage() {
           onSearchChange={(value) => setDraft(current => ({ ...current, source: value }))}
           placeholder="Search source…"
           filters={<>
-            <select aria-label="Filter by level" value={draft.level ?? ''} onChange={event => setDraft(current => ({ ...current, level: (event.target.value || undefined) as SystemLogFilters['level'] }))}>
+            <AdminSelect aria-label="Filter by level" value={draft.level ?? ''} onChange={event => setDraft(current => ({ ...current, level: (event.target.value || undefined) as SystemLogFilters['level'] }))}>
               <option value="">All levels</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option>
-            </select>
+            </AdminSelect>
             {/* <input
               className="h-[37px] min-w-[180px] px-3 text-[13px]"
               aria-label="Filter by event"

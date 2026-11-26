@@ -1,3 +1,4 @@
+import { adminResourceJson } from '../../utils/adminAssetFields';
 import { adminDisplayText, adminDetailText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
@@ -25,7 +26,7 @@ export function AuditLogsPage() {
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [page]);
-  const visible = items.filter((log) => `${adminDisplayText(log.action)} ${log.resource_table ?? ''} ${log.user_id ?? ''} ${JSON.stringify(log.details_json ?? {})}`.toLowerCase().includes(query.toLowerCase()));
+  const visible = items.filter((log) => `${adminDisplayText(log.action)} ${log.resource_table ?? ''} ${log.user_id ?? ''} ${adminResourceJson(log.details_json ?? {})}`.toLowerCase().includes(query.toLowerCase()));
   return <AdminPageShell title="Audit Logs" description="Review recorded actions and the users who performed them.">
     {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
     <OperatorPanel className="flush-panel">

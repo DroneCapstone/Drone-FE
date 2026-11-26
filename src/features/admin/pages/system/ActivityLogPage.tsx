@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { RefreshCw } from 'lucide-react';
@@ -64,9 +65,9 @@ export function ActivityLogPage() {
               value={draft.action ?? ''}
               onChange={event => setDraft(current => ({ ...current, action: event.target.value }))}
             /> */}
-            <select aria-label="Filter by role" value={draft.role ?? ''} onChange={event => setDraft(current => ({ ...current, role: event.target.value }))}>
+            <AdminSelect aria-label="Filter by role" value={draft.role ?? ''} onChange={event => setDraft(current => ({ ...current, role: event.target.value }))}>
               <option value="">All roles</option><option value="ADMIN">Admin</option><option value="OPERATOR">Operator</option><option value="TECHNICIAN">Technician</option><option value="CUSTOMER">Customer</option>
-            </select>
+            </AdminSelect>
             {/* <input
               className="h-[37px] min-w-[150px] px-3 text-[13px]"
               aria-label="Filter by resource type"
@@ -74,9 +75,9 @@ export function ActivityLogPage() {
               value={draft.resource_type ?? ''}
               onChange={event => setDraft(current => ({ ...current, resource_type: event.target.value }))}
             /> */}
-            <select aria-label="Filter by status" value={draft.status ?? ''} onChange={event => setDraft(current => ({ ...current, status: (event.target.value || undefined) as ActivityLogFilters['status'] }))}>
+            <AdminSelect aria-label="Filter by status" value={draft.status ?? ''} onChange={event => setDraft(current => ({ ...current, status: (event.target.value || undefined) as ActivityLogFilters['status'] }))}>
               <option value="">All statuses</option><option value="success">Success</option><option value="failed">Failed</option>
-            </select>
+            </AdminSelect>
             {/* <ActionButton type="button" variant="secondary" onClick={reset} disabled={loading}>Reset</ActionButton> */}
             <ActionButton type="submit" disabled={loading}>Apply filters</ActionButton>
           </>}

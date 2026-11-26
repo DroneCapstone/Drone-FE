@@ -70,13 +70,13 @@ export interface LiveHubDetail extends LiveHub {
   assigned_batteries: Record<string, unknown>[];
 }
 export interface LiveDrone {
-  id: string; name: string; model: string; serial_number: string;
+  id: string; name: string; model: string;
   hub_id: number | null; hub_name: string; status: string; admin_state: string;
   battery_level_pct: number | null; installed_battery_id: string | null;
   payload_capacity_kg: number; max_speed: number;
 }
 export interface LiveBattery {
-  id: string; serial_number: string; battery_model: string; capacity_wh: number;
+  id: string; battery_model: string; capacity_wh: number;
   status: string; current_hub_id: number | null; drone_id: string | null;
   charge_level_pct: number; available_status: string; lifecycle_status: string;
 }
@@ -108,7 +108,7 @@ function mapHub(v: Record<string, unknown>): LiveHub {
   };
 }
 function mapDrone(v: Record<string, unknown>): LiveDrone {
-  return { id: str(v.id), name: str(v.name), model: str(v.model), serial_number: str(v.serial_number),
+  return { id: str(v.id), name: str(v.name), model: str(v.model),
     hub_id: typeof v.hub_id === 'number' ? v.hub_id : typeof v.current_hub_id === 'number' ? v.current_hub_id : typeof v.assigned_hub_id === 'number' ? v.assigned_hub_id : null,
     hub_name: str(v.hub_name, str(v.assigned_hub_name, str(v.current_hub_name))), status: str(v.status).toUpperCase(),
     admin_state: str(v.admin_state, 'ACTIVE').toUpperCase(), battery_level_pct: typeof v.battery_level_pct === 'number' ? v.battery_level_pct : null,
@@ -117,7 +117,7 @@ function mapDrone(v: Record<string, unknown>): LiveDrone {
   };
 }
 function mapBattery(v: Record<string, unknown>): LiveBattery {
-  return { id: str(v.id), serial_number: str(v.serial_number), battery_model: str(v.battery_model), capacity_wh: num(v.capacity_wh),
+  return { id: str(v.id), battery_model: str(v.battery_model), capacity_wh: num(v.capacity_wh),
     status: str(v.status), current_hub_id: typeof v.current_hub_id === 'number' ? v.current_hub_id : null,
     drone_id: v.drone_id == null ? null : str(v.drone_id), charge_level_pct: num(v.charge_level_pct),
     available_status: str(v.available_status), lifecycle_status: str(v.lifecycle_status),

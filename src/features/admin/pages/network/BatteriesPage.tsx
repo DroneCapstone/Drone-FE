@@ -1,3 +1,4 @@
+import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, BatteryCharging, CircleCheck, ClipboardCheck } from 'lucide-react';
@@ -31,7 +32,7 @@ export function BatteriesPage() {
   const operationalOf = (battery: BatteryApi) => battery.available_status ?? (battery.drone_id != null ? 'Installed' : battery.status);
   const lifecycleOf = (battery: BatteryApi) => battery.lifecycle_status ?? battery.status;
   const visible = useMemo(() => batteries.filter((b) =>
-    `${b.id} ${b.battery_model ?? ''} ${b.serial_number} ${hubName(b.current_hub_id)}`.toLowerCase().includes(query.toLowerCase())
+    `${b.id} ${b.battery_model ?? ''} ${hubName(b.current_hub_id)}`.toLowerCase().includes(query.toLowerCase())
     && (operational === 'all' || operationalOf(b) === operational)
     && (lifecycle === 'all' || lifecycleOf(b) === lifecycle)
   ), [batteries, hubs, query, operational, lifecycle]);
@@ -48,16 +49,16 @@ export function BatteriesPage() {
       <AdminSummaryCard label="Replaced" value={batteries.filter((b) => lifecycleOf(b).toUpperCase() === 'REPLACED').length} note="Retained in system history" icon={Archive} />
     </div>
     <OperatorPanel className="flush-panel">
-      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search battery, model, serial or Hub…" filters={<>
-        <select value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option>{operationalValues.map((v) => <option key={v}>{v}</option>)}</select>
-        <select value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option>{lifecycleValues.map((v) => <option key={v}>{v}</option>)}</select>
+      <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search battery ID, model or Hub…" filters={<>
+        <AdminSelect value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option>{operationalValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
+        <AdminSelect value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option>{lifecycleValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
       </>} meta={`${visible.length} of ${batteries.length} batteries`} />
-      <div className="table-wrap"><table><thead><tr><th>Battery</th><th>Serial number</th><th>Hub</th><th>Operational status</th><th>Lifecycle</th><th>Action</th></tr></thead><tbody>
-        {visible.map((b) => <tr key={b.id}><td><strong>{b.id}</strong><small>{b.battery_model ?? 'Model unavailable'}</small></td><td>{b.serial_number}</td><td>{hubName(b.current_hub_id)}</td>
+      <div className="table-wrap"><table><thead><tr><th>Battery</th><th>Hub</th><th>Operational status</th><th>Lifecycle</th><th>Action</th></tr></thead><tbody>
+        {visible.map((b) => <tr key={b.id}><td><strong>{b.id}</strong><small>{b.battery_model ?? 'Model unavailable'}</small></td><td>{hubName(b.current_hub_id)}</td>
           <td><StatusBadge tone={['READY', 'AVAILABLE'].includes(operationalOf(b).toUpperCase()) ? 'success' : 'warning'}>{operationalOf(b)}</StatusBadge></td>
           <td><StatusBadge tone={lifecycleOf(b).toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{lifecycleOf(b)}</StatusBadge></td>
           <td><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View details</Link></td></tr>)}
-        {!loading && !error && visible.length === 0 && <tr><td colSpan={6}>No batteries found.</td></tr>}
+        {!loading && !error && visible.length === 0 && <tr><td colSpan={5}>No batteries found.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>
   </AdminPageShell>;

@@ -1,3 +1,4 @@
+import { omitFleetSerialColumns } from '../utils/adminAssetFields';
 import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
 import { authService } from '../../auth/services/authService';
 import { AdminApiError, adminRequest } from './adminOperationsApi';
@@ -117,7 +118,8 @@ async function exportCsv(kind: ReportKind, range: ReportRange = {}, status: Miss
   const blob = await response.blob();
   const prefix = (await blob.slice(0, 1024).text()).replace(/^\uFEFF/, '').trimStart();
   if (!prefix || /^[{[<]/.test(prefix) || !prefix.split(/\r?\n/, 1)[0].includes(',')) throw invalid();
-  const url = URL.createObjectURL(blob);
+  const exportBlob = kind === 'fleet' ? new Blob([omitFleetSerialColumns(await blob.text())], { type: 'text/csv;charset=utf-8' }) : blob;
+  const url = URL.createObjectURL(exportBlob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `droneoptai-${kind}${kind !== 'fleet' && range.from_date ? `-from-${range.from_date}` : ''}${kind !== 'fleet' && range.to_date ? `-to-${range.to_date}` : ''}.csv`;
