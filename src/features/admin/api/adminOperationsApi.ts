@@ -66,8 +66,8 @@ export interface HubApi {
 export interface HubDetailApi extends HubApi {
   assigned_technician?: { id: string; full_name: string; email: string } | null;
   assigned_technicians?: { id: string; full_name: string; email: string }[];
-  assigned_batteries?: { id: string; serial_number?: string; battery_model?: string; status?: string; charge_level_pct?: number | null }[];
-  assigned_drones?: { id: string; name: string; model: string; status: string; serial_number?: string; battery_level_pct?: number | null }[];
+  assigned_batteries?: { id: string; battery_model?: string; status?: string; charge_level_pct?: number | null }[];
+  assigned_drones?: { id: string; name: string; model: string; status: string; battery_level_pct?: number | null }[];
 }
 /** POST /admin/system/hubs expects the fields documented in the Admin Hub creation guide. */
 export interface HubCreateApi {
@@ -84,14 +84,14 @@ export type HubUpdateApi = Partial<Pick<HubApi, 'name' | 'code' | 'area' | 'addr
 export interface HubSummaryApi { total_hubs: number; active_hubs: number; total_drones: number; total_batteries: number; }
 
 export interface DroneApi {
-  id: string; name: string; model: string; serial_number: string; status: string; admin_state: string;
+  id: string; name: string; model: string; status: string; admin_state: string;
   hub_id?: number | null; hub_name?: string | null; hub_code?: string | null;
   battery_level_pct?: number | null; payload_capacity_kg: number; max_speed: number;
   installed_battery_id?: string | null; utilization_pct?: number | null;
 }
 export interface DroneOverviewApi extends DroneApi {
   assigned_hub_id?: number | null; assigned_hub_name?: string | null; current_hub_id?: number | null;
-  current_hub_name?: string | null; installed_battery_serial?: string | null; installed_battery_model?: string | null;
+  current_hub_name?: string | null; installed_battery_model?: string | null;
   maintenance_status: { open_work_orders: number; completed_work_orders: number; last_maintenance?: string | null; next_maintenance?: string | null; schedule_status?: string; maintenance_note?: string };
   recent_work_orders?: WorkOrderApi[];
   flight_activity: { last_flight?: string | null; total_flights: number; total_flight_hours: number };
@@ -105,7 +105,7 @@ export interface FlightHistoryApi { total_flights: number; flight_hours: number;
 export interface DroneSummaryApi { total_drones: number; available_drones: number; maintenance_drones: number; in_flight_drones: number; }
 export interface DroneMaintenanceApi { open_work_orders: number; completed_work_orders: number; maintenance_schedule: string; maintenance_overview: Record<string, unknown>; recent_technician_records: WorkOrderApi[]; }
 export interface BatteryApi {
-  id: string; serial_number: string; capacity_wh: number; status: string; drone_id?: string | number | null;
+  id: string; capacity_wh: number; status: string; drone_id?: string | number | null;
   current_hub_id?: number | null; charge_level_pct?: number | null; battery_model?: string | null;
   last_charged_at?: string | null; available_status?: string | null; lifecycle_status?: string | null;
   days_until_expiry?: number | null; unit_cost?: number | null; acquisition_cost?: number | null; compatible_drone_models?: string[]; quantity?: number; battery_ids?: string[];
@@ -118,10 +118,10 @@ export interface NotificationApi { id: number; title: string; message: string; n
 export type NotificationType = 'Mission_Status' | 'Payment' | 'System_Alert' | 'AI_Warning' | 'Maintenance';
 export interface NotificationQuery { page?: number; page_size?: number; is_read?: boolean; notification_type?: NotificationType; }
 export interface NotificationPageApi { total: number; unread_count: number; page: number; page_size: number; items: NotificationApi[]; }
-export interface DroneCreateApi { name?: string; model: string; serial_number: string; payload_capacity_kg: number; max_speed: number; status?: string; current_hub_id?: number | null; acquisition_cost?: number | null }
+export interface DroneCreateApi { name?: string; model: string; payload_capacity_kg: number; max_speed: number; status?: string; current_hub_id?: number | null; acquisition_cost?: number | null }
 export type DroneUpdateApi = Partial<DroneCreateApi>;
-export interface BatteryCreateApi { quantity: number; serial_number?: string; serial_numbers?: string[]; battery_model: string; capacity_wh?: number; unit_cost_override?: number; acquisition_cost?: number; current_hub_id?: number | null; status?: string; charge_level_pct?: number }
-export type BatteryUpdateApi = Partial<Pick<BatteryApi, 'serial_number' | 'battery_model' | 'capacity_wh' | 'status' | 'current_hub_id' | 'charge_level_pct' | 'last_charged_at'>>;
+export interface BatteryCreateApi { quantity: number; battery_model: string; capacity_wh?: number; unit_cost_override?: number; acquisition_cost?: number; current_hub_id?: number | null; status?: string; charge_level_pct?: number }
+export type BatteryUpdateApi = Partial<Pick<BatteryApi, 'battery_model' | 'capacity_wh' | 'status' | 'current_hub_id' | 'charge_level_pct' | 'last_charged_at'>>;
 export interface BatteryModelApi { id: number; name: string; capacity_wh: number; unit_cost: number | null; compatible_drone_models?: string[] | null; description?: string | null; is_active: boolean }
 export type BatteryModelCreateApi = Pick<BatteryModelApi, 'name' | 'capacity_wh'> & Partial<Pick<BatteryModelApi, 'unit_cost' | 'compatible_drone_models' | 'description'>>;
 export interface BatterySupplyApi { hub_id: number; battery_ids: string[]; note?: string }

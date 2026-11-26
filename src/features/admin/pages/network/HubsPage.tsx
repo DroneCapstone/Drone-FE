@@ -81,7 +81,7 @@ export function HubsPage() {
       }])));
       setDrones(d.map((item) => ({
         id: item.id, name: item.name, displayId: item.id, model: item.model,
-        serialNumber: item.serial_number, hubId: item.hub_id == null ? '' : String(item.hub_id),
+        hubId: item.hub_id == null ? '' : String(item.hub_id),
         status: (item.status.toUpperCase() === 'AVAILABLE' ? 'AVAILABLE' : item.status.toUpperCase() === 'IN FLIGHT' ? 'IN_FLIGHT' : 'MAINTENANCE') as AdminDrone['status'],
         isActive: item.admin_state.toUpperCase() === 'ACTIVE', batteryPct: item.battery_level_pct ?? 0,
         maxPayloadKg: item.payload_capacity_kg, createdAt: '', updatedAt: '',

@@ -1,3 +1,4 @@
+import { adminResourceJson } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { adminDetailText, adminDisplayText } from '../../utils/adminDisplayText';
@@ -45,7 +46,7 @@ export function TransactionsPage() {
   const amountOf = (row: JsonRow) => amount(row, 'amount', 'amount_vnd', 'total_amount', 'paid_amount');
   const visible = useMemo(() => items.filter(row =>
     (status === 'all' || statusOf(row) === status)
-    && JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
+    && adminResourceJson(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
   const settled = items.filter(row => ['PAID', 'REFUNDED'].includes(statusOf(row)));
   const knownAmount = items.every(row => statusOf(row) !== '—') && settled.every(row => amountOf(row) !== null);
   const collected = settled.reduce((sum, row) => sum + (amountOf(row) ?? 0), 0);

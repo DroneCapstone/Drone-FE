@@ -224,7 +224,7 @@ export function ApprovalsPage() {
     .filter(b => b.status.toUpperCase() === 'ACTIVE' && b.drone_id == null && b.current_hub_id == null
       && (!damagedBattery || b.battery_model === damagedBattery.battery_model)
       && b.id !== damagedBattery?.id)
-    .map(b => ({ id: b.id, model: b.battery_model ?? '—', serialNumber: b.serial_number })) : [];
+    .map(b => ({ id: b.id, model: b.battery_model ?? '—' })) : [];
   const droneModel = undefined; // ReplacementRequestOut does not expose Drone model.
   const suggestedId = request?.type === 'PART' ? matchedParts[0]?.id ?? ''
     : matchedBatteries.length === 1 ? matchedBatteries[0].id : '';
@@ -504,7 +504,7 @@ export function ApprovalsPage() {
 
                   </option>) : matchedBatteries.map((battery) => <option key={battery.id} value={battery.id}>
 
-                    {battery.id} · {battery.model} · {battery.serialNumber}
+                    {battery.id} · {battery.model}
 
                   </option>)}
 

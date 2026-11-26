@@ -29,7 +29,6 @@ export interface AdminDrone {
   name: string;
   displayId: string;
   model: string;
-  serialNumber: string;
   hubId: string;
   status: AdminDroneStatus;
   isActive: boolean;
@@ -46,7 +45,6 @@ export interface AdminDrone {
 export interface AdminBattery {
   id: string;
   model: string;
-  serialNumber: string;
   hubId: string;
   droneId?: string;
   chargeLevelPct: number;

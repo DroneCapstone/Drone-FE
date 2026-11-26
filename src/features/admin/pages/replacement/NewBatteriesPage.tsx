@@ -2,7 +2,7 @@ import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { BatteryCharging, Box, CalendarDays, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { BatteryCharging, Box, CalendarDays, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
 import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
@@ -53,11 +53,7 @@ export function NewBatteriesPage() {
   const [creating, setCreating] = useState(false);
   const [model, setModel] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [serials, setSerials] = useState('');
-  const [serialsTouched, setSerialsTouched] = useState(false);
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
-  const [editing, setEditing] = useState<BatteryApi | null>(null);
-  const [editSerial, setEditSerial] = useState('');
   const [removing, setRemoving] = useState<BatteryApi | null>(null);
   const [removalReason, setRemovalReason] = useState('');
   const [error, setError] = useState('');
@@ -91,53 +87,30 @@ export function NewBatteriesPage() {
     if (modelFilter !== 'ALL' && item.name !== modelFilter) return false;
     const match = search.trim().toLowerCase();
     return !match || item.name.toLowerCase().includes(match) || available.some(b => b.battery_model === item.name
-      && `${b.id} ${b.serial_number}`.toLowerCase().includes(match));
+      && b.id.toLowerCase().includes(match));
   });
   const existingQuantity = modelSummary.find(item => item.name === model)?.quantity ?? 0;
-  const serialLines = serials.replace(/\r/g, '').split('\n').map(value => value.trim()).filter(Boolean);
-  const serialCount = serialLines.length;
   const validQuantity = Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 30;
-  const serialsUnique = new Set(serialLines.map(s => s.toLowerCase())).size === serialLines.length;
-  const existingSerials = new Set(allBatteries.map(b => b.serial_number.toLowerCase()));
-  const serialsUnused = serialLines.every(s => !existingSerials.has(s.toLowerCase()));
   const activeModel = catalog.some(m => m.name === model && m.is_active);
-  const validSerials = validQuantity && serialCount === quantity && serialsUnique && serialsUnused;
 
   function openCreate(selectedModel?: string) {
     setModel(selectedModel && models.includes(selectedModel) ? selectedModel : models.includes(modelHint) ? modelHint : catalog.find(m => m.is_active)?.name ?? '');
-    setQuantity(1); setSerials(''); setSerialsTouched(false); setError(''); setNotice(''); setCreating(true);
+    setQuantity(1); setError(''); setNotice(''); setCreating(true);
   }
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving || !activeModel || !validSerials) {
-      setError('Select an active battery model and enter exactly one unique serial for each physical battery.'); return;
+    if (saving || !activeModel || !validQuantity) {
+      setError('Select an active battery model and enter a quantity from 1 to 30.'); return;
     }
     if (!window.confirm(`Add ${quantity} real ${model} batteries into Admin warehouse?`)) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.createBattery({
         quantity, battery_model: model,
-        ...(quantity === 1 ? { serial_number: serialLines[0] } : { serial_numbers: serialLines }),
         status: 'Active', charge_level_pct: 100,
       });
       setCreating(false); setExpandedModel(model); setNotice(`${quantity} ${model} batteries registered successfully.`);
       await refresh();
-    } catch (cause) { setError(apiError(cause)); }
-    finally { setSaving(false); }
-  }
-  function openEdit(battery: BatteryApi) {
-    setEditSerial(battery.serial_number); setError(''); setNotice(''); setEditing(battery);
-  }
-  async function saveEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!editing || saving) return;
-    const value = editSerial.trim();
-    if (!value || available.some(b => b.id !== editing.id && b.serial_number.toLowerCase() === value.toLowerCase())) {
-      setError('Serial is required and must be unique.'); return;
-    }
-    setSaving(true); setError('');
-    try {
-      await adminOperationsApi.updateBattery(editing.id, { serial_number: value });
-      setEditing(null); setNotice(`Battery ${editing.id} updated successfully.`); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -164,12 +137,12 @@ export function NewBatteriesPage() {
     </div>}
     {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
     {loading && <OperatorLoadingState label="Loading new batteries…" />}
-    {error && !creating && !editing && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && !creating && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
     {/* Browser-only demo stock is intentionally disabled. This table reads the Backend catalog and physical battery units. */}
     {!loading && inventoryReady && <OperatorPanel className="flush-panel">
       <AdminToolbar
         searchValue={search} onSearchChange={setSearch}
-        placeholder="Search Battery Model, Battery ID or serial…"
+        placeholder="Search Battery Model or Battery ID…"
         filters={<AdminSelect aria-label="Filter by battery model" value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}>
           <option value="ALL">All battery models</option>{models.map((name) => <option key={name} value={name}>{name}</option>)}
         </AdminSelect>}
@@ -195,17 +168,15 @@ export function NewBatteriesPage() {
         <div><strong>{expandedModel}</strong><p className="text-xs text-[var(--admin-muted)]">Individual Battery IDs · {expandedUnits.length} unit(s)</p></div>
         <ActionButton variant="secondary" onClick={() => setExpandedModel(null)}>Close</ActionButton>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Battery ID</th><th>Serial Number</th><th>Created on</th><th>Actions</th></tr></thead><tbody>
+      <div className="table-wrap"><table><thead><tr><th>Battery ID</th><th>Created on</th><th>Actions</th></tr></thead><tbody>
         {expandedUnits.map((battery) => <tr key={battery.id}>
           <td><strong>{battery.id}</strong></td>
-          <td>{battery.serial_number}</td>
           <td>{'—'}</td>
           <td><div className="flex items-center gap-2">
-            <button type="button" aria-label={`Edit ${battery.id}`} title="Edit serial" onClick={() => openEdit(battery)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-[var(--admin-text-secondary)] hover:border-[#FF6B00] hover:text-[#FF6B00]"><Pencil size={15} /></button>
             <button type="button" aria-label={`Remove ${battery.id}`} title="Remove new battery" onClick={() => { setError(''); setNotice(''); setRemovalReason(''); setRemoving(battery); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-red-500 hover:border-red-400"><Trash2 size={15} /></button>
           </div></td>
         </tr>)}
-        {!loading && !error && expandedUnits.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
+        {!loading && !error && expandedUnits.length === 0 && <tr><td colSpan={3} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
       </tbody></table></div>
     </OperatorPanel>}
 
@@ -225,24 +196,9 @@ export function NewBatteriesPage() {
             <label><span>Quantity to Add <span className="text-red-500">*</span></span><input className="new-batteries-quantity-input" type="number" required min={1} max={30} step={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
           </div>
           <div className="new-batteries-quantity-result"><span>Quantity after addition</span><strong>{validQuantity ? `${existingQuantity + quantity} units` : '—'}</strong></div>
-          <label className="block text-sm"><span>Serial Numbers <span className="text-red-500">*</span></span>
-            <textarea rows={3} className={`${field} mt-2 !h-auto resize-y py-2`} placeholder="Enter one serial per line" value={serials} onChange={(event) => { setSerials(event.target.value); setSerialsTouched(true); }} />
-          </label>
-          {serialsTouched && !validSerials && <p role="alert" className="new-batteries-quantity-error">{!validQuantity ? 'Enter a quantity from 1 to 30.' : !serialsUnique || !serialsUnused ? 'Serial numbers must be unique.' : `Enter ${quantity} serial number${quantity === 1 ? '' : 's'}.`}</p>}
           {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
         </div>
-        <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving || !activeModel || !validSerials}>{saving ? 'Saving…' : 'Confirm Addition'}</ActionButton></div>
-      </form></DialogContent>}
-    </Dialog>
-
-    <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
-      {editing && <DialogContent className="new-batteries-quantity-dialog"><form onSubmit={saveEdit}>
-        <div className="new-batteries-quantity-header"><DialogTitle className="text-lg font-semibold">Edit {editing.id}</DialogTitle></div>
-        <div className="new-batteries-quantity-body space-y-4"><label className="block text-sm"><span>Battery Model</span><input readOnly className={`${field} mt-2`} value={editing.battery_model ?? '—'} /></label>
-          <label className="block text-sm"><span>Serial Number *</span><input className={`${field} mt-2`} value={editSerial} onChange={(event) => setEditSerial(event.target.value)} placeholder="Required" required /></label>
-          {error && <p role="alert" className="new-batteries-quantity-error">{error}</p>}
-        </div>
-        <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setEditing(null)}>Cancel</ActionButton><ActionButton type="submit">Save Changes</ActionButton></div>
+        <div className="new-batteries-quantity-footer"><ActionButton variant="secondary" onClick={() => setCreating(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving || !activeModel || !validQuantity}>{saving ? 'Saving…' : 'Confirm Addition'}</ActionButton></div>
       </form></DialogContent>}
     </Dialog>
 

@@ -1,3 +1,4 @@
+import { adminResourceJson } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -28,7 +29,7 @@ export function RefundsPage() {
   useEffect(() => { void refresh(); }, []);
   const statusOf = (row: JsonRow) => field(row, 'refund_status', 'status').toUpperCase();
   const visible = useMemo(() => items.filter(row =>
-    (status === 'all' || status === statusOf(row)) && JSON.stringify(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
+    (status === 'all' || status === statusOf(row)) && adminResourceJson(row).toLowerCase().includes(query.toLowerCase())), [items, query, status]);
   return <AdminPageShell title="Refunds" description="Track refund requests and their processing status. Final settlement is confirmed by the payment provider.">
     {loading && <OperatorLoadingState label="Loading refunds…" />}
     {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}

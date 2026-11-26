@@ -1,3 +1,5 @@
+import { adminResourceJson } from './adminAssetFields';
+
 /** Presentation-only helpers. Keep original responses, log records and filters unchanged. */
 export function adminDisplayText(value: string | null | undefined, fallback = '—'): string {
   if (!value?.trim()) return fallback;
@@ -25,5 +27,5 @@ export function adminErrorText(error: unknown, fallback = 'Something went wrong.
 
 /** Render nested record details without modifying the stored values. */
 export function adminDetailText(value: unknown): string {
-  return adminDisplayText(JSON.stringify(value, null, 2));
+  return adminDisplayText(adminResourceJson(value, 2));
 }

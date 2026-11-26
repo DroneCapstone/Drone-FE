@@ -123,7 +123,7 @@ export function AdminDashboardPage() {
         capacity: h.capacity, technicianIds: [], createdAt: h.created_at ?? '', updatedAt: h.updated_at ?? '',
       })));
       setDrones(droneRows.map((d: DroneApi) => ({
-        id: d.id, name: d.name, displayId: d.id, model: d.model, serialNumber: d.serial_number,
+        id: d.id, name: d.name, displayId: d.id, model: d.model,
         hubId: d.hub_id == null ? '' : String(d.hub_id),
         status: (d.status.toUpperCase() === 'AVAILABLE' ? 'AVAILABLE' : d.status.toUpperCase() === 'IN FLIGHT' ? 'IN_FLIGHT' : 'MAINTENANCE') as AdminDrone['status'],
         isActive: d.admin_state.toUpperCase() === 'ACTIVE', batteryPct: d.battery_level_pct ?? 0,

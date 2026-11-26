@@ -1,0 +1,87 @@
+/* Admin only, including the Radix portal outside AdminLayout. */
+.admin-date-range-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  height: 40px;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--border, #e3e5e8);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--text, #17181b);
+  font: 400 13px/1.45 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+.admin-date-range-trigger svg { flex-shrink: 0; color: var(--muted, #6c727e); }
+.admin-date-range-trigger span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-date-range-trigger .admin-date-range-placeholder { color: var(--muted, #6c727e); }
+.admin-date-range-trigger:hover, .admin-date-range-trigger[data-state='open'] { border-color: #ff6b00; }
+.admin-date-range-trigger:focus-visible { outline: 2px solid #ff6b00; outline-offset: 2px; }
+.admin-date-range-popover {
+  --range-fill: #fff0e5;
+  --range-middle-text: #9a4100;
+  --range-endpoint: #ff6b00;
+  --range-endpoint-text: #fff;
+  --range-cell: 36px;
+  width: max-content;
+  max-width: min(calc(100vw - 24px), var(--radix-popover-content-available-width, 100vw));
+  max-height: min(calc(100dvh - 24px), var(--radix-popover-content-available-height, 100dvh));
+  overflow: auto;
+  padding: 12px;
+  z-index: 10002;
+  border: 1px solid var(--border, #e3e5e8);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text, #17181b);
+  font: 400 13px/1.45 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  box-shadow: 0 6px 24px rgba(0,0,0,.10);
+}
+:root[data-theme='dark'] .admin-date-range-popover {
+  --range-fill: #4a2b19;
+  --range-middle-text: #ffd2b1;
+  --range-endpoint: #ff6b00;
+  --range-endpoint-text: #fff;
+  box-shadow: 0 6px 24px rgba(0,0,0,.32);
+}
+.admin-date-range-popover .admin-range-calendar { padding: 0; width: max-content; max-width: 100%; position: relative; }
+.admin-date-range-popover .admin-range-months { position: relative; display: flex; align-items: flex-start; gap: 0; width: max-content; max-width: 100%; }
+.admin-date-range-popover .admin-range-month { flex: 0 0 auto; width: calc(7 * var(--range-cell)); }
+.admin-date-range-popover .admin-range-caption { height: 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; padding: 0 30px; }
+.admin-date-range-popover .admin-range-caption-label { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.admin-date-range-popover .admin-range-nav { position: absolute; inset: 0 0 auto; height: 36px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 1; }
+.admin-date-range-popover :is(.admin-range-prev,.admin-range-next) { pointer-events: auto; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text, #17181b); cursor: pointer; }
+.admin-date-range-popover .admin-range-grid { border: 0; border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 0; margin: 0; }
+.admin-date-range-popover :is(.admin-range-week,.admin-range-weekdays) { border: 0; background: transparent; cursor: default; }
+.admin-date-range-popover .admin-range-weekday { width: var(--range-cell); height: 30px; padding: 0; border: 0; background: transparent; text-align: center; font: 400 12px/1.4 'IBM Plex Sans', sans-serif; text-transform: none; letter-spacing: 0; color: var(--muted, #6c727e); }
+.admin-date-range-popover .admin-range-day { width: var(--range-cell); height: var(--range-cell); padding: 0; border: 0; text-align: center; vertical-align: middle; background: transparent; }
+.admin-date-range-popover .admin-range-day-button { display: inline-grid; place-items: center; width: var(--range-cell); height: 32px; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text, #17181b); font: inherit; cursor: pointer; }
+.admin-date-range-popover .admin-range-middle .admin-range-day-button { background: var(--range-fill); color: var(--range-middle-text); border-radius: 0; }
+.admin-date-range-popover .admin-range-start:not(.admin-range-end) .admin-range-day-button { background: var(--range-endpoint); color: var(--range-endpoint-text); }
+.admin-date-range-popover .admin-range-end:not(.admin-range-start) .admin-range-day-button { background: var(--range-endpoint); color: var(--range-endpoint-text); }
+.admin-date-range-popover[data-range-complete="true"] .admin-range-start:not(.admin-range-end) { background: linear-gradient(to left, var(--range-fill) 50%, transparent 50%) center / 100% 32px no-repeat; }
+.admin-date-range-popover[data-range-complete="true"] .admin-range-end:not(.admin-range-start) { background: linear-gradient(to right, var(--range-fill) 50%, transparent 50%) center / 100% 32px no-repeat; }
+.admin-date-range-popover .admin-range-start.admin-range-end .admin-range-day-button { background: var(--range-endpoint); color: var(--range-endpoint-text); }
+.admin-date-range-popover .admin-range-middle:first-child .admin-range-day-button { border-radius: 6px 0 0 6px; }
+.admin-date-range-popover .admin-range-middle:last-child .admin-range-day-button { border-radius: 0 6px 6px 0; }
+.admin-date-range-popover[data-range-complete="true"] .admin-range-start:last-child,
+.admin-date-range-popover[data-range-complete="true"] .admin-range-end:first-child { background: transparent; }
+.admin-date-range-popover .admin-range-today:not(.admin-range-selected) .admin-range-day-button { border-color: #ff6b00; }
+.admin-date-range-popover .admin-range-outside .admin-range-day-button { color: var(--faint, #9aa0ab); }
+.admin-date-range-popover .admin-range-hidden { visibility: hidden; }
+.admin-date-range-popover :is(.admin-range-prev,.admin-range-next,.admin-range-day-button):disabled,
+.admin-date-range-popover .admin-range-disabled .admin-range-day-button { opacity: .35; cursor: not-allowed; box-shadow: none; }
+.admin-date-range-popover :is(.admin-range-prev,.admin-range-next,.admin-range-day-button):hover:not(:disabled):not([aria-disabled='true']) { background: #ff6b00; border-color: #ff6b00; color: #fff; }
+.admin-date-range-popover button:focus-visible { outline: 2px solid #ff6b00; outline-offset: -2px; }
+.admin-date-range-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border, #e3e5e8); }
+.admin-date-range-footer > span { color: var(--muted, #6c727e); font-size: 12px; }
+.admin-date-range-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.admin-date-range-actions button { height: 40px; padding: 0 14px; border: 1px solid var(--border, #e3e5e8); border-radius: 6px; background: var(--surface, #fff); color: var(--text, #17181b); font: 600 13px/1.4 'IBM Plex Sans', sans-serif; cursor: pointer; }
+.admin-date-range-actions button:hover:not(:disabled) { background: #ff6b00; border-color: #ff6b00; color: #fff; }
+.admin-date-range-actions button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .admin-date-range-popover { --range-cell: 36px; } }
+@media (max-width: 340px) { .admin-date-range-popover { --range-cell: 32px; padding: 8px; } }

@@ -1,3 +1,4 @@
+import { isSerialField } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -117,7 +118,7 @@ export function DroneDetailPage() {
           <DetailCard title="Drone information" action={<button type="button" className="dd-edit-btn" onClick={() => setEditing(true)}><Pencil size={15}/> Edit</button>}>
             <div className="dd-master-fields-grid">
               {readonlyFact('Drone name', drone.name)}{readonlyFact('Model', drone.model)}
-              {readonlyFact('Serial number', drone.serial_number)}{readonlyFact('Maximum payload (kg)', drone.payload_capacity_kg)}
+              {readonlyFact('Maximum payload (kg)', drone.payload_capacity_kg)}
               {readonlyFact('Assigned Hub', hubName)}
             </div>
           </DetailCard>
@@ -136,7 +137,7 @@ export function DroneDetailPage() {
         </div>}
         {tab === 'maintenance' && maintenance && <div className="dd-tab-stack"><div className="dd-grid-two">
           <DetailCard title="Maintenance overview"><div className="dd-rows"><DetailRow label="Schedule"><DetailBadge tone={maintenanceTone(maintenance.maintenance_schedule)}>{maintenance.maintenance_schedule}</DetailBadge></DetailRow><DetailRow label="Open work orders">{maintenance.open_work_orders}</DetailRow><DetailRow label="Completed work orders">{maintenance.completed_work_orders}</DetailRow>
-          {Object.entries(maintenance.maintenance_overview ?? {}).filter(([, v]) => typeof v === 'string' || typeof v === 'number').map(([key, value]) => <DetailRow key={key} label={key.replace(/_/g, ' ')}>{String(value ?? '—')}</DetailRow>)}</div></DetailCard>
+          {Object.entries(maintenance.maintenance_overview ?? {}).filter(([key, v]) => !isSerialField(key) && (typeof v === 'string' || typeof v === 'number')).map(([key, value]) => <DetailRow key={key} label={key.replace(/_/g, ' ')}>{String(value ?? '—')}</DetailRow>)}</div></DetailCard>
           <DetailCard title="Recent technician records">{renderOrders(maintenance.recent_technician_records ?? [])}</DetailCard>
         </div></div>}
         {tab === 'orders' && <DetailCard title="Work orders">{renderOrders(orders)}</DetailCard>}
@@ -151,7 +152,6 @@ export function DroneDetailPage() {
       <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle></div>
       <div className="fields two p-5">
         <label><span>Drone name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/></label>
-        <label><span>Serial number</span><input readOnly value={drone.serial_number}/></label>
         <label><span>Maximum payload (kg)</span><input type="number" min={0.01} step="any" required value={draft.payload} onChange={(e) => setDraft({ ...draft, payload: Number(e.target.value) })}/></label>
         <label><span>Maximum speed</span><input type="number" min={0.01} step="any" required value={draft.speed} onChange={(e) => setDraft({ ...draft, speed: Number(e.target.value) })}/></label>
         <label><span>Assigned Hub</span><AdminSelect required value={draft.hub} onChange={(e) => setDraft({ ...draft, hub: e.target.value })}><option value="">Select Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE' || String(h.id) === draft.hub).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>
