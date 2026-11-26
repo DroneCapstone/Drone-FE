@@ -1,6 +1,6 @@
 /* Local toolbar control; no map, aircraft card or telemetry style changes. */
-.live-simulation-speed { display: flex; flex-direction: column; gap: 3px; flex: none; }
-.live-simulation-speed-control { display: flex; align-items: center; gap: 4px; }
+.live-simulation-speed { position: relative; display: flex; align-items: center; flex: none; }
+.live-simulation-speed-control { position: relative; display: flex; align-items: center; gap: 4px; }
 .live-3d-tools .live-simulation-speed select {
   height: 30px;
   box-sizing: border-box;
@@ -16,8 +16,67 @@
 }
 .live-3d-tools .live-simulation-speed select:focus-visible { outline: 1px solid var(--orange); outline-offset: 1px; }
 .live-3d-tools .live-simulation-speed select:disabled { cursor: default; opacity: .65; }
-.live-simulation-speed small { max-width: 190px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
-.live-simulation-speed .live-simulation-speed-error { color: var(--red); }
+/* Keep status text accessible without adding a second row to the toolbar. */
+.live-simulation-speed > small[role="status"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+/* Replace the native arrow visually while updating; select dimensions stay fixed. */
+.live-simulation-speed:has(> small[role="status"]) .live-simulation-speed-control:not(:has(button))::before,
+.live-simulation-speed:has(> small[role="status"]) .live-simulation-speed-control:not(:has(button))::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+}
+.live-simulation-speed:has(> small[role="status"]) .live-simulation-speed-control:not(:has(button))::before {
+  right: 1px;
+  width: 20px;
+  height: 28px;
+  transform: translateY(-50%);
+  background: var(--surface-2);
+  border-radius: 0 5px 5px 0;
+}
+.live-simulation-speed:has(> small[role="status"]) .live-simulation-speed-control:not(:has(button))::after {
+  right: 5px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid var(--border-strong, var(--border));
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: live-simulation-speed-spin .7s linear infinite;
+}
+@keyframes live-simulation-speed-spin {
+  from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-simulation-speed-control::after { animation: none; transform: translateY(-50%); }
+}
+/* Errors remain visible without increasing the toolbar height. */
+.live-simulation-speed > .live-simulation-speed-error {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  width: max-content;
+  max-width: 190px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface);
+  color: var(--red);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
 /* The new control can wrap without shrinking the existing map buttons. */
 .live-ops-map-panel .live-3d-toolbar { flex-wrap: wrap; }
 .live-ops-map-panel .live-3d-tools { max-width: 100%; flex-wrap: wrap; margin-left: auto; justify-content: flex-end; }
