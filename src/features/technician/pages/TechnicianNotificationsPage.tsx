@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Clock3,
   Plane,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -41,6 +42,12 @@ import {
 } from "../api/httpClient";
 
 import {
+  getNotificationsApi,
+} from "../api/notificationApi";
+
+import {
+  useClearReadNotificationsMutation,
+  useDeleteNotificationMutation,
   useMarkAllNotificationsReadMutation,
   useMarkNotificationReadMutation,
   useNotificationsQuery,
@@ -146,7 +153,13 @@ export function TechnicianNotificationsPage() {
   const markAllMutation =
     useMarkAllNotificationsReadMutation();
   const markOneMutation = useMarkNotificationReadMutation();
+  const deleteMutation = useDeleteNotificationMutation();
+  const clearReadMutation = useClearReadNotificationsMutation();
   const [readError, setReadError] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [serverUnread, setServerUnread] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [
     notifications,
@@ -176,18 +189,96 @@ export function TechnicianNotificationsPage() {
           Boolean(item),
       );
 
-    setNotifications(next);
+    // Keep older pages that were loaded with "Load more" across refetches.
+    setNotifications((current) =>
+      current.length > next.length
+        ? [
+            ...next,
+            ...current.filter(
+              (old) => !next.some((item) => item.id === old.id),
+            ),
+          ]
+        : next,
+    );
+
+    if (isRecord(notificationsQuery.data)) {
+      const meta = notificationsQuery.data;
+      setTotal(typeof meta.total === "number" ? meta.total : next.length);
+      setServerUnread(
+        typeof meta.unread_count === "number" ? meta.unread_count : null,
+      );
+    } else {
+      setTotal(next.length);
+      setServerUnread(null);
+    }
   }, [notificationsQuery.data]);
 
-
-  const unreadCount =
+  const loadedUnread =
     notifications.filter(
       (item) => item.unread,
     ).length;
 
-  const readCount =
-    notifications.length -
-    unreadCount;
+  // Prefer the Backend total, which also covers pages that are not loaded yet.
+  const unreadCount = serverUnread ?? loadedUnread;
+
+  const readCount = Math.max(
+    (total || notifications.length) - unreadCount,
+    0,
+  );
+
+  const hasLoadedRead = notifications.some((item) => !item.unread);
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      setReadError("");
+      const response = await getNotificationsApi(page + 1, 50);
+      const next = unwrapList(response)
+        .map(mapApiNotification)
+        .filter((item): item is TechnicianNotification => Boolean(item));
+      setNotifications((current) => [
+        ...current,
+        ...next.filter((item) => !current.some((old) => old.id === item.id)),
+      ]);
+      setPage(page + 1);
+      if (isRecord(response) && typeof response.total === "number") {
+        setTotal(response.total);
+      }
+    } catch (error) {
+      setReadError(error instanceof Error ? error.message : "Unable to load more notifications.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const deleteOne = async (notification: TechnicianNotification) => {
+    try {
+      setReadError("");
+      await deleteMutation.mutateAsync(notification.backendId);
+      setNotifications((current) =>
+        current.filter((item) => item.id !== notification.id),
+      );
+      setTotal((value) => Math.max(value - 1, 0));
+      if (notification.unread) {
+        setServerUnread((value) =>
+          value === null ? value : Math.max(value - 1, 0),
+        );
+      }
+    } catch (error) {
+      setReadError(error instanceof Error ? error.message : "Unable to delete notification.");
+    }
+  };
+
+  const clearRead = async () => {
+    try {
+      setReadError("");
+      await clearReadMutation.mutateAsync();
+      setNotifications((current) => current.filter((item) => item.unread));
+    } catch (error) {
+      setReadError(error instanceof Error ? error.message : "Unable to clear read notifications.");
+    }
+  };
 
   const filteredNotifications =
     useMemo(() => {
@@ -225,6 +316,7 @@ export function TechnicianNotificationsPage() {
       saveNotifications(notifications.map((item) =>
         item.id === notification.id ? { ...item, unread: false } : item,
       ));
+      setServerUnread((value) => value === null ? value : Math.max(value - 1, 0));
     } catch (error) {
       setReadError(error instanceof Error ? error.message : "Unable to mark notification as read.");
     }
@@ -244,6 +336,7 @@ export function TechnicianNotificationsPage() {
     }));
 
     saveNotifications(next);
+    setServerUnread(0);
   };
 
   const handleViewDetail = async (
@@ -429,7 +522,7 @@ export function TechnicianNotificationsPage() {
             }
             label="All"
             count={
-              notifications.length
+              total || notifications.length
             }
           />
 
@@ -460,20 +553,36 @@ export function TechnicianNotificationsPage() {
           />
         </div>
 
-        {unreadCount > 0 && (
-          <Button
-            type="button"
-            onClick={
-              markAllAsRead
-            }
-            className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
-          >
-            <CheckCheck
-              size={15}
-            />
-            Mark all as read
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasLoadedRead && (
+            <Button
+              type="button"
+              onClick={() => void clearRead()}
+              disabled={clearReadMutation.isPending}
+              className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
+            >
+              <Trash2
+                size={15}
+              />
+              Clear read
+            </Button>
+          )}
+
+          {unreadCount > 0 && (
+            <Button
+              type="button"
+              onClick={
+                markAllAsRead
+              }
+              className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
+            >
+              <CheckCheck
+                size={15}
+              />
+              Mark all as read
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* NOTIFICATION LIST */}
@@ -631,6 +740,20 @@ export function TechnicianNotificationsPage() {
                         size={16}
                       />
                     </button>
+
+                    {/* DELETE */}
+                    <button
+                      type="button"
+                      title="Delete notification"
+                      aria-label="Delete notification"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => void deleteOne(notification)}
+                      className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--tech-subtle)] transition-colors hover:text-red-500 disabled:opacity-50"
+                    >
+                      <Trash2
+                        size={15}
+                      />
+                    </button>
                   </div>
                 );
               },
@@ -655,6 +778,21 @@ export function TechnicianNotificationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {notifications.length < total && (
+        <div className="mt-4 flex justify-center">
+          <Button
+            type="button"
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] font-medium text-[var(--tech-text-secondary)] hover:bg-[var(--tech-surface-2)]"
+          >
+            {loadingMore
+              ? "Loading…"
+              : `Load more (${total - notifications.length} remaining)`}
+          </Button>
+        </div>
+      )}
     </TechnicianPageShell>
   );
 }

@@ -1,6 +1,6 @@
 /**
  * Admin-controlled NEW BATTERIES: uniquely identified units registered in a
- * demo-only, unassigned inventory. Physical manufacturer serials are optional.
+ * demo-only, unassigned inventory.
  * No real supplier purchase, Hub transfer, or Backend mutation occurs here.
  * Records share Admin Battery Management's existing battery storage key: a
  * supplied unit moves to the Hub list without creating another Battery ID.
@@ -33,7 +33,7 @@ export function getNewBatteryReferenceUnitCostVnd(model: string): number {
 
 function nextAdminBatteryId(batteries: AdminBattery[]): string {
   // Never reuse a removed Battery ID: replacement/work-order references might
-  // still point to it. No auto-generated manufacturer serials are involved.
+  // still point to it.
   const allIds = [
     ...batteries.map((battery) => battery.id),
     ...getNewBatteryRemovalHistory().map((item) => item.batteryId),
@@ -75,35 +75,19 @@ function commit(entries: Array<[string, unknown]>) {
 }
 
 /**
- * Demo-only registration: Add Quantity of a battery MODEL, not one record per
- * manufacturer serial. Each unit still receives a unique internal Battery ID.
- * Optional serials are supplied one per line in creation order; remaining units
- * keep an empty serialNumber ("not provided") rather than a fictitious serial.
- *
+ * Demo-only registration by model and quantity. Each unit receives an internal Battery ID.
  * Writes units and exactly one reference acquisition cost per registration
  * batch with localStorage rollback on write errors. No Backend API is called.
  */
 export function registerAdminNewBatteries(
   model: string,
   quantity: number,
-  serialNumbers: string[] = [],
 ): AdminBattery[] {
   const batteries = getAdminBatteries();
   const template = batteries.find((battery) => battery.model === model);
   if (!template) throw new Error('Choose an existing supported battery model.');
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 30)
     throw new Error('Quantity must be a whole number between 1 and 30.');
-
-  const provided = serialNumbers.map((serial) => serial.trim());
-  while (provided.length && !provided[provided.length - 1]) provided.pop();
-  if (provided.length > quantity)
-    throw new Error('The number of serial lines cannot exceed Quantity.');
-  const normalized = provided.filter(Boolean).map((serial) => serial.toLocaleLowerCase());
-  if (new Set(normalized).size !== normalized.length)
-    throw new Error('Duplicate serial numbers in this batch.');
-  const existingSerials = new Set(batteries.map((battery) => battery.serialNumber.trim().toLocaleLowerCase()).filter(Boolean));
-  if (normalized.some((serial) => existingSerials.has(serial)))
-    throw new Error('A serial number is already registered in the system.');
 
   const unitPrice = getNewBatteryReferenceUnitCostVnd(model);
   if (!Number.isSafeInteger(unitPrice) || unitPrice <= 0 || !Number.isSafeInteger(unitPrice * quantity))
@@ -115,7 +99,6 @@ export function registerAdminNewBatteries(
   for (let index = 0; index < quantity; index++) {
     const battery: AdminBattery = {
       id: nextAdminBatteryId(working), model,
-      serialNumber: provided[index] ?? '', // Empty is intentional; serial is optional.
       hubId: '', // Not assigned to a Hub until Admin explicitly supplies the unit.
       operationalStatus: 'MAINTENANCE', administrativeStatus: 'ACTIVE',
       inspectionPending: true, replacementSupplyState: 'AVAILABLE',
@@ -164,7 +147,6 @@ export function seedNewBatteriesDemo(): number {
     'FC30 Battery Pack', 'TB65', 'FC30 Battery Pack', 'TB65', 'FC30 Battery Pack'];
   const created: AdminBattery[] = [];
   const working = [...all];
-  const knownSerials = new Set(all.map((battery) => battery.serialNumber.toLowerCase()));
 
   const monday = new Date();
   monday.setHours(0, 0, 0, 0);
@@ -177,14 +159,12 @@ export function seedNewBatteriesDemo(): number {
     const template = templates.get(model);
     if (!template) continue;
     const id = nextAdminBatteryId(working);
-    const serial = `${model === 'TB65' ? 'TB65' : 'FC30'}-DEMO-${id}`;
-    if (knownSerials.has(serial.toLowerCase())) continue;
     const date = new Date(monday);
     date.setDate(date.getDate() + (i < 5 ? Math.min(offsets[i], todayOffset) : offsets[i]));
     date.setHours(9 + (i % 4), 15 + (i * 5 % 45), 0, 0);
     const timestamp = date.toISOString();
     const battery: AdminBattery = {
-      id, model, serialNumber: serial, hubId: '',
+      id, model, hubId: '',
       operationalStatus: 'MAINTENANCE', administrativeStatus: 'ACTIVE',
       inspectionPending: true, replacementSupplyState: 'AVAILABLE',
       adminReceivedAt: timestamp, chargeLevelPct: 0,
@@ -195,7 +175,6 @@ export function seedNewBatteriesDemo(): number {
       physicalCondition: 'NORMAL', retirementRecommended: false,
       createdAt: timestamp, updatedAt: timestamp,
     };
-    knownSerials.add(serial.toLowerCase());
     working.push(battery);
     created.push(battery);
   }
@@ -204,17 +183,14 @@ export function seedNewBatteriesDemo(): number {
 }
 
 /** Edit identification only; a supplied or assigned battery cannot be changed here. */
-export function editAvailableNewBattery(id: string, model: string, serial: string): void {
+export function editAvailableNewBattery(id: string, model: string): void {
   const items = getAdminBatteries();
   const target = getAvailableNewBatteries().find((battery) => battery.id === id);
   if (!target) throw new Error('Only new batteries not yet supplied can be edited.');
   const template = items.find((battery) => battery.model === model);
   if (!template) throw new Error('Choose a supported battery model.');
-  const cleaned = serial.trim();
-  if (cleaned && items.some((battery) => battery.id !== id && battery.serialNumber.trim().toLowerCase() === cleaned.toLowerCase()))
-    throw new Error('This serial number is already registered.');
   const updated = items.map((battery) => battery.id !== id ? battery : {
-    ...battery, model, serialNumber: cleaned,
+    ...battery, model,
     designCapacityMah: template.designCapacityMah, designEnergyWh: template.designEnergyWh,
     fullChargeCapacityMah: template.designCapacityMah, maxCycles: template.maxCycles,
     updatedAt: new Date().toISOString(),
@@ -226,7 +202,6 @@ export function editAvailableNewBattery(id: string, model: string, serial: strin
 export interface RemovedNewBatteryRecord {
   batteryId: string;
   model: string;
-  serialNumber: string;
   reason: string;
   removedAt: string;
   removedBy: string;
@@ -248,7 +223,6 @@ export function removeAvailableNewBattery(id: string, reason: string): void {
   const removal: RemovedNewBatteryRecord = {
     batteryId: target.id,
     model: target.model,
-    serialNumber: target.serialNumber,
     reason: trimmed,
     removedAt: new Date().toISOString(),
     removedBy: 'System Administrator',

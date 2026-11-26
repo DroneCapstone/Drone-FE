@@ -4,6 +4,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AdminHeader } from "../features/admin/components/AdminHeader";
 import { AdminSidebar } from "../features/admin/components/AdminSidebar";
 import "../features/admin/admin-typography.css";
+import "../features/admin/admin-sidebar.css";
 
 const THEME_KEY = "droneoptai.admin.theme";
 
@@ -23,7 +24,7 @@ export function AdminLayout() {
   }, [isDark]);
 
   return (
-    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app-shell admin-workspace ${collapsed ? "sidebar-collapsed" : ""}`}>
       <AdminSidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}

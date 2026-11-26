@@ -1,3 +1,4 @@
+import { AdminReportsPage } from "./pages/reports/AdminReportsPage";
 import { NewBatteriesPage } from "./pages/replacement/NewBatteriesPage";
 import { useLocation } from "react-router-dom";
 import { Navigate, type RouteObject } from "react-router-dom";
@@ -50,6 +51,7 @@ export const adminRoutes: RouteObject[] = [
   { path: "payments/transactions", element: <TransactionsPage /> },
   { path: "payments/refunds", element: <RefundsPage /> },
   { path: "payments/financial", element: <ExpensesPage /> },
+  { path: "reports", element: <AdminReportsPage /> },
   { path: "logs", element: <Navigate to="/admin/logs/activity" replace /> },
   { path: "logs/activity", element: <ActivityLogPage /> },
   { path: "logs/system", element: <SystemLogsPage /> },

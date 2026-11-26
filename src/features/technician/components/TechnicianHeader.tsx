@@ -54,21 +54,8 @@ interface TechnicianProfile {
   controlCenter: string;
 }
 
-type StoredNotification = {
-  unread?: boolean;
-};
-
 const PROFILE_STORAGE_KEY =
   "droneoptai.technician.profile";
-
-const NOTIFICATION_STORAGE_KEY =
-  "droneoptai.technician.notifications.v3";
-
-/*
- * Current frontend mock has 3 unread notifications.
- * Later this value should come directly from the notifications API.
- */
-const DEFAULT_UNREAD_NOTIFICATION_COUNT = 3;
 
 function getInitials(
   name?: string,
@@ -107,39 +94,6 @@ function getSavedProfile():
     ) as TechnicianProfile;
   } catch {
     return null;
-  }
-}
-
-function getUnreadNotificationCount() {
-  try {
-    const saved =
-      localStorage.getItem(
-        NOTIFICATION_STORAGE_KEY,
-      );
-
-    if (!saved) {
-      return DEFAULT_UNREAD_NOTIFICATION_COUNT;
-    }
-
-    const notifications =
-      JSON.parse(
-        saved,
-      ) as StoredNotification[];
-
-    if (
-      !Array.isArray(
-        notifications,
-      )
-    ) {
-      return 0;
-    }
-
-    return notifications.filter(
-      (notification) =>
-        notification.unread,
-    ).length;
-  } catch {
-    return 0;
   }
 }
 
@@ -247,9 +201,9 @@ function TechnicianHeaderContent({
         ? pickNumber(
             unreadData,
             ["unread_count", "count", "total"],
-            getUnreadNotificationCount(),
+            0,
           )
-        : getUnreadNotificationCount();
+        : 0;
 
 
   const displayName =

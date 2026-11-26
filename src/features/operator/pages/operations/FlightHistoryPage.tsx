@@ -2,6 +2,7 @@ import { formatHubName } from '../../utils/displayEnglish';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/OperatorTable';
 import { useMemo, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
+import { OperatorDateInput } from '../../components/OperatorDateInput';
 import { useQueries } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
@@ -71,6 +72,7 @@ export function FlightHistoryPage() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [dateResetKey, setDateResetKey] = useState(0);
   const search = params.get('q') ?? '';
   const from = params.get('date') ?? '';
   const to = from;
@@ -99,7 +101,7 @@ export function FlightHistoryPage() {
     setParams(next);
     setPage(1);
   };
-  const clearFilters = () => { setParams({}); setPage(1); };
+  const clearFilters = () => { setParams({}); setPage(1); setDateResetKey(key => key + 1); };
 
   const filtered = useMemo(() => records.filter(m => {
     const date = localDay(flightStart(m) || flightEnd(m));
@@ -141,7 +143,7 @@ export function FlightHistoryPage() {
       <RouteTabs items={operationTabs} active="/operator/operations/history" />
       <section className="fh-filter-panel" aria-label="Flight history filters">
         <label className="fh-filter fh-search"><span>Search</span><input aria-label="Search history" value={search} onChange={e => setFilter('q', e.target.value)} placeholder="Mission ID, drone or route..." /></label>
-        <label className="fh-filter"><span>Date</span><input type="date" aria-label="Filter flights by date" value={from} onChange={e => setFilter('date', e.target.value)} /></label>
+        <div className="fh-filter"><span>Date</span><OperatorDateInput key={dateResetKey} label="Filter flights by date" value={from} onChange={value => setFilter('date', value)} /></div>
 
         <div className="fh-filter">
           <span>Status</span>
@@ -150,7 +152,7 @@ export function FlightHistoryPage() {
             options={[{ value: '__all_statuses__', label: 'All statuses' }, 'Completed', 'Failed']}
             onChange={value => setFilter('status', value === '__all_statuses__' ? '' : value)}
             ariaLabel="Filter flights by status"
-            className="w-full min-w-0 !h-[34px] !text-[11px]"
+            className="w-full min-w-0"
           />
         </div>
         <div className="fh-filter">
@@ -160,7 +162,7 @@ export function FlightHistoryPage() {
             options={[{ value: '__all_hubs__', label: 'All hubs' }, ...Array.from(hubs, ([id, name]) => ({ value: id, label: formatHubName(name) || name }))]}
             onChange={value => setFilter('hub', value === '__all_hubs__' ? '' : value)}
             ariaLabel="Filter flights by hub"
-            className="w-full min-w-0 !h-[34px] !text-[11px]"
+            className="w-full min-w-0"
           />
         </div>
         <button type="button" className="fh-button fh-reset" onClick={clearFilters}>Reset filters</button>

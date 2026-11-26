@@ -41,23 +41,33 @@ export function AdminHeader({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const displayName = user?.name || "Administrator";
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    const refresh = () => {
-      adminOperationsApi.notificationUnreadCount().then(count => {
-        if (alive) setUnreadCount(count);
-      }).catch(() => {
-        // The OpenAPI response schema is unspecified; fall back to the visible notification page.
-        adminOperationsApi.notifications().then(items => {
-          if (alive) setUnreadCount(items.filter(item => !item.is_read).length);
-        }).catch(() => { if (alive) setUnreadCount(0); });
-      });
+    let sequence = 0;
+    setUnreadCount(null);
+    if (!user?.id) return;
+    const refresh = async () => {
+      const current = ++sequence;
+      try {
+        let count: number;
+        try { count = await adminOperationsApi.notificationUnreadCount(); }
+        catch { count = (await adminOperationsApi.notifications({ page: 1, page_size: 1 })).unread_count; }
+        if (alive && current === sequence && Number.isSafeInteger(count) && count >= 0) setUnreadCount(count);
+      } catch { /* Keep the last confirmed count; do not display a false zero. */ }
     };
-    refresh();
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    void refresh();
+    const timer = window.setInterval(onVisible, 60000);
     window.addEventListener('admin-notifications-updated', refresh);
-    return () => { alive = false; window.removeEventListener('admin-notifications-updated', refresh); };
-  }, []);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('admin-notifications-updated', refresh);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [user?.id]);
 
   const handleLogout = () => {
     logout();
@@ -88,9 +98,9 @@ export function AdminHeader({
           <Icon name={isDark ? "sun" : "moon"} />
         </button>
 
-        <NavLink className="icon-button notification-button" to="/admin/notifications" aria-label={`${unreadCount} admin alerts`}>
+        <NavLink className="icon-button notification-button" to="/admin/notifications" aria-label={unreadCount === null ? "Notifications" : `${unreadCount} unread notifications`}>
           <Icon name="bell" />
-          {unreadCount > 0 ? <span className="notification-count" aria-hidden="true">{unreadCount}</span> : null}
+          {unreadCount !== null && unreadCount > 0 ? <span className="notification-count" aria-hidden="true">{unreadCount}</span> : null}
         </NavLink>
 
         <DropdownMenu>

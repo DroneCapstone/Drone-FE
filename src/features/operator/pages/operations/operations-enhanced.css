@@ -1018,3 +1018,47 @@
 
 .live-aircraft-card.is-recently-completed .live-aircraft-card-icon { color: var(--green); }
 .live-aircraft-card.is-recently-completed .live-aircraft-card-metrics { display: flex; justify-content: flex-end; }
+
+/* Live aircraft: full flight/telemetry text in narrow rails.
+   The flight stage and connection health are separate signals. */
+.live-aircraft-rail .live-aircraft-card {
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  row-gap: 5px;
+}
+.live-aircraft-rail .live-aircraft-card-main {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+}
+.live-aircraft-rail .live-aircraft-card-title {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.live-aircraft-rail .live-aircraft-card-title strong,
+.live-aircraft-rail .live-aircraft-card-main small,
+.live-aircraft-rail .live-aircraft-state {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.live-aircraft-rail .live-aircraft-card-title .badge { margin-left: 0; }
+.live-aircraft-rail .live-aircraft-flight-status {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  align-items: flex-start;
+}
+.live-aircraft-rail .live-aircraft-flight-dot { margin-top: 4px; }
+.live-aircraft-rail .live-aircraft-card-metrics {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 3px;
+}
+.live-aircraft-rail .live-aircraft-card-metrics > svg { grid-column: auto; grid-row: auto; }

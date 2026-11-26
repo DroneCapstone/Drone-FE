@@ -1,5 +1,8 @@
+import { isSerialField } from '../../utils/adminAssetFields';
+import { AdminSelect } from '../../components/AdminSelect';
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
@@ -17,14 +20,20 @@ const maintenanceTone = (value: string): 'red' | 'green' => value.toUpperCase() 
 
 export function DroneDetailPage() {
   const { droneId } = useParams();
+  const [params] = useSearchParams();
+  const requestedTab = params.get('tab');
+  const initialTab: DetailTab = requestedTab === 'orders' || requestedTab === 'maintenance' || requestedTab === 'flights' ? requestedTab : 'overview';
   const [drone, setDrone] = useState<DroneOverviewApi | null>(null);
   const [hubs, setHubs] = useState<HubApi[]>([]);
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [tab, setTab] = useState<DetailTab>(initialTab);
   const [maintenance, setMaintenance] = useState<DroneMaintenanceApi | null>(null);
   const [orders, setOrders] = useState<WorkOrderApi[]>([]);
   const [flights, setFlights] = useState<FlightHistoryApi | null>(null);
   const [loading, setLoading] = useState(true);
   const [tabLoading, setTabLoading] = useState(false);
+  const [tabResult, setTabResult] = useState<{ key: string; ok: boolean } | null>(null);
+  const tabKey = `${droneId}:${tab}`;
+  const tabPending = tab !== 'overview' && (tabLoading || tabResult?.key !== tabKey);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -42,19 +51,20 @@ export function DroneDetailPage() {
     } catch (cause) { setError(apiError(cause)); }
     finally { setLoading(false); }
   }
-  useEffect(() => { setDrone(null); setTab('overview'); void refresh(); }, [droneId]);
+  useEffect(() => { setDrone(null); void refresh(); }, [droneId]);
+  useEffect(() => { setTab(initialTab); }, [droneId, initialTab]);
   useEffect(() => {
-    if (!droneId || tab === 'overview') return;
+    if (!droneId || tab === 'overview') { setTabLoading(false); setTabResult(null); return; }
     let live = true;
-    setTabLoading(true);
+    setTabLoading(true); setTabResult(null);
     const req = tab === 'maintenance' ? adminOperationsApi.droneMaintenance(droneId) : tab === 'orders' ? adminOperationsApi.droneWorkOrders(droneId) : adminOperationsApi.droneFlights(droneId);
     void req.then((result) => {
       if (!live) return;
       if (tab === 'maintenance') setMaintenance(result as DroneMaintenanceApi);
       else if (tab === 'orders') setOrders(result as WorkOrderApi[]);
       else setFlights(result as FlightHistoryApi);
-      setError('');
-    }).catch((cause: unknown) => { if (live) setError(apiError(cause)); }).finally(() => { if (live) setTabLoading(false); });
+      setError(''); setTabResult({ key: tabKey, ok: true });
+    }).catch((cause: unknown) => { if (live) { setError(apiError(cause)); setTabResult({ key: tabKey, ok: false }); } }).finally(() => { if (live) setTabLoading(false); });
     return () => { live = false; };
   }, [droneId, tab]);
 
@@ -68,7 +78,7 @@ export function DroneDetailPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.updateDrone(drone.id, { name: draft.name.trim(), payload_capacity_kg: draft.payload, max_speed: draft.speed, current_hub_id: hub.id });
-      setEditing(false); setNotice('Drone updated in Backend.'); await refresh();
+      setEditing(false); setNotice('Drone updated successfully.'); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -79,7 +89,7 @@ export function DroneDetailPage() {
     setSaving(true); setError('');
     try {
       await adminOperationsApi.setDroneActive(drone.id, !adminActive(drone.admin_state));
-      setNotice('Drone administrative state updated by Backend.'); await refresh();
+      setNotice('Drone availability updated successfully.'); await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
   }
@@ -97,18 +107,18 @@ export function DroneDetailPage() {
     actions={drone ? <ActionButton variant={adminActive(drone.admin_state) ? 'danger' : 'secondary'} disabled={saving || (adminActive(drone.admin_state) && flying(drone.status))} onClick={() => void toggleActive()}>{adminActive(drone.admin_state) ? 'Deactivate' : 'Activate'}</ActionButton> : undefined}>
     <Link className="mb-4 inline-flex items-center gap-2 text-sm text-orange-600" to="/admin/network/drones"><ArrowLeft size={15}/>Back to Drones</Link>
     <div className="admin-drone-detail">
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Drone Detail from Backend…</p>}
+      {loading && <OperatorLoadingState label="Loading drone details…" compact />}
       {error && <p role="alert" className="dd-error">{error}</p>}
       {notice && <p role="status" className="dd-notice">{notice}</p>}
-      {drone && <>
+      {!loading && drone && <>
         <div className="dd-tabs" role="tablist" aria-label="Drone detail tabs">{detailTabs.map(({ id, label }) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'dd-tab is-active' : 'dd-tab'} onClick={() => setTab(id)}>{label}</button>)}</div>
-        {tabLoading && <p className="mb-3 text-xs text-muted-foreground">Loading tab from Backend…</p>}
-        <div role="tabpanel">
+        {tabPending && <OperatorLoadingState label="Loading details…" compact />}
+        {(tab === 'overview' || (!tabPending && tabResult?.ok)) && <div role="tabpanel">
         {tab === 'overview' && <div className="dd-overview">
           <DetailCard title="Drone information" action={<button type="button" className="dd-edit-btn" onClick={() => setEditing(true)}><Pencil size={15}/> Edit</button>}>
             <div className="dd-master-fields-grid">
               {readonlyFact('Drone name', drone.name)}{readonlyFact('Model', drone.model)}
-              {readonlyFact('Serial number', drone.serial_number)}{readonlyFact('Maximum payload (kg)', drone.payload_capacity_kg)}
+              {readonlyFact('Maximum payload (kg)', drone.payload_capacity_kg)}
               {readonlyFact('Assigned Hub', hubName)}
             </div>
           </DetailCard>
@@ -127,7 +137,7 @@ export function DroneDetailPage() {
         </div>}
         {tab === 'maintenance' && maintenance && <div className="dd-tab-stack"><div className="dd-grid-two">
           <DetailCard title="Maintenance overview"><div className="dd-rows"><DetailRow label="Schedule"><DetailBadge tone={maintenanceTone(maintenance.maintenance_schedule)}>{maintenance.maintenance_schedule}</DetailBadge></DetailRow><DetailRow label="Open work orders">{maintenance.open_work_orders}</DetailRow><DetailRow label="Completed work orders">{maintenance.completed_work_orders}</DetailRow>
-          {Object.entries(maintenance.maintenance_overview ?? {}).filter(([, v]) => typeof v === 'string' || typeof v === 'number').map(([key, value]) => <DetailRow key={key} label={key.replace(/_/g, ' ')}>{String(value ?? '—')}</DetailRow>)}</div></DetailCard>
+          {Object.entries(maintenance.maintenance_overview ?? {}).filter(([key, v]) => !isSerialField(key) && (typeof v === 'string' || typeof v === 'number')).map(([key, value]) => <DetailRow key={key} label={key.replace(/_/g, ' ')}>{String(value ?? '—')}</DetailRow>)}</div></DetailCard>
           <DetailCard title="Recent technician records">{renderOrders(maintenance.recent_technician_records ?? [])}</DetailCard>
         </div></div>}
         {tab === 'orders' && <DetailCard title="Work orders">{renderOrders(orders)}</DetailCard>}
@@ -135,17 +145,16 @@ export function DroneDetailPage() {
           {flights.flights.map((f, i) => <tr key={f.flight_code ?? f.flight_id ?? f.id ?? i}><td>{f.flight_code ?? f.flight_id ?? f.id ?? '—'}</td><td>{f.mission_id ?? '—'}</td><td>{f.route ?? '—'}</td><td>{dateText(f.departure ?? f.departed_at)}</td><td>{f.status ?? '—'}</td></tr>)}
           {flights.flights.length === 0 && <tr><td colSpan={5}>No flight history.</td></tr>}
         </tbody></table></div></DetailCard>}
-        </div>
+        </div>}
       </>}
     </div>
     <Dialog open={editing} onOpenChange={(open) => !open && setEditing(false)}>{drone && editing && <DialogContent><form onSubmit={(event) => void save(event)}>
-      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle><p className="mt-1 text-xs text-muted-foreground">Serial number is read-only: Backend update does not support modifying it.</p></div>
+      <div className="border-b border-border p-5"><DialogTitle className="text-lg font-semibold">Edit Drone</DialogTitle></div>
       <div className="fields two p-5">
         <label><span>Drone name</span><input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/></label>
-        <label><span>Serial number</span><input readOnly value={drone.serial_number}/></label>
         <label><span>Maximum payload (kg)</span><input type="number" min={0.01} step="any" required value={draft.payload} onChange={(e) => setDraft({ ...draft, payload: Number(e.target.value) })}/></label>
         <label><span>Maximum speed</span><input type="number" min={0.01} step="any" required value={draft.speed} onChange={(e) => setDraft({ ...draft, speed: Number(e.target.value) })}/></label>
-        <label><span>Assigned Hub</span><select required value={draft.hub} onChange={(e) => setDraft({ ...draft, hub: e.target.value })}><option value="">Select Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE' || String(h.id) === draft.hub).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+        <label><span>Assigned Hub</span><AdminSelect required value={draft.hub} onChange={(e) => setDraft({ ...draft, hub: e.target.value })}><option value="">Select Hub</option>{hubs.filter((h) => h.status?.toUpperCase() === 'ACTIVE' || String(h.id) === draft.hub).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect></label>
       </div>
       {error && <p className="px-5 text-xs text-red-500" role="alert">{error}</p>}
       <div className="form-actions border-t border-border p-5"><ActionButton variant="secondary" onClick={() => setEditing(false)}>Cancel</ActionButton><ActionButton type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</ActionButton></div>

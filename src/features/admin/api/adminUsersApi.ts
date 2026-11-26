@@ -1,3 +1,4 @@
+import { adminErrorText } from '../utils/adminDisplayText';
 import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
 import { authService } from '../../auth/services/authService';
 
@@ -143,4 +144,4 @@ export const adminUsersApi = {
 };
 
 export const isArchivedUser = (user: AdminApiUser) => !user.is_active && user.email.startsWith('archived_');
-export const apiErrorText = (error: unknown) => error instanceof Error ? error.message : 'Unexpected error occurred.';
+export const apiErrorText = (error: unknown) => adminErrorText(error);

@@ -8,7 +8,6 @@ import type { LucideIcon } from 'lucide-react';
 export function AdminSummaryCard({
   label,
   value,
-  note,
   icon: Icon,
 }: {
   label: string;
@@ -18,13 +17,13 @@ export function AdminSummaryCard({
 }) {
   return (
     <div
-      className="min-w-0 px-4 py-3"
+      className="flex min-w-0 flex-col justify-center px-4 py-3"
       style={{
         backgroundColor: '#FFFFFF',
         border: '1px solid #DDE2E8',
         borderRadius: 12,
         boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05)',
-        minHeight: 112,
+        minHeight: 88,
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -34,7 +33,6 @@ export function AdminSummaryCard({
       <strong className="mt-1 block break-words text-2xl font-bold leading-tight text-[var(--admin-text)]">
         {value}
       </strong>
-      {note ? <span className="mt-0.5 block text-[11px] leading-snug text-[var(--admin-subtle)]">{note}</span> : null}
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function DroneDetailDialogs({ drone, confirmActive, onConfirmClose, onCon
       <AdminDialogContent className="dd-dialog"><div className="dd-dialog-head">
         <DialogTitle asChild><h2>{drone.isActive ? 'Deactivate' : 'Activate'} {drone.id}?</h2></DialogTitle>
         <p>{drone.isActive ? 'This drone will be excluded from new mission planning. Historical records remain.' : 'This restores administrative availability; Technician checks are still required.'}</p>
-      </div><p className="dd-dialog-hint">Prototype: scheduled Backend missions have not been checked here.</p>
+      </div><p className="dd-dialog-hint">Check scheduled missions before changing drone availability.</p>
       <div className="dd-dialog-actions"><ActionButton variant="secondary" onClick={onConfirmClose}>Cancel</ActionButton>
         <ActionButton variant={drone.isActive ? 'danger' : 'primary'} onClick={onConfirmActive}>{drone.isActive ? 'Deactivate' : 'Activate'}</ActionButton>
       </div></AdminDialogContent>

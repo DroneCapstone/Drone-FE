@@ -34,7 +34,6 @@ export function DroneOverviewTab({ drone, hubName, batteryLevel, orders, flights
       <div className="dd-master-fields-grid">
         <ReadonlyField label="Drone name">{drone.name}</ReadonlyField>
         <ReadonlyField label="Model">{drone.model}</ReadonlyField>
-        <ReadonlyField label="Serial number">{drone.serialNumber}</ReadonlyField>
         <ReadonlyField label="Maximum payload (kg)">{drone.maxPayloadKg}</ReadonlyField>
         <ReadonlyField label="Assigned Hub"><Link className="dd-inline-link" to={`/admin/network/hubs/${encodeURIComponent(drone.hubId)}`}>{hubName}<ExternalLink size={12} aria-hidden="true" /></Link></ReadonlyField>
       </div>

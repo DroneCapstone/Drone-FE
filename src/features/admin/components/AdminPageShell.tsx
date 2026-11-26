@@ -9,11 +9,11 @@ function isChildActive(pathname: string, path: string) {
 /**
  * Admin page header shares the TechnicianPageShell title scale and vertical rhythm.
  * Breadcrumbs are intentionally not rendered: they repeat the page name and sidebar.
- * The optional breadcrumbLabel prop is retained for backwards compatibility.
+ * The optional breadcrumbLabel and description props are retained for backwards compatibility.
+ * Page headers intentionally display the title only, without a subtitle.
  *
  * Header measurements (TechnicianPageShell):
  * - 28px IBM Plex Sans / weight 600 / -0.025em tracking
- * - 4px space between title and optional description
  * - 28px space below the header
  * - 20px horizontal gap between title and action
  * - 32px desktop / 24px smaller screens content top padding (Admin layout already
@@ -21,7 +21,6 @@ function isChildActive(pathname: string, path: string) {
  */
 export function AdminPageShell({
   title,
-  description,
   actions,
   hideSectionTabs = false,
   children,
@@ -42,7 +41,7 @@ export function AdminPageShell({
   return (
     <>
       <header
-        className="mb-7 flex flex-col items-start justify-between gap-5 sm:flex-row"
+        className="mb-7 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center"
         style={{ marginBottom: 28 }}
       >
         <div className="min-w-0">
@@ -60,18 +59,6 @@ export function AdminPageShell({
           >
             {title}
           </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: 13.5,
-              fontWeight: 400,
-              lineHeight: 1.5,
-              letterSpacing: 0,
-              color: "var(--admin-muted, var(--muted))",
-            }}
-          >
-            {description ?? ""}
-          </p>
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
       </header>

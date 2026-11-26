@@ -1,3 +1,4 @@
+import { AdminSelect } from './AdminSelect';
 import { Link } from "react-router-dom";
 import { MapPin, Plane, Plus, Minus, LocateFixed, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -205,7 +206,7 @@ export function HubDroneMap({
             />
           </div>
 
-          <select
+          <AdminSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
             aria-label="Filter hub status"
@@ -213,9 +214,9 @@ export function HubDroneMap({
             <option value="all">All hubs</option>
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
-          </select>
+          </AdminSelect>
 
-          <select
+          <AdminSelect
             value={mapStyle}
             onChange={(event) => setMapStyle(event.target.value as MapStyleChoice)}
             aria-label="Map type"
@@ -223,7 +224,7 @@ export function HubDroneMap({
             <option value="default">Default map</option>
             <option value="streets">Streets</option>
             <option value="satellite">Satellite</option>
-          </select>
+          </AdminSelect>
 
           <div className="admin-hub-network-map__controls">
             <button type="button" onClick={() => mapRef.current?.zoomIn({ duration: 250 })} aria-label="Zoom in" title="Zoom in">
@@ -247,11 +248,11 @@ export function HubDroneMap({
               <div ref={hostRef} className="admin-hub-network-map__canvas" />
             ) : (
               <div className="admin-hub-network-map__canvas admin-hub-network-map__canvas--empty">
-                <p>Map is unavailable because VITE_MAPTILER_API_KEY is not configured.</p>
+                <p>Map is currently unavailable.</p>
               </div>
             )}
-            {!visibleHubs.length ? (
-              <div className="admin-hub-network-map__empty-state">No hubs match the current filters.</div>
+            {MAPTILER_KEY && !visibleHubs.length ? (
+              <div className="admin-hub-network-map__empty-state">{query.trim() || statusFilter !== "all" ? "No hubs match the current filters." : "No hubs available on the map."}</div>
             ) : null}
           </div>
 
@@ -316,7 +317,7 @@ export function HubDroneMap({
                 </Link>
               </>
             ) : (
-              <p className="admin-hub-network-map__empty-copy">Select a hub to view its details.</p>
+              <p className="admin-hub-network-map__empty-copy">{query.trim() || statusFilter !== "all" ? "Try a different search or reset the filters." : "No hub details available."}</p>
             )}
           </aside>
         </div>

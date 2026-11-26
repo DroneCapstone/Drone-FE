@@ -2,7 +2,7 @@ import { formatRouteName, formatBackendLabel } from '../../utils/displayEnglish'
 import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
@@ -13,6 +13,7 @@ import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuer
 import { operatorQueryKeys } from '../../query/queryKeys';
 import { LiveMapTiler, type LiveMapTilerHandle, type LiveMapStyle } from './LiveMapTiler';
 import { OperationPageShell } from './OperationPageShell';
+import { LiveSimulationSpeed } from './LiveSimulationSpeed';
 import { resolveLiveFlightStatus } from './liveFlightStatus';
 import './operations-enhanced.css';
 import './digital-twin-live.css';
@@ -51,6 +52,16 @@ function formatBattery(drone: LiveTrackingDrone) {
   return drone.batteryVoltage !== undefined ? `${drone.batteryVoltage.toFixed(2)} V` : '—';
 }
 function measure(value?: number, unit = '') { return value !== undefined && Number.isFinite(value) ? `${value.toFixed(2)}${unit}` : '—'; }
+/** Display a single telemetry value without inventing missing measurements. */
+function LiveMeasurement({ label, value, unit, digits = 2, title }: {
+  label: string; value?: number; unit: string; digits?: number; title?: string;
+}) {
+  const valid = typeof value === 'number' && Number.isFinite(value);
+  return <div className="live-measurement" title={title}>
+    <dt>{label}</dt>
+    <dd>{valid ? <><strong>{value.toFixed(digits)}</strong><span>{unit}</span></> : <strong>—</strong>}</dd>
+  </div>;
+}
 function eventTime(value: string) { const d = new Date(value); return Number.isFinite(d.getTime()) ? d.toLocaleTimeString('en-GB', { hour12: false }) : '—'; }
 function bearing(from: MissionTelemetryPoint, to: MissionTelemetryPoint): number | undefined {
   if (from.latitude === undefined || from.longitude === undefined || to.latitude === undefined || to.longitude === undefined) return undefined;
@@ -61,9 +72,68 @@ function bearing(from: MissionTelemetryPoint, to: MissionTelemetryPoint): number
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// The inline trail is a rolling GPS window, not the entire Mission history.
+// Key by actual telemetry identity, never by an array index (which is page-local).
+function gpsIdentity(point: MissionTelemetryPoint): string | undefined {
+  const time = Date.parse(point.recordedAt);
+  if (Number.isFinite(time) && Number.isFinite(point.latitude) && Number.isFinite(point.longitude)) {
+    return `${time}:${point.latitude}:${point.longitude}`;
+  }
+  const id = point.raw.id ?? point.raw.telemetry_id ?? point.raw.telemetryId;
+  return typeof id === 'number' || (typeof id === 'string' && id.length > 0) ? `id:${id}` : undefined;
+}
+
+/** GET /telemetry is ordered timestamp ASC. Keep its raw row count for offset. */
+async function extendGpsHistory(
+  missionId: string,
+  previous: MissionTelemetryPoint[],
+  fetchPage = getMissionTelemetryApi,
+): Promise<MissionTelemetryPoint[]> {
+  const pageSize = 5000;
+  const points = [...previous];
+  const seen = new Set(points.map(gpsIdentity).filter((id): id is string => id !== undefined));
+  for (let page = 0; page < 100; page++) {
+    const batch = await fetchPage(missionId, { limit: pageSize, offset: points.length });
+    if (batch.length === 0) return points.length === previous.length ? previous : points;
+    const keys = batch.map(gpsIdentity);
+    // A server ignoring offset must not append the same history indefinitely.
+    if (keys.every(key => key !== undefined && seen.has(key))) {
+      throw new Error('Telemetry pagination returned an already recorded page.');
+    }
+    points.push(...batch);
+    for (const key of keys) if (key !== undefined) seen.add(key);
+    if (batch.length < pageSize) return points;
+  }
+  throw new Error('Telemetry pagination exceeded its safety limit.');
+}
+
+/** Preserve the full history; append only a continuous overlapping live window. */
+function mergeLiveGps(history: MissionTelemetryPoint[], trail: MissionTelemetryPoint[]): MissionTelemetryPoint[] {
+  if (!history.length) return trail;
+  if (!trail.length) return history;
+  const seen = new Set(history.map(gpsIdentity).filter((id): id is string => id !== undefined));
+  const overlap = trail.some(point => {
+    const key = gpsIdentity(point);
+    return key !== undefined && seen.has(key);
+  });
+  // Do not draw a solid straight line across an unrecorded gap between windows.
+  // The next incremental telemetry request fills the gap with actual BE records.
+  if (!overlap) return history;
+  const merged = [...history];
+  for (const point of trail) {
+    const key = gpsIdentity(point);
+    if (key === undefined || seen.has(key)) continue;
+    merged.push(point);
+    seen.add(key);
+  }
+  return merged.sort((a, b) => (Date.parse(a.recordedAt) || 0) - (Date.parse(b.recordedAt) || 0));
+}
+
 export function LiveTrackingPage() {
   const navigate = useNavigate();
-  const { data: rawDrones, isLoading, error, dataUpdatedAt } = useLiveTrackingQuery();
+  const queryClient = useQueryClient();
+  // Consume the warm Operator-session cache; do not create a second poll timer.
+  const { data: rawDrones, isLoading, error, dataUpdatedAt } = useLiveTrackingQuery({ subscribeOnly: true });
   const hubsQuery = useMissionHubsQuery();
   const [clockTick, setClockTick] = useState(0);
   useEffect(() => { const id = window.setInterval(() => setClockTick(v => v + 1), 5000); return () => window.clearInterval(id); }, []);
@@ -126,10 +196,15 @@ export function LiveTrackingPage() {
     [missionIds, rememberedIds],
   );
   const trailsQuery = useQueries({
-    queries: missionIds.map(id => ({
-      queryKey: [...operatorQueryKeys.missionTelemetry(id), 'live-3d-trail', 200] as const,
-      queryFn: () => getMissionTelemetryApi(id, { limit: 200 }), refetchInterval: 8000, staleTime: 3000,
-    }))
+    queries: missionIds.map(id => {
+      const queryKey = [...operatorQueryKeys.missionTelemetry(id), 'live-3d-full-trail'] as const;
+      return {
+        queryKey,
+        queryFn: () => extendGpsHistory(id, queryClient.getQueryData<MissionTelemetryPoint[]>(queryKey) ?? []),
+        refetchInterval: 8000,
+        staleTime: 3000,
+      };
+    }),
   });
   // Load assigned route geometry independently from GPS telemetry. A planned
   // line must remain visible before the drone records its second GPS point.
@@ -164,13 +239,26 @@ export function LiveTrackingPage() {
   const liveDrone = useMemo(() => sourceDrones.map(drone => {
     const flight = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
     const confirmedGroundStop = ['relay', 'awaiting-swap', 'swapping', 'ready-to-depart', 'destination', 'completed', 'scheduled'].includes(flight.key);
-    // Preserve explicit BE warnings and DISCONNECTED. Suppress only the FE's
-    // fabricated "delayed telemetry" warning at a BE-confirmed ground stop.
+    // A lack of telemetry after BE has explicitly logged arrival is normal for
+    // a stopped simulator. Only suppress a stale-only Attention with no real
+    // incident/failsafe; never hide explicit connection-loss or safety alerts.
+    const anomalyIsOnlyStale = /^(?:telemetry update delayed|telemetry data (?:stale|delayed)|stale telemetry)/i.test((drone.anomaly ?? '').trim());
+    if (flight.key === 'destination' && drone.health === 'Attention' &&
+        anomalyIsOnlyStale && !drone.alertId && !drone.incidentReason &&
+        (drone.failsafeStatus ?? '').trim().toUpperCase() !== 'DISCONNECTED') {
+      return { ...drone, health: 'Normal' as const, anomaly: undefined, anomalyDuration: undefined, incidentPolicy: 'none' as const };
+    }
     if (drone.health !== 'Normal' || !stale(drone.lastUpdated) || confirmedGroundStop) return drone;
     return { ...drone, health: 'Attention' as const, anomaly: 'Telemetry update delayed (>10 seconds)', incidentPolicy: 'monitor' as const };
     // clockTick refreshes computed age even when no new telemetry arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [sourceDrones, missionById, hubNames, clockTick]);
+  // Only the already-established BE arrival status changes the presentation of
+  // missing plan geometry. Actual GPS records are never modified or synthesized.
+  const arrivedMissionIds = useMemo(() => new Set(liveDrone.filter(drone => {
+    const status = resolveLiveFlightStatus(drone, missionById[drone.missionId], hubNames);
+    return status.key === 'destination' || status.key === 'completed';
+  }).map(drone => drone.missionId)), [liveDrone, missionById, hubNames]);
   const sortedDrone = useMemo(() => [...liveDrone].sort((a, b) => priority[a.health] - priority[b.health] || a.id.localeCompare(b.id)), [liveDrone]);
   const selectedDrone = liveDrone.find(drone => drone.id === selectedDroneId) ?? liveDrone[0];
   const filteredDrone = filter === 'All' ? sortedDrone : sortedDrone.filter(drone => drone.health === filter);
@@ -198,13 +286,13 @@ export function LiveTrackingPage() {
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionIds, trailsKey]);
-  // The live-tracking response may already include a more recent BE GPS trail.
-  // Preserve telemetry API for detailed logs; use inline trail only for the map.
+  // Never replace the entire historical path with the last inline GPS window.
+  // Merge only within the same Mission, regardless of Selected/All/Follow mode.
   const mapHistories = useMemo(() => {
     const result: Record<string, MissionTelemetryPoint[]> = { ...histories };
     for (const drone of liveDrone) {
-      if (drone.missionId && (drone.trail?.length ?? 0) >= 2) {
-        result[drone.missionId] = drone.trail!;
+      if (drone.missionId && drone.trail?.length) {
+        result[drone.missionId] = mergeLiveGps(histories[drone.missionId] ?? [], drone.trail);
       }
     }
     return result;
@@ -227,21 +315,22 @@ export function LiveTrackingPage() {
   const visibleLogs = logFilter === 'selected' && selectedDrone ? logEvents.filter(e => e.missionId === selectedDrone.missionId) : logEvents;
   const selectedHistory = selectedDrone ? mapHistories[selectedDrone.missionId] ?? [] : [];
   const heading = selectedHistory.length > 1 ? bearing(selectedHistory[selectedHistory.length - 2], selectedHistory[selectedHistory.length - 1]) : undefined;
-  // The first aircraft is highlighted on load, not auto-followed; the user chooses when to follow.
-  function followFromAircraftList(aircraft: LiveTrackingDrone) {
+  // Selecting an aircraft also follows its actual GPS marker.
+  function selectFromAircraftList(aircraft: LiveTrackingDrone) {
     setSelectedDroneId(aircraft.id);
     mapRef.current?.focus(aircraft.missionId);
   }
   useEffect(() => { if (!isMapExpanded) return; const handle = (e: KeyboardEvent) => { if (e.key === 'Escape') setMapExpanded(false); }; window.addEventListener('keydown', handle); return () => window.removeEventListener('keydown', handle); }, [isMapExpanded]);
   const filterCount = (value: Filter) => value === 'All' ? liveDrone.length : liveDrone.filter(d => d.health === value).length;
-  const handleFilterChange = (next: Filter) => { setFilter(next); if (next !== 'All' && selectedDrone?.health !== next) { const found = sortedDrone.find(d => d.health === next); if (found) followFromAircraftList(found); } };
+  const handleFilterChange = (next: Filter) => { setFilter(next); if (next !== 'All' && selectedDrone?.health !== next) { const found = sortedDrone.find(d => d.health === next); if (found) selectFromAircraftList(found); } };
   return <OperationPageShell active="/operator/operations/live">
     <div className="live-ops-layout">
       <div className="live-ops-main">
         <OperatorPanel className={`live-map-panel live-ops-map-panel ${isMapExpanded ? 'live-ops-map-expanded' : ''}`}>
           <div className="live-3d-toolbar">
-            <div className="live-3d-title"><strong>Drone Fleet Map</strong><small>{liveDrone.length} aircraft flying · updates ~every 2s</small></div>
+            <div className="live-3d-title"><strong>Drone Fleet Map</strong></div>
             <div className="live-3d-tools" aria-label="Map controls">
+              <LiveSimulationSpeed />
               <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Icon name="plus" size={17} /></button>
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
               <button type="button" title="Fit all hubs and aircraft" aria-label="Fit all hubs and aircraft" onClick={() => mapRef.current?.fitAll()}><Icon name="pin" size={17} /></button>
@@ -293,6 +382,8 @@ export function LiveTrackingPage() {
               drones={liveDrone}
               histories={mapHistories}
               plannedRoutes={plannedRoutes}
+              arrivedMissionIds={arrivedMissionIds}
+              connectionHealthy={!error}
               mapStyle={mapStyle}
               selectedMissionId={selectedDrone?.missionId}
               onSelectMission={(missionId) => {
@@ -306,42 +397,54 @@ export function LiveTrackingPage() {
           </div>
         </OperatorPanel>
         <div ref={detailRef}>
-          {selectedDrone ? <OperatorPanel className="live-selection-panel">
+          {selectedDrone ? <OperatorPanel className="live-selection-panel live-horizontal-summary">
             <div className="live-selection-head">
-              <div className="live-selection-id"><span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span><div><div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div><small>{selectedDrone.orderId ? `Delivery ${selectedDrone.orderId} · ` : ''}{formatRouteName(selectedDrone.route)}</small></div></div>
-              <div className="live-selection-tools">
-                <div className="live-selection-metrics">
-                  <span><Icon name="battery" size={16} /><strong>{formatBattery(selectedDrone)}</strong><small>Battery</small></span>
-                  <span><Icon name="pin" size={16} /><strong>{measure(selectedDrone.altitudeM, ' m')}</strong><small>Altitude</small></span>
-                  <span><Icon name="speed" size={16} /><strong>{measure(selectedDrone.speedKmh, ' km/h')}</strong><small>Speed</small></span>
+              <div className="live-selection-id">
+                <span className={`live-selection-icon health-${selectedDrone.health.toLowerCase()}`}><Icon name="drone" size={19} /></span>
+                <div>
+                  <div className="live-selection-title"><strong>{selectedDrone.id}</strong><StatusBadge tone={healthTone[selectedDrone.health]}>{selectedDrone.health}</StatusBadge></div>
+                  <small>Mission {selectedDrone.missionId || '—'}</small>
                 </div>
-                <button
-                  type="button"
-                  className="live-view-telemetry"
-                  onClick={() => navigate(`/operator/operations/telemetry?aircraft=${encodeURIComponent(selectedDrone.id)}&missionId=${encodeURIComponent(selectedDrone.missionId)}`)}
-                >
-                  <Icon name="chart" size={16} />
-                  View telemetry
-                  <Icon name="chevron" size={15} />
-                </button>
               </div>
+              <button
+                type="button"
+                className="live-view-telemetry"
+                onClick={() => navigate(`/operator/operations/telemetry?aircraft=${encodeURIComponent(selectedDrone.id)}&missionId=${encodeURIComponent(selectedDrone.missionId)}`)}
+              >
+                <Icon name="chart" size={16} />
+                View telemetry
+                <Icon name="chevron" size={15} />
+              </button>
+            </div>
+            <div className="live-summary-groups">
+              <section className="live-summary-group" aria-label="Flight Telemetry">
+                <h3><Icon name="speed" size={16} />Flight Telemetry</h3>
+                <dl className="live-summary-metrics">
+                  <LiveMeasurement label="Battery voltage" value={selectedDrone.batteryVoltage} unit="V" />
+                  <LiveMeasurement label="Altitude" value={selectedDrone.altitudeM} unit="m" />
+                  <LiveMeasurement label="Speed" value={selectedDrone.speedKmh} unit="km/h" />
+                  <LiveMeasurement label="Heading (GPS)" value={heading === undefined ? undefined : Math.round(heading) % 360} unit="°" digits={0} title="Direction of travel from the last two recorded GPS positions; not aircraft yaw." />
+                </dl>
+              </section>
+              <section className="live-summary-group" aria-label="Weather Conditions">
+                <h3><Icon name="cloud" size={16} />Weather Conditions</h3>
+                <dl className="live-summary-metrics">
+                  <LiveMeasurement label="Temperature" value={selectedDrone.weather?.temperature} unit="°C" digits={1} />
+                  <LiveMeasurement label="Wind speed" value={selectedDrone.weather?.windSpeed} unit="m/s" digits={1} />
+                  <LiveMeasurement label="Humidity" value={selectedDrone.weather?.humidity} unit="%" digits={0} />
+                  <LiveMeasurement label="Wind direction" value={selectedDrone.weather?.windDirection} unit="°" digits={0} />
+                </dl>
+              </section>
             </div>
           </OperatorPanel> : <OperatorPanel className="live-selection-panel"><div className="operator-empty-state">Select an aircraft in flight to view details.</div></OperatorPanel>}
         </div>
         <div className="live-ops-bottom">
           <OperatorPanel className="live-events-panel">
-            <div className="live-events-head"><div><strong>LIVE OPERATIONS LOG</strong><small></small></div>
+            <div className="live-events-head"><div><strong>Live Operations Log</strong></div>
               <div className="live-events-filters"><button type="button" className={logFilter === 'all' ? 'active' : ''} onClick={() => setLogFilter('all')}>All</button><button type="button" className={logFilter === 'selected' ? 'active' : ''} onClick={() => setLogFilter('selected')}>Selected</button></div></div>
             <div className="live-events-scroll" aria-live="polite">
               {!visibleLogs.length ? <p className="live-events-empty">No recorded events yet.</p> : visibleLogs.map(e => <div key={e.key} className={`live-events-entry level-${e.level.toLowerCase()}`}><time>{eventTime(e.time)}</time><strong>{e.droneId}</strong><span>{e.message}</span></div>)}
             </div>
-          </OperatorPanel>
-          <OperatorPanel className="live-route-panel"><div className="live-route-title">FLIGHT FOLLOW-UP</div>
-            <div className="live-route-metric"><small>AIRCRAFT</small><strong>{selectedDrone?.id ?? '—'}</strong></div>
-            <div className="live-route-metric"><small>MISSION</small><strong title={selectedDrone?.missionId}>{selectedDrone?.missionId ?? '—'}</strong></div>
-            <div className="live-route-metric"><small>HEADING (GPS)</small><strong>{heading !== undefined ? `${Math.round(heading)}°` : '—'}</strong></div>
-            <div className="live-route-metric"><small>CHECKPOINTS</small><strong>{selectedDrone?.checkpointsPassed ?? '—'}</strong></div>
-            {/* <p>Heading is calculated from consecutive GPS coordinates. Click an aircraft to follow it on the map.</p> */}
           </OperatorPanel>
         </div>
       </div>
@@ -370,14 +473,25 @@ export function LiveTrackingPage() {
           {filteredDrone.map((aircraft) => {
             const isSelected = selectedDrone?.id === aircraft.id;
             const healthClass = aircraft.health.toLowerCase();
-            const flightStatus = resolveLiveFlightStatus(aircraft, missionById[aircraft.missionId], hubNames);
+            const missionDetail = missionById[aircraft.missionId];
+            const missionDetailIndex = trackedMissionIds.indexOf(aircraft.missionId);
+            const missionDetailPending = !missionDetail && missionDetailIndex >= 0 &&
+              routesQuery[missionDetailIndex]?.isPending;
+            // Avoid showing "Flight: Disconnected" just because the flight-progress
+            // endpoint has not yet returned. Telemetry alerts remain visible.
+            const flightStatus = missionDetailPending
+              ? { key: 'unknown', label: 'Checking mission status', tone: 'neutral', detail: undefined }
+              : resolveLiveFlightStatus(aircraft, missionDetail, hubNames);
+            const alertMessage = aircraft.anomaly
+              ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}`
+              : '';
 
             return (
               <button
                 type="button"
                 key={aircraft.id}
                 className={`live-aircraft-card health-${healthClass} ${isSelected ? 'selected' : ''}`}
-                onClick={() => followFromAircraftList(aircraft)}
+                onClick={() => selectFromAircraftList(aircraft)}
               >
                 <span className="live-aircraft-card-icon"><Icon name="drone" size={18} /></span>
                 <span className="live-aircraft-card-main">
@@ -385,15 +499,14 @@ export function LiveTrackingPage() {
                     <strong>{aircraft.id}</strong>
                     <StatusBadge tone={healthTone[aircraft.health]}>{aircraft.health}</StatusBadge>
                   </span>
-                  <small>{aircraft.orderId ? `Delivery ${aircraft.orderId}` : `Mission ${aircraft.missionId || '—'}`}</small>
-                  <small>{formatRouteName(aircraft.route)}</small>
+                  <small title={aircraft.missionId || undefined}>Mission {aircraft.missionId || '—'}</small>
                   <span className={`live-aircraft-flight-status status-${flightStatus.tone}`} title={flightStatus.detail ?? flightStatus.label}>
                     <span className="live-aircraft-flight-dot" aria-hidden="true" />
-                    <span>Flight: {flightStatus.label}</span>
+                    <span>{flightStatus.key === 'disconnected' ? 'Telemetry: Disconnected' : `Flight: ${flightStatus.label}`}</span>
                   </span>
                   {flightStatus.detail && <small title={flightStatus.detail}>{flightStatus.detail}</small>}
-                  <em className="live-aircraft-state">
-                    {aircraft.anomaly ? `${formatBackendLabel(aircraft.anomaly)}${aircraft.anomalyDuration ? ` · ${aircraft.anomalyDuration}` : ''}` : 'Operating normally'}
+                  <em className="live-aircraft-state" title={alertMessage || 'Operating normally'}>
+                    {alertMessage || 'Operating normally'}
                   </em>
                 </span>
                 <span className="live-aircraft-card-metrics">

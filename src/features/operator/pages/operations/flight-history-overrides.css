@@ -9,7 +9,7 @@
  * Load AFTER flight-history.css.
  */
 .flight-history-screen {
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
   font-size: 12px;
   line-height: 1.45;
   letter-spacing: 0;
@@ -20,7 +20,7 @@
 .app-shell .main-column .flight-history-screen input,
 .app-shell .main-column .flight-history-screen select,
 .app-shell .main-column .flight-history-screen a {
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
 }
 
 /* History-specific page header and operation tabs. */
@@ -32,7 +32,7 @@
   margin-bottom: 5px;
 }
 .flight-history-screen .page-heading h1 {
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
   font-size: 27px;
   font-weight: 750;
   line-height: 1.18;

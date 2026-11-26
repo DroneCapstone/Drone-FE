@@ -1,3 +1,5 @@
+import { AdminSelect } from '../../components/AdminSelect';
+import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
@@ -79,7 +81,7 @@ export function HubsPage() {
       }])));
       setDrones(d.map((item) => ({
         id: item.id, name: item.name, displayId: item.id, model: item.model,
-        serialNumber: item.serial_number, hubId: item.hub_id == null ? '' : String(item.hub_id),
+        hubId: item.hub_id == null ? '' : String(item.hub_id),
         status: (item.status.toUpperCase() === 'AVAILABLE' ? 'AVAILABLE' : item.status.toUpperCase() === 'IN FLIGHT' ? 'IN_FLIGHT' : 'MAINTENANCE') as AdminDrone['status'],
         isActive: item.admin_state.toUpperCase() === 'ACTIVE', batteryPct: item.battery_level_pct ?? 0,
         maxPayloadKg: item.payload_capacity_kg, createdAt: '', updatedAt: '',
@@ -142,7 +144,7 @@ export function HubsPage() {
         latitude, longitude, status: newHub.status,
       });
       setCreating(false);
-      setNotice(`Hub ${name} (${code}) created in Backend. Supply compatible batteries before testing relay routes.`);
+      setNotice(`Hub ${name} (${code}) created successfully.`);
       // Existing refresh reloads cards, map and Hub list from Backend.
       void refresh();
     } catch (cause) {
@@ -164,7 +166,7 @@ export function HubsPage() {
         latitude: editing.latitude, longitude: editing.longitude, capacity: editing.capacity,
       });
       setEditing(null);
-      setNotice('Hub updated in Backend.');
+      setNotice('Hub updated successfully.');
       await refresh();
     } catch (cause) { setError(apiError(cause)); }
     finally { setSaving(false); }
@@ -176,6 +178,9 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
       actions={<ActionButton onClick={openCreate}><Plus size={16} aria-hidden="true" /> Create hub</ActionButton>}
     >
+      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
+      {loading ? <OperatorLoadingState label="Loading hubs…" /> : summary !== null && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminSummaryCard label="Total hubs" value={summary?.total_hubs ?? hubs.length} note="Registered hubs" icon={MapPin} />
         <AdminSummaryCard label="Active" value={summary?.active_hubs ?? hubs.filter((hub) => hub.status === "ACTIVE").length} note="Eligible for new planning" icon={CircleCheck} />
@@ -183,9 +188,6 @@ export function HubsPage() {
         <AdminSummaryCard label="Batteries" value={summary?.total_batteries ?? batteriesCount} note="Assigned to Hubs" icon={BatteryCharging} />
       </div>
 
-      {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
-      {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
-      {loading && <p className="mb-3 text-sm text-muted-foreground">Loading Hubs…</p>}
       <HubDroneMap hubs={hubs.filter((h) => Number.isFinite(h.latitude) && Number.isFinite(h.longitude))} drones={drones} />
 
       <OperatorPanel className="flush-panel">
@@ -194,11 +196,11 @@ export function HubsPage() {
           onSearchChange={setQuery}
           placeholder="Search hub name, code, area or address…"
           filters={
-            <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Hub status filter">
+            <AdminSelect value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Hub status filter">
               <option value="all">All status</option>
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
-            </select>
+            </AdminSelect>
           }
           meta={`${visible.length} of ${hubs.length} hubs`}
         />
@@ -222,10 +224,12 @@ export function HubsPage() {
                   </td>
                 </tr>
               ))}
+              {!visible.length && <tr><td colSpan={7} className="p-5 text-center">{hubs.length ? "No hubs match your filters." : "No hubs available yet."}</td></tr>}
             </tbody>
           </table>
         </div>
       </OperatorPanel>
+      </>}
 
       <Dialog open={creating} onOpenChange={(open) => { if (!open && !createSaving) setCreating(false); }}>
         {creating ? (
@@ -237,7 +241,7 @@ export function HubsPage() {
               <div className="fields two max-h-[65vh] overflow-y-auto p-5">
                 <label className="sm:col-span-2">
                   <span>Use a hub from the guide (optional)</span>
-                  <select
+                  <AdminSelect
                     value={hubCreationPresets.some((preset) => preset.code === newHub.code) ? newHub.code : ''}
                     onChange={(event) => {
                       const preset = hubCreationPresets.find((item) => item.code === event.target.value);
@@ -251,17 +255,16 @@ export function HubsPage() {
                         {preset.name} ({preset.code})
                       </option>
                     ))}
-                  </select>
+                  </AdminSelect>
                 </label>
                 <label><span>Hub name</span><input required value={newHub.name} onChange={(event) => setNewHub((current) => ({ ...current, name: event.target.value }))} /></label>
                 <label><span>Hub code</span><input required value={newHub.code} onChange={(event) => setNewHub((current) => ({ ...current, code: event.target.value }))} /></label>
                 <label><span>Area (optional)</span><input value={newHub.area} onChange={(event) => setNewHub((current) => ({ ...current, area: event.target.value }))} /></label>
-                <label><span>Status</span><select value={newHub.status} onChange={(event) => setNewHub((current) => ({ ...current, status: event.target.value as HubCreateApi['status'] }))}><option value="Active">Active</option><option value="Inactive">Inactive</option></select></label>
+                <label><span>Status</span><AdminSelect value={newHub.status} onChange={(event) => setNewHub((current) => ({ ...current, status: event.target.value as HubCreateApi['status'] }))}><option value="Active">Active</option><option value="Inactive">Inactive</option></AdminSelect></label>
                 <label className="sm:col-span-2"><span>Address</span><input required value={newHub.address} onChange={(event) => setNewHub((current) => ({ ...current, address: event.target.value }))} /></label>
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={newHub.latitude} onChange={(event) => setNewHub((current) => ({ ...current, latitude: event.target.value }))} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={newHub.longitude} onChange={(event) => setNewHub((current) => ({ ...current, longitude: event.target.value }))} /></label>
                 <label className="sm:col-span-2"><span>Capacity (drone slots)</span><input required type="number" min={1} step={1} value={newHub.capacity} onChange={(event) => setNewHub((current) => ({ ...current, capacity: event.target.value }))} /></label>
-                <p className="sm:col-span-2 text-xs text-muted-foreground">New Hubs need compatible, charged batteries before Dijkstra can use them as relay stops. Creating a Hub does not automatically supply batteries.</p>
                 {createError && <p role="alert" className="sm:col-span-2 text-sm text-red-500">{createError}</p>}
               </div>
               <div className="form-actions border-t border-border p-5">
@@ -285,7 +288,7 @@ export function HubsPage() {
                 <label><span>Hub name</span><input required value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></label>
                 <label><span>Hub code</span><input required value={editing.code} onChange={(e) => setEditing({ ...editing, code: e.target.value })} /></label>
                 <label><span>Area</span><input required value={editing.area} onChange={(e) => setEditing({ ...editing, area: e.target.value })} /></label>
-                <label><span>Status</span><select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as AdminHub["status"] })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+                <label><span>Status</span><AdminSelect value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as AdminHub["status"] })}><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect></label>
                 <label className="sm:col-span-2"><span>Address</span><input required value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></label>
                 <label><span>Latitude</span><input required type="number" min={-90} max={90} step="any" value={editing.latitude} onChange={(e) => setEditing({ ...editing, latitude: Number(e.target.value) })} /></label>
                 <label><span>Longitude</span><input required type="number" min={-180} max={180} step="any" value={editing.longitude} onChange={(e) => setEditing({ ...editing, longitude: Number(e.target.value) })} /></label>

@@ -192,7 +192,7 @@ export function nextAdminBatteryId(batteries = getAdminBatteries()): string {
   * The model and receiving Hub always come from the reported damaged battery/request.
   * No existing Battery ID is eligible for reuse in this flow.
   */
-export function registerNewReplacementBattery(requestId: string, serialNumber: string, paidUnitCostVnd?: number): AdminBattery {
+export function registerNewReplacementBattery(requestId: string, paidUnitCostVnd?: number): AdminBattery {
   const request = findRequest(requestId);
   const records = readRecords();
   const record = records.find((item) => item.requestId === requestId);
@@ -206,16 +206,12 @@ export function registerNewReplacementBattery(requestId: string, serialNumber: s
   if (!damaged) throw new Error('The damaged Battery ID does not exist in Admin Battery Management.');
   if (!getAdminHubs().some((hub) => hub.id === request.hubId && hub.status === 'ACTIVE'))
     throw new Error('The receiving Hub does not exist.');
-  const serial = serialNumber.trim();
-  if (!serial) throw new Error('Enter the serial number printed on the new physical battery.');
   if (paidUnitCostVnd !== undefined && (!Number.isFinite(paidUnitCostVnd) || paidUnitCostVnd <= 0))
     throw new Error('A paid battery must have a positive actual purchase price.');
   const batteries = getAdminBatteries();
-  if (batteries.some((battery) => battery.serialNumber.trim().toLowerCase() === serial.toLowerCase()))
-    throw new Error('This serial number is already registered.');
   const time = now();
   const created: AdminBattery = {
-    id: nextAdminBatteryId(batteries), model: damaged.model, serialNumber: serial,
+    id: nextAdminBatteryId(batteries), model: damaged.model,
     hubId: request.hubId, chargeLevelPct: 100, operationalStatus: 'MAINTENANCE',
     administrativeStatus: 'ACTIVE', designCapacityMah: damaged.designCapacityMah,
     designEnergyWh: damaged.designEnergyWh, fullChargeCapacityMah: damaged.designCapacityMah,
@@ -263,18 +259,14 @@ export function getMatchingBatteryOptions(request: ReplacementRequest): AdminBat
 }
 
 /** Simple direct registration in Admin Battery Management (not tied to a replacement). */
-export function registerStandaloneBattery(model: string, hubId: string, serialNumber: string): AdminBattery {
+export function registerStandaloneBattery(model: string, hubId: string): AdminBattery {
   const batteries = getAdminBatteries();
   const template = batteries.find((battery) => battery.model === model);
   if (!template) throw new Error('Choose a supported battery model already registered in the system.');
   if (!getAdminHubs().some((hub) => hub.id === hubId && hub.status === 'ACTIVE')) throw new Error('Select an active Hub.');
-  const serial = serialNumber.trim();
-  if (!serial) throw new Error('New battery serial number is required.');
-  if (batteries.some((battery) => battery.serialNumber.trim().toLowerCase() === serial.toLowerCase()))
-    throw new Error('Serial number already exists.');
   const stamp = now();
   const battery: AdminBattery = {
-    id: nextAdminBatteryId(batteries), model, serialNumber: serial, hubId,
+    id: nextAdminBatteryId(batteries), model, hubId,
     chargeLevelPct: 100, operationalStatus: 'MAINTENANCE', administrativeStatus: 'ACTIVE',
     designCapacityMah: template.designCapacityMah, designEnergyWh: template.designEnergyWh,
     fullChargeCapacityMah: template.designCapacityMah, sohPct: 100, cycleCount: 0,

@@ -1,0 +1,205 @@
+/* Shared Operator visual rules. Specificity deliberately exceeds lazy page CSS.
+   Preserve table density, local card layouts, charts, map controls and state colors.
+   No universal font-size reset, no shared role component changes. */
+.operator-app .main-column,
+.operator-app .main-column :is(button, input, textarea, select, a),
+.operator-app .main-column .flight-history-screen,
+.operator-app .main-column .flight-history-screen :is(button, input, select, a),
+.operator-app .main-column .flight-history-screen .page-heading h1,
+.mission-resource-popup,
+.operator-contact-dialog,
+:root:has(.operator-app) :is([role="listbox"], .profile-popover) {
+  font-family: var(--op-font);
+}
+.operator-app .main-column { font-size: var(--op-body); line-height: 1.45; }
+.operator-app .main-column .page-content .page-heading h1 {
+  font-family: var(--op-font); font-size: var(--op-page-title); font-weight: 600;
+  line-height: 1.25; letter-spacing: -.025em;
+}
+.operator-app .main-column .page-content .page-heading p { font-size: var(--op-secondary); line-height: 1.45; }
+.operator-app .main-column .page-content :is(.panel, .mission-ai-evidence, .fh-card) {
+  border-radius: var(--op-panel-radius); box-shadow: none;
+}
+/* Mission Detail panel spacing is the model; flush tables/maps keep their padding. */
+.operator-app .main-column .page-content .panel-head { gap: 12px; }
+.operator-app .main-column .page-content :is(.panel-head h2, .mission-detail-section-title h2,
+  .mission-detail-side-title, .mission-ai-section-head h2, .mission-ai-evidence h2,
+  .mission-weather-panel-heading h2, .fh-card h2, .fh-playback-header h2,
+  .telemetry-log-heading h2, .telemetry-list-title strong, .rail-head h2,
+  .live-aircraft-head > strong, .mission-review-energy-heading strong) {
+  font-size: var(--op-panel-title); font-weight: 600; line-height: 1.4;
+}
+.operator-app .main-column .page-content :is(.panel-head .eyebrow, .eyebrow) {
+  font-size: 11px; font-weight: 600; line-height: 1.4;
+}
+.operator-app .main-column .page-content :is(.mission-hero h2, .incident-detail-title h2) {
+  font-size: var(--op-detail-title); font-weight: 700; line-height: 1.3;
+}
+.operator-app .main-column .page-content :is(.panel h3, .fh-card h3,
+  .mission-ai-evidence-battery h3, .mission-ai-detail-section h4) {
+  font-size: var(--op-section-title); font-weight: 600; line-height: 1.4;
+}
+/* Table is the component source of truth: do not change existing core row sizes. */
+.operator-app .main-column .page-content .operator-ui-table {
+  font-family: var(--op-font); font-size: var(--op-body);
+}
+.operator-app .main-column .page-content .operator-ui-table thead [data-slot="table-head"] {
+  font-size: 11px; font-weight: 600; line-height: 1.4;
+}
+.operator-app .main-column .page-content .operator-ui-table tbody [data-slot="table-cell"] {
+  font-size: var(--op-body); line-height: 1.45;
+}
+.operator-app .main-column .page-content .operator-ui-table [data-slot="table-cell"] small {
+  font-size: var(--op-caption); line-height: 1.45;
+}
+.operator-app .main-column .page-content .operator-ui-table.fh-table .fh-route { font-size: var(--op-body); }
+/* Shared badges retain the semantic BE tone. Compact badges are no taller
+   than the 13px title's 18px line; they do not stretch the containing row. */
+.operator-app .main-column .badge,
+.operator-contact-dialog .badge,
+.operator-app .main-column .page-content .fh-status,
+.operator-app .main-column .page-content .mission-ai-route-recommended {
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: center; flex: 0 0 auto; width: max-content; max-width: 100%;
+  min-height: 0; height: auto; box-sizing: border-box;
+  padding: var(--op-badge-padding); border-radius: var(--op-control-radius);
+  border: 1px solid var(--border-strong); background: transparent;
+  font-family: var(--op-font); font-size: var(--op-badge-font);
+  font-weight: var(--op-badge-weight); line-height: var(--op-badge-line-height); white-space: nowrap;
+}
+.operator-app .main-column .page-content .operator-ui-table .badge,
+.operator-app .main-column .page-content .operator-ui-table.fh-table .fh-status {
+  padding: var(--op-badge-table-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font);
+  font-weight: var(--op-badge-weight); line-height: var(--op-badge-line-height);
+}
+.operator-app .main-column .page-content :is(.live-aircraft-card-title,
+  .live-selection-title, .telemetry-aircraft-top, .telemetry-log-heading,
+  .telemetry-log-actions, .mission-route-tags, .eligible-drone-head) .badge,
+.operator-app .main-column .page-content .ai-route-switcher .mission-ai-route-recommended,
+.operator-app .main-column .page-content .mission-ai-route-recommended {
+  height: var(--op-badge-compact-height); min-height: 0;
+  padding: var(--op-badge-compact-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font);
+  font-weight: var(--op-badge-weight); line-height: 1;
+}
+.operator-app .main-column .page-content :is(.live-aircraft-card-title, .live-selection-title, .telemetry-aircraft-top) {
+  align-items: center; flex-wrap: wrap; gap: 4px 6px;
+}
+.operator-app .main-column .page-content :is(.live-aircraft-card-title, .telemetry-aircraft-top) > strong {
+  font-size: var(--op-body); font-weight: 600; line-height: 18px;
+  min-width: 0; overflow-wrap: anywhere; white-space: normal;
+}
+.operator-app .main-column .page-content .live-selection-title > strong { font-size: var(--op-value); font-weight: 600; line-height: 1.4; }
+.operator-app .main-column .page-content :is(.mission-hero, .incident-detail-title) .badge {
+  height: var(--op-badge-detail-height); padding: var(--op-badge-detail-padding); font-size: var(--op-badge-detail-font); line-height: 1;
+}
+.operator-app .main-column .page-content .mission-detail-leg-list .badge { padding: var(--op-badge-padding); }
+/* Controls: only ordinary actions/forms, not map, pagination or replay tools. */
+.operator-app .main-column .page-content .button,
+.operator-contact-dialog .button {
+  min-height: var(--op-control); border-radius: var(--op-control-radius);
+  font-size: var(--op-body); font-weight: 600; line-height: 1.3; box-shadow: none;
+}
+.operator-app .main-column .page-content .row-action,
+.operator-app .main-column .page-content .operator-ui-table.fh-table .fh-row-actions .fh-button {
+  min-height: var(--op-table-action); font-size: var(--op-secondary); font-weight: 600;
+  border-radius: var(--op-control-radius);
+}
+/* Preserve Flight History's deliberate icon-only second action. */
+.operator-app .main-column .page-content .operator-ui-table.fh-table .fh-row-actions .fh-button:nth-child(2) { font-size: 0; padding: 0; }
+.operator-app .main-column .page-content :is(.filter-search, .telemetry-search) {
+  min-height: var(--op-control); border-radius: var(--op-control-radius);
+}
+.operator-app .main-column .page-content :is(.filter-search input, .telemetry-search input,
+  .toolbar select, .fields input:not([type="checkbox"]):not([type="radio"]),
+  .fields select, .fields textarea, .select-field select, .fh-filter input, .fh-filter select,
+  .toolbar button[role="combobox"], .fields button[role="combobox"]),
+.operator-contact-dialog :is(textarea, button[role="combobox"]) {
+  font-size: var(--op-body); font-weight: 400; line-height: 1.45;
+}
+.operator-app .main-column .page-content :is(.toolbar select, .fields input:not([type="checkbox"]):not([type="radio"]),
+  .fields select, .select-field select, .fh-filter input, .fh-filter select) {
+  min-height: var(--op-control); border-radius: var(--op-control-radius);
+}
+.operator-app .main-column .page-content .fh-filter :is(input,select) { height: var(--op-control); }
+.operator-app .main-column .page-content :is(.fields label > span, .select-field > span, .fh-filter) {
+  font-size: var(--op-secondary); font-weight: 500;
+}
+.operator-app .main-column .page-content :is(.subtabs a, .notification-filter button) { font-size: var(--op-body); font-weight: 500; }
+.operator-app .main-column .page-content .text-button { font-size: var(--op-body); font-weight: 600; }
+/* Facts and data cards follow Mission Detail: label muted, value emphasized. */
+.operator-app .main-column .page-content :is(.key-values dt, .key-values dd, .mission-review-field dt, .mission-review-field dd) {
+  font-size: var(--op-body); line-height: 1.45;
+}
+.operator-app .main-column .page-content :is(.key-values dt, .mission-review-field dt) { color: var(--muted); font-weight: 400; }
+.operator-app .main-column .page-content :is(.key-values dd, .mission-review-field dd) { font-weight: 600; }
+.operator-app .main-column .page-content .mission-detail-inline-note {
+  display: block; margin-top: 3px; font-size: var(--op-secondary); font-weight: 400; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere;
+}
+.operator-app .main-column .page-content :is(.mission-detail-route-label small, .mission-detail-leg-label) { font-size: var(--op-secondary); font-weight: 400; }
+.operator-app .main-column .page-content :is(.mission-detail-route-label strong, .mission-detail-leg-list strong) { font-size: var(--op-section-title); font-weight: 600; }
+.operator-app .main-column .page-content .mission-detail-leg-list .mission-leg-battery-info { font-size: var(--op-secondary); }
+.operator-app .main-column .page-content :is(.metric-card > strong, .mission-review-energy-highlight > strong) {
+  font-size: var(--op-kpi); font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums;
+}
+.operator-app .main-column .page-content :is(.metric-label, .metric-card > small, .metric-delta, .mission-review-energy-label) { font-size: var(--op-secondary); }
+.operator-app .main-column .page-content :is(.eligible-drone-head strong, .hub-card-head h3,
+  .mission-ai-route-top > strong, .mission-route-heading-text strong) {
+  font-size: var(--op-section-title); font-weight: 600; line-height: 1.4;
+}
+.operator-app .main-column .page-content :is(.eligible-drone-meta small, .hub-card-location,
+  .mission-ai-route-path, .mission-ai-route-metrics small, .mission-weather-panel-grid small,
+  .live-aircraft-card-main small, .live-aircraft-state, .live-selection-id small,
+  .live-selection-metrics small, .telemetry-aircraft-item small, .telemetry-log-heading p,
+  .telemetry-list-title small, .notification-list small, .profile-meta small, .toggle-row small,
+  .mission-hero p, .incident-detail-title p) { font-size: var(--op-secondary); line-height: 1.45; }
+.operator-app .main-column .page-content :is(.notification-list strong, .toggle-row strong,
+  .profile-meta strong, .live-aircraft-flight-status, .live-selection-metrics strong,
+  .mission-ai-route-metrics b, .mission-ai-evidence-factor-label, .mission-ai-evidence-factor-label > strong,
+  .mission-ai-final-conclusion > span, .mission-ai-final-conclusion > strong) {
+  font-size: var(--op-body); line-height: 1.45;
+}
+.operator-app .main-column .page-content :is(.notification-list p, .profile-card p) { font-size: var(--op-body); line-height: 1.45; }
+.operator-app .main-column .page-content .mission-ai-route-top { flex-wrap: wrap; min-height: 0; }
+.operator-app .main-column .page-content .mission-ai-evidence-factor-label > strong { font-weight: 600; }
+.operator-app .main-column .page-content .mission-ai-final-conclusion > strong { font-weight: 600; }
+.operator-app .main-column .page-content .mission-weather-panel-grid strong { font-size: var(--op-value); font-weight: 600; }
+.operator-app .main-column .page-content .mission-weather-panel-primary strong { font-size: var(--op-kpi); font-weight: 700; }
+/* Avoid hardcoded light backgrounds in the existing Review & Assign panel. */
+.operator-app .main-column .page-content .mission-builder .mission-review-energy { background: var(--op-review-energy-bg); }
+/* Popup UI is rendered outside .operator-app. Explicit scopes keep other roles safe. */
+.mission-resource-popup.mission-resource-popup { font-size: var(--op-body); border-radius: var(--op-panel-radius); }
+.mission-resource-popup .mission-resource-popup-title { font-size: var(--op-panel-title); font-weight: 600; }
+.mission-resource-popup :is(.mission-resource-popup-subtitle, .mission-resource-popup-identity strong) { font-size: var(--op-section-title); font-weight: 600; }
+.mission-resource-popup :is(.mission-resource-popup-reasons li, .mission-resource-popup-alternative p) { font-size: var(--op-body); line-height: 1.45; }
+.mission-resource-popup :is(.mission-resource-popup-alternative strong, .mission-resource-popup-alternatives-toggle, .mission-resource-popup-tabs button) { font-size: var(--op-body); font-weight: 600; }
+.mission-resource-popup .mission-resource-popup-done { min-height: var(--op-control); font-size: var(--op-body); border-radius: var(--op-control-radius); }
+.operator-contact-dialog { font-size: var(--op-body); }
+:root:has(.operator-app) [role="listbox"] [role="option"] { font-family: var(--op-font); font-size: var(--op-body); }
+:root:has(.operator-app) .profile-popover :is(a,button,[role="menuitem"]) { font-family: var(--op-font); font-size: var(--op-body); }
+/* Keep true coordinate readouts monospace and map control sizing unchanged. */
+.operator-app .main-column .page-content .telemetry-position { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+/* Compact map header, telemetry and replay keep their purpose-specific controls. */
+.operator-app .main-column .page-content .live-3d-title > strong { font-size: var(--op-section-title); font-weight: 600; line-height: 1.4; }
+.operator-app .main-column .page-content .live-3d-title > small { font-size: var(--op-caption); }
+.operator-app .main-column .page-content :is(.live-events-head strong, .live-route-title) { font-size: var(--op-section-title); font-weight: 600; }
+.operator-app .main-column .page-content :is(.fh-filter button[role="combobox"], .fh-reset) {
+  min-height: var(--op-control); height: var(--op-control); font-size: var(--op-body); border-radius: var(--op-control-radius);
+}
+.operator-app .main-column .page-content .fh-filter button[role="combobox"] { font-weight: 400; }
+.operator-app .main-column .page-content .fh-filter input::placeholder { font-size: var(--op-body); }
+.operator-app .main-column .page-content :is(.fh-stat-list dt, .fh-stat-list dd, .fh-replay-metrics strong) { font-size: var(--op-body); }
+.operator-app .main-column .page-content :is(.fh-stat-list dd, .fh-replay-metrics strong) { font-weight: 600; }
+.operator-app .main-column .page-content :is(.fh-summary-metrics small, .fh-replay-metrics small, .fh-summary-note, .fh-subtle) { font-size: var(--op-secondary); }
+.operator-app .main-column .page-content :is(.mission-detail-refined, .mission-detail-refined .detail-main, .mission-detail-refined .detail-side, .telemetry-layout, .fh-columns) { gap: var(--op-panel-gap); }
+.operator-app .main-column .page-content .mission-builder .mission-route-leg-number { height: var(--op-badge-compact-height); min-height: 0; min-width: 0; padding: var(--op-badge-compact-padding); border-radius: var(--op-control-radius); font-size: var(--op-badge-font); font-weight: var(--op-badge-weight); line-height: 1; }
+
+/* One corner radius for controls and status labels, independent of height.
+   Radix DropdownSelect is a button[role=combobox], not a native select. */
+.operator-app .main-column .page-content :is(button[role="combobox"], .dropdown-trigger,
+  .live-health-filters button, .live-events-filters, .live-events-filters button,
+  .notification-filter button, .notification-filter span, .model-chip, .weather-chip),
+.operator-contact-dialog button[role="combobox"],
+:root:has(.operator-app) [role="listbox"] {
+  border-radius: var(--op-control-radius);
+}

@@ -21,6 +21,7 @@ export interface LiveMapTilerHandle {
   fitAll: () => void;
   togglePitch: () => void;
   focus: (missionId: string) => void;
+  showSelectedPath: () => void;
 }
 
 type Props = {
@@ -29,25 +30,69 @@ type Props = {
   histories: Record<string, MissionTelemetryPoint[]>;
   /** Planned hub-to-hub Mission route, separate from recorded GPS. */
   plannedRoutes: Record<string, RouteLegSnapshot[] | undefined>;
+  arrivedMissionIds: ReadonlySet<string>;
   mapStyle: LiveMapStyle;
   selectedMissionId?: string;
   onSelectMission: (missionId: string) => void;
+  /** Pause display interpolation when Live Tracking reports a request error. */
+  connectionHealthy?: boolean;
 };
+
+type FlightPathScope = 'none' | 'selected' | 'all';
+
+/** Limit line geometry, never aircraft markers or telemetry data. */
+function scopeFlightPaths<T>(paths: Record<string, T>, scope: FlightPathScope, selectedId: string | undefined, activeIds: ReadonlySet<string>): Record<string, T> {
+  if (scope === 'none') return {};
+  return Object.fromEntries(Object.entries(paths).filter(([id]) =>
+    activeIds.has(id) && (scope === 'all' || id === selectedId),
+  ));
+}
 
 type Point = [number, number];
 type MovingMarker = {
   marker: Marker;
   element: HTMLElement;
   popup: Popup;
-  /** Most recent accepted real GPS fix; do not confuse with animated position. */
+  /** Most recent accepted BE GPS fix; not the approximate on-screen position. */
   position: Point;
   lastFixAt?: number;
-  frame?: number;
+  /** Monotonic time of the last CHANGED GPS fix received from BE. */
+  lastReceivedAt: number;
+  /** Smoothly approach a confirmed GPS target; never go past it. */
+  segmentFrom: Point;
+  segmentTo: Point;
+  segmentStartedAt: number;
+  segmentDurationMs: number;
+  /** Moving estimate of actual GPS update spacing (includes request latency). */
+  gpsCadenceMs: number;
+  pausedAt?: number;
+  wasGroundStop: boolean;
 };
-// Maximum on-screen interpolation time. Do not delay a new BE fix by a fixed
-// 3 seconds: accelerated simulator points can arrive sooner than that.
-const MAX_MARKER_TRANSITION_MS = 1_500;
-const MIN_MARKER_TRANSITION_MS = 250;
+// The previous predictive animation could travel *ahead* of BE and then use a
+// correction vector that dragged the marker backwards whenever GPS caught up.
+// Instead interpolate between confirmed positions with a small cadence buffer.
+// It may pause if BE sends no new coordinates; that is intentional (no fake GPS).
+const DEFAULT_GPS_CADENCE_MS = 1_000;
+const MIN_SEGMENT_MS = 120;
+const MAX_SEGMENT_MS = 5_500;
+const MAX_GPS_JUMP_METERS = 2_000;
+
+/** Follow the actual arrival cadence, not the configured polling interval.
+ * Faster fixes must not be dragged out by an old slow cadence estimate.
+ * Keep a small amount of smoothing for irregular response arrival times.
+ */
+function nextGpsCadence(previousMs: number, gapMs: number, afterStop: boolean): number {
+  const observed = afterStop ? Math.min(gapMs, DEFAULT_GPS_CADENCE_MS) : gapMs;
+  return Math.max(MIN_SEGMENT_MS, Math.min(MAX_SEGMENT_MS,
+    observed * 1.05, previousMs * 0.2 + observed * 0.8,
+  ));
+}
+
+/** Linear interpolation cannot overshoot the newest confirmed GPS fix. */
+function sampleGpsSegment(from: Point, to: Point, startedAt: number, durationMs: number, now: number): Point {
+  const t = Math.max(0, Math.min(1, (now - startedAt) / Math.max(1, durationMs)));
+  return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+}
 const INITIAL_CENTER: Point = [106.78, 10.83];
 const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? '').trim();
 // MapTiler style IDs: grayscale current map, colorful Replay streets,
@@ -94,6 +139,72 @@ function getLine(h: MissionTelemetryPoint[]): Point[] {
     .filter((p): p is Point => p !== null);
 }
 
+// WGS84 local distance is sufficient for short hub-to-hub visual segments.
+// This is strictly for display; it does not alter GPS or mission/leg status.
+function distanceInMeters(a: Point, b: Point): number {
+  const latitudeRad = (a[1] + b[1]) / 2 * Math.PI / 180;
+  return Math.hypot(
+    (a[0] - b[0]) * 111_320 * Math.cos(latitudeRad),
+    (a[1] - b[1]) * 111_320,
+  );
+}
+
+type PlannedSegment = { from: Point; to: Point; start: number; length: number };
+
+function projectedProgress(p: Point, seg: PlannedSegment): { progress: number; crossTrack: number } {
+  const latRad = (seg.from[1] + seg.to[1]) / 2 * Math.PI / 180;
+  const metersPerLng = 111_320 * Math.cos(latRad);
+  const dx = (seg.to[0] - seg.from[0]) * metersPerLng;
+  const dy = (seg.to[1] - seg.from[1]) * 111_320;
+  const x = (p[0] - seg.from[0]) * metersPerLng;
+  const y = (p[1] - seg.from[1]) * 111_320;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared > 0 ? Math.min(1, Math.max(0, (x * dx + y * dy) / lengthSquared)) : 0;
+  return {
+    progress: seg.start + t * seg.length,
+    crossTrack: Math.hypot(x - dx * t, y - dy * t),
+  };
+}
+
+/** Hide only the planned interval covered by the available GPS history.
+ * A rolling window may start halfway through the route; preserve the missing
+ * prefix as planned (dashed), never invent a recorded line for it.
+ */
+function recordedRouteCoverage(segments: PlannedSegment[], history: MissionTelemetryPoint[]): [number, number] | null {
+  if (history.length < 2 || segments.length === 0) return null;
+  let first = Infinity;
+  let last = -Infinity;
+  for (const gps of getLine(history)) {
+    let closest: { progress: number; crossTrack: number } | null = null;
+    for (const segment of segments) {
+      const projection = projectedProgress(gps, segment);
+      if (!closest || projection.crossTrack < closest.crossTrack) closest = projection;
+    }
+    if (closest && closest.crossTrack <= 200) {
+      first = Math.min(first, closest.progress);
+      last = Math.max(last, closest.progress);
+    }
+  }
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last - first < 1) return null;
+  const total = segments[segments.length - 1].start + segments[segments.length - 1].length;
+  return [first <= 25 ? 0 : first, total - last <= 25 ? total : last];
+}
+
+/** Split a leg into its portions outside the observed GPS interval. */
+function uncoveredLegParts(segment: PlannedSegment, coverage: [number, number] | null): [Point, Point][] {
+  const start = segment.start;
+  const end = start + segment.length;
+  const intervals: [number, number][] = coverage
+    ? [[start, Math.min(end, coverage[0])], [Math.max(start, coverage[1]), end]]
+    : [[start, end]];
+  const at = (distance: number): Point => {
+    const t = (distance - start) / segment.length;
+    return [segment.from[0] + (segment.to[0] - segment.from[0]) * t,
+      segment.from[1] + (segment.to[1] - segment.from[1]) * t];
+  };
+  return intervals.filter(([a, b]) => b - a >= 1).map(([a, b]) => [at(a), at(b)]);
+}
+
 function emptyCollection() {
   return {
     type: 'FeatureCollection' as const, features: [] as Array<{
@@ -102,10 +213,45 @@ function emptyCollection() {
   };
 }
 
+// Repeated snapshots can carry exactly the same coordinates. Avoid re-uploading
+// identical geometry to MapLibre's worker, including after a health-only update.
+const lastGeometryBySource = new WeakMap<maplibregl.GeoJSONSource, string>();
+function syncLineSource(map: MapLibreMap, id: string, data: ReturnType<typeof emptyCollection>) {
+  const signature = JSON.stringify(data);
+  let source = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
+  if (!source) {
+    map.addSource(id, { type: 'geojson', data });
+    source = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
+  } else if (lastGeometryBySource.get(source) !== signature) {
+    source.setData(data);
+  }
+  if (source) lastGeometryBySource.set(source, signature);
+}
+
+// A moveLayer call invalidates the style even when the requested order is
+// already in effect. Keep the existing z-order without repeating the mutation.
+function ensureLayerBefore(map: MapLibreMap, id: string, before: string) {
+  if (!map.getLayer(id) || !map.getLayer(before)) return;
+  const layers = map.getStyle()?.layers ?? [];
+  const index = layers.findIndex(layer => layer.id === id);
+  const target = layers.findIndex(layer => layer.id === before);
+  if (index >= 0 && target >= 0 && index !== target - 1) map.moveLayer(id, before);
+}
+
+const lastPopupContent = new WeakMap<Popup, string>();
+function syncPopup(popup: Popup, title: string, lines: Array<[string, string]>) {
+  const signature = JSON.stringify([title, lines]);
+  if (lastPopupContent.get(popup) === signature) return;
+  popup.setDOMContent(createPopup(title, lines));
+  lastPopupContent.set(popup, signature);
+}
+
 function drawPlannedRoutes(
   map: MapLibreMap,
   routes: Props['plannedRoutes'],
   hubs: Props['hubs'],
+  histories: Props['histories'],
+  arrivedMissionIds: ReadonlySet<string>,
   selectedMissionId?: string,
 ) {
   const data = emptyCollection();
@@ -119,39 +265,73 @@ function drawPlannedRoutes(
   };
   for (const [missionId, legs] of Object.entries(routes)) {
     if (!legs?.length) continue;
+    const segments: PlannedSegment[] = [];
+    let routeDistance = 0;
     for (const leg of [...legs].sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0))) {
       const from = asPoint(leg.from_longitude, leg.from_latitude) ??
         hubPoint(leg.from_hub_id, leg.from_hub_code, leg.from_hub_name);
       const to = asPoint(leg.to_longitude, leg.to_latitude) ??
         hubPoint(leg.to_hub_id, leg.to_hub_code, leg.to_hub_name);
-      // A missing coordinate is unknown, never invent a straight line to 0,0
-      // or connect non-adjacent legs across an unrecorded segment.
+      // Never invent missing coordinates or connect nonadjacent legs.
       if (!from || !to || (from[0] === to[0] && from[1] === to[1])) continue;
       if ((from[0] === 0 && from[1] === 0) || (to[0] === 0 && to[1] === 0)) continue;
-      data.features.push({
-        type: 'Feature',
-        properties: { selected: String(missionId === selectedMissionId) },
-        geometry: { type: 'LineString', coordinates: [from, to] },
-      });
+      const length = distanceInMeters(from, to);
+      if (length < 1) continue;
+      segments.push({ from, to, start: routeDistance, length });
+      routeDistance += length;
+    }
+    const coverage = recordedRouteCoverage(segments, histories[missionId] ?? []);
+    for (const segment of segments) {
+      for (const coordinates of uncoveredLegParts(segment, coverage)) {
+        data.features.push({
+          type: 'Feature',
+          properties: { selected: String(missionId === selectedMissionId), completedPlan: String(arrivedMissionIds.has(missionId)) },
+          geometry: { type: 'LineString', coordinates },
+        });
+      }
     }
   }
-  if (!map.getSource('droneoptai-planned-routes')) {
-    map.addSource('droneoptai-planned-routes', { type: 'geojson', data });
-  } else {
-    (map.getSource('droneoptai-planned-routes') as maplibregl.GeoJSONSource).setData(data);
-  }
+  syncLineSource(map, 'droneoptai-planned-routes', data);
   if (!map.getLayer('droneoptai-planned-routes')) {
     map.addLayer({
       id: 'droneoptai-planned-routes', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['all', ['==', ['get', 'selected'], 'false'], ['==', ['get', 'completedPlan'], 'false']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#f97316', '#64748b'],
-        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.85, 0.55],
-        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 3.2, 2],
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 2,
         'line-dasharray': [3, 2],
       },
     });
   }
+  // Keep the followed aircraft's planned route above other flights' paths.
+  // The selected path uses the same orange as its recorded GPS trail; line style
+  // (dashed versus solid) remains the visual distinction.
+  if (!map.getLayer('droneoptai-planned-routes-selected')) {
+    map.addLayer({
+      id: 'droneoptai-planned-routes-selected', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['all', ['==', ['get', 'selected'], 'true'], ['==', ['get', 'completedPlan'], 'false']],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 3.2,
+        'line-dasharray': [3, 2],
+      },
+    });
+  }
+  // A confirmed arrival can have a missing first/last GPS sample. Keep that
+  // part visible as the assigned plan, NOT a fabricated recorded GPS line.
+  if (!map.getLayer('droneoptai-completed-plan')) {
+    map.addLayer({
+      id: 'droneoptai-completed-plan', type: 'line', source: 'droneoptai-planned-routes',
+      filter: ['==', ['get', 'completedPlan'], 'true'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#f97316', 'line-opacity': 1, 'line-width': 2 },
+    });
+  }
+  return data.features.some(feature => feature.properties.completedPlan === 'true');
 }
 
 function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMissionId?: string) {
@@ -161,31 +341,83 @@ function drawTrails(map: MapLibreMap, histories: Props['histories'], selectedMis
     if (coordinates.length < 2) continue;
     data.features.push({ type: 'Feature', properties: { selected: String(missionId === selectedMissionId) }, geometry: { type: 'LineString', coordinates } });
   }
-  if (!map.getSource('droneoptai-trails')) {
-    map.addSource('droneoptai-trails', { type: 'geojson', data });
-  } else {
-    (map.getSource('droneoptai-trails') as maplibregl.GeoJSONSource).setData(data);
-  }
+  syncLineSource(map, 'droneoptai-trails', data);
   if (!map.getLayer('droneoptai-trails')) {
     map.addLayer({
       id: 'droneoptai-trails', type: 'line', source: 'droneoptai-trails',
+      filter: ['==', ['get', 'selected'], 'false'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': ['case', ['==', ['get', 'selected'], 'true'], '#fb923c', '#38bdf8'],
-        'line-opacity': ['case', ['==', ['get', 'selected'], 'true'], 0.94, 0.38],
-        'line-width': ['case', ['==', ['get', 'selected'], 'true'], 4.5, 2.5]
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 2.5
       }
     });
   }
+  if (!map.getLayer('droneoptai-trails-selected')) {
+    map.addLayer({
+      id: 'droneoptai-trails-selected', type: 'line', source: 'droneoptai-trails',
+      filter: ['==', ['get', 'selected'], 'true'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#f97316',
+        'line-opacity': 1,
+        'line-width': 4.5,
+      },
+    });
+  }
+  // Draw the followed Mission above every other aircraft's route/trail:
+  // unselected planned -> selected planned initially -> unselected GPS -> selected GPS.
+  // Reorder selected planned between the two GPS layers to avoid gray/blue blending.
+  ensureLayerBefore(map, 'droneoptai-planned-routes-selected', 'droneoptai-trails-selected');
 }
 
-export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, mapStyle, selectedMissionId, onSelectMission }, ref) {
+// Keep the native attribution control and its source links. Only shorten the
+// standard two-provider label; additional basemap/imagery credits stay intact.
+function configureCompactAttribution(map: MapLibreMap): () => void {
+  const control = map.getContainer().querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+  if (!control) return () => {};
+  let initialized = false;
+  const sync = () => {
+    const inner = control.querySelector<HTMLElement>('.maplibregl-ctrl-attrib-inner');
+    if (!inner) return;
+    const label = inner.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const links = Array.from(inner.querySelectorAll<HTMLAnchorElement>('a[href]'));
+    if (/^©\s*MapTiler\s*(?:[|·]\s*)?©\s*OpenStreetMap(?: contributors)?$/i.test(label) && links.length === 2) {
+      const maptiler = links.find(a => /^(?:www\.)?maptiler\.com$/i.test(a.hostname));
+      const osm = links.find(a => /^(?:www\.)?openstreetmap\.org$/i.test(a.hostname));
+      if (maptiler && osm && label !== '© MapTiler · © OpenStreetMap') {
+        const first = maptiler.cloneNode(true) as HTMLAnchorElement;
+        const second = osm.cloneNode(true) as HTMLAnchorElement;
+        first.textContent = '© MapTiler';
+        second.textContent = '© OpenStreetMap';
+        inner.replaceChildren(first, ' · ', second);
+      }
+    }
+    // Credits can arrive asynchronously with style/source metadata. Collapse
+    // only once, so subsequent GPS/style refreshes do not undo a user's click.
+    if (!initialized && label && control.classList.contains('maplibregl-compact') &&
+        !control.classList.contains('maplibregl-attrib-empty')) {
+      initialized = true;
+      control.classList.remove('maplibregl-compact-show');
+      control.removeAttribute('open');
+    }
+  };
+  const observer = new MutationObserver(sync);
+  observer.observe(control, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  sync();
+  return () => observer.disconnect();
+}
+
+export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveMapTiler({ hubs, drones, histories, plannedRoutes, arrivedMissionIds, mapStyle, selectedMissionId, onSelectMission, connectionHealthy = true }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const hubsRef = useRef(new Map<string, Marker>());
   const dronesRef = useRef(new Map<string, MovingMarker>());
-  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission });
-  stateRef.current = { hubs, drones, histories, plannedRoutes, selectedMissionId, onSelectMission };
+  const stateRef = useRef({ hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, onSelectMission, connectionHealthy });
+  stateRef.current = { hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, onSelectMission, connectionHealthy };
+  // One animation clock for all aircraft; refetches never restart this clock.
+  const animationClockRef = useRef<number | null>(null);
   const followRef = useRef<string | null>(null);
   // Changing the basemap must never reconstruct the map or its DOM markers.
   const mapStyleRef = useRef<LiveMapStyle>(mapStyle);
@@ -193,24 +425,31 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
   const appliedStyleUrlRef = useRef(MAP_STYLE(mapStyle, themeNow()));
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [isFollowing, setIsFollowing] = useState(false);
   const [showHubs, setShowHubs] = useState(true);
-  const [showTrails, setShowTrails] = useState(true);
-  const [showWeather, setShowWeather] = useState(true);
-  const [viewLabel, setViewLabel] = useState('Expanded Ho Chi Minh City');
+  const [pathScope, setPathScope] = useState<FlightPathScope>('none');
 
+  function stopFollowing() {
+    followRef.current = null;
+  }
+  function showSelectedPath() {
+    stopFollowing();
+    setPathScope('selected');
+  }
+  function changePathScope(next: FlightPathScope) {
+    if (next !== 'selected') stopFollowing();
+    setPathScope(next);
+  }
   function fitAll() {
     const map = mapRef.current;
     if (!map) return;
-    followRef.current = null;
-    setIsFollowing(false);
+    stopFollowing();
+    setPathScope('none');
     const bounds = new maplibregl.LngLatBounds();
     let count = 0;
     for (const h of stateRef.current.hubs) { const pt = asPoint(h.longitude, h.latitude); if (pt) { bounds.extend(pt); count++; } }
     for (const d of stateRef.current.drones) { const pt = asPoint(d.longitude, d.latitude); if (pt) { bounds.extend(pt); count++; } }
     if (count > 0) map.fitBounds(bounds, { padding: 75, maxZoom: 13, duration: 900 });
     else map.flyTo({ center: INITIAL_CENTER, zoom: 8, duration: 800 });
-    setViewLabel('Hub network');
   }
   function focus(missionId: string) {
     const map = mapRef.current;
@@ -220,9 +459,8 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     // Follow the displayed marker's current animated location rather than
     // jumping ahead to the latest fix while an animation is in progress.
     const displayed = dronesRef.current.get(missionId)?.marker.getLngLat().toArray() as Point | undefined;
+    setPathScope('selected');
     followRef.current = missionId;
-    setIsFollowing(true);
-    setViewLabel(`Following ${drone.id}`);
     // Follow needs a readable zoom immediately: continuous map.jumpTo() calls
     // from the GPS animation would otherwise cancel an in-progress easeTo zoom.
     // Zoom 16 makes the 15-25 m GPS steps clearly visible (~7-11 px in HCMC).
@@ -233,6 +471,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     zoomOut: () => mapRef.current?.zoomOut({ duration: 350 }),
     fitAll,
     focus,
+    showSelectedPath,
     togglePitch: () => { const m = mapRef.current; if (m) m.easeTo({ pitch: m.getPitch() > 15 ? 0 : 50, bearing: m.getBearing(), duration: 400 }); },
   }));
 
@@ -240,6 +479,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     if (!host.current || !MAPTILER_KEY) return;
     let disposed = false;
     let map: MapLibreMap;
+    let cleanupAttribution: (() => void) | undefined;
     try {
       map = new maplibregl.Map({
         container: host.current,
@@ -255,6 +495,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         canvasContextAttributes: { antialias: true },
       });
       map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+      cleanupAttribution = configureCompactAttribution(map);
       map.dragRotate.enable();
       map.touchZoomRotate.enableRotation();
       map.scrollZoom.enable();
@@ -270,7 +511,7 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
             setError('Unable to load the map. Check the MapTiler API key, Allowed HTTP Origins and your Internet connection.');
         }
       });
-    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to initialize the map.'); return; }
+    } catch (e) { cleanupAttribution?.(); setError(e instanceof Error ? e.message : 'Unable to initialize the map.'); return; }
     const resizeObserver = new ResizeObserver(() => { if (!disposed) map.resize(); });
     resizeObserver.observe(host.current);
     const themeObserver = new MutationObserver(() => {
@@ -285,11 +526,14 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => {
       disposed = true;
+      cleanupAttribution?.();
       themeObserver.disconnect();
       resizeObserver.disconnect();
       for (const m of hubsRef.current.values()) m.remove();
       hubsRef.current.clear();
-      for (const m of dronesRef.current.values()) { if (m.frame) cancelAnimationFrame(m.frame); m.marker.remove(); }
+      if (animationClockRef.current !== null) cancelAnimationFrame(animationClockRef.current);
+      animationClockRef.current = null;
+      for (const m of dronesRef.current.values()) m.marker.remove();
       dronesRef.current.clear();
       map.remove();
       mapRef.current = null;
@@ -319,21 +563,32 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
       // style.load fires after the new style can accept custom layers.
       // No isStyleLoaded() gate: that check can still be false while tiles load.
       try {
-        drawPlannedRoutes(map, stateRef.current.plannedRoutes, stateRef.current.hubs, stateRef.current.selectedMissionId);
-        drawTrails(map, stateRef.current.histories, stateRef.current.selectedMissionId);
-        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails']) {
-          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showTrails ? 'visible' : 'none');
+        const current = stateRef.current;
+        const activeIds = new Set(current.drones.map(drone => drone.missionId));
+        const routes = scopeFlightPaths(current.plannedRoutes, pathScope, current.selectedMissionId, activeIds);
+        const trails = scopeFlightPaths(current.histories, pathScope, current.selectedMissionId, activeIds);
+        drawPlannedRoutes(map, routes, current.hubs, trails, current.arrivedMissionIds, current.selectedMissionId);
+        drawTrails(map, trails, current.selectedMissionId);
+        // Keep the thin plan beneath the real GPS even after a style refresh.
+        ensureLayerBefore(map, 'droneoptai-completed-plan', 'droneoptai-trails');
+        for (const id of ['droneoptai-planned-routes', 'droneoptai-trails', 'droneoptai-planned-routes-selected', 'droneoptai-trails-selected', 'droneoptai-completed-plan']) {
+          const visibility = pathScope !== 'none' ? 'visible' : 'none';
+          if (map.getLayer(id) && (map.getLayoutProperty(id, 'visibility') ?? 'visible') !== visibility) {
+            map.setLayoutProperty(id, 'visibility', visibility);
+          }
         }
       } catch (error) {
         console.warn('Unable to update flight trails:', error);
       }
     }
-    if (map.isStyleLoaded()) sync();
+    // Existing sources may still be processing the previous GPS update.
+    // Refresh them even while tiles are loading, including when changing scope.
+    if (map.isStyleLoaded() || (map.getSource('droneoptai-planned-routes') && map.getSource('droneoptai-trails'))) sync();
     map.on('style.load', sync);
     return () => {
       map.off('style.load', sync);
     };
-  }, [ready, hubs, histories, plannedRoutes, selectedMissionId, showTrails]);
+  }, [ready, hubs, drones, histories, plannedRoutes, arrivedMissionIds, selectedMissionId, pathScope]);
   useEffect(() => {
     if (!ready || !mapRef.current) return;
     const map = mapRef.current;
@@ -365,18 +620,85 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         });
         elem.addEventListener('mouseleave', () => ownMarker.getPopup()?.remove());
       }
-      marker.setLngLat(point);
+      const currentPoint = marker.getLngLat();
+      if (currentPoint.lng !== point[0] || currentPoint.lat !== point[1]) marker.setLngLat(point);
       const element = marker.getElement();
       element.style.display = showHubs ? '' : 'none';
+      if (!showHubs) marker.getPopup()?.remove();
+      const occupied = drones.some(drone => {
+        const dronePoint = asPoint(drone.longitude, drone.latitude);
+        return dronePoint && typeof drone.speedKmh === 'number' && drone.speedKmh <= 1
+          && distanceInMeters(point, dronePoint) <= 85;
+      });
+      // Lift the Hub name above a parked aircraft; keep the aircraft visible.
+      element.classList.toggle('live-geo-hub--occupied', Boolean(occupied));
+      element.style.zIndex = occupied ? '12' : '';
       const label = element.querySelector('.live-geo-hub-label');
-      if (label) label.textContent = hub.code || formatHubName(hub.name);
-      marker.getPopup()?.setDOMContent(createPopup(formatHubName(hub.name), [
+      const hubLabel = formatHubName(hub.name) || hub.code || `Hub ${hub.id}`;
+      if (label && label.textContent !== hubLabel) label.textContent = hubLabel;
+      const popup = marker.getPopup();
+      if (popup) syncPopup(popup, formatHubName(hub.name), [
         ['Hub', hub.code || hub.id],
         ['Position', `${point[1].toFixed(5)}, ${point[0].toFixed(5)}`],
-      ]));
+      ]);
     }
     for (const [id, marker] of hubsRef.current) { if (!current.has(id)) { marker.remove(); hubsRef.current.delete(id); } }
-  }, [hubs, ready, showHubs]);
+  }, [hubs, drones, ready, showHubs]);
+
+  // One animation frame clock; no forward GPS extrapolation. A new fix starts
+  // from the displayed marker, preserving position continuity between fixes.
+  useEffect(() => {
+    if (!ready) return;
+    const pauseWhenHidden = () => {
+      if (!document.hidden) return;
+      const now = performance.now();
+      for (const moving of dronesRef.current.values()) moving.pausedAt ??= now;
+    };
+    document.addEventListener('visibilitychange', pauseWhenHidden);
+    const tick = (now: number) => {
+      const map = mapRef.current;
+      if (map) {
+        const canAnimate = stateRef.current.connectionHealthy && !document.hidden;
+        for (const [id, moving] of dronesRef.current) {
+          if (!canAnimate) {
+            // Pause without throwing away the last confirmed target. A retry
+            // may return the same GPS fix, and must still finish this segment.
+            moving.pausedAt ??= now;
+            continue;
+          }
+          if (moving.pausedAt !== undefined) {
+            const remaining = moving.segmentDurationMs - Math.max(0, moving.pausedAt - moving.segmentStartedAt);
+            moving.segmentFrom = moving.marker.getLngLat().toArray() as Point;
+            moving.segmentStartedAt = now;
+            moving.segmentDurationMs = Math.max(MIN_SEGMENT_MS, remaining);
+            moving.pausedAt = undefined;
+          }
+          const next = sampleGpsSegment(
+            moving.segmentFrom, moving.segmentTo,
+            moving.segmentStartedAt, moving.segmentDurationMs, now,
+          );
+          const current = moving.marker.getLngLat();
+          if (Math.abs(current.lng - next[0]) < 1e-10 && Math.abs(current.lat - next[1]) < 1e-10) continue;
+          moving.marker.setLngLat(next);
+          if (moving.popup.isOpen()) moving.popup.setLngLat(next);
+          // MapLibre jumpTo() interrupts zoomIn/zoomOut easing when called on
+          // every frame. Let zoom/rotate/pitch animations finish uninterrupted;
+          // keep updating the marker's geographic position throughout.
+          if (followRef.current === id &&
+            !map.isMoving()) {
+            map.jumpTo({ center: next });
+          }
+        }
+      }
+      animationClockRef.current = requestAnimationFrame(tick);
+    };
+    animationClockRef.current = requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener('visibilitychange', pauseWhenHidden);
+      if (animationClockRef.current !== null) cancelAnimationFrame(animationClockRef.current);
+      animationClockRef.current = null;
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (!ready || !mapRef.current) return;
@@ -404,138 +726,123 @@ export const LiveMapTiler = forwardRef<LiveMapTilerHandle, Props>(function LiveM
         element.addEventListener('mouseenter', () => popup.setLngLat(marker.getLngLat()).addTo(map));
         element.addEventListener('mouseleave', () => popup.remove());
         const initialFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
-        moving = { marker, element, popup, position: pt, lastFixAt: Number.isFinite(initialFixAt) ? initialFixAt : undefined };
+        const now = performance.now();
+        moving = {
+          marker, element, popup, position: pt,
+          lastFixAt: Number.isFinite(initialFixAt) ? initialFixAt : undefined,
+          lastReceivedAt: now,
+          segmentFrom: pt, segmentTo: pt, segmentStartedAt: now,
+          segmentDurationMs: DEFAULT_GPS_CADENCE_MS,
+          gpsCadenceMs: DEFAULT_GPS_CADENCE_MS,
+          wasGroundStop: false,
+        };
         dronesRef.current.set(id, moving);
       }
-      moving.element.className = `live-geo-drone health-${drone.health.toLowerCase()} ${selectedMissionId === id ? 'selected' : ''}`;
+      const className = `live-geo-drone health-${drone.health.toLowerCase()} ${selectedMissionId === id ? 'selected' : ''}`;
+      if (moving.element.className !== className) moving.element.className = className;
       const droneLabel = moving.element.querySelector('.live-geo-drone-label');
-      if (droneLabel) droneLabel.textContent = drone.id;
-      moving.popup.setDOMContent(createPopup(drone.id, [
+      if (droneLabel && droneLabel.textContent !== drone.id) droneLabel.textContent = drone.id;
+      syncPopup(moving.popup, drone.id, [
         ['Mission', drone.missionId], ['Status', drone.health], ['Altitude', drone.altitudeM != null ? `${drone.altitudeM.toFixed(1)} m` : '—'],
         ['Battery', drone.batteryVoltage != null ? `${drone.batteryVoltage.toFixed(2)} V` : '—'],
         ['Updated', drone.lastUpdated ? new Date(drone.lastUpdated).toLocaleTimeString('en-GB') : '—'],
-      ]));
-      moving.popup.setLngLat(moving.marker.getLngLat());
+      ]);
+      if (moving.popup.isOpen()) moving.popup.setLngLat(moving.marker.getLngLat());
       const parsedFixAt = drone.lastUpdated ? Date.parse(drone.lastUpdated) : NaN;
       const fixAt = Number.isFinite(parsedFixAt) ? parsedFixAt : undefined;
       const outOfOrder = fixAt !== undefined && moving.lastFixAt !== undefined && fixAt < moving.lastFixAt;
-      // Diagnostic: this proves which GPS actually reaches the map component.
-      // Keep this DEV-only; do not log bearer tokens or the complete response.
-      if (import.meta.env.DEV && selectedMissionId === id) {
-        console.info('[DroneOptAI MAP GPS]', {
-          missionId: id,
-          latestLat: pt[1], latestLng: pt[0],
-          markerLat: moving.marker.getLngLat().lat,
-          markerLng: moving.marker.getLngLat().lng,
-          changed: moving.position[0] !== pt[0] || moving.position[1] !== pt[1],
-          outOfOrder,
-          lastUpdated: drone.lastUpdated,
-          zoom: Number(map.getZoom().toFixed(1)),
-        });
-      }
+      // Ignore only strictly older BE timestamps. Two distinct GPS positions
+      // may share the same second-resolution timestamp, so do not drop those.
       if (outOfOrder) continue;
-      if (moving.position[0] !== pt[0] || moving.position[1] !== pt[1]) {
-        if (moving.frame !== undefined) cancelAnimationFrame(moving.frame);
-        const start: Point = moving.marker.getLngLat().toArray() as Point;
-        // A timestamp older than 10 seconds still describes a real received GPS
-        // point. The operator UI keeps its existing "Telemetry update delayed"
-        // warning, but we should NOT suppress animation merely because BE timestamps
-        // are older than the browser wall clock (e.g. delayed flight replay).
-        // Interpolate only between two genuinely different GPS fixes.
-        const longGap = fixAt !== undefined && moving.lastFixAt !== undefined &&
-          fixAt - moving.lastFixAt > 30_000;
-        const latRadians = ((start[1] + pt[1]) / 2) * Math.PI / 180;
+      const gpsChanged = moving.position[0] !== pt[0] || moving.position[1] !== pt[1];
+      const now = performance.now();
+      const groundStop = (drone.speedKmh !== undefined && drone.speedKmh <= 0.5) ||
+        ['SCHEDULED', 'COMPLETED', 'FAILED'].includes((drone.missionStatusRaw ?? '').toUpperCase());
+      if (gpsChanged) {
+        const previous = moving.position;
+        const displayed = moving.marker.getLngLat().toArray() as Point;
+        const gapMs = Math.max(MIN_SEGMENT_MS, now - moving.lastReceivedAt);
+        const gapOnServer = fixAt !== undefined && moving.lastFixAt !== undefined
+          ? fixAt - moving.lastFixAt : undefined;
+        const latitudeRad = (pt[1] + previous[1]) / 2 * Math.PI / 180;
         const jumpMeters = Math.hypot(
-          (pt[0] - start[0]) * 111_320 * Math.cos(latRadians),
-          (pt[1] - start[1]) * 111_320,
+          (pt[0] - previous[0]) * 111_320 * Math.cos(latitudeRad),
+          (pt[1] - previous[1]) * 111_320,
         );
-        // GPS jumps over 2 km in one refresh should not be visualized as a
-        // normal 3-second flight, even if the BE timestamp appears up to date.
-        const abnormalJump = jumpMeters > 2_000;
-        const previousFixAt = moving.lastFixAt;
+        const discontinuity = jumpMeters > MAX_GPS_JUMP_METERS ||
+          (gapOnServer !== undefined && gapOnServer > 30_000);
         moving.position = pt;
-        moving.lastFixAt = fixAt;
-        // BE simulator may emit points at interval_sec / speed_multiplier.
-        // Cap visual animation so the map catches up instead of lagging one or
-        // more telemetry points behind. Keep the GPS target authoritative.
-        const fixInterval = fixAt !== undefined && previousFixAt !== undefined
-          ? fixAt - previousFixAt : 2_000;
-        const animationMs = Math.max(MIN_MARKER_TRANSITION_MS,
-          Math.min(MAX_MARKER_TRANSITION_MS, fixInterval > 0 ? fixInterval * 0.85 : 1_200));
-        if (import.meta.env.DEV) {
-          console.info('[DroneOptAI GPS]', {
-            missionId: id, drone: drone.id,
-            previous: start, received: pt, lastUpdated: drone.lastUpdated,
-            jumpMeters: Math.round(jumpMeters),
-            movement: longGap || abnormalJump ? 'SNAP (gap / GPS jump)' : `ANIMATE ${Math.round(animationMs)}ms`
-          });
-        }
-        if (longGap || abnormalJump) {
+        moving.lastFixAt = fixAt ?? moving.lastFixAt;
+        moving.lastReceivedAt = now;
+        moving.gpsCadenceMs = nextGpsCadence(moving.gpsCadenceMs, gapMs, moving.wasGroundStop);
+        if (moving.pausedAt !== undefined) moving.pausedAt = now;
+        if (discontinuity || groundStop) {
+          // Genuine discontinuities or explicit stops use the BE location.
+          // They are not predicted; no coasting past a landing or relay hub.
+          moving.segmentFrom = pt;
+          moving.segmentTo = pt;
+          moving.segmentStartedAt = now;
           moving.marker.setLngLat(pt);
-          moving.popup.setLngLat(pt);
-          if (followRef.current === id) map.jumpTo({ center: pt });
-          moving.frame = undefined;
-          continue;
+          if (moving.popup.isOpen()) moving.popup.setLngLat(pt);
+          if (followRef.current === id && !map.isMoving()) {
+            map.jumpTo({ center: pt });
+          }
+        } else {
+          moving.segmentFrom = displayed;
+          moving.segmentTo = pt;
+          moving.segmentStartedAt = now;
+          // Use the observed cadence without adding another 12% delay.
+          // The marker never predicts a position past the latest BE fix.
+          moving.segmentDurationMs = moving.gpsCadenceMs;
         }
-        const begin = performance.now();
-        const animate = (now: number) => {
-          // Linear interpolation preserves the BE slowing/descending profile.
-          const t = Math.min(1, (now - begin) / animationMs);
-          const next: Point = [
-            start[0] + (pt[0] - start[0]) * t,
-            start[1] + (pt[1] - start[1]) * t,
-          ];
-          moving!.marker.setLngLat(next);
-          if (moving!.popup.isOpen()) moving!.popup.setLngLat(next);
-          if (followRef.current === id) map.jumpTo({ center: next });
-          if (t < 1) moving!.frame = requestAnimationFrame(animate);
-          else moving!.frame = undefined;
-        };
-        moving.frame = requestAnimationFrame(animate);
+      } else if (groundStop) {
+        // A genuine stationary fix must not keep an earlier animation moving.
+        moving.segmentFrom = pt;
+        moving.segmentTo = pt;
+        moving.segmentStartedAt = now;
+        if (moving.pausedAt !== undefined) moving.pausedAt = now;
+        if (fixAt !== undefined && (moving.lastFixAt === undefined || fixAt > moving.lastFixAt)) {
+          moving.lastFixAt = fixAt;
+          moving.lastReceivedAt = now;
+        }
+        const displayed = moving.marker.getLngLat();
+        if (displayed.lng !== pt[0] || displayed.lat !== pt[1]) moving.marker.setLngLat(pt);
       } else if (fixAt !== undefined && (moving.lastFixAt === undefined || fixAt > moving.lastFixAt)) {
-        // A fresh timestamp with unchanged GPS means the aircraft stayed put.
+        // BE sent fresh telemetry at the same GPS coordinates: do not fabricate
+        // extra displacement; allow any in-flight interpolation to finish.
         moving.lastFixAt = fixAt;
       }
+      moving.wasGroundStop = groundStop;
     }
     for (const [id, moving] of dronesRef.current) {
       if (!active.has(id)) {
-        if (moving.frame) cancelAnimationFrame(moving.frame);
         moving.marker.remove(); dronesRef.current.delete(id);
-        if (followRef.current === id) { followRef.current = null; setIsFollowing(false); }
+        if (followRef.current === id) stopFollowing();
       }
     }
   }, [drones, selectedMissionId, ready]);
+
+  // Selection may change automatically when an aircraft leaves the live fleet.
+  // Never keep following a different aircraft from the one whose path is shown.
+  useEffect(() => {
+    if (followRef.current && followRef.current !== selectedMissionId) stopFollowing();
+    if (!selectedMissionId && pathScope === 'selected') setPathScope('none');
+  }, [selectedMissionId, pathScope]);
 
   const selected = drones.find(d => d.missionId === selectedMissionId);
   return <div className="live-geo-shell">
     <div ref={host} className="live-geo-map" role="application" aria-label="Live geographic drone map of Ho Chi Minh City" />
     {!MAPTILER_KEY && <div className="live-geo-error">MapTiler API key is not configured. Add VITE_MAPTILER_API_KEY to .env.local and restart Vite.</div>}
     {error && <div className="live-geo-error" role="alert">{error}</div>}
-    <div className="live-geo-badge">{viewLabel}</div>
-    <div className="live-geo-controls">
-      <button type="button" onClick={() => { followRef.current = null; setIsFollowing(false); mapRef.current?.fitBounds([[106.05, 8.55], [108.25, 11.55]], { padding: 24, duration: 900 }); setViewLabel('Expanded Ho Chi Minh City'); }}>Entire city</button>
-      <button type="button" onClick={fitAll}>Hub network</button>
-      {isFollowing && <button type="button" onClick={() => { followRef.current = null; setIsFollowing(false); setViewLabel('Hub network'); }}>Stop following</button>}
-    </div>
-    {showWeather && selected && <div className="live-geo-weather">
-      <strong>Observed weather · selected aircraft</strong>
-      <span>{selected.id}</span>
-      <div><span>Temperature</span><b>{selected.weather?.temperature !== undefined ? `${selected.weather.temperature.toFixed(1)}°C` : '—'}</b></div>
-      <div><span>Wind</span><b>{selected.weather?.windSpeed !== undefined ? `${selected.weather.windSpeed.toFixed(1)}` : '—'}</b></div>
-      <div><span>Humidity</span><b>{selected.weather?.humidity !== undefined ? `${selected.weather.humidity.toFixed(0)}%` : '—'}</b></div>
-      <div><span>Wind direction</span><b>{selected.weather?.windDirection !== undefined ? `${Math.round(selected.weather.windDirection)}°` : '—'}</b></div>
-      {/* <small>Weather at aircraft location, not district-wide conditions.</small> */}
-    </div>}
     <div className="live-geo-layers" role="group" aria-label="Map layers">
       <button type="button" aria-pressed={showHubs} onClick={() => setShowHubs(v => !v)} className={showHubs ? 'active' : ''}>Hubs</button>
-      <button type="button" aria-pressed={showTrails} onClick={() => setShowTrails(v => !v)} className={showTrails ? 'active' : ''}>Flight paths</button>
-      <button type="button" aria-pressed={showWeather} onClick={() => setShowWeather(v => !v)} className={showWeather ? 'active' : ''}>Weather</button>
+      <select aria-label="Flight paths" title="Choose which flight paths to display" className={`live-geo-path-scope ${pathScope !== 'none' ? 'active' : ''}`} value={pathScope} onChange={event => changePathScope(event.target.value as FlightPathScope)}>
+        <option value="none">Flight paths: Off</option>
+        <option value="selected" disabled={!selected}>Flight paths: Selected</option>
+        <option value="all">All flight paths</option>
+      </select>
     </div>
 
-    {showTrails && <div className="live-geo-route-legend" aria-label="Flight path legend">
-      <span><i className="live-geo-route-dash" aria-hidden="true" />Planned route</span>
-      <span><i className="live-geo-route-solid" aria-hidden="true" />Recorded GPS</span>
-    </div>}
     {/* <div className="live-geo-hint">Scroll to zoom · Drag to pan · Right-drag to rotate / tilt</div> */}
   </div>;
 });

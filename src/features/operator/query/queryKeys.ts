@@ -9,6 +9,9 @@ export const operatorQueryKeys = {
 
   aiExplanation: (predictionId: string) => [...operatorQueryKeys.operatorAiPredictions(), 'explain', predictionId] as const,
 
+  notifications: () => [...operatorQueryKeys.all, 'notifications'] as const,
+  notificationList: () => [...operatorQueryKeys.notifications(), 'list'] as const,
+  notificationUnreadCount: () => [...operatorQueryKeys.notifications(), 'unread-count'] as const,
   orders: () => [...operatorQueryKeys.all, 'orders'] as const,
 
   orderList: (params: ListOperatorOrdersParams = {}) =>

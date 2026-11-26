@@ -418,12 +418,13 @@ export async function getEligibleDronesApi(
   if (!normalizedOrderId) throw new OperatorApiError('Order ID is required.', 400);
 
   const encoded = encodeURIComponent(normalizedOrderId);
+  const signal = AbortSignal.timeout(20_000);
   let payload: unknown;
   try {
-    payload = await operatorApiRequest<unknown>(`/operator/orders/${encoded}/eligible-drones`);
+    payload = await operatorApiRequest<unknown>(`/operator/orders/${encoded}/eligible-drones`, { signal });
   } catch (error) {
     if (!(error instanceof OperatorApiError) || ![404, 405].includes(error.status)) throw error;
-    payload = await operatorApiRequest<unknown>(`/orders/${encoded}/eligible-drones`);
+    payload = await operatorApiRequest<unknown>(`/orders/${encoded}/eligible-drones`, { signal });
   }
 
   const envelope = isRecord(payload) ? payload : {};
