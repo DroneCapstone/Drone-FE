@@ -348,10 +348,8 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
   const rawDroneId = pickString(value, ["drone_id", "droneId"]);
   if (!rawId || !rawDroneId) return null;
 
-  // Preserve backend IDs exactly: DRN-0013 must NOT become DR-0013.
-  const droneId = /^DRN-/i.test(rawDroneId.trim())
-    ? rawDroneId.trim()
-    : maintenanceDisplayId("DR", rawDroneId, 3);
+  // Preserve the entire Backend ID, including model prefixes.
+  const droneId = rawDroneId.trim();
 
   return {
     id: maintenanceDisplayId("WO", rawId, 4),
@@ -365,9 +363,7 @@ function mapApiWorkOrder(value: unknown): WorkOrder | null {
         "",
       );
 
-      return rawBatteryId
-        ? maintenanceDisplayId("BAT", rawBatteryId, 3)
-        : undefined;
+      return rawBatteryId.trim() || undefined;
     })(),
     title: pickString(value, ["issue_description", "title", "task", "description"], "Maintenance work order"),
     priority: normalizeApiPriority(
@@ -438,9 +434,8 @@ function extractInspectionChecklist(action: string) {
 }
 
 function normalizeRecordDroneId(id: string): string {
-  const cleaned = id.trim();
-  // The API uses full IDs such as DRN-0003. Do not rewrite these as DR-0003.
-  return /^DRN-/i.test(cleaned) ? cleaned.toUpperCase() : maintenanceDisplayId("DR", cleaned, 3);
+  // Do not collapse different model-prefixed drone IDs to the same suffix.
+  return id.trim();
 }
 
 function mapApiMaintenanceRecord(

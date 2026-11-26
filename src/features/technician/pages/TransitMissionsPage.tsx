@@ -507,12 +507,26 @@ function saveRelaySwapReceipt(receipt: RelaySwapReceipt): RelaySwapReceipt[] {
   return next;
 }
 
-/** One click calls exactly the BE endpoint selected by mission + handling + leg. */
+/** Final-hub arrival may still be pending while Backend reports Flying and
+ * next_leg.status=IN_PROGRESS. A completed relay leg does NOT mean that final
+ * arrival has been confirmed. Never infer a confirmation from leg 1 alone.
+ */
+function isFinalHubPendingArrival(mission: TransitMission): boolean {
+  const missionState = (mission.missionState ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const lastLegState = (mission.nextLegStatus ?? mission.legStatus ?? "")
+    .trim().toUpperCase().replace(/[\s-]+/g, "_");
+  return mission.droneCurrentHubId !== undefined &&
+    mission.destinationHubId !== undefined &&
+    mission.droneCurrentHubId === mission.destinationHubId &&
+    mission.status === "At Hub" &&
+    !["COMPLETED", "MISSION_COMPLETED", "CANCELLED", "CANCELED", "FAILED"].includes(missionState) &&
+    !mission.arrivalConfirmed && !mission.arrivalConfirmedAt &&
+    lastLegState === "IN_PROGRESS";
+}
 
+/** Confirm the physical landing once; keep final and relay routing separate. */
 function canConfirmLandedMission(mission: TransitMission): boolean {
-
-  return getTransitConfirmKind(mission) !== null;
-
+  return isFinalHubPendingArrival(mission) || getTransitConfirmKind(mission) !== null;
 }
 
 
@@ -591,6 +605,20 @@ export function TransitMissionsPage() {
 
   const arrivalKey = (mission: TransitMission) => `${mission.backendMissionId ?? mission.id}:${mission.legId || mission.currentLegToHubId || "current"}`;
 
+  // A relay receipt belongs to its leg; final arrival belongs to the mission
+  // and destination hub. The Backend can keep reporting old current_leg=Leg 1
+  // even while next_leg=IN_PROGRESS at the final hub.
+  const isFinalHubMission = (mission: TransitMission): boolean =>
+    mission.purpose !== "BATTERY_STOP" || (
+      mission.droneCurrentHubId !== undefined &&
+      mission.destinationHubId !== undefined &&
+      mission.droneCurrentHubId === mission.destinationHubId
+    );
+  const arrivalConfirmationKey = (mission: TransitMission): string =>
+    isFinalHubMission(mission)
+      ? `${mission.backendMissionId ?? mission.id}:final-hub:${mission.destinationHubId ?? "unknown"}`
+      : arrivalKey(mission);
+
   // Unlike a leg-based UI key, this server-confirmation receipt is stable if
   // POST confirmation completes leg 1 and GET /incoming later points to leg 2.
   const [relayReceipts, setRelayReceipts] = useState<RelayConfirmationReceipt[]>(readRelayReceipts);
@@ -605,21 +633,22 @@ export function TransitMissionsPage() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Keep the legacy sessionStorage receipt path for final-hub handling and
-  // previously saved confirmations. Relay uses the additional stable receipt.
-  // Prefer the new /incoming.current_leg.status=COMPLETED + next_leg=PENDING
-  // evidence. This works even if the user confirmed in a previous tab/session.
-  const arrivalConfirmedFor = (mission: TransitMission): boolean =>
-    // A server-reported Ready relay could only follow confirmed arrival.
-    (isContinuationMission(mission) && mission.status === "Ready") ||
-    mission.relayArrivalConfirmedByLeg === true ||
-    mission.arrivalConfirmed || confirmedArrivalIds.includes(arrivalKey(mission)) ||
-    // Migration for an older successful sessionStorage confirmation that used
-    // :current before Backend supplied a leg ID. Only applies to relay At Hub.
-    (mission.purpose === "BATTERY_STOP" && mission.status === "At Hub" &&
-      !!mission.backendMissionId &&
-      confirmedArrivalIds.includes(`${mission.backendMissionId}:current`)) ||
-    hasRelayReceipt(mission, relayReceipts);
+  // Ignore legacy per-leg confirmations at the FINAL hub. Those can refer
+  // to Leg 1 (relay) while Leg 2 is still IN_PROGRESS at destination.
+  const arrivalConfirmedFor = (mission: TransitMission): boolean => {
+    if (isFinalHubMission(mission)) {
+      return mission.arrivalConfirmed || Boolean(mission.arrivalConfirmedAt) ||
+        confirmedArrivalIds.includes(arrivalConfirmationKey(mission));
+    }
+    return (isContinuationMission(mission) && mission.status === "Ready") ||
+      mission.relayArrivalConfirmedByLeg === true ||
+      mission.arrivalConfirmed || confirmedArrivalIds.includes(arrivalKey(mission)) ||
+      // The old :current session key is valid only for relay handling.
+      (mission.purpose === "BATTERY_STOP" && mission.status === "At Hub" &&
+        !!mission.backendMissionId &&
+        confirmedArrivalIds.includes(`${mission.backendMissionId}:current`)) ||
+      hasRelayReceipt(mission, relayReceipts);
+  };
 
   const batterySwappedFor = (mission: TransitMission): boolean =>
     // BE handling_status=Ready signals the swap was completed by Backend.
@@ -939,7 +968,7 @@ export function TransitMissionsPage() {
 
     }
 
-    const confirmationKey = arrivalKey(mission);
+    const confirmationKey = arrivalConfirmationKey(mission);
 
     if (arrivalConfirmedFor(mission)) {
 
@@ -949,7 +978,11 @@ export function TransitMissionsPage() {
 
     }
 
-    const confirmRoute = getTransitConfirmKind(mission);
+    // The final hub can still require confirmation even with an old
+    // current_leg=COMPLETED and a next_leg=IN_PROGRESS.
+    const confirmRoute = isFinalHubPendingArrival(mission)
+      ? "FINAL"
+      : getTransitConfirmKind(mission);
 
     if (!confirmRoute) {
 
@@ -1632,7 +1665,7 @@ export function TransitMissionsPage() {
                     <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
 
                       {!isContinuationMission(mission) &&
-                        (canConfirmLandedMission(mission) || mission.status === "Incoming") &&
+                        (isFinalHubPendingArrival(mission) || canConfirmLandedMission(mission) || mission.status === "Incoming") &&
                         !arrivalConfirmed && (
 
                         <Button
