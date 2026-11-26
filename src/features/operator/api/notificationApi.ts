@@ -21,13 +21,36 @@ export interface OperatorNotificationPage {
   page_size: number;
 }
 
+export interface OperatorNotificationFilters {
+  is_read?: boolean;
+  notification_type?: string;
+}
+
 export async function listOperatorNotificationsApi(
   page = 1,
   pageSize = 50,
+  filters: OperatorNotificationFilters = {},
+  signal?: AbortSignal,
 ): Promise<OperatorNotificationPage> {
-  return operatorApiRequest<OperatorNotificationPage>(
-    `/notifications?page=${page}&page_size=${pageSize}`,
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (filters.is_read !== undefined) params.set('is_read', String(filters.is_read));
+  if (filters.notification_type) params.set('notification_type', filters.notification_type);
+  const response = await operatorApiRequest<OperatorNotificationPage | { data: OperatorNotificationPage }>(
+    `/notifications?${params.toString()}`, { signal },
   );
+  const payload = response && 'data' in response ? response.data : response;
+  if (!payload || !Array.isArray(payload.items) ||
+      !payload.items.every(item => item && Number.isSafeInteger(item.id) &&
+        typeof item.title === 'string' && typeof item.message === 'string' &&
+        typeof item.notifications_type === 'string' && typeof item.is_read === 'boolean' &&
+        typeof item.created_at === 'string') ||
+      !Number.isSafeInteger(payload.total) || payload.total < 0 ||
+      !Number.isSafeInteger(payload.page) || payload.page < 1 ||
+      !Number.isSafeInteger(payload.page_size) || payload.page_size < 1 ||
+      !Number.isSafeInteger(payload.unread_count) || payload.unread_count < 0) {
+    throw new Error('Unable to load notifications. Unexpected response structure.');
+  }
+  return payload;
 }
 
 export async function getOperatorUnreadCountApi(): Promise<number> {
