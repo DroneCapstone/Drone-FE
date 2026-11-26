@@ -105,13 +105,15 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
   const [gaveUp, setGaveUp] = useState(false);
 
   const status = route?.deliveryStatus.toLowerCase() ?? "";
-  const finished = /deliver|arriv|complet/.test(status) || /complete|arriv/i.test(live?.mission_status ?? "");
+  // Backend codes: DELIVERED, ARRIVED_AT_HUB (final); IN_DELIVERY is still in flight.
+  const finished = /^(delivered|arrived_at_hub)$/.test(status) || /^(mission[ _])?completed$/i.test((live?.mission_status ?? "").trim());
   const flying = !!live?.is_flying;
   const dispatched = flying || finished || !!live?.mission_id;
+  const showMap = !loaded || dispatched;
 
   // Create map once.
   useEffect(() => {
-    if (!active || !MAPTILER_KEY || !host.current) return;
+    if (!active || !MAPTILER_KEY || !showMap || !host.current) return;
     const map = new maplibregl.Map({ container: host.current, style: STYLE_URL, center: [106.78, 10.83], zoom: 9 });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
@@ -132,7 +134,7 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
       fittedRef.current = false;
       setMapReady(false);
     };
-  }, [active, dispatched]);
+  }, [active, showMap]);
 
   const loadRoute = useCallback(async () => {
     try {
@@ -292,7 +294,7 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
       </section>
     );
 
-  if (loaded && !dispatched)
+  if (!showMap)
     return (
       <section className={box}>
         {label}
