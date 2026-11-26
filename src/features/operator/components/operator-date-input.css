@@ -1,0 +1,38 @@
+/* Operator single-date input: use the same sizing and colors as its search field. */
+.operator-date-field, .operator-date-control { min-width: 0; width: 100%; }
+.operator-date-control { position: relative; }
+.operator-app .main-column .page-content .operator-date-control .operator-date-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--op-control, 40px);
+  min-height: var(--op-control, 40px);
+  padding: 0 36px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 var(--op-body, 13px)/1.45 var(--op-font, 'IBM Plex Sans', sans-serif);
+}
+.operator-date-input::placeholder { color: var(--faint); opacity: 1; }
+.operator-app .main-column .page-content .operator-date-control .operator-date-input:focus-visible,
+.operator-date-control:has(.operator-date-icon[data-state='open']) .operator-date-input { border-color: var(--orange, #ff6b00); }
+.operator-app .main-column .page-content .operator-date-control .operator-date-input[aria-invalid='true'] { border-color: var(--red, #e74f4f); }
+.operator-date-control .operator-date-icon {
+  position: absolute;
+  top: 50%; right: 4px;
+  transform: translateY(-50%);
+  display: grid; place-items: center;
+  width: 30px; height: 30px;
+  padding: 0; margin: 0;
+  border: 0; border-radius: var(--radius-control, 6px);
+  background: transparent; color: var(--muted);
+  cursor: pointer;
+}
+.operator-date-control .operator-date-icon:hover,
+.operator-date-control .operator-date-icon[data-state='open'] { color: var(--orange, #ff6b00); background: var(--orange-soft); }
+.operator-date-control .operator-date-icon:focus-visible { outline: 2px solid var(--orange, #ff6b00); outline-offset: -2px; }
+.operator-date-error { display: block; margin-top: 4px; color: var(--red, #e74f4f); font-size: 11px; font-weight: 400; }
+/* Single selection uses exactly the Admin range endpoint appearance. */
+.operator-date-popover.admin-date-range-popover .admin-range-selected .admin-range-day-button {
+  background: var(--range-endpoint); color: var(--range-endpoint-text);
+}
