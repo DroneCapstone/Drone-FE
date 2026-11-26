@@ -7,6 +7,7 @@ const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY ?? "").trim();
 const STYLE_URL = `https://api.maptiler.com/maps/streets-v4-dark/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`;
 const POSITION_POLL_MS = 4000;
 const ROUTE_POLL_MS = 15000;
+const WAITING_POLL_MS = 15000;
 const MAX_FAILURES = 3;
 const MOVE_MS = 1000;
 
@@ -108,8 +109,8 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
   // Backend codes: DELIVERED, ARRIVED_AT_HUB (final); IN_DELIVERY is still in flight.
   const finished = /^(delivered|arrived_at_hub)$/.test(status) || /^(mission[ _])?completed$/i.test((live?.mission_status ?? "").trim());
   const flying = !!live?.is_flying;
-  const dispatched = flying || finished || !!live?.mission_id;
-  const showMap = !loaded || dispatched;
+  const dispatched = flying || finished;
+  const showMap = loaded && dispatched;
 
   // Create map once.
   useEffect(() => {
@@ -165,9 +166,9 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
     };
   }, [active, orderId, loadRoute]);
 
-  // Polling while flying.
+  // Fast polling while flying; slow polling while waiting for takeoff.
   useEffect(() => {
-    if (!active || !flying) return;
+    if (!active || !loaded || finished || gaveUp) return;
     let stop = false;
     let failures = 0;
     let posTimer: number | undefined;
@@ -181,10 +182,11 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
           if (stop) return;
           failures = 0;
           setLive(p);
-          if (!p.is_flying) {
+          if (flying && !p.is_flying) {
             void loadRoute();
             return;
           }
+          if (!flying) void loadRoute();
         } catch {
           failures += 1;
           if (failures >= MAX_FAILURES) {
@@ -193,7 +195,7 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
           }
         }
       }
-      posTimer = window.setTimeout(tickPos, POSITION_POLL_MS);
+      posTimer = window.setTimeout(tickPos, flying ? POSITION_POLL_MS : WAITING_POLL_MS);
     };
     const tickRoute = async () => {
       if (stop) return;
@@ -207,15 +209,15 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
       }
     };
     document.addEventListener("visibilitychange", onVisible);
-    posTimer = window.setTimeout(tickPos, POSITION_POLL_MS);
-    routeTimer = window.setTimeout(tickRoute, ROUTE_POLL_MS);
+    posTimer = window.setTimeout(tickPos, flying ? POSITION_POLL_MS : WAITING_POLL_MS);
+    if (flying) routeTimer = window.setTimeout(tickRoute, ROUTE_POLL_MS);
     return () => {
       stop = true;
       window.clearTimeout(posTimer);
       window.clearTimeout(routeTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [active, flying, orderId, loadRoute, gaveUp]);
+  }, [active, loaded, flying, finished, orderId, loadRoute, gaveUp]);
 
   // Draw route, hubs, trail.
   useEffect(() => {
@@ -329,7 +331,10 @@ export default function CustomerLiveMap({ orderId, active }: { orderId: string; 
             <div><dt>Updated</dt><dd className="text-white">{updated}</dd></div>
           </dl>
           {gaveUp && (
-            <p className="mt-2 text-xs text-amber-200">Live updates paused. Refresh the page to retry.</p>
+            <p className="mt-2 text-xs text-amber-200">
+              Live updates paused.{" "}
+              <button type="button" onClick={() => setGaveUp(false)} className="font-semibold text-orange-400 hover:text-orange-300">Retry</button>
+            </p>
           )}
         </>
       )}
