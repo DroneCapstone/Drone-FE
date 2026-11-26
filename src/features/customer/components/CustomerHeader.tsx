@@ -108,6 +108,15 @@ export function CustomerHeader() {
 
     void loadUnread();
 
+    const onUpdated = () => {
+      void loadUnread();
+    };
+
+    window.addEventListener(
+      "customer-notifications-updated",
+      onUpdated,
+    );
+
     const timer =
       window.setInterval(
         () => {
@@ -120,6 +129,10 @@ export function CustomerHeader() {
       cancelled = true;
       window.clearInterval(
         timer,
+      );
+      window.removeEventListener(
+        "customer-notifications-updated",
+        onUpdated,
       );
     };
   }, [location.pathname]);

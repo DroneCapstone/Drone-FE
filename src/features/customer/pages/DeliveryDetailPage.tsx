@@ -1,4 +1,4 @@
-﻿import {
+import {
 
   ArrowLeft,
 
@@ -34,6 +34,7 @@ import {
   formatDeliveryMode,
 
 
+  formatDateTime,
   formatVnd,
 
 } from "../services/customerDeliveryService";
@@ -283,6 +284,7 @@ export function DeliveryDetailPage() {
     customerDeliveryService.getCustomerStatus(delivery);
 
   const paid = (serverOrder?.paymentStatus ?? delivery.paymentStatus) === "paid";
+  const cancelled = isCancelledOrder(serverOrder?.orderStatus, serverOrder?.customerStatus, serverOrder?.statusLabel, delivery.backendStatus, delivery.orderStatus);
 
   return (
 
@@ -307,6 +309,8 @@ export function DeliveryDetailPage() {
           {changeNotice && <StatusChangeNotice text={changeNotice} onClose={() => setChangeNotice("")} />}
 
           {loadError && <p className="text-xs text-amber-200" role="status">Unable to refresh right now. Showing the last saved information.</p>}
+
+          {cancelled && serverOrder && <CancellationNotice order={serverOrder} />}
 
           {progressOrder && <DeliveryProgressTimeline order={progressOrder} events={trackingEvents} />}
 
@@ -428,7 +432,7 @@ export function DeliveryDetailPage() {
 
             </div>
 
-            {!paid && (
+            {!paid && !cancelled && (
 
               <Link
 
@@ -444,7 +448,7 @@ export function DeliveryDetailPage() {
 
             )}
 
-            {paid && (
+            {paid && !cancelled && (
               <OrderRatingAction
                 orderId={delivery.id}
                 eligible={canShowDeliveryRating(
@@ -476,6 +480,22 @@ export function DeliveryDetailPage() {
 
 }
 
+/** True when any backend/customer status marks the order as cancelled. */
+function isCancelledOrder(...statuses: Array<string | null | undefined>): boolean {
+  return statuses.some((value) => /^(cancelled|canceled)$/.test(String(value ?? "").trim().toLowerCase()));
+}
+
+function CancellationNotice({ order }: { order: CustomerOrderSummary }) {
+  return (
+    <section role="status" className="rounded-2xl border border-orange-500/[0.26] bg-orange-500/[0.09] p-5 sm:p-6">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-300">Order cancelled</p>
+      <div className="mt-4 grid grid-cols-2 gap-5">
+        {order.cancelledAt && <DetailItem label="Cancelled on" value={formatDateTime(order.cancelledAt)} />}
+        {order.cancellationReason && <DetailItem label="Reason" value={order.cancellationReason} />}
+      </div>
+    </section>
+  );
+}
 /** Same progress timeline for orders that exist only on the backend. */
 
 function BackendOrderDetails({
@@ -504,7 +524,7 @@ function BackendOrderDetails({
 
 }) {
 
-  const canPay = order.paymentStatus === "pending" &&
+  const canPay = !isCancelledOrder(order.orderStatus, order.customerStatus, order.statusLabel) && order.paymentStatus === "pending" &&
 
     ["pending", "awaiting_payment"].includes(order.orderStatus.trim().toLowerCase());
 
@@ -531,6 +551,8 @@ function BackendOrderDetails({
           {changeNotice && <StatusChangeNotice text={changeNotice} onClose={onDismiss} />}
 
           {refreshError && <p role="status" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">Unable to refresh now. Showing the last known status.</p>}
+
+          {isCancelledOrder(order.orderStatus, order.customerStatus, order.statusLabel) && <CancellationNotice order={order} />}
 
           <DeliveryProgressTimeline order={order} events={events} />
 
@@ -593,7 +615,7 @@ function BackendOrderDetails({
 
             )}
 
-            {order.paymentStatus === "paid" && (
+            {order.paymentStatus === "paid" && !isCancelledOrder(order.orderStatus, order.customerStatus, order.statusLabel) && (
               <OrderRatingAction
                 orderId={order.id}
                 eligible={canShowDeliveryRating(order.orderStatus, order.customerStatus, order.statusLabel)}

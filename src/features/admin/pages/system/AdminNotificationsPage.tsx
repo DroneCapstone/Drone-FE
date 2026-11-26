@@ -10,6 +10,7 @@ import { adminDisplayText } from '../../utils/adminDisplayText';
 import './AdminNotificationsPage.css';
 
 const PAGE_SIZE = 20;
+const REFRESH_MS = 60_000;
 const types: { value: NotificationType; label: string }[] = [
   { value: 'Mission_Status', label: 'Mission Status' },
   { value: 'Payment', label: 'Payment' },
@@ -58,28 +59,43 @@ export function AdminNotificationsPage() {
   const reload = () => setRevision(value => value + 1);
 
   useEffect(() => {
+    // Do not refresh over an in-flight read/delete action.
+    if (saving) return;
     let active = true;
-    adminOperationsApi.notifications({
-      page, page_size: PAGE_SIZE,
-      ...(filter === 'all' ? {} : { is_read: filter === 'read' }),
-      ...(type ? { notification_type: type } : {}),
-    }).then(value => {
-      if (!active) return;
-      if (!value || !Array.isArray(value.items) ||
-          !Number.isSafeInteger(value.total) || value.total < 0 ||
-          !Number.isSafeInteger(value.page) || value.page < 1 ||
-          !Number.isSafeInteger(value.page_size) || value.page_size < 1) {
-        setResult({ key, data: null, error: 'Unable to load notifications. Please try again.' });
-        return;
-      }
-      const lastPage = Math.max(1, Math.ceil(value.total / value.page_size));
-      if (page > lastPage) { setPage(lastPage); return; }
-      setResult({ key, data: value, error: '' });
-    }).catch(() => {
-      if (active) setResult({ key, data: null, error: "Unable to load notifications. Please try again." });
-    });
-    return () => { active = false; };
-  }, [key, page, filter, type]);
+    let inFlight = false;
+    async function load(silent = false) {
+      if (!active || inFlight) return;
+      inFlight = true;
+      try {
+        const value = await adminOperationsApi.notifications({
+          page, page_size: PAGE_SIZE,
+          ...(filter === 'all' ? {} : { is_read: filter === 'read' }),
+          ...(type ? { notification_type: type } : {}),
+        });
+        if (!active) return;
+        if (!value || !Array.isArray(value.items) ||
+            !Number.isSafeInteger(value.total) || value.total < 0 ||
+            !Number.isSafeInteger(value.page) || value.page < 1 ||
+            !Number.isSafeInteger(value.page_size) || value.page_size < 1) {
+          throw new Error('Unexpected notification response structure.');
+        }
+        const lastPage = Math.max(1, Math.ceil(value.total / value.page_size));
+        if (page > lastPage) { setPage(lastPage); return; }
+        setResult({ key, data: value, error: '' });
+      } catch {
+        if (active) setResult(previous => {
+          // Keep the last valid result when a background refresh fails.
+          if (silent && previous?.key === key && previous.data) return previous;
+          return { key, data: null, error: 'Unable to load notifications. Please try again.' };
+        });
+      } finally { inFlight = false; }
+    }
+    void load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load(true);
+    }, REFRESH_MS);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [key, page, filter, type, saving]);
 
   function changeFilter(next: ReadFilter) {
     setFilter(next); setPage(1); setExpanded([]); setActionError(''); setNotice('');

@@ -832,8 +832,10 @@ export const getDroneMaintenanceSchedulesApi = (
 // Notifications
 // ---------------------------------------------------------------------------
 
-export const getNotificationsApi = () =>
-  technicianApiRequest("/notifications/");
+export const getNotificationsApi = (page = 1, pageSize = 50) =>
+  technicianApiRequest(
+    `/notifications?page=${page}&page_size=${pageSize}`,
+  );
 
 export const getUnreadNotificationCountApi = () =>
   technicianApiRequest("/notifications/unread-count");
@@ -848,6 +850,15 @@ export const markNotificationReadApi = (notificationId: string | number) =>
 export const markAllNotificationsReadApi = () =>
   technicianApiRequest("/notifications/read-all", {
     method: "PATCH",
+  });
+export const deleteNotificationApi = (notificationId: string | number) =>
+  technicianApiRequest(
+    `/notifications/${encodeURIComponent(String(notificationId))}`,
+    { method: "DELETE" },
+  );
+export const clearReadNotificationsApi = () =>
+  technicianApiRequest("/notifications/clear-read", {
+    method: "DELETE",
   });
 
 // ---------------------------------------------------------------------------

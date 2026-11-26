@@ -100,12 +100,40 @@ function normalizeNotification(
   };
 }
 
+const PAGE_SIZE = 50;
+
+function readCounts(response: unknown) {
+  const record =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : {};
+
+  return {
+    total:
+      typeof record.total === "number" ? record.total : null,
+    unread:
+      typeof record.unread_count === "number"
+        ? record.unread_count
+        : null,
+  };
+}
+
 export function CustomerNotificationsPage() {
   const [filter, setFilter] =
     useState<NotificationFilter>("all");
 
   const [notifications, setNotifications] =
     useState<NotificationItem[]>([]);
+
+  const [page, setPage] = useState(1);
+
+  const [total, setTotal] = useState(0);
+
+  const [serverUnread, setServerUnread] =
+    useState<number | null>(null);
+
+  const [loadingMore, setLoadingMore] =
+    useState(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -121,7 +149,7 @@ export function CustomerNotificationsPage() {
 
     try {
       const response =
-        await customerApi.getNotifications();
+        await customerApi.getNotifications(1, PAGE_SIZE);
 
       const items = unwrapArray<NotificationApi>(
         response,
@@ -133,7 +161,23 @@ export function CustomerNotificationsPage() {
             new Date(a.timestamp).getTime(),
         );
 
-      setNotifications(items);
+      const meta = readCounts(response);
+
+      // Silent refreshes keep older pages the user already loaded.
+      setNotifications((current) =>
+        silent && current.length > items.length
+          ? [
+              ...items,
+              ...current.filter(
+                (old) =>
+                  !items.some((item) => item.id === old.id),
+              ),
+            ]
+          : items,
+      );
+      if (!silent) setPage(1);
+      setTotal(meta.total ?? items.length);
+      setServerUnread(meta.unread);
     } catch (requestError) {
       if (!silent) {
         setError(
@@ -164,13 +208,104 @@ export function CustomerNotificationsPage() {
     };
   }, []);
 
-  const unreadCount =
+  const loadedUnread =
     notifications.filter(
       (item) => !item.read,
     ).length;
 
-  const readCount =
-    notifications.length - unreadCount;
+  // Prefer the BE total, which also covers pages that are not loaded yet.
+  const unreadCount = serverUnread ?? loadedUnread;
+
+  const readCount = Math.max(
+    (total || notifications.length) - unreadCount,
+    0,
+  );
+
+  const hasLoadedRead = notifications.some(
+    (item) => item.read,
+  );
+
+  const notifyHeader = () => {
+    window.dispatchEvent(
+      new Event("customer-notifications-updated"),
+    );
+  };
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+
+    try {
+      const response =
+        await customerApi.getNotifications(
+          page + 1,
+          PAGE_SIZE,
+        );
+
+      const next = unwrapArray<NotificationApi>(
+        response,
+      ).map(normalizeNotification);
+
+      setNotifications((current) => [
+        ...current,
+        ...next.filter(
+          (item) =>
+            !current.some((old) => old.id === item.id),
+        ),
+      ]);
+      setPage(page + 1);
+      setTotal(readCounts(response).total ?? total);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load notifications.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const deleteOne = async (id: string) => {
+    const previous = notifications;
+    const target = notifications.find(
+      (item) => item.id === id,
+    );
+
+    setNotifications((items) =>
+      items.filter((item) => item.id !== id),
+    );
+    setTotal((value) => Math.max(value - 1, 0));
+    if (target && !target.read) {
+      setServerUnread((value) =>
+        value === null ? value : Math.max(value - 1, 0),
+      );
+    }
+
+    try {
+      await customerApi.deleteNotification(id);
+      notifyHeader();
+    } catch {
+      setNotifications(previous);
+      void load(true);
+    }
+  };
+
+  const clearRead = async () => {
+    const previous = notifications;
+
+    setNotifications((items) =>
+      items.filter((item) => !item.read),
+    );
+
+    try {
+      await customerApi.clearReadNotifications();
+      void load(true);
+      notifyHeader();
+    } catch {
+      setNotifications(previous);
+    }
+  };
 
   const visibleNotifications =
     useMemo(() => {
@@ -212,10 +347,15 @@ export function CustomerNotificationsPage() {
       ),
     );
 
+    setServerUnread((value) =>
+      value === null ? value : Math.max(value - 1, 0),
+    );
+
     try {
       await customerApi.markNotificationRead(
         id,
       );
+      notifyHeader();
     } catch {
       void load();
     }
@@ -231,10 +371,15 @@ export function CustomerNotificationsPage() {
       })),
     );
 
+    const previousUnread = serverUnread;
+    setServerUnread(0);
+
     try {
       await customerApi.markAllNotificationsRead();
+      notifyHeader();
     } catch {
       setNotifications(previous);
+      setServerUnread(previousUnread);
     }
   };
 
@@ -246,21 +391,33 @@ export function CustomerNotificationsPage() {
             Notifications
           </h1>
 
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              onClick={markAllAsRead}
-              className="w-fit text-[13px] font-medium text-white/[0.52] transition hover:text-orange-400"
-            >
-              Mark all as read
-            </button>
-          )}
+          <div className="flex items-center gap-6">
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={markAllAsRead}
+                className="w-fit text-[13px] font-medium text-white/[0.52] transition hover:text-orange-400"
+              >
+                Mark all as read
+              </button>
+            )}
+
+            {hasLoadedRead && (
+              <button
+                type="button"
+                onClick={clearRead}
+                className="w-fit text-[13px] font-medium text-white/[0.52] transition hover:text-orange-400"
+              >
+                Clear read
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-8 flex items-center gap-8 border-b border-white/[0.08] sm:mt-11 sm:gap-10">
           <FilterTab
             label="All"
-            count={notifications.length}
+            count={total || notifications.length}
             active={filter === "all"}
             onClick={() => setFilter("all")}
           />
@@ -308,8 +465,11 @@ export function CustomerNotificationsPage() {
         ) : (
           visibleNotifications.map(
             (item) => (
-              <Link
+              <div
                 key={item.id}
+                className="relative"
+              >
+              <Link
                 to={item.to}
                 onClick={() =>
                   markAsRead(item.id)
@@ -372,9 +532,39 @@ export function CustomerNotificationsPage() {
                   </div>
                 </div>
               </Link>
+              <button
+                type="button"
+                aria-label="Delete notification"
+                onClick={() => {
+                  void deleteOne(item.id);
+                }}
+                className="absolute bottom-3 right-4 text-[12px] font-medium text-white/[0.30] transition hover:text-red-300 sm:right-6"
+              >
+                Delete
+              </button>
+              </div>
             ),
           )
         )}
+
+        {!loading &&
+          !error &&
+          notifications.length < total && (
+            <div className="flex justify-center border-t border-white/[0.075] px-6 py-5">
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => {
+                  void loadMore();
+                }}
+                className="text-[13px] font-medium text-orange-400 disabled:opacity-50"
+              >
+                {loadingMore
+                  ? "Loading…"
+                  : `Load more (${total - notifications.length} remaining)`}
+              </button>
+            </div>
+          )}
       </section>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "../../ui/DropdownMenu";
 import { Icon } from "../../ui/Icon";
+import { useOperatorUnreadCountQuery } from "../../../features/operator/hooks/useNotificationQueries";
 
 interface OperatorHeaderProps {
   isDark: boolean;
@@ -35,6 +36,8 @@ export function OperatorHeader({
 }: OperatorHeaderProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { data: unreadCount = 0 } = useOperatorUnreadCountQuery();
+  const unreadBadge = unreadCount > 99 ? "99+" : String(unreadCount);
 
   const handleLogout = () => {
     logout();
@@ -65,10 +68,12 @@ export function OperatorHeader({
         <NavLink
           className="icon-button notification-button"
           to="/operator/notifications"
-          aria-label="Notifications, 3 unread"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
           <Icon name="bell" />
-          <span className="notification-count" aria-hidden="true">3</span>
+          {unreadCount > 0 && (
+            <span className="notification-count" aria-hidden="true">{unreadBadge}</span>
+          )}
         </NavLink>
 
         <DropdownMenu>

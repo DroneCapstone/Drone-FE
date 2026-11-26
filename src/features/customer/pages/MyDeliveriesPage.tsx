@@ -11,7 +11,7 @@ type DeliverySummary = ReturnType<
   typeof customerDeliveryService.getOrderSummariesByCustomer
 >[number];
 
-type DeliveryTab = "all" | "unpaid" | "paid" | "received" | "in-transit" | "delivered";
+type DeliveryTab = "all" | "unpaid" | "paid" | "received" | "in-transit" | "delivered" | "cancelled";
 
 const DELIVERY_TABS: ReadonlyArray<{ key: DeliveryTab; label: string }> = [
   { key: "all", label: "All" },
@@ -20,6 +20,7 @@ const DELIVERY_TABS: ReadonlyArray<{ key: DeliveryTab; label: string }> = [
   { key: "received", label: "Received" },
   { key: "in-transit", label: "In transit" },
   { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
 ];
 
 const ORDERS_PER_PAGE = 8;
@@ -39,9 +40,12 @@ function getDeliveryTab(order: DeliverySummary): Exclude<DeliveryTab, "all"> | n
   const statuses = `${code} ${customer}`;
   const tokens = `${statuses} ${label}`.replace(/[_-]/g, " ");
 
-  // Cancelled/expired/refunded orders are kept in All, not in active stages.
-  if (/cancel|reject|order expired|refund/.test(tokens) ||
-      /^(cancelled|canceled|refunded)$/.test(payment)) return null;
+  // Cancelled/rejected orders get their own tab (and stay in All).
+  if (/cancel|reject/.test(tokens) || /^(cancelled|canceled)$/.test(payment)) return "cancelled";
+
+  // Expired/refunded orders are kept in All, not in active stages.
+  if (/order expired|refund/.test(tokens) ||
+      /^refunded$/.test(payment)) return null;
 
   const paid = /^(paid|completed|success|succeeded)$/.test(payment);
   const unpaid = /^(pending|unpaid|not_paid|failed|awaiting_payment|pending_payment|payment_pending|payment_required)$/.test(payment);

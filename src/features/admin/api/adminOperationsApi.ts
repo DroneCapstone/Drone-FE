@@ -236,6 +236,9 @@ export const adminOperationsApi = {
     }
     return payload as unknown as NotificationPageApi;
   },
+  // Compatibility with the paginated helper introduced in main.
+  notificationsPage: (page = 1, pageSize = 50): Promise<NotificationPageApi> =>
+    adminOperationsApi.notifications({ page, page_size: pageSize }),
   notificationUnreadCount: async (): Promise<number> => {
     const payload = unwrap(await get<unknown>('/notifications/unread-count'));
     const candidates = object(payload) ? [payload.unread_count, payload.count, payload.unread] : [payload];
