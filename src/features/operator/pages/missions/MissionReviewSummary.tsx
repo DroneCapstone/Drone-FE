@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BarChart3, BatteryCharging, BatteryFull, Clock, Cpu, Leaf, Package, Route, Warehouse, Zap } from 'lucide-react';
+import { BarChart3, BatteryFull, Clock, Cpu, Leaf, Package, Route, Zap } from 'lucide-react';
 import { Icon } from '../../../../components/ui/Icon';
 import type { EligibleMissionBattery } from '../../api/missionApi';
 import type { Order, OperatorDrone, RouteOption } from '../../types/operator';
@@ -119,8 +119,11 @@ export function MissionReviewSummary(props: Props) {
         <Field label="Order ID"><span className="mr-id">{order.id}</span></Field>
         <Field label="Delivery mode"><span className="mr-inline">{String(order.deliveryMode).toUpperCase() === 'EXPRESS' && <Zap size={15} className="mr-accent" />}{order.deliveryMode}</span></Field>
         <Field label="Payload">{finite(order.payloadKg) ? `${order.payloadKg.toFixed(2)} kg` : '—'}</Field>
-        <Field label="Origin package"><span className={received ? 'mr-success' : ''}>{received ? 'Received at Hub' : 'Awaiting package'}</span>
-          {order.originHubReceivedAt && <small>{formatMissionTime(order.originHubReceivedAt)}</small>}
+        <Field label="Origin package">
+          <span>
+            {received ? 'Received at Hub' : 'Awaiting package'}
+            {order.originHubReceivedAt && ` · ${formatMissionTime(order.originHubReceivedAt)}`}
+          </span>
         </Field>
       </dl>
     </Section>
@@ -139,14 +142,13 @@ export function MissionReviewSummary(props: Props) {
         <dl className="mr-single"><Field label="Route ID">{route.id}</Field></dl>
         <div className="mr-profile"><Leaf size={15} />{profile || '—'}</div>
         <div className="mr-divider" />
-        {drone.isCrossHub && <small className="mr-dispatch">Dispatch flight · 0 kg (no package)</small>}
         <ol className="mr-path">
           {path.map((hub,i) => {
             const swap = hub.id != null && (swapHubIds.includes(hub.id) || (relayHubIds.includes(hub.id) && batteries.some(b => b.hub === hub.name && b.role.startsWith('Relay'))));
             const relayIndex = hub.id ? relayHubIds.indexOf(hub.id) : -1;
             const role = i === path.length-1 ? 'Destination' : hub.id === order.originHubId || (!drone.isCrossHub && i === 0) ? 'Origin' :
               i === 0 && drone.isCrossHub ? 'Dispatch origin' : `Relay ${relayIndex >= 0 ? relayIndex + 1 : i}${swap ? ' · Battery swap' : ''}`;
-            return <li key={`${hub.id ?? hub.name}-${i}`}><span className={`mr-path-icon${swap ? ' mr-path-swap' : ''}`}>{swap ? <BatteryCharging size={15} /> : <Warehouse size={15} />}</span><div><strong>{hub.name}</strong><small>{role}</small></div></li>;
+            return <li key={`${hub.id ?? hub.name}-${i}`}><span className="mr-path-dot" aria-hidden="true" /><div><strong>{hub.name}</strong><small>{role}</small></div></li>;
           })}
         </ol>
         {drone.isCrossHub && !legs.some(l => l.isDispatch) && <small>Dispatch to {originLabel} · leg data unavailable</small>}
@@ -177,7 +179,7 @@ export function MissionReviewSummary(props: Props) {
       <div className="mr-divider" />
       <h4>Energy consumption by leg</h4>
       <div className="mr-table-scroll"><table className="mr-table"><thead><tr><th scope="col">Flight leg</th><th scope="col">Distance</th><th scope="col">Energy</th><th scope="col">Battery consumption</th></tr></thead>
-        <tbody>{legs.length ? legs.map((l,i) => <tr key={i}><td>{l.from} → {l.to}{l.isDispatch && <small>Dispatch · 0 kg</small>}</td><td>{measure(l.distance,' km',2)}</td><td>{energy(l.energy)}</td><td className="mr-accent">{pct(l.use)}</td></tr>) : <tr><td colSpan={4}>Per-leg data unavailable</td></tr>}</tbody>
+        <tbody>{legs.length ? legs.map((l,i) => <tr key={i}><td>{l.from} → {l.to}</td><td>{measure(l.distance,' km',2)}</td><td>{energy(l.energy)}</td><td className="mr-accent">{pct(l.use)}</td></tr>) : <tr><td colSpan={4}>Per-leg data unavailable</td></tr>}</tbody>
       </table></div>
     </section>
   </div>;
