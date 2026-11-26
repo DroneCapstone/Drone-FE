@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  clearReadNotificationsApi,
+  deleteNotificationApi,
   getNotificationsApi,
   getUnreadNotificationCountApi,
   markAllNotificationsReadApi,
@@ -19,7 +21,7 @@ export function useNotificationsQuery() {
   return useQuery({
     queryKey:
       technicianQueryKeys.notifications(),
-    queryFn: getNotificationsApi,
+    queryFn: () => getNotificationsApi(1, 50),
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
@@ -67,5 +69,31 @@ export function useMarkAllNotificationsReadMutation() {
         queryClient.invalidateQueries({ queryKey: technicianQueryKeys.unreadCount() }),
       ]);
     },
+  });
+}
+
+function useInvalidateNotifications() {
+  const queryClient = useQueryClient();
+  return () => {
+    void Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.notifications() }),
+      queryClient.invalidateQueries({ queryKey: technicianQueryKeys.unreadCount() }),
+    ]);
+  };
+}
+
+export function useDeleteNotificationMutation() {
+  const invalidate = useInvalidateNotifications();
+  return useMutation({
+    mutationFn: (notificationId: string) => deleteNotificationApi(notificationId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useClearReadNotificationsMutation() {
+  const invalidate = useInvalidateNotifications();
+  return useMutation({
+    mutationFn: clearReadNotificationsApi,
+    onSuccess: invalidate,
   });
 }
