@@ -1,4 +1,4 @@
-import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, Tone } from '../types/operator';
+import type { Mission, MissionLeg, MissionStatus, PlannedRelayBattery, PlannedRouteLeg, RouteLegSnapshot, RouteOption, RouteAiExplanation, RouteComparisonVsRecommended, RoutePlanningExplanation, RouteAlternativeExplanation, RouteWeatherConditions, Tone } from '../types/operator';
 import { OperatorApiError, operatorApiRequest } from './orderApi';
 
 export interface MissionHubSummary {
@@ -723,6 +723,23 @@ function mapRelayBattery(raw: unknown): PlannedRelayBattery {
   };
 }
 
+/** Preserve the structured forecast returned by Analyze at route and leg level. */
+function mapRouteWeather(raw: unknown, fallbackSummary?: string): RouteWeatherConditions | undefined {
+  const record = asRecord(raw);
+  const weather: RouteWeatherConditions = {
+    temperatureC: pickOptionalNumber(record, ['temperature_c', 'temperatureC']),
+    windSpeedMs: pickOptionalNumber(record, ['wind_speed_ms', 'windSpeedMs']),
+    windGustMs: pickOptionalNumber(record, ['wind_gust_ms', 'windGustMs']),
+    precipitationMm: pickOptionalNumber(record, ['precipitation_mm', 'precipitationMm']),
+    humidityPct: pickOptionalNumber(record, ['humidity_pct', 'humidityPct']),
+    conditionLabel: pickString(record, ['condition_label', 'conditionLabel']) || undefined,
+    weatherSummary: pickString(record, ['weather_summary', 'weatherSummary']) || fallbackSummary,
+    isBadWeather: pickOptionalBoolean(record, ['is_bad_weather', 'isBadWeather']),
+    warningMessage: pickString(record, ['warning_message', 'warningMessage']) || undefined,
+  };
+  return Object.values(weather).some((value) => value !== undefined) ? weather : undefined;
+}
+
 function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
   const item = asRecord(raw);
   const from = pickString(item, ['from_hub_code', 'fromHubCode']);
@@ -733,6 +750,9 @@ function mapRouteLegSnapshot(raw: unknown): RouteLegSnapshot | null {
     from_hub_code: from,
     to_hub_code: to,
     distance_km: distance,
+    weather: mapRouteWeather(item.weather, pickString(item, ['weather_summary', 'weatherSummary']) || undefined),
+    weather_summary: pickString(item, ['weather_summary', 'weatherSummary']) ||
+      pickString(asRecord(item.weather), ['weather_summary', 'weatherSummary']) || undefined,
     leg_type: pickString(item, ['leg_type', 'legType']) || undefined,
     is_dispatch: pickOptionalBoolean(item, ['is_dispatch', 'isDispatch']),
     payload_kg: pickOptionalNumber(item, ['payload_kg', 'payloadKg']),
@@ -848,6 +868,9 @@ function mapRouteOption(raw: unknown, index: number): RouteOption {
     confidencePct: pickNumber(record, ['confidence_pct', 'confidencePct', 'confidence'], 0),
     risk: normalizeRisk(record.risk_level ?? record.risk),
     weatherImpact: pickString(record, ['weather_impact', 'weatherImpact']),
+    weather: mapRouteWeather(record.weather, pickString(record, ['weather_summary', 'weatherSummary']) || undefined),
+    weatherSummary: pickString(record, ['weather_summary', 'weatherSummary']) ||
+      pickString(asRecord(record.weather), ['weather_summary', 'weatherSummary']) || undefined,
     relayHubIds,
     relayStopMinutes: pickNumber(record, ['relay_stop_minutes', 'relayStopMinutes'], Number.NaN),
     feasible: pickOptionalBoolean(record, ['feasible', 'is_feasible', 'isFeasible']),
