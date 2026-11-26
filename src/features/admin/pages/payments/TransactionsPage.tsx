@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { adminDetailText, adminDisplayText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,13 +17,16 @@ import { extractRows, field, amount, money, timestamp, type JsonRow } from '../.
 // The Backend currently publishes no response schema for GET /payments/transactions.
 // Render only fields actually supplied by its response. Never fall back to prototype payments.
 export function TransactionsPage() {
+  const [params] = useSearchParams();
+  const initialQuery = params.get('q') ?? '';
   const [items, setItems] = useState<JsonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState('all');
+  useEffect(() => { setQuery(initialQuery); setStatus('all'); }, [initialQuery]);
   const [selected, setSelected] = useState<JsonRow | null>(null);
   const [reason, setReason] = useState('');
 

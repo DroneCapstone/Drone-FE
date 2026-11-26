@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -18,6 +19,8 @@ const blankDraft = (): Draft => ({ name: '', categoryType: 'Other', compatible: 
 
 /** Inventory is per Hub in Backend. The former browser-local Spare Parts demo is intentionally disabled; no mock fallback. */
 export function SparePartsPage() {
+  const [params] = useSearchParams();
+  const initialFilter = params.get('stock') === 'LOW' ? 'LOW' : 'ALL';
   const [parts, setParts] = useState<PartCategoryApi[]>([]);
   const [stocks, setStocks] = useState<StockApi[]>([]);
   const [hubs, setHubs] = useState<HubApi[]>([]);
@@ -27,7 +30,8 @@ export function SparePartsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('ALL');
+  const [filter, setFilter] = useState(initialFilter);
+  useEffect(() => { setFilter(initialFilter); }, [initialFilter]);
   const [selectedHub, setSelectedHub] = useState('all');
   const [editing, setEditing] = useState<PartCategoryApi | 'new' | null>(null);
   const [draft, setDraft] = useState<Draft>(blankDraft);

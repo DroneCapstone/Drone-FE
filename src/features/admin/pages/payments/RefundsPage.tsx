@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
@@ -9,11 +10,14 @@ import { extractRows, field, amount, money, timestamp, type JsonRow } from '../.
 
 // GET /payments/refunds is the only data source. Previous prototype refunds are unused.
 export function RefundsPage() {
+  const [params] = useSearchParams();
+  const initialQuery = params.get('q') ?? '';
   const [items, setItems] = useState<JsonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [status, setStatus] = useState('all');
+  useEffect(() => { setQuery(initialQuery); setStatus('all'); }, [initialQuery]);
   async function refresh() {
     setLoading(true);
     try { setItems(extractRows(await adminOperationsApi.refunds(), ['refunds'])); setError(''); }

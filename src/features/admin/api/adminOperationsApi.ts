@@ -115,6 +115,9 @@ export interface StockApi { id?: number; hub_id: number; part_category_id: numbe
 export interface AuditApi { id: number; user_id: string | number | null; action: string; resource_table: string | null; details_json: Record<string, unknown> | null; created_at: string; }
 export interface AuditPageApi { total: number; page: number; page_size: number; items: AuditApi[]; }
 export interface NotificationApi { id: number; title: string; message: string; notifications_type: string; is_read: boolean; created_at: string; reference_id?: string | null; drone_id?: string | number | null; mission_id?: string | null; work_order_id?: number | null; }
+export type NotificationType = 'Mission_Status' | 'Payment' | 'System_Alert' | 'AI_Warning' | 'Maintenance';
+export interface NotificationQuery { page?: number; page_size?: number; is_read?: boolean; notification_type?: NotificationType; }
+export interface NotificationPageApi { total: number; unread_count: number; page: number; page_size: number; items: NotificationApi[]; }
 export interface DroneCreateApi { name?: string; model: string; serial_number: string; payload_capacity_kg: number; max_speed: number; status?: string; current_hub_id?: number | null; acquisition_cost?: number | null }
 export type DroneUpdateApi = Partial<DroneCreateApi>;
 export interface BatteryCreateApi { quantity: number; serial_number?: string; serial_numbers?: string[]; battery_model: string; capacity_wh?: number; unit_cost_override?: number; acquisition_cost?: number; current_hub_id?: number | null; status?: string; charge_level_pct?: number }
@@ -217,17 +220,30 @@ export const adminOperationsApi = {
   patchSimulatorConfig: (data: Partial<Pick<SimulatorConfigApi, 'incident_enabled' | 'incident_probability' | 'incident_min_step' | 'incident_severity' | 'interval_sec' | 'steps_per_leg' | 'next_flight_incident'>>) => send<SimulatorConfigApi>('/system/simulator-config', 'PATCH', data),
   triggerNextIncident: (data: SimulatorIncidentApi) => send<SimulatorTriggerResultApi>('/system/simulator-config/trigger-next-incident', 'POST', data),
   audit: (page: number, pageSize = 30) => get<AuditPageApi>(`/system/audit-logs?page=${page}&page_size=${pageSize}`),
-  notifications: async () => apiList<NotificationApi>(await get<unknown>('/notifications'), 'Notifications'),
-  notificationUnreadCount: async (): Promise<number> => {
-    const payload = await get<unknown>('/notifications/unread-count');
-    if (typeof payload === 'number' && Number.isFinite(payload)) return payload;
-    if (object(payload)) {
-      for (const key of ['unread_count', 'count', 'unread']) {
-        const value = payload[key];
-        if (typeof value === 'number' && Number.isFinite(value)) return value;
-      }
+  notifications: async (query: NotificationQuery = {}): Promise<NotificationPageApi> => {
+    const params = new URLSearchParams({ page: String(query.page ?? 1), page_size: String(query.page_size ?? 20) });
+    if (query.is_read !== undefined) params.set('is_read', String(query.is_read));
+    if (query.notification_type) params.set('notification_type', query.notification_type);
+    const payload = unwrap(await get<unknown>(`/notifications?${params.toString()}`));
+    if (!object(payload) || !Array.isArray(payload.items) ||
+        !payload.items.every(item => object(item) && Number.isSafeInteger(item.id) &&
+          typeof item.title === 'string' && typeof item.message === 'string' &&
+          typeof item.notifications_type === 'string' && typeof item.is_read === 'boolean' &&
+          typeof item.created_at === 'string') ||
+        ![payload.total, payload.unread_count, payload.page, payload.page_size].every(v => typeof v === 'number' && Number.isInteger(v) && v >= 0) ||
+        Number(payload.page) < 1 || Number(payload.page_size) < 1) {
+      throw new Error('Unexpected notification response structure.');
     }
-    throw new Error('Unread notification count: unknown response schema.');
+    return payload as unknown as NotificationPageApi;
+  },
+  notificationUnreadCount: async (): Promise<number> => {
+    const payload = unwrap(await get<unknown>('/notifications/unread-count'));
+    const candidates = object(payload) ? [payload.unread_count, payload.count, payload.unread] : [payload];
+    for (const candidate of candidates) {
+      const value = typeof candidate === 'string' && /^\d+$/.test(candidate.trim()) ? Number(candidate) : candidate;
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+    }
+    throw new Error('Unexpected notification count response.');
   },
   markNotification: (id: number) => send<unknown>(`/notifications/${id}/read`, 'PATCH'),
   markNotificationsRead: () => send<unknown>('/notifications/read-all', 'PATCH'),

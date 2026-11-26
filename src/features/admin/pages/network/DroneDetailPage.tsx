@@ -1,6 +1,6 @@
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
@@ -18,9 +18,12 @@ const maintenanceTone = (value: string): 'red' | 'green' => value.toUpperCase() 
 
 export function DroneDetailPage() {
   const { droneId } = useParams();
+  const [params] = useSearchParams();
+  const requestedTab = params.get('tab');
+  const initialTab: DetailTab = requestedTab === 'orders' || requestedTab === 'maintenance' || requestedTab === 'flights' ? requestedTab : 'overview';
   const [drone, setDrone] = useState<DroneOverviewApi | null>(null);
   const [hubs, setHubs] = useState<HubApi[]>([]);
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const [tab, setTab] = useState<DetailTab>(initialTab);
   const [maintenance, setMaintenance] = useState<DroneMaintenanceApi | null>(null);
   const [orders, setOrders] = useState<WorkOrderApi[]>([]);
   const [flights, setFlights] = useState<FlightHistoryApi | null>(null);
@@ -46,7 +49,8 @@ export function DroneDetailPage() {
     } catch (cause) { setError(apiError(cause)); }
     finally { setLoading(false); }
   }
-  useEffect(() => { setDrone(null); setTab('overview'); void refresh(); }, [droneId]);
+  useEffect(() => { setDrone(null); void refresh(); }, [droneId]);
+  useEffect(() => { setTab(initialTab); }, [droneId, initialTab]);
   useEffect(() => {
     if (!droneId || tab === 'overview') { setTabLoading(false); setTabResult(null); return; }
     let live = true;
