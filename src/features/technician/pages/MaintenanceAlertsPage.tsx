@@ -532,7 +532,6 @@ export function MaintenanceAlertsPage() {
                 <p><strong>Status:</strong> {selectedAlert.status ?? "—"}</p>
                 <p><strong>Created:</strong> {selectedAlert.createdAt}</p>
                 {selectedAlert.missionId && <p><strong>Mission:</strong> {selectedAlert.missionId}</p>}
-                {selectedAlert.reason && <p className="whitespace-pre-wrap"><strong>Details:</strong> {selectedAlert.reason}</p>}
               </div>
             ) : (
               <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Backend returned no valid alert details.</p>
