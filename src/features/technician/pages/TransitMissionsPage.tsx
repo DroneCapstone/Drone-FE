@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
 
   type ReactNode,
@@ -574,6 +575,8 @@ export function TransitMissionsPage() {
     setMissions,
 
   ] = useState<TransitMission[]>(() => transitQuery.data ?? []);
+  const [hasLoadedTransit, setHasLoadedTransit] = useState(() => transitQuery.data !== undefined);
+  const isInitialTransitLoading = !hasLoadedTransit && !transitQuery.isError;
 
 
 
@@ -817,6 +820,7 @@ export function TransitMissionsPage() {
     if (transitQuery.data) {
 
       setMissions(transitQuery.data);
+      setHasLoadedTransit(true);
 
     }
 
@@ -1873,13 +1877,15 @@ export function TransitMissionsPage() {
 
 
 
-          {visibleMissions.length === 0 && (
+          {isInitialTransitLoading ? (
+            <TechnicianLoadingState label="Loading transit missions..." />
+          ) : visibleMissions.length === 0 && (
 
             <div className="px-5 py-14 text-center">
 
               <p className="text-[15px] font-medium text-[var(--tech-text-secondary)]">
 
-                {transitQuery.isPending ? "Loading transit missions..." : transitQuery.isError ? "Unable to load transit missions" : "No incoming missions found"}
+                {transitQuery.isError ? "Unable to load transit missions" : "No incoming missions found"}
 
               </p>
 
@@ -1887,7 +1893,7 @@ export function TransitMissionsPage() {
 
               <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
 
-                {transitQuery.isPending ? "Fetching data from Backend." : transitQuery.isError ? "Check the Backend connection and retry." : "No drones currently require handling at this hub."}
+                {transitQuery.isError ? "Check the Backend connection and retry." : "No drones currently require handling at this hub."}
 
               </p>
 
@@ -1993,7 +1999,7 @@ export function TransitMissionsPage() {
 
                 {historyQuery.isPending ? (
 
-                  <p className="p-8 text-center text-sm text-[var(--tech-muted)]">Loading mission history...</p>
+                  <TechnicianLoadingState label="Loading mission history..." />
 
                 ) : historyQuery.isError ? (
 

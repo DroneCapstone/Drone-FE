@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   BatteryFull,
   Eye,
@@ -338,11 +339,11 @@ export function OutboundDeliveriesPage() {
         <CardContent className="border-b border-[var(--tech-border)] px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--tech-muted)]">
-              <span><strong className="font-semibold text-[var(--tech-text)]">{outboundQuery.isPending ? "—" : normalizedDeliveries.length}</strong> total</span>
-              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{awaitingCount}</strong> awaiting</span>
-              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{atHubCount}</strong> at hub</span>
-              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{assignedCount}</strong> assigned</span>
-              <span><strong className="font-semibold text-orange-500">{readyCount}</strong> ready</span>
+              <span><strong className="font-semibold text-[var(--tech-text)]">{outboundQuery.data === undefined ? "—" : normalizedDeliveries.length}</strong> total</span>
+              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{outboundQuery.data === undefined ? "—" : awaitingCount}</strong> awaiting</span>
+              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{outboundQuery.data === undefined ? "—" : atHubCount}</strong> at hub</span>
+              <span><strong className="font-semibold text-[var(--tech-text-secondary)]">{outboundQuery.data === undefined ? "—" : assignedCount}</strong> assigned</span>
+              <span><strong className="font-semibold text-orange-500">{outboundQuery.data === undefined ? "—" : readyCount}</strong> ready</span>
             </div>
             <button type="button" onClick={() => {
               setHistoryOpen(true);
@@ -536,11 +537,11 @@ export function OutboundDeliveriesPage() {
                 </div>
               ))}
               {outboundQuery.isPending && (
-                <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">Loading outbound deliveries...</div>
+                <TechnicianLoadingState label="Loading outbound deliveries..." />
               )}
               {!outboundQuery.isPending && filteredDeliveries.length === 0 && (
                 <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">
-                  {normalizedDeliveries.length === 0 ? "No outbound deliveries available." : "No orders match these filters."}
+                  {outboundQuery.isError && !outboundQuery.data ? "Unable to load outbound deliveries." : normalizedDeliveries.length === 0 ? "No outbound deliveries available." : "No orders match these filters."}
                 </div>
               )}
             </div>
@@ -693,9 +694,9 @@ export function OutboundDeliveriesPage() {
                     <span>{formatDate(item.departedAt)}</span>
                   </div>
                 )) : (
-                  <div className="px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]">
+                  <div className={historyQuery.isPending ? "" : "px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]"}>
                     {historyQuery.isPending
-                      ? "Loading outbound history from Backend..."
+                      ? <TechnicianLoadingState label="Loading outbound history..." />
                       : historyQuery.isError
                         ? "Unable to load outbound history."
                         : "No outbound mission history found."}

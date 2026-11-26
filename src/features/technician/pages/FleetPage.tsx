@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   useMemo,
   useState,
@@ -355,7 +356,7 @@ export function FleetPage() {
                     className="h-32 text-center text-[13px] text-[var(--tech-subtle)]"
                   >
                     {fleetQuery.isPending
-                      ? "Loading drones..."
+                      ? <TechnicianLoadingState label="Loading drones..." />
                       : fleetQuery.isError
                         ? "Unable to load Hub Fleet."
                         : hubDrones.length > 0

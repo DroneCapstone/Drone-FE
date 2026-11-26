@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   ArrowUpRight,
   History,
@@ -621,7 +622,7 @@ export function WorkOrdersPage() {
           </h2>
           <div className="flex items-center gap-4">
             <span className="text-[13px] text-[var(--tech-subtle)]">
-              {filteredWorkOrders.length} work orders
+              {workOrdersQuery.data === undefined ? "—" : filteredWorkOrders.length} work orders
             </span>
             <button
               type="button"
@@ -699,10 +700,11 @@ export function WorkOrdersPage() {
                   </div>
                 ),
               )}
-              {filteredWorkOrders.length ===
-                0 && (
+              {workOrdersQuery.isPending ? (
+                <TechnicianLoadingState label="Loading work orders..." />
+              ) : filteredWorkOrders.length === 0 && (
                 <div className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
-                  No work orders match the current filters.
+                  {workOrdersQuery.isError && !workOrdersQuery.data ? "Unable to load work orders." : "No work orders match the current filters."}
                 </div>
               )}
             </div>
@@ -831,9 +833,7 @@ export function WorkOrdersPage() {
                   <span>Status</span>
                 </div>
                 {historyLoading ? (
-                  <div className="px-5 py-12 text-center text-[14px] text-[var(--tech-muted)]">
-                    Loading completed work orders...
-                  </div>
+                  <TechnicianLoadingState label="Loading completed work orders..." />
                 ) : completedHistory.length > 0 ? (
                   <div className="divide-y divide-[var(--tech-border)]">
                     {completedHistory.map((item) => (
