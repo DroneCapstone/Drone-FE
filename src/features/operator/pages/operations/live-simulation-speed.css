@@ -1,0 +1,23 @@
+/* Local toolbar control; no map, aircraft card or telemetry style changes. */
+.live-simulation-speed { display: flex; flex-direction: column; gap: 3px; flex: none; }
+.live-simulation-speed-control { display: flex; align-items: center; gap: 4px; }
+.live-3d-tools .live-simulation-speed select {
+  height: 30px;
+  box-sizing: border-box;
+  max-width: 160px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 6px);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.live-3d-tools .live-simulation-speed select:focus-visible { outline: 1px solid var(--orange); outline-offset: 1px; }
+.live-3d-tools .live-simulation-speed select:disabled { cursor: default; opacity: .65; }
+.live-simulation-speed small { max-width: 190px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.live-simulation-speed .live-simulation-speed-error { color: var(--red); }
+/* The new control can wrap without shrinking the existing map buttons. */
+.live-ops-map-panel .live-3d-toolbar { flex-wrap: wrap; }
+.live-ops-map-panel .live-3d-tools { max-width: 100%; flex-wrap: wrap; margin-left: auto; justify-content: flex-end; }

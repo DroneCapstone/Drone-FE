@@ -13,6 +13,7 @@ import { useLiveTrackingQuery, useMissionHubsQuery, useMissionHubCheckpointsQuer
 import { operatorQueryKeys } from '../../query/queryKeys';
 import { LiveMapTiler, type LiveMapTilerHandle, type LiveMapStyle } from './LiveMapTiler';
 import { OperationPageShell } from './OperationPageShell';
+import { LiveSimulationSpeed } from './LiveSimulationSpeed';
 import { resolveLiveFlightStatus } from './liveFlightStatus';
 import './operations-enhanced.css';
 import './digital-twin-live.css';
@@ -329,6 +330,7 @@ export function LiveTrackingPage() {
           <div className="live-3d-toolbar">
             <div className="live-3d-title"><strong>Drone Fleet Map</strong></div>
             <div className="live-3d-tools" aria-label="Map controls">
+              <LiveSimulationSpeed />
               <button type="button" title="Zoom in" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}><Icon name="plus" size={17} /></button>
               <button type="button" title="Zoom out" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
               <button type="button" title="Fit all hubs and aircraft" aria-label="Fit all hubs and aircraft" onClick={() => mapRef.current?.fitAll()}><Icon name="pin" size={17} /></button>
