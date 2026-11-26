@@ -4,11 +4,15 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type FormEvent,
   type ReactNode,
 } from "react";
 
 import {
   Camera,
+  KeyRound,
+  Eye,
+  EyeOff,
   Mail,
   MapPin,
   Pencil,
@@ -42,6 +46,8 @@ import {
 
 import {
   pickString,
+  technicianApiRequest,
+  TechnicianApiError,
   unwrapObject,
 } from "../api/httpClient";
 
@@ -187,6 +193,8 @@ export function TechnicianProfilePage() {
   ] = useState(false);
 
   const [apiError, setApiError] = useState("");
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
   const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
 
   useEffect(() => {
@@ -471,6 +479,19 @@ export function TechnicianProfilePage() {
             </Button>
           </div>
         ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPasswordMessage("");
+                setPasswordOpen(true);
+              }}
+              className="h-9 rounded-md border border-[var(--tech-border)] !bg-transparent px-4 text-[13px] font-medium text-[var(--tech-text)] hover:!border-orange-500/50 hover:!text-orange-500"
+            >
+              <KeyRound size={15} strokeWidth={1.6} />
+              Change password
+            </Button>
           <Button
   type="button"
   variant="outline"
@@ -507,9 +528,15 @@ export function TechnicianProfilePage() {
 
   Edit profile
 </Button>
+          </div>
         )
       }
     >
+      {passwordMessage && (
+        <div role="status" className="mb-4 rounded-md border border-emerald-500/30 px-4 py-3 text-[13px] text-emerald-600 dark:text-emerald-400">
+          {passwordMessage}
+        </div>
+      )}
       {apiError && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError}
@@ -1043,6 +1070,15 @@ export function TechnicianProfilePage() {
           </CardContent>
         </Card>
       </div>
+      {passwordOpen && (
+        <ChangePasswordDialog
+          onClose={() => setPasswordOpen(false)}
+          onSuccess={() => {
+            setPasswordOpen(false);
+            setPasswordMessage("Password changed successfully.");
+          }}
+        />
+      )}
     </TechnicianPageShell>
   );
 }
@@ -1240,5 +1276,147 @@ function ProfileField({
 
       {children}
     </label>
+  );
+}
+
+// Keep the request contract in one place. The shared API client adds /api/v1
+// through API_BASE_URL and attaches the current authenticated session.
+// Verify old_password/new_password against the Backend Swagger request schema.
+async function changeTechnicianPassword(oldPassword: string, newPassword: string) {
+  return technicianApiRequest("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      old_password: oldPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
+function ChangePasswordDialog({ onClose, onSuccess }: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const submitLock = useRef(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => { if (dialog?.open) dialog.close(); };
+  }, []);
+
+  const close = () => {
+    if (!submitLock.current) onClose();
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitLock.current) return;
+    setError("");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError("Please complete all password fields.");
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setError("The new password must be different from your current password.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match.");
+      return;
+    }
+    submitLock.current = true;
+    setPending(true);
+    try {
+      await changeTechnicianPassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      onSuccess();
+    } catch (cause) {
+      // Do not display/log raw validation payloads; they may echo passwords.
+      const status = cause instanceof TechnicianApiError ? cause.status : undefined;
+      setError(status === 400 || status === 401 || status === 403
+        ? "Password change was rejected. Check your current password and password requirements, or sign in again if your session expired."
+        : status === 422
+          ? "The password request is invalid. Check the password requirements and Backend request schema."
+          : status === 404
+            ? "The change password endpoint is unavailable."
+            : "Unable to confirm the password change. If the connection failed, verify your credentials before trying again.");
+    } finally {
+      submitLock.current = false;
+      setPending(false);
+    }
+  };
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="technician-change-password-title"
+      onCancel={(event) => { event.preventDefault(); close(); }}
+      className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-[460px] overflow-y-auto rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-0 text-[var(--tech-text)] shadow-2xl backdrop:bg-black/60"
+    >
+      <form onSubmit={submit} aria-busy={pending}>
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--tech-border)] px-6 py-4">
+          <h2 id="technician-change-password-title" className="text-[19px] font-semibold">Change password</h2>
+          <button type="button" aria-label="Close change password" onClick={close} disabled={pending}
+            className="text-[var(--tech-muted)] hover:text-orange-500 disabled:opacity-50">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <PasswordField label="Current password" value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" disabled={pending} />
+          <PasswordField label="New password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" disabled={pending} />
+          <PasswordField label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" disabled={pending} />
+          {error && <p role="alert" className="text-[13px] text-red-500">{error}</p>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
+          <Button type="button" variant="outline" disabled={pending} onClick={close}
+            className="h-9 rounded-md border-[var(--tech-border)] !bg-transparent px-4 text-[13px] text-[var(--tech-text)] hover:!text-orange-500">Cancel</Button>
+          <Button type="submit" disabled={pending || !currentPassword || !newPassword || !confirmPassword}
+            className="h-9 rounded-md bg-orange-500 px-4 text-[13px] font-medium text-black hover:bg-orange-600 disabled:opacity-50">
+            {pending ? "Changing..." : "Change password"}
+          </Button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+function PasswordField({ label, value, onChange, autoComplete, disabled }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: "current-password" | "new-password";
+  disabled: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div>
+      <label className="block text-[13px] font-medium text-[var(--tech-text-secondary)]">
+        {label}
+        <Input
+          type={visible ? "text" : "password"}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required
+          disabled={disabled}
+          className="mt-2 h-10 rounded-md border-[var(--tech-border)] bg-[var(--tech-surface-2)] pr-11 text-[14px] text-[var(--tech-text)] focus-visible:border-orange-500 focus-visible:ring-0"
+        />
+      </label>
+      <div className="relative h-0">
+        <button type="button" aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`} aria-pressed={visible}
+          disabled={disabled} onClick={() => setVisible((current) => !current)}
+          className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center text-[var(--tech-muted)] hover:text-orange-500 disabled:opacity-50">
+          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+    </div>
   );
 }
