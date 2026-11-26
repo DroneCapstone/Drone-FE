@@ -487,6 +487,8 @@ export type CustomerOrderSummary = {
   departedAt?: string | null;
   destinationReceivedAt?: string | null;
   collectedAt?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   /** Forecasts, NOT evidence that a milestone was reached. */
   estimatedDepartureAt?: string | null;
   estimatedArrivalAt?: string | null;
@@ -581,6 +583,8 @@ function summarizeServer(
     departedAt: readText(order.departed_at) ?? readText(order.flight_started_at),
     destinationReceivedAt: readText(order.destination_received_at),
     collectedAt: readText(order.collected_at) ?? readText(order.recipient_collected_at),
+    cancelledAt: readText(order.cancelled_at),
+    cancellationReason: readText(order.cancellation_reason),
     estimatedDepartureAt: readText(order.estimated_departure),
     estimatedArrivalAt: readText(order.estimated_arrival),
     packageLabel: readText(order.package_label),
