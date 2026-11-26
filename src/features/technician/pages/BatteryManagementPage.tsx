@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
 
   type ReactNode,
@@ -284,7 +285,7 @@ export function BatteryManagementPage() {
 
           label="Ready"
 
-          value={readyCount}
+          value={batteriesQuery.data === undefined ? "—" : readyCount}
 
           helper=""
 
@@ -296,13 +297,13 @@ export function BatteryManagementPage() {
 
           label="Charging"
 
-          value={chargingCount}
+          value={batteriesQuery.data === undefined ? "—" : chargingCount}
 
           helper=""
 
         />
 
-        <StatCard label="In Use" value={inUseCount} helper="" />
+        <StatCard label="In Use" value={batteriesQuery.data === undefined ? "—" : inUseCount} helper="" />
 
 
 
@@ -310,7 +311,7 @@ export function BatteryManagementPage() {
 
           label="Total at hub"
 
-          value={hubBatteries.length}
+          value={batteriesQuery.data === undefined ? "—" : hubBatteries.length}
 
           helper=""
 
@@ -408,11 +409,7 @@ export function BatteryManagementPage() {
 
           hubBatteries.length === 0 ? (
 
-            <div className="px-5 py-14 text-center text-[14px] text-[var(--tech-muted)]">
-
-              Loading batteries...
-
-            </div>
+            <TechnicianLoadingState label="Loading batteries..." />
 
           ) : (
 
@@ -552,7 +549,7 @@ export function BatteryManagementPage() {
 
           {!batteriesQuery.isPending &&
 
-            hubBatteries.length === 0 && (
+            hubBatteries.length === 0 && !batteriesQuery.isError && (
 
               <div className="px-5 py-14 text-center">
 
@@ -677,7 +674,7 @@ function StatCard({
 
   label: string;
 
-  value: number;
+  value: number | string;
 
   helper: string;
 

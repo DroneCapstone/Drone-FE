@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { type ReactNode, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -158,7 +159,7 @@ export function DroneDetailPage() {
 
   const loading = !drone && (droneQuery.isPending || fleetQuery.isPending);
   if (loading) {
-    return <div className={`px-6 py-8 text-[14px] ${MUTED}`}>Loading drone details...</div>;
+    return <div className="px-6 py-8"><TechnicianLoadingState label="Loading drone details..." panel /></div>;
   }
   if (!drone) {
     const error = droneQuery.error instanceof Error ? droneQuery.error.message :
@@ -283,9 +284,7 @@ export function DroneDetailPage() {
         )}
 
         {flightHistoryQuery.isPending ? (
-          <p className={`py-10 text-center text-[13px] ${MUTED}`}>
-            Loading flight history from Backend...
-          </p>
+          <TechnicianLoadingState label="Loading flight history..." />
         ) : flightRows.length === 0 ? (
           !flightHistoryQuery.isError && (
             <p className={`mt-5 rounded-md border border-dashed border-[var(--tech-border)] px-4 py-10 text-center text-[13px] ${MUTED}`}>
@@ -355,7 +354,7 @@ export function DroneDetailPage() {
           </p>}
           <div className="mt-5 space-y-3">
             {maintenanceBusy && maintenanceRecords.length === 0 ? (
-              <p className={`py-7 text-center text-[13px] ${MUTED}`}>Loading maintenance records...</p>
+              <TechnicianLoadingState label="Loading maintenance records..." />
             ) : maintenanceRecords.length > 0 ? maintenanceRecords.map((record) => (
               <details key={record.id} className="group overflow-hidden rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4">
@@ -386,7 +385,7 @@ export function DroneDetailPage() {
                 </div>
               </details>
             )) : <div className={`rounded-md border border-dashed border-[var(--tech-border)] px-4 py-9 text-center text-[14px] ${MUTED}`}>
-              No maintenance records returned for this drone.
+              {maintenanceError ? "Unable to load maintenance records." : "No maintenance records returned for this drone."}
             </div>}
           </div>
         </CardContent></Card>

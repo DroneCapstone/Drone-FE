@@ -1,3 +1,4 @@
+import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   History,
   Eye,
@@ -394,9 +395,7 @@ export function MaintenanceAlertsPage() {
                 ),
               )}
               {alertsLoading ? (
-                <div role="status" aria-live="polite" className="px-5 py-10 text-center text-[14px] text-[var(--tech-muted)]">
-                  Loading maintenance alerts...
-                </div>
+                <TechnicianLoadingState label="Loading maintenance alerts..." />
               ) : alertsFailed ? (
                 <div role="alert" className="px-5 py-10 text-center text-[14px] text-red-400">
                   <p>Unable to load maintenance alerts. Please try again.</p>
@@ -450,7 +449,7 @@ export function MaintenanceAlertsPage() {
                   <span>Handled at</span>
                 </div>
                 {alertHistoryQuery.isPending && (
-                  <div role="status" className="px-5 py-8 text-center text-[13px] text-[var(--tech-muted)]">Loading alert history...</div>
+                  <TechnicianLoadingState label="Loading alert history..." />
                 )}
                 {alertHistoryQuery.isError && (
                   <div role="alert" className="px-5 py-8 text-center text-[13px] text-red-500">
@@ -516,7 +515,7 @@ export function MaintenanceAlertsPage() {
                 aria-label="Close alert details" className="text-[var(--tech-muted)] hover:text-orange-500"><X size={18}/></button>
             </div>
             {alertDetailQuery.isPending ? (
-              <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Loading alert details from Backend...</p>
+              <TechnicianLoadingState label="Loading alert details..." />
             ) : alertDetailQuery.isError ? (
               <div role="alert" className="mt-5 text-[13px] text-red-500">
                 {alertDetailQuery.error instanceof Error ? alertDetailQuery.error.message : "Unable to load alert."}
