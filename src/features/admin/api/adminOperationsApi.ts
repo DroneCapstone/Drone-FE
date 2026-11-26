@@ -115,6 +115,7 @@ export interface StockApi { id?: number; hub_id: number; part_category_id: numbe
 export interface AuditApi { id: number; user_id: string | number | null; action: string; resource_table: string | null; details_json: Record<string, unknown> | null; created_at: string; }
 export interface AuditPageApi { total: number; page: number; page_size: number; items: AuditApi[]; }
 export interface NotificationApi { id: number; title: string; message: string; notifications_type: string; is_read: boolean; created_at: string; reference_id?: string | null; drone_id?: string | number | null; mission_id?: string | null; work_order_id?: number | null; }
+export interface NotificationPageApi { items: NotificationApi[]; total: number; unread_count: number; page: number; page_size: number; }
 export interface DroneCreateApi { name?: string; model: string; serial_number: string; payload_capacity_kg: number; max_speed: number; status?: string; current_hub_id?: number | null; acquisition_cost?: number | null }
 export type DroneUpdateApi = Partial<DroneCreateApi>;
 export interface BatteryCreateApi { quantity: number; serial_number?: string; serial_numbers?: string[]; battery_model: string; capacity_wh?: number; unit_cost_override?: number; acquisition_cost?: number; current_hub_id?: number | null; status?: string; charge_level_pct?: number }
@@ -218,6 +219,14 @@ export const adminOperationsApi = {
   triggerNextIncident: (data: SimulatorIncidentApi) => send<SimulatorTriggerResultApi>('/system/simulator-config/trigger-next-incident', 'POST', data),
   audit: (page: number, pageSize = 30) => get<AuditPageApi>(`/system/audit-logs?page=${page}&page_size=${pageSize}`),
   notifications: async () => apiList<NotificationApi>(await get<unknown>('/notifications'), 'Notifications'),
+  notificationsPage: async (page = 1, pageSize = 50): Promise<NotificationPageApi> => {
+    const data = unwrap(await get<unknown>(`/notifications?page=${page}&page_size=${pageSize}`));
+    const items = apiList<NotificationApi>(data, 'Notifications');
+    const meta = object(data) ? data : {};
+    const total = typeof meta.total === 'number' ? meta.total : items.length;
+    const unread = typeof meta.unread_count === 'number' ? meta.unread_count : items.filter((item) => !item.is_read).length;
+    return { items, total, unread_count: unread, page, page_size: pageSize };
+  },
   notificationUnreadCount: async (): Promise<number> => {
     const payload = await get<unknown>('/notifications/unread-count');
     if (typeof payload === 'number' && Number.isFinite(payload)) return payload;

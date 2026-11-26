@@ -99,10 +99,6 @@ export interface LiveAuditLog {
   id: number; user_id: string; action: string; resource_table: string;
   details_json: Record<string, unknown>; created_at: string;
 }
-export interface LiveNotification {
-  id: number; title: string; message: string; notifications_type: string;
-  is_read: boolean; created_at: string; reference_id: string | null;
-}
 function mapHub(v: Record<string, unknown>): LiveHub {
   return { id: num(v.id), name: str(v.name), code: str(v.code), area: str(v.area), address: str(v.address),
     latitude: typeof v.latitude === 'number' ? v.latitude : null, longitude: typeof v.longitude === 'number' ? v.longitude : null,
@@ -186,10 +182,4 @@ export const adminBackend = {
     return { total: num(payload.total), items: items.map((v): LiveAuditLog => ({ id: num(v.id), user_id: str(v.user_id), action: str(v.action),
       resource_table: str(v.resource_table), details_json: objectOf(v.details_json), created_at: date(v.created_at) })) };
   },
-  notifications: async () => arrayOf(await adminRequest('/notifications')).map((v): LiveNotification => ({
-    id: num(v.id), title: str(v.title), message: str(v.message), notifications_type: str(v.notifications_type),
-    is_read: bool(v.is_read), created_at: date(v.created_at), reference_id: v.reference_id == null ? null : str(v.reference_id),
-  })),
-  readNotification: (id: number) => adminRequest(`/notifications/${id}/read`, {method: 'PATCH'}),
-  readAllNotifications: () => adminRequest('/notifications/read-all', {method: 'PATCH'}),
 };
