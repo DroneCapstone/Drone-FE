@@ -1,3 +1,4 @@
+import { useAdminConfirm } from './AdminConfirmDialog';
 import { AdminSelect } from './AdminSelect';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../components/ui/ActionButton';
@@ -12,6 +13,7 @@ const isInt = (n: number) => Number.isSafeInteger(n);
 
 /** Contextual stock actions: this is the only existing Admin page receiving new action controls. */
 export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, onClose, onSaved }: Props) {
+  const confirmAction = useAdminConfirm();
   const [hub, setHub] = useState(defaultHub);
   const [destination, setDestination] = useState('');
   const [quantity, setQuantity] = useState(1);
@@ -37,7 +39,7 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
   const label = { TRANSFER: 'Transfer', ADJUST: 'Adjust Stock', DISCARD: 'Discard', THRESHOLD: 'Set Threshold' }[action ?? 'TRANSFER'];
   async function submit(event: FormEvent) {
     event.preventDefault(); if (!part || !action || !valid || saving) return;
-    if (!window.confirm(`${label} ${part.name} at the selected Hub? This updates inventory and records the change.`)) return;
+    if (!(await confirmAction({ title: `${label}`, message: `${label} ${part.name} at the selected Hub? This updates inventory and records the change.`, confirmLabel: `Confirm ${label}` }))) return;
     setSaving(true); setError('');
     try {
       if (action === 'TRANSFER') await adminOperationsApi.transferStock({ from_hub_id: Number(hub), to_hub_id: Number(destination), part_category_id: part.id, quantity, ...(note.trim() ? { note: note.trim() } : {}) });
@@ -67,6 +69,7 @@ export function SparePartActionDialog({ part, action, defaultHub, hubs, stocks, 
 type BulkItem = { partId: string; quantity: number };
 const blank = (): BulkItem => ({ partId: '', quantity: 1 });
 export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onClose, onSaved }: { open: boolean; hubs: HubApi[]; parts: PartCategoryApi[]; defaultHub: string; onClose: () => void; onSaved: () => Promise<void> }) {
+  const confirmAction = useAdminConfirm();
   const [hub, setHub] = useState('');
   const [rows, setRows] = useState<BulkItem[]>([blank(), blank()]);
   const [saving, setSaving] = useState(false);
@@ -80,7 +83,7 @@ export function SparePartsBulkReceiveDialog({ open, hubs, parts, defaultHub, onC
   function edit(index: number, patch: Partial<BulkItem>) { setRows(previous => previous.map((r, i) => i === index ? { ...r, ...patch } : r)); }
   async function submit(event: FormEvent) {
     event.preventDefault(); if (!valid || saving) return;
-    if (!window.confirm(`Receive ${rows.length} spare-part categories into ${activeHubs.find(h => String(h.id) === hub)?.name}?`)) return;
+    if (!(await confirmAction({ title: 'Bulk receive', message: `Receive ${rows.length} spare-part categories into ${activeHubs.find(h => String(h.id) === hub)?.name}?`, confirmLabel: 'Confirm Receipt' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.bulkReceive(Number(hub), rows.map(r => ({ part_category_id: Number(r.partId), quantity: r.quantity })));

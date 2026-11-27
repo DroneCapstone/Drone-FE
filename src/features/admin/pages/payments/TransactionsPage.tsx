@@ -1,3 +1,4 @@
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
@@ -28,6 +29,7 @@ const canRefund = (row: JsonRow) => statusOf(row) === 'PAID' && orderOf(row) !==
 const shortId = (id: string) => id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
 
 export function TransactionsPage() {
+  const confirmAction = useAdminConfirm();
   const [params] = useSearchParams();
   const initialQuery = params.get('q') ?? '';
   const [items, setItems] = useState<JsonRow[]>([]);
@@ -80,7 +82,7 @@ export function TransactionsPage() {
   async function refund() {
     if (!selected || saving || !reason.trim() || !canRefund(selected)) return;
     const orderId = orderOf(selected);
-    if (!window.confirm(`Submit a full refund for order ${orderId}? This action affects customer funds and cannot be undone here.`)) return;
+    if (!(await confirmAction({ title: 'Confirm refund', message: `Submit a full refund for order ${orderId}? This action affects customer funds and cannot be undone here.`, confirmLabel: 'Confirm Refund' }))) return;
     setSaving(true); setRefundError('');
     try {
       const result = await adminOperationsApi.refundOrder(orderId, { reason: reason.trim() });

@@ -1,3 +1,4 @@
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -39,6 +40,7 @@ function CompactMetric({ label, value, icon: Icon }: {
 /** Model-level inventory matches Spare Parts. Individual Battery IDs remain
  * available via View units and for the existing replacement supply workflow. */
 export function NewBatteriesPage() {
+  const confirmAction = useAdminConfirm();
   const [params] = useSearchParams();
   const modelHint = params.get('model') ?? '';
   const backlink = params.get('returnTo') ?? '';
@@ -103,7 +105,7 @@ export function NewBatteriesPage() {
     if (saving || !activeModel || !validQuantity) {
       setError('Select an active battery model and enter a quantity from 1 to 30.'); return;
     }
-    if (!window.confirm(`Add ${quantity} real ${model} batteries into Admin warehouse?`)) return;
+    if (!(await confirmAction({ title: 'Add batteries', message: `Add ${quantity} ${model} ${quantity === 1 ? 'battery' : 'batteries'} to the Admin warehouse?`, confirmLabel: 'Confirm Addition' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.createBattery({
@@ -118,7 +120,7 @@ export function NewBatteriesPage() {
   async function remove() {
     if (!removing || saving || !removalReason.trim()) return;
     // OpenAPI DELETE /batteries/{id} has NO reason field. Do not pretend the reason is recorded.
-    if (!window.confirm(`Permanently remove battery ${removing.id}? The removal reason cannot be saved.`)) return;
+    if (!(await confirmAction({ title: 'Remove battery', message: `Permanently remove battery ${removing.id}? The removal reason cannot be saved.`, confirmLabel: 'Confirm Removal' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.deleteBattery(removing.id);
