@@ -1,3 +1,4 @@
+import { useAdminConfirm } from './AdminConfirmDialog';
 import { invalidateAdminReads } from '../api/adminHttp';
 import { AdminSelect } from './AdminSelect';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
@@ -11,6 +12,7 @@ import { adminOperationsApi, apiError, type HubApi, type PartCategoryApi, type S
 export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
   hubs: HubApi[]; parts: PartCategoryApi[]; stocks: StockApi[]; onChanged: () => Promise<void>;
 }) {
+  const confirmAction = useAdminConfirm();
   const [kind,setKind]=useState<'TRANSFER'|'ADJUST'|'DISCARD'|'THRESHOLD'|'BULK'>('TRANSFER');
   const [hubId,setHubId]=useState('');
   const [toHub,setToHub]=useState('');
@@ -38,7 +40,7 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
     kind==='ADJUST'?Number.isSafeInteger(qty)&&qty!==0 : Number.isSafeInteger(qty)&&qty>0))
     &&(kind!=='TRANSFER'||hubs.some(h=>h.id===destination&&h.id!==hub));
   async function submit(){if(!valid||saving)return;
-    if(!window.confirm(`Confirm ${kind.toLowerCase()}? This stock change will be recorded.`))return;
+    if(!(await confirmAction({ title: 'Confirm stock operation', message: `Confirm ${kind.toLowerCase()}? This stock change will be recorded.`, confirmLabel: 'Confirm' })))return;
     setSaving(true);setError('');setNotice('');
     try {
       if(kind==='TRANSFER')await adminOperationsApi.transferStock({from_hub_id:hub,to_hub_id:destination,part_category_id:part,quantity:qty,...(note.trim()?{note:note.trim()}:{})});

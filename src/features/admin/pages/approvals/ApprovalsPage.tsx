@@ -1,3 +1,4 @@
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
@@ -149,6 +150,7 @@ function ReadOnlyFact({ label, value }: { label: string; value: string | number 
 }
 
 export function ApprovalsPage() {
+  const confirmAction = useAdminConfirm();
 
   const [params, setParams] = useSearchParams();
 
@@ -254,7 +256,7 @@ export function ApprovalsPage() {
   async function confirmSupply() {
     if (!request || !rawRequest || !actionable || !canSupply || saving) return;
     if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Only one replacement battery can be supplied per request.'); return; }
-    if (!window.confirm(`Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`)) return;
+    if (!(await confirmAction({ title: 'Supply replacement', message: `Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`, confirmLabel: 'Confirm Supply' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.supplyReplacement(rawRequest.request_id, request.type === 'BATTERY' ? chosenId : undefined);
@@ -265,7 +267,7 @@ export function ApprovalsPage() {
   async function confirmReject() {
     if (!request || !rawRequest || !actionable || !rejectMode || saving) return;
     const reason = rejectionReason.trim(); if (!reason) { setError('Enter a reason for rejection.'); return; }
-    if (!window.confirm(`Reject replacement ${request.id}?`)) return;
+    if (!(await confirmAction({ title: 'Reject replacement', message: `Reject replacement ${request.id}?`, confirmLabel: 'Confirm Rejection' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.rejectReplacement(rawRequest.request_id, reason);

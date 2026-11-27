@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActionButton } from "../../../../components/ui/ActionButton";
 import { Switch } from "../../../../components/ui/Switch";
 import { OperatorPanel } from "../../../operator/components/OperatorPanel";
@@ -12,11 +12,17 @@ export function AdminSettingsPage() {
   const save = () => {
     saveAdminSettings(settings);
     setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
   };
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
 
   return (
     <AdminPageShell title="System Settings" description="Manage local operational preferences and notification settings. These preferences are saved in this browser only." actions={<ActionButton onClick={save}>Save settings</ActionButton>}>
+      {saved && <p role="status" className="mb-3 text-sm text-green-600">Preferences saved on this device.</p>}
       <div className="mb-3">
         <OperatorPanel title="Mission & fleet" eyebrow="OPERATIONAL THRESHOLDS">
           <div className="fields two">
@@ -48,7 +54,6 @@ export function AdminSettingsPage() {
             </div>
           ))}
         </div>
-        {saved ? <div className="operator-toast">Preferences saved on this device.</div> : null}
       </OperatorPanel>
     </AdminPageShell>
   );

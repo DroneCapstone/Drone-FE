@@ -1,0 +1,19 @@
+/* Same Admin modal geometry and theme tokens; layer above an already-open form. */
+.admin-confirm-overlay {
+  position: fixed; inset: 0; z-index: 240;
+  background: rgba(0, 0, 0, .60); backdrop-filter: blur(5px);
+}
+.admin-dialog-typography.admin-confirm-dialog {
+  position: fixed; z-index: 241; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); outline: none;
+}
+.admin-confirm-header { padding: 20px 22px 16px; border-bottom: 1px solid var(--border); flex: none; }
+.admin-confirm-header h2 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.4; }
+.admin-confirm-body { padding: 20px 22px; min-height: 0; overflow-y: auto; }
+.admin-confirm-body p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text); overflow-wrap: anywhere; }
+.admin-confirm-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: none; }
+.admin-confirm-footer .button { min-height: 40px; border-radius: 6px; }

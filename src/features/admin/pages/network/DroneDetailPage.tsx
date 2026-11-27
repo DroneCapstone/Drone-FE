@@ -1,3 +1,4 @@
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { isSerialField } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -19,6 +20,7 @@ const flying = (value: string) => value.toUpperCase().replace(/[_ ]/g, '') === '
 const maintenanceTone = (value: string): 'red' | 'green' => value.toUpperCase() === 'OVERDUE' ? 'red' : 'green';
 
 export function DroneDetailPage() {
+  const confirmAction = useAdminConfirm();
   const { droneId } = useParams();
   const [params] = useSearchParams();
   const requestedTab = params.get('tab');
@@ -85,7 +87,7 @@ export function DroneDetailPage() {
   async function toggleActive() {
     if (!drone || saving) return;
     if (adminActive(drone.admin_state) && flying(drone.status)) { setError('Cannot deactivate a Drone in flight.'); return; }
-    if (!window.confirm(`Confirm ${adminActive(drone.admin_state) ? 'deactivation' : 'activation'} of ${drone.id}?`)) return;
+    if (!(await confirmAction({ title: `${adminActive(drone.admin_state) ? 'Deactivate' : 'Activate'} drone`, message: `Confirm ${adminActive(drone.admin_state) ? 'deactivation' : 'activation'} of ${drone.id}?`, confirmLabel: `${adminActive(drone.admin_state) ? 'Deactivate' : 'Activate'}` }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.setDroneActive(drone.id, !adminActive(drone.admin_state));
