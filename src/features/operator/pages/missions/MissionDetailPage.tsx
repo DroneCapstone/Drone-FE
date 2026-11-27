@@ -280,8 +280,8 @@ export function MissionDetailPage() {
               <div><dt>Planned start</dt><dd>{formatMissionTime(mission.plannedStartAt)}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>
               <div><dt>Predicted duration</dt><dd>{mission.predictedDurationMin} min</dd></div>
-              <div><dt>Energy (predicted)</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
-              <div><dt>Energy consumption</dt><dd>{mission.batteryConsumptionPct}% </dd></div>
+              {/* <div><dt>Energy (predicted)</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
+              <div><dt>Energy consumption</dt><dd>{mission.batteryConsumptionPct}% </dd></div> */}
             </dl>
           </OperatorPanel>
         </aside>
