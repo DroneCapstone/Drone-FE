@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -51,7 +52,7 @@ export function ActivityLogPage() {
   return <AdminPageShell
     title="Activity Logs"
     description="Review user actions and their outcomes."
-    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={15} /> Refresh</ActionButton>}
+    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => { invalidateAdminReads('/admin/activity-logs'); setRefreshKey(k => k + 1); }}><RefreshCw size={15} /> Refresh</ActionButton>}
   >
     <OperatorPanel className="flush-panel admin-logs-panel">
       <form onSubmit={apply}>

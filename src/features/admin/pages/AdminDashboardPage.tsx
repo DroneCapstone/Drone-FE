@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../api/adminHttp';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -138,7 +139,7 @@ export function AdminDashboardPage() {
 
   return (
     <AdminPageShell title="Dashboard" description="">
-      {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
+      {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
       {loading && <OperatorLoadingState label="Loading dashboard…" />}
       {!loading && !error && data && <>
         {/* Four primary KPIs only; secondary figures are presented in charts below. */}

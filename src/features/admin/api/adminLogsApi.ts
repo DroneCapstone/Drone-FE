@@ -1,5 +1,4 @@
-import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
-import { authService } from '../../auth/services/authService';
+import { adminFetch } from './adminHttp';
 
 /** November 2026 Backend contracts: two distinct ADMIN log APIs, no Audit Logs endpoint. */
 export type ActivityLogStatus = 'success' | 'failed';
@@ -60,21 +59,9 @@ function backendError(value: unknown, status: number): string {
   return `HTTP ${status}: Could not load logs.`;
 }
 async function get<T>(path: string): Promise<T> {
-  async function send(token: string | null): Promise<Response> {
-    const headers = new Headers({ Accept: 'application/json' });
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(`${API_BASE_URL}${path}`, {
-      method: 'GET', headers, credentials: API_WITH_CREDENTIALS ? 'include' : 'omit',
-    });
-  }
   let response: Response;
   try {
-    const token = authService.getAccessToken();
-    response = await send(token);
-    if (response.status === 401 && token) {
-      const renewed = await authService.refreshAccessToken();
-      if (renewed) response = await send(renewed);
-    }
+    response = await adminFetch(path, { headers: { Accept: 'application/json' } });
   } catch (cause) {
     throw new Error(cause instanceof Error ? `Cannot connect to Backend: ${cause.message}` : 'Cannot connect to Backend.');
   }

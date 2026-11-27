@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { adminDisplayText } from '../../utils/adminDisplayText';
@@ -93,7 +94,7 @@ export function TransactionsPage() {
   return <AdminPageShell title="Transactions">
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
     {loading ? <OperatorLoadingState label="Loading transactions..." /> : error ?
-      <OperatorPanel><div role="alert" className="flex flex-wrap items-center justify-center gap-3 p-6 text-sm text-red-500">{error}<ActionButton variant="secondary" onClick={() => void refresh()}>Retry</ActionButton></div></OperatorPanel> : <>
+      <OperatorPanel><div role="alert" className="flex flex-wrap items-center justify-center gap-3 p-6 text-sm text-red-500">{error}<ActionButton variant="secondary" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</ActionButton></div></OperatorPanel> : <>
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Gross collected" value={knownAmount ? money(collected) : '—'} icon={CreditCard} />
       <AdminSummaryCard label="Paid" value={items.filter(row => statusOf(row) === 'PAID').length} icon={CircleCheck} />

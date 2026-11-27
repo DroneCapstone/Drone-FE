@@ -1,6 +1,5 @@
 import { adminErrorText } from '../utils/adminDisplayText';
-import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
-import { authService } from '../../auth/services/authService';
+import { adminFetch } from './adminHttp';
 
 /** Live Admin API. Never fall back to prototype/localStorage on a network failure. */
 export class AdminBackendError extends Error {
@@ -22,24 +21,13 @@ export function num(value: unknown, fallback = 0): number { return typeof value 
 export function bool(value: unknown): boolean { return value === true; }
 export function date(value: unknown): string { return typeof value === 'string' ? value : ''; }
 
-async function send(path: string, init: RequestInit, token: string | null): Promise<Response> {
+export async function adminRequest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...init, headers, credentials: API_WITH_CREDENTIALS ? 'include' : 'omit',
-  });
-}
-export async function adminRequest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = authService.getAccessToken();
   let response: Response;
   try {
-    response = await send(path, init, token);
-    if (response.status === 401 && token) {
-      const refreshed = await authService.refreshAccessToken();
-      if (refreshed) response = await send(path, init, refreshed);
-    }
+    response = await adminFetch(path, { ...init, headers });
   } catch (error) {
     throw new AdminBackendError(`Cannot connect to Backend (${path}). Check API URL and network/CORS. ${messageOf(error)}`);
   }

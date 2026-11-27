@@ -1,6 +1,5 @@
 import { adminErrorText } from '../utils/adminDisplayText';
-import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
-import { authService } from '../../auth/services/authService';
+import { adminFetch } from './adminHttp';
 
 /** Admin endpoints in the November 2026 OpenAPI. All paths below are relative to /api/v1. */
 export class AdminApiError extends Error {
@@ -22,21 +21,12 @@ const msg = (value: unknown, status: number) => {
 };
 
 export async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  async function send(token: string | null) {
-    const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
-    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: API_WITH_CREDENTIALS ? 'include' : 'omit' });
-  }
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'application/json');
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
-    const token = authService.getAccessToken();
-    response = await send(token);
-    if (response.status === 401 && token) {
-      const refreshed = await authService.refreshAccessToken();
-      if (refreshed) response = await send(refreshed);
-    }
+    response = await adminFetch(path, { ...init, headers });
   } catch (cause) {
     throw new AdminApiError(cause instanceof Error ? `Cannot connect to Backend: ${cause.message}` : 'Cannot connect to Backend.', 0);
   }

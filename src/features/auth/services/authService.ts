@@ -440,7 +440,8 @@ function clearStoredSession() {
   ].forEach((key) => {
     localStorage.removeItem(key);
   });
-
+  lastRenewal = null;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('droneoptai-session-cleared'));
 }
 
 function readStoredUser(): AuthUser | null {
@@ -684,6 +685,11 @@ async function performRefreshRequest(
   );
 }
 
+// All callers share one refresh for the same session. Guard against late
+// responses after logout or a new login.
+let refreshFlight: { access: string | null; refresh: string; task: Promise<string | null> } | null = null;
+let lastRenewal: { previous: string | null; current: string } | null = null;
+
 export const authService = {
   getCurrentUser(): AuthUser | null {
     return readStoredUser();
@@ -829,38 +835,33 @@ export const authService = {
     );
   },
 
-  async refreshAccessToken() {
-    const refreshToken =
-      this.getRefreshToken();
-
-    if (!refreshToken) {
-      return null;
+  async refreshAccessToken(failedAccessToken?: string | null): Promise<string | null> {
+    const access = this.getAccessToken();
+    const refresh = this.getRefreshToken();
+    if (!refresh) return null;
+    // A late 401 from the same renewal can use the already renewed access token.
+    if (failedAccessToken !== undefined && failedAccessToken !== access) {
+      return lastRenewal?.previous === failedAccessToken && lastRenewal?.current === access ? access : null;
     }
-
-    try {
-      const response =
-        await performRefreshRequest(
-          refreshToken,
-        );
-
-      const tokens =
-        extractTokens(response);
-
-      if (!tokens) {
-        clearStoredSession();
+    if (refreshFlight && refreshFlight.access === access && refreshFlight.refresh === refresh) return refreshFlight.task;
+    const unchanged = () => this.getAccessToken() === access && this.getRefreshToken() === refresh;
+    const task = (async () => {
+      try {
+        const response = await performRefreshRequest(refresh);
+        if (!unchanged()) return null;
+        const tokens = extractTokens(response);
+        if (!tokens) { clearStoredSession(); return null; }
+        persistTokens(tokens, true);
+        lastRenewal = { previous: access, current: tokens.accessToken };
+        return tokens.accessToken;
+      } catch {
+        if (unchanged()) clearStoredSession();
         return null;
       }
-
-      persistTokens(
-        tokens,
-        true,
-      );
-
-      return tokens.accessToken;
-    } catch {
-      clearStoredSession();
-      return null;
-    }
+    })();
+    refreshFlight = { access, refresh, task };
+    try { return await task; }
+    finally { if (refreshFlight?.task === task) refreshFlight = null; }
   },
 
   async restoreSession() {

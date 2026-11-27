@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
@@ -40,7 +41,7 @@ export function BatteriesPage() {
   const lifecycleValues = [...new Set(batteries.map(lifecycleOf))].sort();
 
   return <AdminPageShell title="Batteries" description="Monitor batteries assigned to Hubs and their operational status." actions={<Link className="button button-secondary" to="/admin/replacement/new-batteries">New batteries</Link>}>
-    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
     {loading && <OperatorLoadingState label="Loading batteries…" />}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Assigned batteries" value={batteries.length} note="Assigned to Hubs" icon={BatteryCharging} />

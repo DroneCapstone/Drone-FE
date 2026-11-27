@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { Bell, CheckCheck, ChevronLeft, ChevronRight, CreditCard, Plane, ShieldAlert, TriangleAlert, Trash2, Wrench, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -56,7 +57,7 @@ export function AdminNotificationsPage() {
   const loadError = current?.error || (current && !data ? 'Unable to load notifications. Please try again.' : '');
   const loading = !current;
   const busy = loading || saving;
-  const reload = () => setRevision(value => value + 1);
+  const reload = () => { invalidateAdminReads('/notifications'); setRevision(value => value + 1); };
 
   useEffect(() => {
     // Do not refresh over an in-flight read/delete action.

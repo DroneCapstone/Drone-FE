@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminDateRangePicker } from '../../components/AdminDateRangePicker';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -24,7 +25,7 @@ function useReport<T>(key: string, load: () => Promise<T>, enabled = true) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, retry, enabled]);
   const current: LoadState<T> = state.key === key ? state : { key, phase: 'loading' };
-  return { ...current, retry: () => setRetry(v => v + 1) };
+  return { ...current, retry: () => { invalidateAdminReads(key.startsWith('rating') ? '/admin/orders/ratings' : '/admin/reports'); setRetry(v => v + 1); } };
 }
 function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return <section className="report-panel"><div className="report-panel-head"><h2>{title}</h2>{action}</div>{children}</section>;

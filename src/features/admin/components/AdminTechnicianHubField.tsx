@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../api/adminHttp';
 import { useEffect, useState } from 'react';
 import { adminOperationsApi, apiError, type HubApi, type HubDetailApi } from '../api/adminOperationsApi';
 import { AdminSelect } from './AdminSelect';
@@ -30,6 +31,7 @@ export async function loadTechnicianHub(technicianId?: string, active = true): P
   const hubs = await adminOperationsApi.hubs();
   const details = await Promise.all(hubs.map(async hub => {
     if (!technicianId && (!activeHub(hub) || staffingCount(hub) !== null)) return null;
+    if (technicianId && staffingCount(hub) === 0) return null;
     return adminOperationsApi.hub(hub.id);
   }));
   const matches = technicianId ? details.filter((hub): hub is HubDetailApi =>
@@ -40,7 +42,7 @@ export async function loadTechnicianHub(technicianId?: string, active = true): P
     if (active) {
       const unassigned = await adminOperationsApi.techniciansUnassigned();
       if (!unassigned.some(person => person.id === technicianId)) throw new Error('Unable to verify the current hub assignment.');
-    } else if (details.some(hub => hub === null || assignedIds(hub) === null)) {
+    } else if (details.some((hub, index) => hub === null ? staffingCount(hubs[index]) !== 0 : assignedIds(hub) === null)) {
       throw new Error('Unable to verify the current hub assignment.');
     }
   }
@@ -77,7 +79,7 @@ export function useTechnicianHub(enabled: boolean, technicianId?: string, active
     });
     return () => { live = false; };
   }, [enabled, technicianId, active, key]);
-  return { data: current?.data ?? null, error: current?.error ?? '', loading: enabled && !current, retry: () => setRetry(n => n + 1) };
+  return { data: current?.data ?? null, error: current?.error ?? '', loading: enabled && !current, retry: () => { invalidateAdminReads('/admin/system/hubs'); invalidateAdminReads('/admin/fleet/technicians'); setRetry(n => n + 1); } };
 }
 
 export async function saveTechnicianHub(technicianId: string, current: number | null, destination: number | null) {

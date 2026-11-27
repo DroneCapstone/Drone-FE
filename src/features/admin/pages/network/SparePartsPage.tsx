@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -114,7 +115,7 @@ export function SparePartsPage() {
     {/* <ActionButton variant="secondary" onClick={() => setBulkOpen(true)}>Bulk Receive</ActionButton> */}
     {/* <ActionButton icon="plus" onClick={() => openEdit()}>Add spare part</ActionButton> */}
   </>}>
-    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
     {loading && <OperatorLoadingState label="Loading spare parts…" />}
     {!loading && inventoryReady && <OperatorPanel className="flush-panel">

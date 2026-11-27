@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../api/adminHttp';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -22,7 +23,7 @@ export function BackendPartsRequests() {
   }catch(e){setError(messageOf(e));}finally{setSaving(false);}};
   return <OperatorPanel className="flush-panel" title="Spare Part Requests">
     {loading&&<OperatorLoadingState label="Loading part requests…" />}
-    {error&&!selected&&<p role="alert" className="p-3 text-sm text-red-500">{error}<button type="button" className="ml-2 underline" onClick={()=>setVersion(v=>v+1)}>Retry</button></p>}
+    {error&&!selected&&<p role="alert" className="p-3 text-sm text-red-500">{error}<button type="button" className="ml-2 underline" onClick={()=>{invalidateAdminReads();setVersion(v=>v+1);}}>Retry</button></p>}
     {notice&&<p role="status" className="p-3 text-sm text-emerald-600">{notice}</p>}
     <div className="table-wrap"><table><thead><tr><th>Request</th><th>Component</th><th>Receiving Hub</th><th>Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
       {requests.map(r=><tr key={r.id}><td><strong>PR-{r.id}</strong><small>{r.created_at?new Date(r.created_at).toLocaleString('en-GB'):'—'}</small></td>
