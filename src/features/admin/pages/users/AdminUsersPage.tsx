@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -143,7 +144,7 @@ export function AdminUsersPage() {
       />
       {listError && <div className="admin-ud-list-error" role="alert">
         <span>{listError}</span>
-        <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
+        <ActionButton variant="secondary" onClick={() => { invalidateAdminReads('/admin/users'); setReload((n) => n + 1); }}>Retry</ActionButton>
       </div>}
       <div className="table-wrap">
         <table className="admin-users-list-table">

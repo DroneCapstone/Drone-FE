@@ -1,6 +1,5 @@
 import { adminErrorText } from '../utils/adminDisplayText';
-import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
-import { authService } from '../../auth/services/authService';
+import { adminFetch } from './adminHttp';
 
 /** OpenAPI: /api/v1/admin/users (ProfileResponse & UserRole). */
 export type AdminApiRole = 'Admin' | 'Operator' | 'Technician' | 'Customer';
@@ -70,26 +69,12 @@ async function readResponse(response: Response): Promise<unknown> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const send = async (token: string | null): Promise<Response> => {
-    const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
-    if (init.body) headers.set('Content-Type', 'application/json');
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers,
-      credentials: API_WITH_CREDENTIALS ? 'include' : 'omit',
-    });
-  };
-
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'application/json');
+  if (init.body) headers.set('Content-Type', 'application/json');
   let response: Response;
-  const currentToken = authService.getAccessToken();
   try {
-    response = await send(currentToken);
-    if (response.status === 401 && currentToken) {
-      const refreshedToken = await authService.refreshAccessToken();
-      if (refreshedToken) response = await send(refreshedToken);
-    }
+    response = await adminFetch(path, { ...init, headers });
   } catch (cause) {
     throw new AdminUsersApiError('Cannot connect to Backend. Check the API URL, network and CORS configuration.', 0, cause);
   }

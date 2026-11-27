@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../api/adminHttp';
 import { AdminSelect } from './AdminSelect';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { adminDisplayText } from '../utils/adminDisplayText';
@@ -68,7 +69,7 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
       </div>
     </OperatorPanel>
     <OperatorPanel title="Stock movement history" eyebrow="STOCK HISTORY">
-      {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>void loadLogs()}>Retry</button></p>}
+      {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>{invalidateAdminReads();void loadLogs();}}>Retry</button></p>}
       {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Hub</th><th>Part</th><th>Change</th><th>Reason</th><th>Reference</th></tr></thead><tbody>
         {logs.slice(0,100).map(l=><tr key={l.id}><td>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</td>
           <td>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</td><td>{l.part_name??l.part_category_id}</td><td>{l.quantity_delta}</td><td>{adminDisplayText(l.reason)}</td><td>{l.reference_id??'—'}</td></tr>)}

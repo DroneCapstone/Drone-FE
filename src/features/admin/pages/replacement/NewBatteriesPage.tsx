@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -137,7 +138,7 @@ export function NewBatteriesPage() {
     </div>}
     {notice && <p className="mb-3 text-sm text-green-600" role="status">{notice}</p>}
     {loading && <OperatorLoadingState label="Loading new batteries…" />}
-    {error && !creating && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && !creating && !removing && <p role="alert" className="mb-3 text-xs text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
     {/* Browser-only demo stock is intentionally disabled. This table reads the Backend catalog and physical battery units. */}
     {!loading && inventoryReady && <OperatorPanel className="flush-panel">
       <AdminToolbar

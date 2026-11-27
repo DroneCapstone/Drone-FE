@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { adminResourceJson } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
@@ -33,7 +34,7 @@ export function RefundsPage() {
     (status === 'all' || status === statusOf(row)) && adminResourceJson(row).toLowerCase().includes(query.trim().toLowerCase())), [items, query, status]);
   return <AdminPageShell title="Refunds" description="Track refund requests and their processing status. Final settlement is confirmed by the payment provider.">
     {loading && <OperatorLoadingState label="Loading refunds…" />}
-    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
     {!loading && !error && <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search refund, payment, order or customer…" filters={<AdminSelect value={status} onChange={e => setStatus(e.target.value)}><option value="all">All status</option><option value="PENDING">Pending</option><option value="COMPLETED">Completed</option><option value="FAILED">Failed</option></AdminSelect>} meta={`${visible.length} ${visible.length === 1 ? 'refund' : 'refunds'}`} />
       <div className="table-wrap"><table><thead><tr><th>Refund</th><th>Payment</th><th>Order</th><th>Customer</th><th>Amount</th><th>Reason</th><th>Status</th><th>Processed</th></tr></thead><tbody>

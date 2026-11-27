@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -104,7 +105,7 @@ export function DronesPage() {
 
   return <AdminPageShell title="Drones" description="Registered physical drones and their administrative availability."
     actions={<ActionButton icon="plus" onClick={openAddDrone}>Add Drone</ActionButton>}>
-    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
+    {error && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
     {loading && <OperatorLoadingState label="Loading drones…" />}
     {notice && <p role="status" className="mb-4 text-sm text-green-600">{notice}</p>}
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

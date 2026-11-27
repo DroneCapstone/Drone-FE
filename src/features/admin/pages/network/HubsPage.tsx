@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
@@ -178,7 +179,7 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
       actions={<ActionButton onClick={openCreate}><Plus size={16} aria-hidden="true" /> Create hub</ActionButton>}
     >
-      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
       {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
       {loading ? <OperatorLoadingState label="Loading hubs…" /> : summary !== null && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

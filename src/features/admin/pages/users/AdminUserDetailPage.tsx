@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -174,7 +175,7 @@ export function AdminUserDetailPage() {
   if (loading && !user) return <AdminPageShell title="User detail"><OperatorLoadingState label="Loading account…" /></AdminPageShell>;
   if (!user) return <AdminPageShell title="User detail"><div className="admin-ud-list-error" role="alert">
     <span>{loadError || 'User not found.'}</span>
-    <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
+    <ActionButton variant="secondary" onClick={() => { invalidateAdminReads('/admin/users'); setReload((n) => n + 1); }}>Retry</ActionButton>
     <Link to="/admin/users">Back to Users</Link>
   </div></AdminPageShell>;
 

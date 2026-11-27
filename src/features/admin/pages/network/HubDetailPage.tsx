@@ -18,15 +18,14 @@ export function HubDetailPage() {
   useEffect(() => {
     if (!hubId) return;
     let live = true; setLoading(true); setHub(null); setSpareStock([]); setError('');
-    void adminOperationsApi.hub(hubId).then(async (data) => {
-      if (!live) return;
-      setHub(data); setError('');
-      try {
-        const rows = await adminOperationsApi.stocks();
-        if (live) setSpareStock(rows.filter((r) => String(r.hub_id) === hubId));
-      } catch (cause) { if (live) setError(`Hub loaded, but spare parts could not load: ${apiError(cause)}`); }
-    }).catch((cause: unknown) => { if (live) setError(apiError(cause)); })
-      .finally(() => { if (live) setLoading(false); });
+    void Promise.allSettled([adminOperationsApi.hub(hubId), adminOperationsApi.stocks()])
+      .then(([detail, stock]) => {
+        if (!live) return;
+        if (detail.status === 'rejected') { setError(apiError(detail.reason)); return; }
+        setHub(detail.value);
+        if (stock.status === 'fulfilled') setSpareStock(stock.value.filter(r => String(r.hub_id) === hubId));
+        else setError(`Hub loaded, but spare parts could not load: ${apiError(stock.reason)}`);
+      }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [hubId]);
   const drones = hub?.assigned_drones ?? [];

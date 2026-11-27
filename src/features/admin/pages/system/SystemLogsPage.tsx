@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -48,7 +49,7 @@ export function SystemLogsPage() {
     ['ERROR', 'CRITICAL'].includes(level.toUpperCase()) ? 'danger' : level.toUpperCase() === 'WARNING' ? 'warning' : level.toUpperCase() === 'INFO' ? 'info' : 'neutral';
 
   return <AdminPageShell title="System Logs" description="Monitor system events, warnings and errors."
-    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={15} /> Refresh</ActionButton>}
+    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => { invalidateAdminReads('/admin/system-logs'); setRefreshKey(k => k + 1); }}><RefreshCw size={15} /> Refresh</ActionButton>}
   >
     <OperatorPanel className="flush-panel admin-logs-panel">
       <form onSubmit={apply}>
