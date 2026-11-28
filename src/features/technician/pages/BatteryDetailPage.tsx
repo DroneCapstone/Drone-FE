@@ -57,7 +57,7 @@ function formatBatteryEta(battery: {
   const readyAt = Date.parse(battery.estimatedReadyAt);
   if (!Number.isFinite(readyAt)) return "ETA unavailable";
   const remaining = Math.max(0, Math.ceil((readyAt - now) / 1000));
-  if (!remaining) return "Awaiting BE update";
+  if (!remaining) return "Awaiting status update";
   const hours = Math.floor(remaining / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);
   const seconds = remaining % 60;
@@ -124,7 +124,7 @@ export function BatteryDetailPage() {
 
       {batteriesQuery.error instanceof Error && (
         <div className="mb-5 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
-          {batteriesQuery.error.message}
+          Unable to load battery information. Please refresh.
         </div>
       )}
 
@@ -235,7 +235,7 @@ export function BatteryDetailPage() {
                 value={battery.status}
               />
               <InfoRow
-                label="Backend status"
+                label="Current status"
                 value={battery.backendStatus ?? "—"}
                 last
               />

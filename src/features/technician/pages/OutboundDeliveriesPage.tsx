@@ -252,7 +252,7 @@ export function OutboundDeliveriesPage() {
     try {
       await receiveMutation.mutateAsync({ orderId, proofImageUrl });
       setBackendReceivedIds((items) => items.includes(orderId) ? items : [...items, orderId]);
-      setActionMessage("Package received at hub. Outbound information has been refreshed from Backend.");
+      setActionMessage("Package received at hub.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to receive this package.";
       const alreadyReceived = /AT[_\s-]*HUB|already received|đã nhận hàng/i.test(message);
@@ -261,11 +261,11 @@ export function OutboundDeliveriesPage() {
       }
       try { await outboundQuery.refetch(); } catch { /* Display original backend error. */ }
       if (alreadyReceived) {
-        setActionMessage("Backend confirms this package is already at hub (AT_HUB). Receive has been disabled to prevent duplicate receipt.");
+        setActionMessage("Package already received at hub.");
       } else if (/not found|\b404\b/i.test(message)) {
-        setActionMessage(`Backend returned 404 for order_id ${orderId}. FE sent the canonical order_id; Backend must verify the Orders lookup and the Technician's origin hub access.`);
+        setActionMessage("Order unavailable. Refresh and check the order before trying again.");
       } else {
-        setActionMessage(message);
+        setActionMessage("Unable to confirm package receipt. Refresh and check the order before trying again.");
       }
     } finally {
       receivingOrdersRef.current.delete(orderId);
@@ -311,13 +311,12 @@ export function OutboundDeliveriesPage() {
         void queryClient.invalidateQueries({ queryKey: [...technicianQueryKeys.outbound(), "history"], refetchType: "active" });
       }
       setAcceptedDispatchIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
-      setActionMessage("Dispatch accepted by Backend. Mission is starting; Hub Fleet and Battery Management are refreshing from the server.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to start the mission.";
+      setActionMessage("Drone dispatched. Mission is starting.");
+    } catch  {
       setActionMessage(
         readyConfirmedThisAttempt
-          ? `Dispatch was not completed: ${message}. If READY was accepted, retry will skip the Ready request.`
-          : `Ready/Dispatch failed: ${message}`,
+          ? "Dispatch could not be confirmed. Refresh and check mission status before trying again."
+          : "Unable to prepare or dispatch the mission. Refresh and check its status.",
       );
       // If READY succeeded but Dispatch failed, GET will show READY for retries.
       void outboundQuery.refetch();
@@ -333,7 +332,7 @@ export function OutboundDeliveriesPage() {
     >
       {outboundQuery.error instanceof Error && (
         <div className="mb-4 rounded-md border border-red-500/30 px-4 py-3 text-[12px] text-red-400">
-          {outboundQuery.error.message}
+          Unable to load outbound deliveries. Please refresh.
         </div>
       )}
 
@@ -470,8 +469,8 @@ export function OutboundDeliveriesPage() {
                   <div className="min-w-0">
                     <StatusLabel status={delivery.status} missionStatus={delivery.prematureMissionAssignment ? undefined : delivery.missionStatus} receivedAt={delivery.packageReceivedAt} />
                     {delivery.prematureMissionAssignment && (
-                      <p className="mt-1 text-[10px] text-orange-500" title="Backend assigned a mission before Technician received the package. Needs Backend review.">
-                        Early mission in Backend
+                      <p className="mt-1 text-[10px] text-orange-500" title="Mission assigned before package receipt. Requires review.">
+                        Early mission assignment
                       </p>
                     )}
                   </div>
@@ -601,7 +600,7 @@ export function OutboundDeliveriesPage() {
                       ? formatDate(selectedDelivery.packageReceivedAt)
                       : selectedDelivery.status === "Awaiting Drop-off"
                         ? "Not received yet"
-                        : "Time not provided by Backend"}
+                        : "Time not recorded"}
                   />
                   <DetailField label="Receiving status" value={<StatusLabel status={selectedDelivery.status} />} />
                 </div>
@@ -621,16 +620,14 @@ export function OutboundDeliveriesPage() {
               <section>
                 <h3 className="mb-4 text-[12px] font-semibold uppercase tracking-[0.07em] text-[var(--tech-text)]">Mission &amp; preparation</h3>
                 <div className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
-                  <DetailField label="Order status (Backend)" value={readableStatus(selectedDelivery.orderStatus)} />
-                  <DetailField label="Handling status (Backend)" value={readableStatus(selectedDelivery.handlingStatus)} />
+                  <DetailField label="Order status" value={readableStatus(selectedDelivery.orderStatus)} />
+                  <DetailField label="Handling status" value={readableStatus(selectedDelivery.handlingStatus)} />
                   {selectedDelivery.prematureMissionAssignment && (
                     <p className="col-span-full rounded-md border border-orange-500/30 p-3 text-[12px] text-orange-500">
-                      Backend has already scheduled a mission before this order was received at the hub.
-                      This violates the agreed workflow and requires Backend correction; the table hides this
-                      premature assignment, but the raw mission is retained here for diagnosis.
+                      A mission was scheduled before the package was received. Check the order and contact the Operator if necessary.
                     </p>
                   )}
-                  <DetailField label="Mission (Backend)" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
+                  <DetailField label="Mission" value={display(selectedDelivery.missionCode ?? selectedDelivery.missionId)} />
                   <DetailField label="Mission state" value={readableStatus(selectedDelivery.missionStatus)} />
                   <DetailField label="Drone ID" value={display(selectedDelivery.assignedDroneId)} />
                   <DetailField label="Assigned battery" value={selectedDelivery.installedBatteryId ? `${selectedDelivery.installedBatteryId}${selectedDelivery.batteryChargePct !== undefined ? ` · ${selectedDelivery.batteryChargePct}%` : ""}${selectedDelivery.batteryStatus ? ` · ${selectedDelivery.batteryStatus}` : ""}` : "Not assigned"} />
@@ -659,7 +656,7 @@ export function OutboundDeliveriesPage() {
             </div>
             {historyQuery.isError && (
               <div className="mx-6 mt-4 flex items-start justify-between gap-3 rounded-md border border-red-500/30 px-4 py-3 text-[12px] text-red-400">
-                <span>{historyQuery.error instanceof Error ? historyQuery.error.message : "Unable to retrieve history from Backend."}</span>
+                <span>{"Unable to load history. Please retry."}</span>
                 <button type="button" className="shrink-0 font-semibold underline" onClick={() => void historyQuery.refetch()}>Retry</button>
               </div>
             )}

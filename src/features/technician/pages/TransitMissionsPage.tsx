@@ -341,7 +341,7 @@ function getPurposeDescription(purpose: TransitMissionPurpose) {
 
   if (purpose === "RETURN_TO_HUB") {
 
-    return "Destination: click Confirm once after physically receiving the drone, including when Backend still reports Flying / Incoming. BE validates the request and finalizes the mission.";
+    return "Destination: click Confirm once after physically receiving the drone.";
 
   }
 
@@ -351,7 +351,7 @@ function getPurposeDescription(purpose: TransitMissionPurpose) {
 
   }
 
-  return "Incoming: Confirm appears for every arriving drone. FE selects relay or final API using drone_current_hub_id and destination_hub_id; click only after the drone actually lands.";
+  return "Incoming: confirm arrival only after the drone has landed.";
 
 }
 
@@ -804,7 +804,7 @@ export function TransitMissionsPage() {
   const [proofTarget, setProofTarget] = useState<{ id: string; key: string; action: ProofAction } | null>(null);
   const openProof = (mission: TransitMission, action: ProofAction) => {
     if (action === "arrival" && !canConfirmLandedMission(mission)) {
-      pushActionMessage("Cannot select arrival API: Backend must provide drone_current_hub_id and destination_hub_id (or an explicit arrival purpose). Do not confirm until the drone has physically landed.");
+      pushActionMessage("Arrival information is incomplete. Check the mission and confirm only after the drone has landed.");
       return;
     }
     setProofTarget({ id: mission.id, key: proofIdentity(mission, action), action });
@@ -844,15 +844,7 @@ export function TransitMissionsPage() {
 
 
 
-  useEffect(() => {
-
-    if (transitQuery.error instanceof Error) {
-
-      pushActionMessage(transitQuery.error.message);
-
-    }
-
-  }, [transitQuery.error]);
+  // Background refresh failures must not enqueue action notifications.
 
 
 
@@ -982,7 +974,7 @@ export function TransitMissionsPage() {
 
     if (!missionKey) {
 
-      pushActionMessage("Backend mission ID is missing; cannot confirm arrival.");
+      pushActionMessage("Mission information is incomplete. Unable to confirm arrival.");
 
       return;
 
@@ -992,7 +984,7 @@ export function TransitMissionsPage() {
 
     if (arrivalConfirmedFor(mission)) {
 
-      pushActionMessage("Arrival was already confirmed by Backend; it cannot be confirmed twice.");
+      pushActionMessage("Arrival already confirmed.");
 
       return;
 
@@ -1006,7 +998,7 @@ export function TransitMissionsPage() {
 
     if (!confirmRoute) {
 
-      pushActionMessage("Cannot select arrival API: Backend must provide drone_current_hub_id and destination_hub_id (or an explicit arrival purpose). Do not confirm until the drone has physically landed.");
+      pushActionMessage("Arrival information is incomplete. Check the mission and confirm only after the drone has landed.");
 
       return;
 
@@ -1055,7 +1047,7 @@ export function TransitMissionsPage() {
 
       pushActionMessage(relay
         ? "Relay arrival confirmed. Install the Operator-assigned next-leg battery, then press Ready."
-        : "Arrival confirmation accepted by Backend. Transit, Hub Fleet and related information are refreshing.");
+        : "Arrival confirmed.");
 
       void transitQuery.refetch();
 
@@ -1078,7 +1070,7 @@ export function TransitMissionsPage() {
           if (receipt) setRelayReceipts(saveRelayReceipt(receipt));
         }
 
-        pushActionMessage("Backend reports that arrival was already confirmed. Refreshing missions and history.");
+        pushActionMessage("Arrival already confirmed. Refreshing mission information.");
 
         void transitQuery.refetch();
 
@@ -1086,7 +1078,7 @@ export function TransitMissionsPage() {
 
       } else {
 
-        pushActionMessage(message);
+        pushActionMessage("Unable to confirm arrival. Refresh and check mission status before trying again.");
 
       }
 
@@ -1143,13 +1135,11 @@ export function TransitMissionsPage() {
           batteryId: assignedBatteryId,
         }));
       }
-      pushActionMessage(`Backend confirmed installation of ${assignedBatteryId}. The relay is Ready; you can now Dispatch.`);
+      pushActionMessage(`Battery ${assignedBatteryId} installed. The relay is Ready; you can now Dispatch.`);
       void transitQuery.refetch();
       // useTransitBatterySwapMutation already invalidates Hub Batteries.
-    } catch (error) {
-      pushActionMessage(error instanceof Error
-        ? `Could not mark Ready: ${error.message}`
-        : "Could not mark Ready. No change was recorded in the UI.");
+    } catch  {
+      pushActionMessage("Unable to confirm readiness. Refresh and check the battery and mission status before trying again.");
       void transitQuery.refetch();
     } finally {
       setSwappingKey(null);
@@ -1168,7 +1158,7 @@ export function TransitMissionsPage() {
       return;
     }
     if (mission.status !== "Ready" && !batterySwappedFor(mission)) {
-      pushActionMessage("The Operator-assigned replacement must be confirmed Ready by Backend before Dispatch.");
+      pushActionMessage("Confirm the assigned replacement battery is Ready before dispatch.");
       return;
     }
 
@@ -1180,11 +1170,11 @@ export function TransitMissionsPage() {
       setConfirmedArrivalIds(keys => keys.filter(item =>
         item !== `${mission.backendMissionId}:current`));
       setDispatchedRelayMissionIds(keys => keys.includes(key) ? keys : [...keys, key]);
-      pushActionMessage("Relay Dispatch was accepted by Backend. Mission continues to the next hub; fleet and battery data are refreshing.");
+      pushActionMessage("Drone dispatched to the next hub.");
       void transitQuery.refetch();
       if (historyOpen) void historyQuery.refetch();
-    } catch (error) {
-      pushActionMessage(`Dispatch not completed: ${error instanceof Error ? error.message : "Dispatch failed."}. The battery swap will not be submitted a second time.`);
+    } catch  {
+      pushActionMessage("Dispatch could not be confirmed. Refresh and check the mission before retrying. Do not repeat the battery swap.");
       void transitQuery.refetch();
     } finally {
       setDispatchingKey(null);
@@ -1703,7 +1693,7 @@ export function TransitMissionsPage() {
 
                             null
 
-                              ? "Backend response is missing mission_id"
+                              ? "Mission information is incomplete"
 
                               : undefined
 
@@ -1762,7 +1752,7 @@ export function TransitMissionsPage() {
                                 batterySwapMutation.isPending || dispatchMutation.isPending ||
                                 dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
                                 !arrivalConfirmed}
-                              title="Dispatch next leg after Backend confirms Ready"
+                              title="Dispatch next leg after confirming Ready"
                               className="h-9 min-w-[142px] rounded-md bg-orange-500 px-3 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
                             >
                               <ArrowRight size={14} />
@@ -1898,7 +1888,7 @@ export function TransitMissionsPage() {
 
               <p className="mt-1 text-[13px] text-[var(--tech-muted)]">
 
-                {transitQuery.isError ? "Check the Backend connection and retry." : "No drones currently require handling at this hub."}
+                {transitQuery.isError ? "Please refresh to try again." : "No drones currently require handling at this hub."}
 
               </p>
 
@@ -2012,7 +2002,7 @@ export function TransitMissionsPage() {
 
                   <div className="p-8 text-center text-sm text-red-500">
 
-                    Could not load history from Backend.
+                    Could not load history. Please retry.
 
                     <button type="button" className="ml-2 underline" onClick={() => void historyQuery.refetch()}>Retry</button>
 
@@ -2156,7 +2146,7 @@ export function TransitMissionsPage() {
 
                     <p className="text-[14px] font-medium text-[var(--tech-text-secondary)]">No recorded hub arrivals yet</p>
 
-                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Hub arrivals appear here when returned by Backend, including relay stops and incident returns, even if destination receipt is not recorded.</p>
+                    <p className="mt-1 text-[12px] text-[var(--tech-muted)]">Recorded hub arrivals, including relay stops and incident returns.</p>
 
                   </div>
 
@@ -2176,7 +2166,7 @@ export function TransitMissionsPage() {
 
 
 
-      {historyOpen && historyDetail && <TechnicianHistoryDetails key={historyDetail.id} title="Transit mission details" record={historyDetail} onClose={() => setHistoryDetailId(null)} note="Proof images are shown as returned for this history record. Hub and leg are displayed when provided by Backend." fields={[
+      {historyOpen && historyDetail && <TechnicianHistoryDetails key={historyDetail.id} title="Transit mission details" record={historyDetail} onClose={() => setHistoryDetailId(null)} note="Proof images for this history record." fields={[
         { label: "Mission ID", value: getMissionDisplayId(historyDetail.missionId) }, { label: "Order ID", value: historyDetail.orderId },
         { label: "Drone ID", value: historyDetail.droneId }, { label: "Battery ID", value: historyDetail.batteryId },
         { label: "Leg ID", value: historyDetail.legId }, { label: "Origin hub", value: historyDetail.origin },
@@ -2322,7 +2312,7 @@ export function TransitMissionsPage() {
 
                   <DetailField
 
-                    label="Backend mission ID"
+                    label="Mission ID"
 
                     value={
 
@@ -2729,7 +2719,7 @@ export function TransitMissionsPage() {
 
                             ? "No"
 
-                            : "Pending Backend verification"
+                            : "Pending confirmation"
 
                       }
 
@@ -2807,7 +2797,7 @@ export function TransitMissionsPage() {
 
                     <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
 
-                      Confirm Arrival records physical arrival with Backend. Carry out initial inspection in Hub Fleet, check maintenance status and verify battery removal/charging in Battery Management. These inventory changes must be confirmed by Backend; the FE does not perform them automatically.
+                      Confirm physical arrival, then inspect the drone in Hub Fleet, check maintenance status and verify battery removal and charging in Battery Management.
 
                     </p>
 
@@ -2855,7 +2845,7 @@ export function TransitMissionsPage() {
 
                   <p className="mt-3 text-[13px] leading-5 text-[var(--tech-muted)]">
 
-                    When the drone has physically landed, click Confirm once to record its arrival. Inspection and hub inventory are handled in the subsequent Backend workflow.
+                    When the drone has physically landed, click Confirm once to record its arrival. Then continue with inspection and inventory checks.
 
                   </p>
 
@@ -2923,7 +2913,7 @@ export function TransitMissionsPage() {
 
                               <p className="mt-1 text-[13px] leading-5 text-[var(--tech-muted)]">
 
-                                The mission requires Operator review. Replacement assignment must be recorded by Backend before the Technician can proceed.
+                                The mission requires Operator review. Wait for the replacement assignment before proceeding.
 
                               </p>
 
@@ -3009,7 +2999,7 @@ export function TransitMissionsPage() {
 
                         : arrivalConfirmedFor(selectedMission)
 
-                          ? "Confirmed (time not provided by Backend)"
+                          ? "Confirmed (time not recorded)"
 
                           : "Waiting for arrival confirmation"
 
@@ -3034,7 +3024,7 @@ export function TransitMissionsPage() {
                       <ActivityRow
                         label="Battery service"
                         value={batterySwappedFor(selectedMission)
-                          ? "Ready confirmed by Backend"
+                          ? "Ready confirmed"
                           : `Install Operator-assigned battery: ${operatorAssignedBatteryId(selectedMission) || "Not assigned"}`}
                       />
 

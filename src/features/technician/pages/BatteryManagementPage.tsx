@@ -94,7 +94,7 @@ function formatCountdown(battery: HubBattery, now: number): string {
   const finishAt = Date.parse(battery.estimatedReadyAt);
   if (!Number.isFinite(finishAt)) return "ETA unavailable";
   const secondsLeft = Math.max(0, Math.ceil((finishAt - now) / 1000));
-  if (secondsLeft === 0) return "Awaiting BE update";
+  if (secondsLeft === 0) return "Awaiting status update";
   const hours = Math.floor(secondsLeft / 3600);
   const minutes = Math.floor((secondsLeft % 3600) / 60);
   const seconds = secondsLeft % 60;
@@ -271,7 +271,7 @@ export function BatteryManagementPage() {
 
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
 
-          {batteriesQuery.error.message}
+          Unable to load battery information. Please refresh.
 
         </div>
 
@@ -492,7 +492,7 @@ export function BatteryManagementPage() {
 
                     <span
                       className={`text-[12px] ${battery.status === "Charging" ? "font-semibold tabular-nums text-orange-500" : "text-[var(--tech-muted)]"}`}
-                      title={battery.status === "Charging" ? "Estimated time remaining, from Backend" : undefined}
+                      title={battery.status === "Charging" ? "Estimated time remaining" : undefined}
                     >
                       {formatCountdown(battery, now)}
                     </span>
@@ -561,7 +561,7 @@ export function BatteryManagementPage() {
 
                 <p className="mx-auto mt-2 max-w-[680px] text-[12px] leading-5 text-[var(--tech-muted)]">
 
-                  The request succeeded, but Backend returned an empty battery list.
+                  No batteries available.
 
                   Check the authenticated Technician&apos;s hub assignment and make sure
 

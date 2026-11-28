@@ -234,9 +234,9 @@ export function WorkOrdersPage() {
         payload: { issue_description: issue },
       });
       setEditOrder(null);
-      setWriteMessage(`${editOrder.id} updated in Backend.`);
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Unable to update Work Order.");
+      setWriteMessage(`${editOrder.id} updated successfully.`);
+    } catch  {
+      setApiError("Unable to update Work Order.");
     } finally {
       writeLock.current = false;
     }
@@ -256,9 +256,9 @@ export function WorkOrdersPage() {
       setWriteMessage("");
       await deleteWorkOrderMutation.mutateAsync(workOrderId);
       setDeleteOrder(null);
-      setWriteMessage(`${workOrderId} deleted from Backend.`);
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Unable to delete Work Order.");
+      setWriteMessage(`${workOrderId} deleted successfully.`);
+    } catch  {
+      setDeleteError("Unable to delete Work Order.");
     } finally {
       writeLock.current = false;
     }
@@ -477,12 +477,10 @@ export function WorkOrdersPage() {
         (Date.parse(a.resolvedAt || a.createdAt) || 0),
       ));
       historyLoadedRef.current = true;
-    } catch (error) {
+    } catch  {
       // Leave historyLoadedRef false so Retry can request the list again.
       setHistoryWarning(
-        error instanceof Error
-          ? `Could not load completed Work Orders: ${error.message}`
-          : "Could not load completed Work Orders from Backend.",
+        "Could not load completed work orders. Please retry.",
       );
     } finally {
       historyFetchingRef.current = false;
@@ -534,11 +532,9 @@ export function WorkOrdersPage() {
       }
       setCreateModalOpen(false);
       setForm(initialForm);
-    } catch (error) {
+    } catch  {
       setApiError(
-        error instanceof Error
-          ? error.message
-          : "Unable to create work order.",
+        "Unable to create work order.",
       );
     }
   };
@@ -562,9 +558,7 @@ export function WorkOrdersPage() {
       {(apiError || workOrdersQuery.error instanceof Error) && (
         <div className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError ||
-            (workOrdersQuery.error instanceof Error
-              ? workOrdersQuery.error.message
-              : "")}
+            ("")}
         </div>
       )}
       {writeMessage && <div role="status" className="mb-4 rounded-md border border-[var(--tech-border)] px-4 py-3 text-[13px] text-[var(--tech-text-secondary)]">{writeMessage}</div>}
@@ -734,7 +728,7 @@ export function WorkOrdersPage() {
             <div className="px-6 py-5">
               <p id="delete-work-order-description" className="text-[14px] leading-relaxed text-[var(--tech-text-secondary)]">
                 Are you sure you want to delete <strong className="text-[var(--tech-text)]">{deleteOrder.id}</strong>?
-                This will permanently remove the Work Order from Backend and cannot be undone.
+                This will permanently remove the Work Order and cannot be undone.
               </p>
               {deleteError && (
                 <p role="alert" className="mt-3 text-[13px] text-red-500">{deleteError}</p>

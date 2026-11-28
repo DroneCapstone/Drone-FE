@@ -497,9 +497,9 @@ export function TechnicianNotificationsPage() {
 
       }
 
-    } catch (error) {
+    } catch  {
 
-      setReadError(error instanceof Error ? error.message : "Unable to load more notifications.");
+      setReadError("Unable to load more notifications.");
 
     } finally {
 
@@ -537,9 +537,9 @@ export function TechnicianNotificationsPage() {
 
       }
 
-    } catch (error) {
+    } catch  {
 
-      setReadError(error instanceof Error ? error.message : "Unable to delete notification.");
+      setReadError("Unable to delete notification.");
 
     }
 
@@ -557,9 +557,9 @@ export function TechnicianNotificationsPage() {
 
       setNotifications((current) => current.filter((item) => item.unread));
 
-    } catch (error) {
+    } catch  {
 
-      setReadError(error instanceof Error ? error.message : "Unable to clear read notifications.");
+      setReadError("Unable to clear read notifications.");
 
     }
 
@@ -646,9 +646,9 @@ export function TechnicianNotificationsPage() {
 
       setServerUnread((value) => value === null ? value : Math.max(value - 1, 0));
 
-    } catch (error) {
+    } catch  {
 
-      setReadError(error instanceof Error ? error.message : "Unable to mark notification as read.");
+      setReadError("Unable to mark notification as read.");
 
     }
 
@@ -1532,7 +1532,7 @@ export function TechnicianNotificationsPage() {
             <div role="status" aria-live="polite" className="flex min-h-[180px] flex-col items-center justify-center gap-3">
               <LoaderCircle size={25} className="animate-spin text-orange-500" aria-hidden="true" />
               <p className="text-[13px] font-medium text-[var(--tech-text-secondary)]">Loading notifications...</p>
-              <p className="text-[11px] text-[var(--tech-subtle)]">Fetching notifications from Backend.</p>
+              <p className="text-[11px] text-[var(--tech-subtle)]">Please wait a moment.</p>
             </div>
           ) : isInitialError ? (
             <div role="alert" className="flex min-h-[180px] flex-col items-center justify-center gap-3">
