@@ -19,19 +19,15 @@ function text(r: Data, ...keys: string[]): string {
   }
   return '';
 }
-function rows(value: unknown, orderId: string): unknown[] {
+function rows(value: unknown, missionId: string): unknown[] {
   if (Array.isArray(value)) return value;
   const r = record(value);
-  if (text(r, 'order_id') && text(r, 'order_id') !== orderId) throw new Error('Order identifier does not match.');
+  if (text(r, 'mission_id') && text(r, 'mission_id') !== missionId) throw new Error('Mission identifier does not match.');
   for (const key of ['data', 'proof_images', 'order_proof_images', 'proof_images_json', 'items', 'results']) {
-    if (r[key] && typeof r[key] === 'object') return rows(r[key], orderId);
+    if (r[key] && typeof r[key] === 'object') return rows(r[key], missionId);
   }
   throw new Error('Unable to read proof image records.');
 }
-const checkIn = new Set(['CHECK_IN', 'CHECKIN', 'CONFIRM_RELAY_ARRIVAL', 'CONFIRM_ARRIVAL']);
-const checkout = new Set(['CHECK_OUT', 'CHECKOUT']);
-const loaded = new Set(['PACKAGE_LOADED_TO_DRONE', 'LOAD_PACKAGE', 'PACKAGE_LOADED', 'RELOAD_PACKAGE', 'DISPATCH']);
-const unloaded = new Set(['PACKAGE_UNLOADED_FROM_DRONE', 'UNLOAD_PACKAGE', 'PACKAGE_UNLOADED']);
 function validTime(value: string) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4}),?\s+(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
   const t = m ? `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || '00'}+07:00` : value;
@@ -49,59 +45,57 @@ function imageUrls(r: Data): string[] {
 export function missionEvidenceOrderIds(mission: Mission): string[] {
   return [...new Set([mission.orderId, ...(mission.bundledOrderIds ?? [])].filter(Boolean))].sort();
 }
-/** Group a stop's arrival, package handling and departure under the incoming leg.
- * For a repeated hub, require an explicit incoming leg ID or unambiguous outgoing leg ID.
- * Per-order proof alone is not evidence that a record belongs to this mission. */
-export function mapLegEvidence(payload: unknown, orderId: string, mission: Mission, legIndex: number): LegEvidence[] {
+/** Group relay arrival, package loading and departure under the incoming leg.
+ * The mission endpoint contains all orders, including relay-bundled orders.
+ * At a repeated hub, require an unambiguous leg reference. */
+export function mapLegEvidence(payload: unknown, mission: Mission, legIndex: number): LegEvidence[] {
   const legs = mission.legs ?? [];
   const leg = legs[legIndex];
-  if (!leg?.toHubId || !missionEvidenceOrderIds(mission).includes(orderId)) return [];
+  if (!leg?.toHubId || leg.isDispatch) return [];
   const final = legIndex === legs.length - 1 && leg.toHubId === mission.destinationHubId;
   const repeatedHub = legs.filter(l => l.toHubId === leg.toHubId).length > 1;
-  return rows(payload, orderId).flatMap(item => {
+  return rows(payload, mission.id).flatMap(item => {
     const r = record(item);
-    const eventOrder = text(r, 'order_id');
-    if (eventOrder && eventOrder !== orderId) return [];
     if (text(r, 'mission_id') !== mission.id || text(r, 'hub_id') !== leg.toHubId) return [];
     const raw = text(r, 'stage').toUpperCase().replace(/[\s-]+/g, '_');
     let stage: LegEvidenceStage;
-    if (checkIn.has(raw)) stage = final ? 'received' : 'check-in';
-    else if (!final && checkout.has(raw)) stage = 'check-out';
-    else if (!final && loaded.has(raw)) stage = 'loaded';
-    else if (unloaded.has(raw)) stage = 'unloaded';
+    if (!final && raw === 'DRONE_CHECKIN_RELAY') stage = 'check-in';
+    else if (!final && raw === 'DRONE_CHECKOUT_RELAY') stage = 'check-out';
+    else if (!final && raw === 'PACKAGE_LOADED_TO_DRONE') stage = 'loaded';
+    // The destination arrival photo is recorded as package unloading by the BE.
+    // Use the existing Drone received section, without duplicating the same photo.
+    else if (final && raw === 'PACKAGE_UNLOADED_FROM_DRONE') stage = 'received';
     else return []; // Never show customer pickup or origin receipt images here.
+
     const arrivalLeg = text(r, 'arrival_leg_id', 'incoming_leg_id');
     const eventLeg = text(r, 'leg_id', 'mission_leg_id');
     if (arrivalLeg) {
       if (arrivalLeg !== leg.id) return [];
     } else if (eventLeg) {
+      // Checkout/loading may reference the incoming or the next outgoing leg.
       const departing = stage === 'check-out' || stage === 'loaded';
       const candidates = legs.flatMap((l, i) => l.toHubId === leg.toHubId &&
         (l.id === eventLeg || (departing && legs[i + 1]?.fromHubId === l.toHubId && legs[i + 1]?.id === eventLeg)) ? [i] : []);
       if (candidates.length !== 1 || candidates[0] !== legIndex) return [];
-    } else if (repeatedHub) return [];
-    // Only package-specific records carry the order label; drone photos may be shared across orders.
-    return imageUrls(r).map(url => ({stage, orderId: stage === 'loaded' || stage === 'unloaded' ? orderId : '', url,
+    } else if (repeatedHub && !final) return [];
+
+    // Preserve the actual order ID for package photos, including bundled orders.
+    // Drone check-in/out photos are mission-level and do not need an order label.
+    const orderId = stage === 'loaded' || stage === 'received' ? text(r, 'order_id') : '';
+    return imageUrls(r).map(url => ({stage, orderId, url,
       recordedAt: validTime(text(r, 'recorded_at', 'timestamp')), recordedBy: text(r, 'technician_name', 'technician_id')}));
   });
 }
 
 export async function getMissionLegEvidence(mission: Mission, legIndex: number, signal?: AbortSignal): Promise<LegEvidenceResult> {
-  const ids = missionEvidenceOrderIds(mission);
-  if (!ids.length) return {items: [], partial: true};
-  // Same proposed Operator endpoint as Package receipt; do not request Admin routes.
-  const results = await Promise.allSettled(ids.map(async id => {
-    const payload = await operatorApiRequest<unknown>(`/operator/orders/${encodeURIComponent(id)}/proof-images`, {signal});
-    return mapLegEvidence(payload, id, mission, legIndex);
-  }));
-  const successes = results.filter((r): r is PromiseFulfilledResult<LegEvidence[]> => r.status === 'fulfilled');
-  if (!successes.length) throw new Error('Unable to load leg photos.');
+  // A single mission-scoped request replaces the old per-order requests.
+  const payload = await operatorApiRequest<unknown>(`/operator/missions/${encodeURIComponent(mission.id)}/proof-images`, {signal});
   const unique = new Map<string, LegEvidence>();
-  for (const item of successes.flatMap(r => r.value)) {
+  for (const item of mapLegEvidence(payload, mission, legIndex)) {
     const key = JSON.stringify([item.stage, item.orderId, item.url, item.recordedAt]);
     if (!unique.has(key)) unique.set(key, item);
   }
   const stageOrder: Record<LegEvidenceStage, number> = {'check-in': 0, received: 0, unloaded: 1, loaded: 2, 'check-out': 3};
   return {items: [...unique.values()].sort((a,b) => stageOrder[a.stage] - stageOrder[b.stage] || (Date.parse(a.recordedAt) || 0) - (Date.parse(b.recordedAt) || 0)),
-    partial: successes.length !== ids.length || (mission.totalOrdersCount ?? ids.length) > ids.length};
+    partial: false};
 }
