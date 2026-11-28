@@ -2171,10 +2171,9 @@ export function TransitMissionsPage() {
       {historyOpen && historyDetail && <TechnicianHistoryDetails key={historyDetail.id} title="Transit mission details" record={historyDetail} onClose={() => setHistoryDetailId(null)} note="Proof images for this history record." fields={[
         { label: "Mission ID", value: getMissionDisplayId(historyDetail.missionId) }, { label: "Order ID", value: historyDetail.orderId },
         { label: "Drone ID", value: historyDetail.droneId }, { label: "Battery ID", value: historyDetail.batteryId },
-        { label: "Leg ID", value: historyDetail.legId }, { label: "Origin hub", value: historyDetail.origin },
-        { label: "Current hub", value: historyDetail.hub }, { label: "Destination hub", value: historyDetail.destination },
+        { label: "Origin hub", value: historyDetail.origin },
+        { label: "Destination hub", value: historyDetail.destination },
         { label: "Arrival type", value: getHistoryReasonLabel(historyDetail.purpose) },
-        { label: "Drone departed", value: formatHistoryTimestamp(historyDetail.departedAt) },
         { label: "Arrived at hub", value: formatHistoryTimestamp(historyDetail.arrivedAt) },
         { label: "Arrival confirmed at", value: formatHistoryTimestamp(historyDetail.arrivalConfirmedAt) },
         { label: "Destination received at", value: formatHistoryTimestamp(historyDetail.destinationReceivedAt) },
