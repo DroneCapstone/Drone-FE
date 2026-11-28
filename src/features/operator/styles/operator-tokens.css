@@ -3,6 +3,7 @@
 .operator-app,
 .mission-resource-popup,
 .operator-contact-dialog,
+.operator-receipt-dialog,
 :root:has(.operator-app) :is([role="listbox"], .profile-popover) {
   --op-font: "IBM Plex Sans", "Segoe UI", sans-serif;
   --op-page-title: 28px;

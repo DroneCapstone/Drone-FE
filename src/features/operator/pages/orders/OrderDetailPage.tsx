@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
+import { PackageReceipt } from '../../components/PackageReceipt';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { useMissionListQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
@@ -115,7 +116,7 @@ export function OrderDetailPage() {
               <div><dt>Payload</dt><dd>{order.payloadKg} kg</dd></div>
               <div>
                 <dt>Origin package</dt>
-                <dd>{order.originPackageReceived || order.originHubReceivedAt ? <>Received at Hub{order.originHubReceivedAt && <><br /><small>{formatMissionTime(order.originHubReceivedAt)}</small></>}</> : 'Awaiting package'}</dd>
+                <dd><PackageReceipt key={order.id} order={order} /></dd>
               </div>
               <div><dt>Estimated delivery</dt><dd>{formatDeliveryWindow(order)}</dd></div>
               <div><dt>Planning state</dt><dd>{planning ?? '—'}</dd></div>

@@ -27,6 +27,9 @@ export const operatorQueryKeys = {
   orderDetail: (orderId: string) =>
     [...operatorQueryKeys.orders(), 'detail', orderId] as const,
 
+  packageReceipt: (orderId: string, originHubId: string) =>
+    [...operatorQueryKeys.orderDetail(orderId), 'package-receipt', originHubId] as const,
+
   eligibleDrones: (orderId: string) =>
     [...operatorQueryKeys.orders(), 'detail', orderId, 'eligible-drones'] as const,
 
