@@ -1,10 +1,13 @@
+import { AdminSummaryCard as ReplacementMetric } from "../../components/AdminSummaryCard";
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { ClipboardList, Clock3, PackageCheck, Truck, CircleCheckBig, Ban } from 'lucide-react';
+import { ClipboardList, PackageCheck, Truck, CircleCheckBig, Ban } from 'lucide-react';
 
 import { ActionButton } from '../../../../components/ui/ActionButton';
 
@@ -100,41 +103,6 @@ const adminDialogFont = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Se
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-[13px] text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
 
-function ReplacementMetric({ label, value, icon: Icon }: {
-
-  label: string;
-
-  value: number;
-
-  note: string;
-
-  icon: typeof Clock3;
-
-}) {
-
-  return <div className="flex min-w-0 flex-col justify-center px-4 py-3" style={{
-
-    backgroundColor: '#FFFFFF', border: '1px solid #DDE2E8', borderRadius: 12,
-
-    boxShadow: '0 8px 22px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.05)',
-
-    minHeight: 88,
-
-  }}>
-
-    <div className="flex items-center justify-between gap-2">
-
-      <span className="text-xs font-medium text-[var(--admin-muted)]">{label}</span>
-
-      <Icon size={18} strokeWidth={1.8} className="shrink-0 text-[#FF6B00]" aria-hidden="true" />
-
-    </div>
-
-    <strong className="mt-1 block text-2xl font-bold text-[var(--admin-text)]">{value}</strong>
-
-  </div>;
-
-}
 
 function ReadOnlyFact({ label, value }: { label: string; value: string | number }) {
 
@@ -149,6 +117,7 @@ function ReadOnlyFact({ label, value }: { label: string; value: string | number 
 }
 
 export function ApprovalsPage() {
+  const confirmAction = useAdminConfirm();
 
   const [params, setParams] = useSearchParams();
 
@@ -254,7 +223,7 @@ export function ApprovalsPage() {
   async function confirmSupply() {
     if (!request || !rawRequest || !actionable || !canSupply || saving) return;
     if (request.type === 'BATTERY' && request.quantity !== 1) { setError('Only one replacement battery can be supplied per request.'); return; }
-    if (!window.confirm(`Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`)) return;
+    if (!(await confirmAction({ title: 'Supply replacement', message: `Confirm supply for replacement ${request.id}? Stock will be updated and the technician notified.`, confirmLabel: 'Confirm Supply' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.supplyReplacement(rawRequest.request_id, request.type === 'BATTERY' ? chosenId : undefined);
@@ -265,7 +234,7 @@ export function ApprovalsPage() {
   async function confirmReject() {
     if (!request || !rawRequest || !actionable || !rejectMode || saving) return;
     const reason = rejectionReason.trim(); if (!reason) { setError('Enter a reason for rejection.'); return; }
-    if (!window.confirm(`Reject replacement ${request.id}?`)) return;
+    if (!(await confirmAction({ title: 'Reject replacement', message: `Reject replacement ${request.id}?`, confirmLabel: 'Confirm Rejection' }))) return;
     setSaving(true); setError('');
     try {
       await adminOperationsApi.rejectReplacement(rawRequest.request_id, reason);
@@ -324,37 +293,37 @@ export function ApprovalsPage() {
 
       />
 
-      <div className="table-wrap"><table>
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions">
 
-        <thead><tr><th>Request</th><th>Damaged item</th><th>Receiving Hub</th><th>Technician</th><th>Qty</th><th>Status</th><th>Action</th></tr></thead>
+        <TableHeader><TableRow><TableHead>Request</TableHead><TableHead>Damaged item</TableHead><TableHead>Receiving Hub</TableHead><TableHead>Technician</TableHead><TableHead>Qty</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
 
-        <tbody>
+        <TableBody>
 
           {visible.map((entry) => {
 
             const entryStatus = effectiveStatus(entry);
 
-            return <tr key={entry.id}>
+            return <TableRow key={entry.id}>
 
-              <td><strong>{entry.id}</strong><small>{time(entry.createdAt)}</small></td>
+              <TableCell><strong>{entry.id}</strong><small>{time(entry.createdAt)}</small></TableCell>
 
-              <td><strong>{item(entry)}</strong><small>{entry.droneId ?? entry.batteryId ?? '—'}</small></td>
+              <TableCell><strong>{item(entry)}</strong><small>{entry.droneId ?? entry.batteryId ?? '—'}</small></TableCell>
 
-              <td>{hubName(entry.hubId)}</td><td>{entry.technician}</td><td>{entry.quantity}</td>
+              <TableCell>{hubName(entry.hubId)}</TableCell><TableCell>{entry.technician}</TableCell><TableCell>{entry.quantity}</TableCell>
 
-              <td><ReplacementStatusText status={entryStatus} /></td>
+              <TableCell><ReplacementStatusText status={entryStatus} /></TableCell>
 
-              <td><ActionButton variant="secondary" onClick={() => openRequest(entry)}>View details</ActionButton></td>
+              <TableCell><ActionButton variant="secondary" onClick={() => openRequest(entry)}>View details</ActionButton></TableCell>
 
-            </tr>;
+            </TableRow>;
 
           })}
 
-          {!loading && !error && visible.length === 0 && <tr><td colSpan={7} className="text-center">No matching replacement records.</td></tr>}
+          {!loading && !error && visible.length === 0 && <TableRow><TableCell colSpan={7} className="text-center">No matching replacement records.</TableCell></TableRow>}
 
-        </tbody>
+        </TableBody>
 
-      </table></div>
+      </OperatorTable></div>
 
     </OperatorPanel>
 
@@ -372,7 +341,7 @@ export function ApprovalsPage() {
 
           <div className="min-w-0">
 
-            <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 18, fontWeight: 600 }}>
+            <DialogTitle asChild><div className="text-lg font-semibold leading-snug" style={{ fontFamily: adminDialogFont, fontSize: 16, fontWeight: 600 }}>
 
               {request ? `Replacement ${request.id}` : 'Replacement not found'}
 

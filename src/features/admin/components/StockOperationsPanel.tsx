@@ -1,3 +1,6 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../operator/components/OperatorTable";
+import { useAdminConfirm } from './AdminConfirmDialog';
+import { invalidateAdminReads } from '../api/adminHttp';
 import { AdminSelect } from './AdminSelect';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { adminDisplayText } from '../utils/adminDisplayText';
@@ -10,6 +13,7 @@ import { adminOperationsApi, apiError, type HubApi, type PartCategoryApi, type S
 export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
   hubs: HubApi[]; parts: PartCategoryApi[]; stocks: StockApi[]; onChanged: () => Promise<void>;
 }) {
+  const confirmAction = useAdminConfirm();
   const [kind,setKind]=useState<'TRANSFER'|'ADJUST'|'DISCARD'|'THRESHOLD'|'BULK'>('TRANSFER');
   const [hubId,setHubId]=useState('');
   const [toHub,setToHub]=useState('');
@@ -37,7 +41,7 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
     kind==='ADJUST'?Number.isSafeInteger(qty)&&qty!==0 : Number.isSafeInteger(qty)&&qty>0))
     &&(kind!=='TRANSFER'||hubs.some(h=>h.id===destination&&h.id!==hub));
   async function submit(){if(!valid||saving)return;
-    if(!window.confirm(`Confirm ${kind.toLowerCase()}? This stock change will be recorded.`))return;
+    if(!(await confirmAction({ title: 'Confirm stock operation', message: `Confirm ${kind.toLowerCase()}? This stock change will be recorded.`, confirmLabel: 'Confirm' })))return;
     setSaving(true);setError('');setNotice('');
     try {
       if(kind==='TRANSFER')await adminOperationsApi.transferStock({from_hub_id:hub,to_hub_id:destination,part_category_id:part,quantity:qty,...(note.trim()?{note:note.trim()}:{})});
@@ -68,12 +72,12 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
       </div>
     </OperatorPanel>
     <OperatorPanel title="Stock movement history" eyebrow="STOCK HISTORY">
-      {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>void loadLogs()}>Retry</button></p>}
-      {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Hub</th><th>Part</th><th>Change</th><th>Reason</th><th>Reference</th></tr></thead><tbody>
-        {logs.slice(0,100).map(l=><tr key={l.id}><td>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</td>
-          <td>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</td><td>{l.part_name??l.part_category_id}</td><td>{l.quantity_delta}</td><td>{adminDisplayText(l.reason)}</td><td>{l.reference_id??'—'}</td></tr>)}
-        {!logError&&!logs.length&&<tr><td colSpan={6}>No stock movements recorded.</td></tr>}
-      </tbody></table></div>}
+      {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>{invalidateAdminReads();void loadLogs();}}>Retry</button></p>}
+      {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><OperatorTable><TableHeader><TableRow><TableHead>When</TableHead><TableHead>Hub</TableHead><TableHead>Part</TableHead><TableHead>Change</TableHead><TableHead>Reason</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader><TableBody>
+        {logs.slice(0,100).map(l=><TableRow key={l.id}><TableCell>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</TableCell>
+          <TableCell>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</TableCell><TableCell>{l.part_name??l.part_category_id}</TableCell><TableCell>{l.quantity_delta}</TableCell><TableCell>{adminDisplayText(l.reason)}</TableCell><TableCell>{l.reference_id??'—'}</TableCell></TableRow>)}
+        {!logError&&!logs.length&&<TableRow><TableCell colSpan={6}>No stock movements recorded.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>}
     </OperatorPanel>
   </div>;
 }

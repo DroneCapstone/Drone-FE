@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -28,7 +29,7 @@ export function ExpensesPage() {
   const net = gross != null && refunds != null ? gross - refunds : null;
   return <AdminPageShell title="Financial Overview">
     {loading ? <OperatorLoadingState label="Loading financial overview…" /> : error ?
-      <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p> : <>
+      <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p> : <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <AdminSummaryCard label="Gross Collected" value={money(gross)} icon={CreditCard} />
         <AdminSummaryCard label="Completed Refunds" value={money(refunds)} icon={RotateCcw} />

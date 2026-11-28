@@ -47,7 +47,7 @@
   justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-  background: #fff;
+  background: var(--surface);
 }
 .admin-replacement-dialog__footer-actions {
   display: flex;
@@ -72,7 +72,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.admin-replacement-dialog__reject-trigger:hover { background: #fef2f2; }
+.admin-replacement-dialog__reject-trigger:hover { background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
 .admin-replacement-dialog__reject-trigger:focus-visible {
   outline: 2px solid #dc2626;
   outline-offset: 2px;
@@ -84,7 +84,7 @@
   min-height: 112px;
   border-radius: 9px;
   border: 1px solid var(--admin-border, #d9dee6);
-  background: #fff;
+  background: var(--surface);
   padding: 10px 12px;
   color: var(--admin-text, #111827);
   font: inherit;

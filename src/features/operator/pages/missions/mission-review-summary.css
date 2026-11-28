@@ -1,0 +1,107 @@
+/* Review-only layout; no shared Operator selectors or changes to other steps. */
+.page-content .mission-builder .mission-review-summary {
+  --mr-id: #147da6;
+  --mr-success: #15834f;
+  --mr-accent: var(--orange, #ff6b00);
+  --mr-consumption: #e88432;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  font-family: var(--op-font, "IBM Plex Sans", "Segoe UI", sans-serif);
+  font-size: var(--op-body, 13px);
+  color: var(--text);
+  line-height: 1.45;
+}
+:root[data-theme='dark'] .page-content .mission-builder .mission-review-summary {
+  --mr-id: #73c3ed;
+  --mr-success: #53cf92;
+  --mr-accent: #ff9c50;
+  --mr-consumption: #ffb06a;
+}
+.mission-review-summary .mr-card { min-width: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.page-content .mission-builder .mission-review-summary .mr-heading {
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px;
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  font-size: var(--op-section-title, 14px); font-weight: 600; line-height: 1.4; color: var(--text);
+}
+.mission-review-summary :is(h3,h4,dt,dd,small,strong,th,td) { font-family: inherit; }
+.mission-review-summary .mr-heading svg { flex: none; color: var(--orange); }
+.mission-review-summary .mr-fields { margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.mission-review-summary .mr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px; }
+.mission-review-summary .mr-schedule .mr-field { padding: 8px 12px; }
+.mission-review-summary :is(dt,small) { display: block; font-size: var(--op-secondary, 12px); font-weight: 400; color: var(--muted); line-height: 1.45; }
+.mission-review-summary dt,
+.mission-review-summary .mr-body > small:first-child,
+.mission-review-summary .mr-energy-metrics > div > small:first-child { font-size: var(--op-body, 13px); }
+.mission-review-summary dd { display: flex; flex-direction: column; gap: 3px; margin: 0; font-size: var(--op-body, 13px); font-weight: 500; overflow-wrap: anywhere; }
+.mission-review-summary .mr-id { color: var(--mr-id); font-weight: 600; overflow-wrap: anywhere; }
+.mission-review-summary .mr-success { color: var(--mr-success); }
+.mission-review-summary .mr-accent { color: var(--mr-accent); }
+.mission-review-summary .mr-inline { display: inline-flex; align-items: center; gap: 5px; }
+.mission-review-summary .mr-body { padding: 12px; display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.mission-review-summary .mr-single { margin: 0; }
+.mission-review-summary .mr-single .mr-field { padding: 0; }
+.mission-review-summary .mr-profile { display: flex; align-items: center; gap: 6px; color: var(--mr-accent); font-size: var(--op-body, 13px); font-weight: 500; overflow-wrap: anywhere; }
+.mission-review-summary .mr-profile svg { flex: none; }
+.mission-review-summary .mr-divider { height: 1px; background: var(--border); flex: none; }
+.mission-review-summary .mr-path { list-style: none; margin: 0; padding: 0; display: grid; }
+.mission-review-summary .mr-path li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 0 12px;
+}
+.mission-review-summary .mr-path li:last-child { padding-bottom: 0; }
+.mission-review-summary .mr-path li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 11px;
+  bottom: -10px;
+  border-left: 1px solid var(--border);
+}
+.mission-review-summary .mr-path-dot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  background: var(--surface);
+  box-sizing: border-box;
+}
+.mission-review-summary .mr-path li > div { min-width: 0; }
+.mission-review-summary .mr-path strong { display: block; font-size: var(--op-body, 13px); font-weight: 600; overflow-wrap: anywhere; }
+.mission-review-summary .mr-drone { display: flex; gap: 8px; align-items: center; }
+.mission-review-summary .mr-drone-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; background: var(--surface-2); color: var(--muted); border-radius: 6px; }
+.mission-review-summary .mr-drone > div { min-width: 0; }
+.mission-review-summary .mr-battery-title { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.mission-review-summary .mr-battery-title strong { font-size: var(--op-body, 13px); font-weight: 600; }
+.mission-review-summary .mr-batteries { display: grid; gap: 8px; }
+.mission-review-summary .mr-battery { border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: grid; gap: 4px; min-width: 0; font-size: var(--op-body, 13px); }
+.mission-review-summary .mr-battery > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 3px 8px; min-width: 0; }
+.mission-review-summary .mr-battery strong { font-weight: 500; overflow-wrap: anywhere; }
+.mission-review-summary .mr-charge { color: var(--mr-success); font-weight: 500; white-space: nowrap; }
+.mission-review-summary .mr-energy { grid-column: 1 / -1; min-width: 0; padding: 12px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--op-review-energy-bg, var(--surface-2)); }
+.page-content .mission-builder .mission-review-summary .mr-energy .mr-heading { padding: 0; border: 0; background: transparent; font-size: var(--op-panel-title, 16px); }
+.mission-review-summary .mr-energy-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.mission-review-summary .mr-energy-metrics > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mission-review-summary .mr-energy-metrics > div > small:first-child { font-size: var(--op-section-title, 14px); }
+.mission-review-summary .mr-energy-metrics > div > small:not(:first-child) { font-size: var(--op-body, 13px); }
+.mission-review-summary .mr-energy-metrics strong { font-size: calc(var(--op-kpi, 28px) + 2px); font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mission-review-summary h4 { margin: 0; font-size: var(--op-value, 15px); font-weight: 600; line-height: 1.4; }
+.mission-review-summary .mr-table-scroll { max-width: 100%; overflow-x: auto; }
+.mission-review-summary .mr-table { font-family: var(--op-font, inherit); width: 100%; border-collapse: collapse; font-size: var(--op-body, 13px); line-height: 1.45; font-variant-numeric: tabular-nums; }
+.mission-review-summary .mr-table :is(th,td) { box-sizing: border-box; border-bottom: 1px solid var(--border); text-align: right; vertical-align: middle; white-space: nowrap; }
+.mission-review-summary .mr-table thead { background: var(--surface-2); }
+.mission-review-summary .mr-table th { height: 56px; padding: 12px 16px; background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; line-height: 1.4; text-transform: uppercase; }
+.mission-review-summary .mr-table :is(th,td):first-child { text-align: left; white-space: normal; min-width: 140px; }
+.mission-review-summary .mr-table td { height: 48px; padding: 12px 16px; color: var(--muted); font-size: var(--op-body, 13px); font-weight: 400; line-height: 1.45; }
+.mission-review-summary .mr-table td.mr-accent { color: var(--orange, #ff6b00); font-weight: 400; }
+.mission-review-summary .mr-table tr:last-child td { border-bottom: 0; }
+@media (max-width: 850px) { .page-content .mission-builder .mission-review-summary { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 420px) { .mission-review-summary .mr-fields { grid-template-columns: minmax(0,1fr); } }

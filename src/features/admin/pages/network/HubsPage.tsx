@@ -1,3 +1,5 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { MapPin, CircleCheck, Plane, BatteryCharging, Plus } from "lucide-react";
@@ -178,7 +180,7 @@ export function HubsPage() {
       description="Manage configured Hubs and their assigned assets."
       actions={<ActionButton onClick={openCreate}><Plus size={16} aria-hidden="true" /> Create hub</ActionButton>}
     >
-      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => void refresh()}>Retry</button></p>}
+      {error && !loading && <p role="alert" className="mb-3 text-sm text-red-500">{error} <button type="button" className="text-button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
       {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
       {loading ? <OperatorLoadingState label="Loading hubs…" /> : summary !== null && <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -205,28 +207,28 @@ export function HubsPage() {
           meta={`${visible.length} of ${hubs.length} hubs`}
         />
         <div className="table-wrap">
-          <table>
-            <thead><tr><th>Hub</th><th>Area</th><th>Status</th><th>Drones</th><th>Batteries</th><th>Technicians</th><th>Action</th></tr></thead>
-            <tbody>
+          <OperatorTable className="admin-pinned-actions">
+            <TableHeader><TableRow><TableHead>Hub</TableHead><TableHead>Area</TableHead><TableHead>Status</TableHead><TableHead>Drones</TableHead><TableHead>Batteries</TableHead><TableHead>Technicians</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+            <TableBody>
               {visible.map((hub) => (
-                <tr key={hub.id}>
-                  <td><strong>{hub.name}</strong><small>{hub.code}</small></td>
-                  <td><strong>{hub.area}</strong><small>{hub.address}</small></td>
-                  <td><StatusBadge tone={hubTone(hub.status)}>{hub.status}</StatusBadge></td>
-                  <td>{drones.filter((drone) => drone.hubId === hub.id).length}</td>
-                  <td>{counts[hub.id]?.batteries ?? 0}</td>
-                  <td>{counts[hub.id]?.technicians ?? 0}</td>
-                  <td>
+                <TableRow key={hub.id}>
+                  <TableCell><strong>{hub.name}</strong><small>{hub.code}</small></TableCell>
+                  <TableCell><strong>{hub.area}</strong><small>{hub.address}</small></TableCell>
+                  <TableCell><StatusBadge tone={hubTone(hub.status)}>{hub.status}</StatusBadge></TableCell>
+                  <TableCell>{drones.filter((drone) => drone.hubId === hub.id).length}</TableCell>
+                  <TableCell>{counts[hub.id]?.batteries ?? 0}</TableCell>
+                  <TableCell>{counts[hub.id]?.technicians ?? 0}</TableCell>
+                  <TableCell>
                     <div className="flex gap-2">
                       <Link className="text-button" to={`/admin/network/hubs/${hub.id}`}>View</Link>
                       <button className="text-button" type="button" onClick={() => setEditing({ ...hub })}>Edit</button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-              {!visible.length && <tr><td colSpan={7} className="p-5 text-center">{hubs.length ? "No hubs match your filters." : "No hubs available yet."}</td></tr>}
-            </tbody>
-          </table>
+              {!visible.length && <TableRow><TableCell colSpan={7} className="p-5 text-center">{hubs.length ? "No hubs match your filters." : "No hubs available yet."}</TableCell></TableRow>}
+            </TableBody>
+          </OperatorTable>
         </div>
       </OperatorPanel>
       </>}

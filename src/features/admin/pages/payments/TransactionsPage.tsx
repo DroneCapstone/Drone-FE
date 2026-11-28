@@ -1,3 +1,6 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
 import { adminDisplayText } from '../../utils/adminDisplayText';
@@ -27,6 +30,7 @@ const canRefund = (row: JsonRow) => statusOf(row) === 'PAID' && orderOf(row) !==
 const shortId = (id: string) => id.length > 18 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
 
 export function TransactionsPage() {
+  const confirmAction = useAdminConfirm();
   const [params] = useSearchParams();
   const initialQuery = params.get('q') ?? '';
   const [items, setItems] = useState<JsonRow[]>([]);
@@ -79,7 +83,7 @@ export function TransactionsPage() {
   async function refund() {
     if (!selected || saving || !reason.trim() || !canRefund(selected)) return;
     const orderId = orderOf(selected);
-    if (!window.confirm(`Submit a full refund for order ${orderId}? This action affects customer funds and cannot be undone here.`)) return;
+    if (!(await confirmAction({ title: 'Confirm refund', message: `Submit a full refund for order ${orderId}? This action affects customer funds and cannot be undone here.`, confirmLabel: 'Confirm Refund' }))) return;
     setSaving(true); setRefundError('');
     try {
       const result = await adminOperationsApi.refundOrder(orderId, { reason: reason.trim() });
@@ -93,7 +97,7 @@ export function TransactionsPage() {
   return <AdminPageShell title="Transactions">
     {notice && <p role="status" className="mb-3 text-sm text-green-600">{notice}</p>}
     {loading ? <OperatorLoadingState label="Loading transactions..." /> : error ?
-      <OperatorPanel><div role="alert" className="flex flex-wrap items-center justify-center gap-3 p-6 text-sm text-red-500">{error}<ActionButton variant="secondary" onClick={() => void refresh()}>Retry</ActionButton></div></OperatorPanel> : <>
+      <OperatorPanel><div role="alert" className="flex flex-wrap items-center justify-center gap-3 p-6 text-sm text-red-500">{error}<ActionButton variant="secondary" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</ActionButton></div></OperatorPanel> : <>
     <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <AdminSummaryCard label="Gross collected" value={knownAmount ? money(collected) : '—'} icon={CreditCard} />
       <AdminSummaryCard label="Paid" value={items.filter(row => statusOf(row) === 'PAID').length} icon={CircleCheck} />
@@ -102,17 +106,17 @@ export function TransactionsPage() {
     </div>
     <OperatorPanel className="flush-panel">
       <AdminToolbar searchValue={query} onSearchChange={setQuery} placeholder="Search order, payment or customer..." filters={<AdminSelect value={status} onChange={e => setStatus(e.target.value)}><option value="all">All statuses</option><option value="PENDING">Pending</option><option value="PAID">Paid</option><option value="FAILED">Failed</option><option value="REFUNDED">Refunded</option></AdminSelect>} meta={`${visible.length} of ${items.length} transactions`} />
-      <div className="table-wrap"><table><thead><tr><th>Order ID</th><th>Customer</th><th>Amount</th><th>Status</th><th>Paid at</th><th>Action</th></tr></thead><tbody>
-        {visible.map((row, index) => <tr key={`${paymentOf(row)}-${index}`} className="cursor-pointer" tabIndex={0} title="Double-click to view transaction details" aria-label={`Order ${orderOf(row)}. Press Enter to view transaction details.`} onDoubleClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a'))) setDetail(row); }} onKeyDown={event => { if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setDetail(row); } }}>
-          <td><strong>{orderOf(row) !== '—' ? orderOf(row) : paymentOf(row)}</strong></td>
-          <td><span title={customerIdOf(row) !== '—' ? customerIdOf(row) : undefined} className="break-words">{customerText(row)}</span></td>
-          <td className="whitespace-nowrap">{money(amountOf(row))}</td>
-          <td><StatusBadge tone={statusTone(row)}>{statusOf(row)}</StatusBadge></td>
-          <td className="whitespace-nowrap">{paidAt(row)}</td>
-          <td>{canRefund(row) ? <ActionButton variant="secondary" disabled={saving} onClick={() => beginRefund(row)}>Refund</ActionButton> : <span aria-label="Refund unavailable">—</span>}</td>
-        </tr>)}
-        {!visible.length && <tr><td colSpan={6} className="p-5 text-center">{items.length === 0 ? 'No transactions yet.' : 'No transactions match your filters.'}</td></tr>}
-      </tbody></table></div>
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Customer</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Paid at</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+        {visible.map((row, index) => <TableRow key={`${paymentOf(row)}-${index}`} className="cursor-pointer" tabIndex={0} title="Double-click to view transaction details" aria-label={`Order ${orderOf(row)}. Press Enter to view transaction details.`} onDoubleClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a'))) setDetail(row); }} onKeyDown={event => { if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); setDetail(row); } }}>
+          <TableCell><strong>{orderOf(row) !== '—' ? orderOf(row) : paymentOf(row)}</strong></TableCell>
+          <TableCell><span title={customerIdOf(row) !== '—' ? customerIdOf(row) : undefined} className="break-words">{customerText(row)}</span></TableCell>
+          <TableCell className="whitespace-nowrap">{money(amountOf(row))}</TableCell>
+          <TableCell><StatusBadge tone={statusTone(row)}>{statusOf(row)}</StatusBadge></TableCell>
+          <TableCell className="whitespace-nowrap">{paidAt(row)}</TableCell>
+          <TableCell>{canRefund(row) ? <ActionButton variant="secondary" disabled={saving} onClick={() => beginRefund(row)}>Refund</ActionButton> : <span aria-label="Refund unavailable">—</span>}</TableCell>
+        </TableRow>)}
+        {!visible.length && <TableRow><TableCell colSpan={6} className="p-5 text-center">{items.length === 0 ? 'No transactions yet.' : 'No transactions match your filters.'}</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>
     </OperatorPanel>
     </>}
     <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}>

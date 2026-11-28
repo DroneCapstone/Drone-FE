@@ -1,3 +1,4 @@
+import { invalidateAdminReads } from '../api/adminHttp';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -25,10 +26,10 @@ const readable = (value: string) => value.replace(/_/g, ' ').replace(/\b\w/g, (c
 
 function ChartPanel({ title, subtitle, children, className = '' }: { title: string; subtitle?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`min-w-0 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] ${className}`}>
+    <section className={`panel admin-dashboard-panel min-w-0 ${className}`}>
       <div className="mb-5">
-        <h2 className="text-sm font-semibold text-[#172033]">{title}</h2>
-        {subtitle && <p className="mt-1 text-xs text-[#8791A2]">{subtitle}</p>}
+        <h2 className="admin-dashboard-title font-semibold text-[var(--text)]">{title}</h2>
+        {subtitle && <p className="mt-1 text-xs text-[var(--muted)]">{subtitle}</p>}
       </div>
       {children}
     </section>
@@ -45,23 +46,23 @@ function DonutChart({ items, centerValue, centerLabel }: { items: Record<string,
       cursor += (value / total) * 100;
       return `${chartPalette[index % chartPalette.length]} ${start}% ${cursor}%`;
     }).join(', ')
-    : '#E9EDF2 0% 100%';
+    : 'var(--surface-3) 0% 100%';
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-6">
       <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: `conic-gradient(${gradient})` }}>
-        <div className="absolute inset-[17px] flex flex-col items-center justify-center rounded-full bg-white">
-          <strong className="text-2xl font-bold text-[#172033]">{centerValue}</strong>
-          <span className="text-[10px] text-[#8791A2]">{centerLabel}</span>
+        <div className="absolute inset-[17px] flex flex-col items-center justify-center rounded-full bg-[var(--surface)]">
+          <strong className="text-2xl font-bold text-[var(--text)]">{centerValue}</strong>
+          <span className="text-[10px] text-[var(--muted)]">{centerLabel}</span>
         </div>
       </div>
       <div className="min-w-[130px] flex-1 space-y-3">
         {rows.length ? rows.map(([label, value], index) => (
           <div key={label} className="flex items-center justify-between gap-3 text-xs">
-            <span className="flex min-w-0 items-center gap-2 text-[#667085]"><i className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: chartPalette[index % chartPalette.length] }} />{readable(label)}</span>
-            <strong className="text-[#263247]">{value.toLocaleString('vi-VN')}</strong>
+            <span className="flex min-w-0 items-center gap-2 text-[var(--muted)]"><i className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: chartPalette[index % chartPalette.length] }} />{readable(label)}</span>
+            <strong className="text-[var(--text)]">{value.toLocaleString('vi-VN')}</strong>
           </div>
-        )) : <p className="text-xs text-[#98A2B3]">No breakdown data available</p>}
+        )) : <p className="text-xs text-[var(--faint)]">No breakdown data available</p>}
       </div>
     </div>
   );
@@ -75,14 +76,14 @@ function HorizontalBars({ items, suffix = '' }: { items: Record<string, number>;
       {rows.length ? rows.map(([label, value], index) => (
         <div key={label}>
           <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-            <span className="capitalize text-[#667085]">{readable(label)}</span>
-            <strong className="text-[#263247]">{value.toLocaleString('vi-VN')}{suffix}</strong>
+            <span className="capitalize text-[var(--muted)]">{readable(label)}</span>
+            <strong className="text-[var(--text)]">{value.toLocaleString('vi-VN')}{suffix}</strong>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[#F0F2F5]">
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
             <div className="h-full rounded-full transition-all" style={{ width: `${Math.max(value > 0 ? 2 : 0, (value / max) * 100)}%`, background: chartPalette[index % chartPalette.length] }} />
           </div>
         </div>
-      )) : <p className="text-xs text-[#98A2B3]">No breakdown data available</p>}
+      )) : <p className="text-xs text-[var(--faint)]">No breakdown data available</p>}
     </div>
   );
 }
@@ -93,11 +94,11 @@ function RevenueBars({ today, month }: { today: number; month: number }) {
     <div className="space-y-5">
       {[{ label: 'Today', value: today }, { label: 'This month', value: month }].map((item, index) => (
         <div key={item.label}>
-          <div className="mb-2 flex items-center justify-between gap-3 text-xs"><span className="text-[#667085]">{item.label}</span><strong className="text-[#263247]">{money(item.value)}</strong></div>
-          <div className="h-3 overflow-hidden rounded-full bg-[#F0F2F5]"><div className="h-full rounded-full" style={{ width: `${(item.value / max) * 100}%`, background: index === 0 ? '#FDBA74' : '#F97316' }} /></div>
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs"><span className="text-[var(--muted)]">{item.label}</span><strong className="text-[var(--text)]">{money(item.value)}</strong></div>
+          <div className="h-3 overflow-hidden rounded-full bg-[var(--surface-3)]"><div className="h-full rounded-full" style={{ width: `${(item.value / max) * 100}%`, background: index === 0 ? '#FDBA74' : '#F97316' }} /></div>
         </div>
       ))}
-      {/* <p className="border-t border-[#EEF0F3] pt-3 text-[11px] text-[#98A2B3]">Recorded revenue · Values shown by their respective periods</p> */}
+      {/* <p className="border-t border-[var(--border)] pt-3 text-[11px] text-[var(--faint)]">Recorded revenue · Values shown by their respective periods</p> */}
     </div>
   );
 }
@@ -138,7 +139,7 @@ export function AdminDashboardPage() {
 
   return (
     <AdminPageShell title="Dashboard" description="">
-      {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => void refresh()}>Retry</button></p>}
+      {error && <p role="alert" className="mb-4 text-sm text-red-500">{error} <button className="text-button" type="button" onClick={() => { invalidateAdminReads(); void refresh(); }}>Retry</button></p>}
       {loading && <OperatorLoadingState label="Loading dashboard…" />}
       {!loading && !error && data && <>
         {/* Four primary KPIs only; secondary figures are presented in charts below. */}
@@ -173,19 +174,19 @@ export function AdminDashboardPage() {
         <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
           {/* <ChartPanel title="AI energy risk breakdown" subtitle={`${data.ai.missions_with_prediction} missions with energy prediction`}>
             <HorizontalBars items={data.ai.risk_breakdown} />
-            <p className="mt-4 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]">Average estimated energy: {Number(data.ai.avg_estimated_energy_wh ?? 0).toLocaleString('vi-VN')} Wh</p>
+            <p className="mt-4 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]">Average estimated energy: {Number(data.ai.avg_estimated_energy_wh ?? 0).toLocaleString('vi-VN')} Wh</p>
           </ChartPanel> */}
           <ChartPanel title="Operational alerts">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-[#FFF7ED] p-3"><Wrench size={17} className="mb-2 text-[#EA580C]" /><strong className="block text-2xl text-[#172033]">{data.alerts.pending_maintenance_alerts}</strong><span className="text-xs text-[#8A5A36]">Maintenance alerts</span></div>
-              <div className="rounded-lg bg-[#FEF2F2] p-3"><ShieldAlert size={17} className="mb-2 text-[#DC2626]" /><strong className="block text-2xl text-[#172033]">{data.alerts.open_incidents}</strong><span className="text-xs text-[#8A4A4A]">Open incidents</span></div>
-              <div className="rounded-lg bg-[#EFF6FF] p-3"><Bell size={17} className="mb-2 text-[#2563EB]" /><strong className="block text-2xl text-[#172033]">{data.alerts.total_audit_logs}</strong><span className="text-xs text-[#526B91]">Audit events</span></div>
+              <div className="rounded-lg bg-[var(--surface-2)] p-3"><Wrench size={17} className="mb-2 text-[#EA580C]" /><strong className="block text-2xl text-[var(--text)]">{data.alerts.pending_maintenance_alerts}</strong><span className="text-xs text-[var(--muted)]">Maintenance alerts</span></div>
+              <div className="rounded-lg bg-[var(--surface-2)] p-3"><ShieldAlert size={17} className="mb-2 text-[#DC2626]" /><strong className="block text-2xl text-[var(--text)]">{data.alerts.open_incidents}</strong><span className="text-xs text-[var(--muted)]">Open incidents</span></div>
+              <div className="rounded-lg bg-[var(--surface-2)] p-3"><Bell size={17} className="mb-2 text-[#2563EB]" /><strong className="block text-2xl text-[var(--text)]">{data.alerts.total_audit_logs}</strong><span className="text-xs text-[var(--muted)]">Audit events</span></div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#EEF0F3] pt-3 text-xs text-[#8791A2]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Operational summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]"><span className="inline-flex items-center gap-1.5"><TrendingUp size={14} /> Operational summary</span><span className="inline-flex items-center gap-1.5"><BatteryCharging size={14} /> {data.batteries.total} registered batteries</span><span className="inline-flex items-center gap-1.5"><Activity size={14} /> {data.revenue.pending_payments ? money(data.revenue.pending_payments) : '0 ₫'} pending payments</span></div>
           </ChartPanel>
         </div>
 
-        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[#172033]">Hub network</h2></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
+        <div className="mb-3 flex items-center justify-between"><div><h2 className="font-semibold text-[var(--text)]">Hub network</h2></div><Link className="text-button" to="/admin/network/hubs">View Hubs</Link></div>
         <HubDroneMap hubs={hubs} drones={drones} />
         <RevenueChartPanel />
       </>}
@@ -210,7 +211,7 @@ function RevenueChartPanel() {
   if (loading || chartError || chartData.length === 0) {
     return (
       <ChartPanel title="Revenue trend — last 30 days" className="mt-4">
-        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[#8791A2]">{chartError ? "Unable to load revenue trend." : "No data available yet."}</p>}
+        {loading ? <OperatorLoadingState label="Loading revenue trend…" compact /> : <p className="text-xs text-[var(--muted)]">{chartError ? "Unable to load revenue trend." : "No data available yet."}</p>}
       </ChartPanel>
     );
   }
@@ -232,7 +233,7 @@ function RevenueChartPanel() {
           );
         })}
       </div>
-      <div className="mt-2 flex items-center justify-between text-[10px] text-[#8791A2]">
+      <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--muted)]">
         <span>{chartData[0]?.date}</span>
         <span>Total: {Number(chartData.reduce((s, d) => s + d.revenue, 0)).toLocaleString('vi-VN')} ₫</span>
         <span>{chartData[chartData.length - 1]?.date}</span>

@@ -1,3 +1,5 @@
+import { AdminFlightHistoryPage, AdminBatterySwapsPage, AdminMissionDetailPage, AdminPackageHistoryPage, AdminPackageDetailPage, AdminMaintenancePage, AdminMaintenanceDuePage, AdminWorkOrderDetailPage } from "./pages/operations/HistoryPages";
+import { AdminFlightReplayPage } from "./pages/operations/AdminFlightReplayPage";
 import { AdminReportsPage } from "./pages/reports/AdminReportsPage";
 import { NewBatteriesPage } from "./pages/replacement/NewBatteriesPage";
 import { useLocation } from "react-router-dom";
@@ -35,6 +37,16 @@ export const adminRoutes: RouteObject[] = [
   { path: "replacement/spare-parts", element: <SparePartsPage /> },
   { path: "replacement/new-batteries", element: <NewBatteriesPage /> },
 
+  { path: "operations", element: <Navigate to="/admin/operations/missions" replace /> },
+  { path: "operations/missions", element: <AdminFlightHistoryPage /> },
+  { path: "operations/missions/swaps", element: <AdminBatterySwapsPage /> },
+  { path: "operations/missions/:missionId", element: <AdminMissionDetailPage /> },
+  { path: "operations/missions/:missionId/replay", element: <AdminFlightReplayPage /> },
+  { path: "operations/packages", element: <AdminPackageHistoryPage /> },
+  { path: "operations/packages/:orderId", element: <AdminPackageDetailPage /> },
+  { path: "operations/maintenance", element: <AdminMaintenancePage /> },
+  { path: "operations/maintenance/alerts", element: <AdminMaintenanceDuePage /> },
+  { path: "operations/maintenance/:workOrderId", element: <AdminWorkOrderDetailPage /> },
   { path: "dashboard", element: <AdminDashboardPage /> },
   { path: "network", element: <Navigate to="/admin/network/hubs" replace /> },
   { path: "network/hubs", element: <HubsPage /> },

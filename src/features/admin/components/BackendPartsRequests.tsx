@@ -1,3 +1,5 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../operator/components/OperatorTable";
+import { invalidateAdminReads } from '../api/adminHttp';
 import { OperatorLoadingState } from '../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -22,15 +24,15 @@ export function BackendPartsRequests() {
   }catch(e){setError(messageOf(e));}finally{setSaving(false);}};
   return <OperatorPanel className="flush-panel" title="Spare Part Requests">
     {loading&&<OperatorLoadingState label="Loading part requests…" />}
-    {error&&!selected&&<p role="alert" className="p-3 text-sm text-red-500">{error}<button type="button" className="ml-2 underline" onClick={()=>setVersion(v=>v+1)}>Retry</button></p>}
+    {error&&!selected&&<p role="alert" className="p-3 text-sm text-red-500">{error}<button type="button" className="ml-2 underline" onClick={()=>{invalidateAdminReads();setVersion(v=>v+1);}}>Retry</button></p>}
     {notice&&<p role="status" className="p-3 text-sm text-emerald-600">{notice}</p>}
-    <div className="table-wrap"><table><thead><tr><th>Request</th><th>Component</th><th>Receiving Hub</th><th>Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
-      {requests.map(r=><tr key={r.id}><td><strong>PR-{r.id}</strong><small>{r.created_at?new Date(r.created_at).toLocaleString('en-GB'):'—'}</small></td>
-        <td><strong>{r.part_name||`Category ${r.part_category_id}`}</strong><small>{r.drone_id||'—'}</small></td>
-        <td>{hubName(r.hub_id)}</td><td>{r.quantity_needed}</td><td>{r.status.replaceAll('_',' ')}</td>
-        <td><ActionButton variant="secondary" onClick={()=>{setSelected(r);setNote(r.admin_note||'');setError('');}}>View details</ActionButton></td>
-      </tr>)}{!requests.length&&!loading&&<tr><td colSpan={6}>No part requests.</td></tr>}
-    </tbody></table></div>
+    <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Request</TableHead><TableHead>Component</TableHead><TableHead>Receiving Hub</TableHead><TableHead>Qty</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+      {requests.map(r=><TableRow key={r.id}><TableCell><strong>PR-{r.id}</strong><small>{r.created_at?new Date(r.created_at).toLocaleString('en-GB'):'—'}</small></TableCell>
+        <TableCell><strong>{r.part_name||`Category ${r.part_category_id}`}</strong><small>{r.drone_id||'—'}</small></TableCell>
+        <TableCell>{hubName(r.hub_id)}</TableCell><TableCell>{r.quantity_needed}</TableCell><TableCell>{r.status.replaceAll('_',' ')}</TableCell>
+        <TableCell><ActionButton variant="secondary" onClick={()=>{setSelected(r);setNote(r.admin_note||'');setError('');}}>View details</ActionButton></TableCell>
+      </TableRow>)}{!requests.length&&!loading&&<TableRow><TableCell colSpan={6}>No part requests.</TableCell></TableRow>}
+    </TableBody></OperatorTable></div>
     <Dialog open={Boolean(selected)} onOpenChange={o=>!o&&!saving&&setSelected(null)}>{selected&&<DialogContent><div className="border-b border-border p-5"><DialogTitle>Part Request PR-{selected.id}</DialogTitle></div><div className="space-y-3 p-5 text-sm">
       <div><strong>Component:</strong> {selected.part_name||selected.part_category_id}</div><div><strong>Drone:</strong> {selected.drone_id||'—'}</div>
       <div><strong>Hub:</strong> {hubName(selected.hub_id)}</div><div><strong>Technician ID:</strong> {selected.requested_by}</div>

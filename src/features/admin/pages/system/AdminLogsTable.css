@@ -1,0 +1,111 @@
+/* Only Activity Logs and System Logs. Reuse OperatorPanel and OperatorTable. */
+.admin-typography .admin-logs-panel {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px; /* operator-tokens.css: --op-panel-radius */
+  box-shadow: none;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.admin-logs-panel .toolbar {
+  flex-wrap: wrap;
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* Shared shadcn container is the only horizontal scroll area. */
+.admin-logs-panel > [data-slot='table-container'] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-logs-panel .operator-ui-table.admin-logs-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
+  /* Separate borders remain visible on sticky cells during horizontal scroll. */
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+}
+
+/* Keep Operator's table density. Only the message column may wrap. */
+.admin-logs-panel .admin-logs-table :is([data-slot='table-head'], [data-slot='table-cell']) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-align: left;
+}
+
+.admin-logs-panel .admin-log-primary {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.admin-logs-panel .admin-log-secondary {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.admin-logs-panel .admin-logs-table .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control, 6px);
+  background: transparent;
+  white-space: nowrap;
+}
+
+.admin-logs-panel .admin-logs-table [data-slot='table-cell'].admin-log-empty {
+  text-align: center;
+  color: var(--muted);
+  height: 72px;
+}
+
+/* Constrain the text column before layout, not just after clipping.
+   A single long log must never determine the entire table width. */
+.admin-logs-panel .admin-logs-table tbody [data-slot='table-cell'].admin-log-message-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.admin-logs-panel .admin-logs-table .admin-log-message {
+  display: -webkit-box;
+  width: clamp(260px, 30vw, 420px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  line-height: 1.45;
+  max-height: 4.35em;
+}
+
+/* Pin only the last column, like Orders. No extra separator or shadow;
+   keep the same alignment, padding, horizontal borders and row colors. */
+.admin-logs-panel .admin-logs-table thead [data-slot='table-head'].admin-log-pinned,
+.admin-logs-panel .admin-logs-table tbody [data-slot='table-cell'].admin-log-pinned {
+  position: sticky;
+  right: 0;
+  width: 112px;
+  min-width: 112px;
+  box-sizing: border-box;
+  text-align: left;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.admin-logs-panel .admin-logs-table thead .admin-log-pinned { z-index: 3; }
+.admin-logs-panel .admin-logs-table tbody .admin-log-pinned { z-index: 2; }
+.admin-logs-panel .admin-logs-table tbody tr:hover .admin-log-pinned {
+  background: var(--surface-2);
+}

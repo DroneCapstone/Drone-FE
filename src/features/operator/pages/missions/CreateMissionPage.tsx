@@ -1,9 +1,8 @@
-import { formatRouteName } from '../../utils/displayEnglish';
 import { formatHubName } from '../../utils/displayEnglish';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, Info, Loader2, Zap } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
@@ -31,12 +30,11 @@ import {
   canCreateMissionForOrder,
 } from '../../utils/deliveryPlanning';
 import { DEFAULT_BATTERY_RESERVE_PCT, getEnergyFeasibility } from '../../utils/droneEligibility';
-import { getDroneDisplayCode } from '../../utils/droneDisplay';
-import { getRouteLegBatteryUse } from '../../utils/routeBatteryUse';
 import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../utils/missionDraftStorage';
 import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
 
 import { MissionPageShell } from './MissionPageShell';
+import { MissionReviewSummary } from './MissionReviewSummary';
 import './create-mission-compact.css';
 
 const STEPS = ['Order info', 'Drone, battery & route', 'Review & assign'] as const;
@@ -1449,153 +1447,19 @@ export function CreateMissionPage() {
             safety checks finish. */}
         {step === 4 && hasOrderHubs && selectedDrone && selectedRoute && selectedTiming && (
           <OperatorPanel title="Review & Assign">
-            {/* One unified review card. Display-only change: mission submission logic is unchanged. */}
-            <div className="mission-review-unified">
-              <div className="mission-review-info">
-                <div className="mission-review-info-row">
-                  <dl className="mission-review-field">
-                    <dt>Order</dt>
-                    <dd className="mission-review-order-code">{order.id}</dd>
-                  </dl>
-                  <dl className="mission-review-field">
-                    <dt>Delivery mode</dt>
-                    <dd className="mission-review-delivery-mode">
-                      {String(order.deliveryMode).toUpperCase() === 'EXPRESS' && (
-                        <Zap size={17} strokeWidth={2.2} aria-hidden="true" />
-                      )}
-                      <span>{order.deliveryMode}</span>
-                    </dd>
-                  </dl>
-                </div>
-
-                <div className="mission-review-info-row mission-review-info-row--full">
-                  <dl className="mission-review-field">
-                    <dt>Order payload</dt>
-                    <dd>{order.payloadKg.toFixed(2)} kg</dd>
-                  </dl>
-                </div>
-                <div className="mission-review-info-row mission-review-info-row--full">
-                  <dl className="mission-review-field">
-                    <dt>Route</dt>
-                    <dd>{selectedRoute.id} · {formatRouteName(selectedRoute.name)}</dd>
-                  </dl>
-                </div>
-
-                {/* Cross-hub operational information remains visible when Analyze includes dispatch. */}
-                {selectedDrone.isCrossHub && (
-                  <div className="mission-review-info-row mission-review-info-row--full">
-                    <dl className="mission-review-field">
-                      <dt>Dispatch flight</dt>
-                      <dd>{formatHubName(selectedDrone.hubName || `Hub ${selectedDrone.hubId}`)} → {originHubLabel} · 0 kg (no package)</dd>
-                    </dl>
-                  </div>
-                )}
-                {selectedRoute.legDetails?.some((leg) => leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH') && (
-                  <div className="mission-review-info-row mission-review-info-row--full">
-                    <dl className="mission-review-field">
-                      <dt>Flight legs</dt>
-                      <dd>
-                        {selectedRoute.legDetails.map((leg, index) => (
-                          <span key={`${leg.sequence_no ?? index}-${leg.from_hub_code}`}>
-                            {leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH'
-                              ? 'DISPATCH · 0 kg'
-                              : `DELIVERY${leg.payload_kg !== undefined ? ` · ${leg.payload_kg} kg` : ''}`}
-                            {' · '}{leg.from_hub_name || leg.from_hub_code} → {leg.to_hub_name || leg.to_hub_code}
-                            {index < (selectedRoute.legDetails?.length ?? 0) - 1 ? '; ' : ''}
-                          </span>
-                        ))}
-                      </dd>
-                    </dl>
-                  </div>
-                )}
-
-                <div className="mission-review-info-row">
-                  <dl className="mission-review-field"><dt>Origin hub</dt><dd>{originHubLabel}</dd></dl>
-                  <dl className="mission-review-field"><dt>Destination hub</dt><dd>{destinationHubLabel}</dd></dl>
-                </div>
-                <div className="mission-review-info-row">
-                  <dl className="mission-review-field">
-                    <dt>Origin package</dt>
-                    <dd>
-                      {order.originPackageReceived || order.originHubReceivedAt ? (
-                        <>Received at Hub{order.originHubReceivedAt && <span> · {formatMissionTime(order.originHubReceivedAt)}</span>}</>
-                      ) : 'Awaiting package'}
-                    </dd>
-                  </dl>
-                  <dl className="mission-review-field"><dt>Drone</dt><dd>{getDroneDisplayCode(selectedDrone)}</dd></dl>
-                </div>
-                <div className="mission-review-info-row">
-                  <dl className="mission-review-field">
-                    <dt>{selectedDrone.isCrossHub ? 'Dispatch battery' : 'Origin battery'}</dt>
-                    <dd>{selectedBattery?.serialNumber || selectedBatteryId}{selectedBattery?.model ? ` · ${selectedBattery.model}` : ''}</dd>
-                  </dl>
-                  <dl className="mission-review-field">
-                    <dt>Relay batteries</dt>
-                    <dd className="mission-review-relay-list">
-                      {selectedRelayHubIds.length ? selectedRelayHubIds.map((hubId) => {
-                        const plan = selectedRoute.relayBatteryPlan?.find((item) => item.hubId === hubId);
-                        const nextLeg = selectedRoute.legDetails?.find((leg) => String(leg.from_hub_id) === hubId);
-                        const batteryId = plan?.swapBatteryId ?? nextLeg?.battery_id;
-                        const model = plan?.selectedBatteryModel ?? nextLeg?.battery_model ?? plan?.batteryModel;
-                        const charge = plan?.selectedBatteryChargePct ?? nextLeg?.battery_charge_pct;
-                        const energy = plan?.selectedBatteryEnergyWh ?? nextLeg?.battery_energy_wh;
-                        return (
-                          <span className="mission-review-relay-entry" key={hubId}>
-                            <strong>{batteryId || 'No battery allocated'}{batteryId && model ? ` · ${model}` : ''}</strong>
-                            <small>
-                              {hubName(hubId)}
-                              {batteryId && charge !== undefined ? ` · ${charge}%` : ''}
-                              {batteryId && energy !== undefined ? ` · ${energy.toFixed(1)} Wh` : ''}
-                            </small>
-                          </span>
-                        );
-                      }) : 'Not required'}
-                    </dd>
-                  </dl>
-                </div>
-                <div className="mission-review-info-row mission-review-info-row--last">
-                  <dl className="mission-review-field"><dt>Planned start</dt><dd>{formatMissionTime(selectedTiming.plannedStartAt)}</dd></dl>
-                  <dl className="mission-review-field"><dt>Estimated arrival</dt><dd>{formatMissionTime(selectedTiming.estimatedArrivalAt)}</dd></dl>
-                </div>
-              </div>
-
-              <div className="mission-review-energy" aria-label="Energy prediction summary">
-                <div className="mission-review-energy-heading">
-                  <BarChart3 size={19} strokeWidth={2.2} aria-hidden="true" />
-                  <strong>Performance &amp; Energy</strong>
-                </div>
-                <div className="mission-review-energy-top">
-                  <span className="mission-review-energy-label">Predicted energy</span>
-                  <div className="mission-review-energy-highlight">
-                    <strong>{selectedRoute.predictedEnergyWh.toFixed(1)} Wh</strong>
-                  </div>
-                </div>
-                <dl className="mission-review-energy-metrics">
-                  <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Predicted battery consumption' : 'Predicted battery consumption'}</dt>
-                    <dd>
-                      {selectedRoute.relayHubIds?.length ? (
-                        getRouteLegBatteryUse(selectedRoute).length ? (
-                          <span className="mission-review-leg-uses">
-                            {getRouteLegBatteryUse(selectedRoute).map((leg) => (
-                              <span className="mission-review-leg-use" key={leg.legNumber}>
-                                <small>Leg {leg.legNumber}</small>
-                                <strong>{leg.batteryUsePct === undefined ? '—' : `${leg.batteryUsePct}%`}</strong>
-                              </span>
-                            ))}
-                          </span>
-                        ) : '—'
-                      ) : `${selectedRoute.batteryConsumptionPct}%`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{selectedRoute.relayHubIds?.length ? 'Expected remaining' : 'Expected remaining'}</dt>
-                    <dd>{selectedRouteEnergy && Number.isFinite(selectedRouteEnergy.remainingBattery) ? `${selectedRouteEnergy.remainingBattery}%` : '—'}</dd>
-                  </div>
-                  <div><dt>Minimum reserve</dt><dd>{DEFAULT_BATTERY_RESERVE_PCT}%</dd></div>
-                </dl>
-              </div>
-            </div>
+            <MissionReviewSummary
+              order={order}
+              drone={selectedDrone}
+              battery={selectedBattery}
+              batteryId={selectedBatteryId}
+              route={selectedRoute}
+              timing={selectedTiming}
+              originLabel={originHubLabel}
+              destinationLabel={destinationHubLabel}
+              relayHubIds={selectedRelayHubIds}
+              swapHubIds={getBatterySwapRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)}
+              hubName={hubName}
+            />
           </OperatorPanel>
         )}
         {/* If a query has genuinely lost the selected data, show a recovery

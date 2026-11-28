@@ -1,6 +1,5 @@
 import { omitFleetSerialColumns } from '../utils/adminAssetFields';
-import { API_BASE_URL, API_WITH_CREDENTIALS } from '../../../config/api';
-import { authService } from '../../auth/services/authService';
+import { adminFetch } from './adminHttp';
 import { AdminApiError, adminRequest } from './adminOperationsApi';
 
 export type ReportRange = { from_date?: string; to_date?: string };
@@ -98,19 +97,9 @@ export function reportQuery(range: ReportRange = {}, status: MissionReportStatus
 async function exportCsv(kind: ReportKind, range: ReportRange = {}, status: MissionReportStatus = '') {
   const query = kind === 'fleet' ? '' : reportQuery(range, kind === 'missions' ? status : '');
   const path = `/admin/reports/${kind}.csv${query}`;
-  const send = (token: string | null) => {
-    const headers = new Headers({ Accept: 'text/csv, application/octet-stream, text/plain' });
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return fetch(`${API_BASE_URL}${path}`, { headers, credentials: API_WITH_CREDENTIALS ? 'include' : 'omit' });
-  };
   let response: Response;
   try {
-    const token = authService.getAccessToken();
-    response = await send(token);
-    if (response.status === 401 && token) {
-      const refreshed = await authService.refreshAccessToken();
-      if (refreshed) response = await send(refreshed);
-    }
+    response = await adminFetch(path, { headers: { Accept: 'text/csv, application/octet-stream, text/plain' } });
   } catch { throw new AdminApiError('Unable to connect.', 0); }
   if (!response.ok) throw new AdminApiError('Unable to download report.', response.status);
   const type = response.headers.get('content-type')?.toLowerCase() ?? '';

@@ -1,3 +1,5 @@
+import { useAdminConfirm } from '../../components/AdminConfirmDialog';
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { Bell, CheckCheck, ChevronLeft, ChevronRight, CreditCard, Plane, ShieldAlert, TriangleAlert, Trash2, Wrench, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -40,6 +42,7 @@ function notificationVisual(item: NotificationApi) {
 }
 
 export function AdminNotificationsPage() {
+  const confirmAction = useAdminConfirm();
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState<number[]>([]);
   const [filter, setFilter] = useState<ReadFilter>('all');
@@ -56,7 +59,7 @@ export function AdminNotificationsPage() {
   const loadError = current?.error || (current && !data ? 'Unable to load notifications. Please try again.' : '');
   const loading = !current;
   const busy = loading || saving;
-  const reload = () => setRevision(value => value + 1);
+  const reload = () => { invalidateAdminReads('/notifications'); setRevision(value => value + 1); };
 
   useEffect(() => {
     // Do not refresh over an in-flight read/delete action.
@@ -114,8 +117,8 @@ export function AdminNotificationsPage() {
   function markOne(item: NotificationApi) {
     if (!item.is_read) void mutate(() => adminOperationsApi.markNotification(item.id), '');
   }
-  function removeOne(item: NotificationApi) {
-    if (busy || !window.confirm('Delete this notification?')) return;
+  async function removeOne(item: NotificationApi) {
+    if (busy || !(await confirmAction({ title: 'Delete notification', message: 'Delete this notification?', confirmLabel: 'Delete' }))) return;
     void mutate(() => adminOperationsApi.deleteNotification(item.id), 'Notification deleted.');
   }
   async function openNotification(item: NotificationApi) {

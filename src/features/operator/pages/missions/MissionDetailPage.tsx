@@ -113,7 +113,7 @@ export function MissionDetailPage() {
                     Track live
                   </ActionButton>
                 )}
-                {hasFlightHistory && (
+                {(mission.status === 'Completed' || (mission.status === 'Failed' && hasFlightHistory)) && (
                   <ActionButton
                     variant="secondary"
                     onClick={() => navigate(`/operator/operations/history?q=${encodeURIComponent(mission.id)}`)}
@@ -121,18 +121,20 @@ export function MissionDetailPage() {
                     Flight history
                   </ActionButton>
                 )}
-                <ActionButton
-                  variant="secondary"
-                  onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
-                    orderId: mission.orderId,
-                    droneId: mission.droneId,
-                    ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
-                    routeId: mission.routeId,
-                    ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
-                  }).toString()}`)}
-                >
-                  AI analysis
-                </ActionButton>
+                {mission.status === 'Scheduled' && (
+                  <ActionButton
+                    variant="secondary"
+                    onClick={() => navigate(`/operator/ai/mission-analysis?${new URLSearchParams({
+                      orderId: mission.orderId,
+                      droneId: mission.droneId,
+                      ...(mission.batteryId ? { batteryId: mission.batteryId } : {}),
+                      routeId: mission.routeId,
+                      ...(mission.bundledOrderIds?.length ? { bundledOrderIds: mission.bundledOrderIds.join(',') } : {}),
+                    }).toString()}`)}
+                  >
+                    AI analysis
+                  </ActionButton>
+                )}
               </div>
             </div>
 
@@ -280,8 +282,8 @@ export function MissionDetailPage() {
               <div><dt>Planned start</dt><dd>{formatMissionTime(mission.plannedStartAt)}</dd></div>
               <div><dt>Estimated arrival</dt><dd>{formatMissionTime(mission.estimatedArrivalAt)}</dd></div>
               <div><dt>Predicted duration</dt><dd>{mission.predictedDurationMin} min</dd></div>
-              <div><dt>Energy (predicted)</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
-              <div><dt>Energy consumption</dt><dd>{mission.batteryConsumptionPct}% </dd></div>
+              {/* <div><dt>Energy (predicted)</dt><dd>{mission.estimatedEnergyWh.toFixed(1)} Wh</dd></div>
+              <div><dt>Energy consumption</dt><dd>{mission.batteryConsumptionPct}% </dd></div> */}
             </dl>
           </OperatorPanel>
         </aside>

@@ -1,6 +1,10 @@
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { adminDisplayText, adminErrorText } from '../../utils/adminDisplayText';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
+import { OperatorPanel } from '../../../operator/components/OperatorPanel';
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../../operator/components/OperatorTable';
+import './AdminLogsTable.css';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
@@ -44,63 +48,47 @@ export function ActivityLogPage() {
     event.preventDefault();
     setPage(1); setFilters({ ...draft });
   }
-  function reset() { const empty = blankFilters(); setDraft(empty); setFilters(empty); setPage(1); }
 
   return <AdminPageShell
     title="Activity Logs"
     description="Review user actions and their outcomes."
-    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => setRefreshKey(k => k + 1)}><RefreshCw size={15} /> Refresh</ActionButton>}
+    actions={<ActionButton variant="secondary" disabled={loading} onClick={() => { invalidateAdminReads('/admin/activity-logs'); setRefreshKey(k => k + 1); }}><RefreshCw size={15} /> Refresh</ActionButton>}
   >
-    <div className="overflow-hidden rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+    <OperatorPanel className="flush-panel admin-logs-panel">
       <form onSubmit={apply}>
         <AdminToolbar
           searchValue={draft.user_id ?? ''}
           onSearchChange={(value) => setDraft(current => ({ ...current, user_id: value }))}
           placeholder="Search user ID or email…"
           filters={<>
-            {/* <input
-              className="h-[37px] min-w-[150px] px-3 text-[13px]"
-              aria-label="Filter by action"
-              placeholder="Action…"
-              value={draft.action ?? ''}
-              onChange={event => setDraft(current => ({ ...current, action: event.target.value }))}
-            /> */}
             <AdminSelect aria-label="Filter by role" value={draft.role ?? ''} onChange={event => setDraft(current => ({ ...current, role: event.target.value }))}>
               <option value="">All roles</option><option value="ADMIN">Admin</option><option value="OPERATOR">Operator</option><option value="TECHNICIAN">Technician</option><option value="CUSTOMER">Customer</option>
             </AdminSelect>
-            {/* <input
-              className="h-[37px] min-w-[150px] px-3 text-[13px]"
-              aria-label="Filter by resource type"
-              placeholder="Resource type…"
-              value={draft.resource_type ?? ''}
-              onChange={event => setDraft(current => ({ ...current, resource_type: event.target.value }))}
-            /> */}
             <AdminSelect aria-label="Filter by status" value={draft.status ?? ''} onChange={event => setDraft(current => ({ ...current, status: (event.target.value || undefined) as ActivityLogFilters['status'] }))}>
               <option value="">All statuses</option><option value="success">Success</option><option value="failed">Failed</option>
             </AdminSelect>
-            {/* <ActionButton type="button" variant="secondary" onClick={reset} disabled={loading}>Reset</ActionButton> */}
             <ActionButton type="submit" disabled={loading}>Apply filters</ActionButton>
           </>}
         />
       </form>
-      {error && <p role="alert" className="border-b border-[var(--admin-border)] p-4 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="border-b border-[var(--border)] p-4 text-sm text-red-600">{error}</p>}
       {loading && <OperatorLoadingState label="Loading activity logs…" />}
-      {!loading && !error && <div className="table-wrap"><table>
-        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Role</th><th>Resource</th><th>Status</th><th>Description</th></tr></thead>
-        <tbody>
-          {items.map(log => <tr key={log.id}>
-            <td className="whitespace-nowrap">{formatDate(log.created_at)}</td>
-            <td><strong>{log.user_email || '—'}</strong><small>{log.user_id || 'System / unknown user'}</small></td>
-            <td>{adminDisplayText(log.action.replace(/_/g, ' '))}</td>
-            <td>{log.role ?? '—'}</td>
-            <td><strong>{adminDisplayText(log.resource_type)}</strong><small>{log.resource_id ?? ''}</small></td>
-            <td><StatusBadge tone={log.status.toLowerCase() === 'success' ? 'success' : log.status.toLowerCase() === 'failed' ? 'danger' : 'neutral'}>{log.status}</StatusBadge></td>
-            <td className="min-w-[220px] max-w-md"><small className="whitespace-normal break-words">{adminDisplayText(log.description)}</small></td>
-          </tr>)}
-          {items.length === 0 && <tr><td colSpan={7} className="p-5 text-center">No activity logs match your filters.</td></tr>}
-        </tbody>
-      </table></div>}
+      {!loading && !error && <OperatorTable className="admin-logs-table" aria-label="Activity logs">
+        <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>User</TableHead><TableHead>Action</TableHead><TableHead>Role</TableHead><TableHead>Resource</TableHead><TableHead>Description</TableHead><TableHead className="admin-log-pinned">Status</TableHead></TableRow></TableHeader>
+        <TableBody>
+          {items.map(log => <TableRow key={log.id}>
+            <TableCell className="whitespace-nowrap">{formatDate(log.created_at)}</TableCell>
+            <TableCell><span className="admin-log-primary">{log.user_email || log.user_id || 'System / unknown user'}</span></TableCell>
+            <TableCell>{adminDisplayText(log.action.replace(/_/g, ' '))}</TableCell>
+            <TableCell>{log.role ?? '—'}</TableCell>
+            <TableCell><span className="admin-log-primary">{adminDisplayText(log.resource_type)}</span>{log.resource_id && <span className="admin-log-secondary"> · {log.resource_id}</span>}</TableCell>
+            <TableCell className="admin-log-message-cell"><span className="admin-log-message" title={adminDisplayText(log.description)}>{adminDisplayText(log.description)}</span></TableCell>
+            <TableCell className="admin-log-pinned"><StatusBadge tone={log.status.toLowerCase() === 'success' ? 'success' : log.status.toLowerCase() === 'failed' ? 'danger' : 'neutral'}>{log.status}</StatusBadge></TableCell>
+          </TableRow>)}
+          {items.length === 0 && <TableRow><TableCell colSpan={7} className="admin-log-empty">{Object.values(filters).some(Boolean) ? 'No activity logs match your filters.' : 'No activity logs yet.'}</TableCell></TableRow>}
+        </TableBody>
+      </OperatorTable>}
       {!error && !loading && <LogsPagination page={page} pageSize={PAGE_SIZE} total={total} loading={loading} onPageChange={setPage} />}
-    </div>
+    </OperatorPanel>
   </AdminPageShell>;
 }

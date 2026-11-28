@@ -1,3 +1,5 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
+import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -143,26 +145,26 @@ export function AdminUsersPage() {
       />
       {listError && <div className="admin-ud-list-error" role="alert">
         <span>{listError}</span>
-        <ActionButton variant="secondary" onClick={() => setReload((n) => n + 1)}>Retry</ActionButton>
+        <ActionButton variant="secondary" onClick={() => { invalidateAdminReads('/admin/users'); setReload((n) => n + 1); }}>Retry</ActionButton>
       </div>}
       <div className="table-wrap">
-        <table className="admin-users-list-table">
-          <thead><tr>
-            <th scope="col">Name</th>
-            <th scope="col">Email</th>
-            <th scope="col">Role</th>
-            <th scope="col">Status</th>
-            <th scope="col" className="admin-users-actions-heading">Actions</th>
-          </tr></thead>
-          <tbody>
-            {loading && <tr><td colSpan={5}><OperatorLoadingState label="Loading users…" /></td></tr>}
-            {!loading && !listError && visible.length === 0 && <tr><td colSpan={5} className="admin-users-empty">No users match the current search or filters.</td></tr>}
-            {!loading && !listError && visible.map((user) => <tr key={user.id}>
-              <td><strong className="admin-users-name">{user.full_name}</strong></td>
-              <td><span className="admin-users-email" title={user.email}>{user.email}</span></td>
-              <td><strong className="admin-user-role-label">{user.role}</strong></td>
-              <td><StatusBadge tone={userTone(user)}>{isArchivedUser(user) ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></td>
-              <td><div className="admin-users-icon-actions">
+        <OperatorTable className="admin-users-list-table admin-pinned-actions">
+          <TableHeader><TableRow>
+            <TableHead scope="col">Name</TableHead>
+            <TableHead scope="col">Email</TableHead>
+            <TableHead scope="col">Role</TableHead>
+            <TableHead scope="col">Status</TableHead>
+            <TableHead scope="col" className="admin-users-actions-heading">Actions</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {loading && <TableRow><TableCell colSpan={5}><OperatorLoadingState label="Loading users…" /></TableCell></TableRow>}
+            {!loading && !listError && visible.length === 0 && <TableRow><TableCell colSpan={5} className="admin-users-empty">No users match the current search or filters.</TableCell></TableRow>}
+            {!loading && !listError && visible.map((user) => <TableRow key={user.id}>
+              <TableCell><strong className="admin-users-name">{user.full_name}</strong></TableCell>
+              <TableCell><span className="admin-users-email" title={user.email}>{user.email}</span></TableCell>
+              <TableCell><strong className="admin-user-role-label">{user.role}</strong></TableCell>
+              <TableCell><StatusBadge tone={userTone(user)}>{isArchivedUser(user) ? 'ARCHIVED' : user.is_active ? 'ACTIVE' : 'INACTIVE'}</StatusBadge></TableCell>
+              <TableCell><div className="admin-users-icon-actions">
                 <Link
                   className="admin-users-icon-action"
                   to={`/admin/users/${encodeURIComponent(user.id)}`}
@@ -175,10 +177,10 @@ export function AdminUsersPage() {
                   title={`Edit ${user.full_name}`}
                   aria-label={`Edit ${user.full_name}`}
                 ><Pencil size={16} strokeWidth={1.9} aria-hidden="true" /></Link>
-              </div></td>
-            </tr>)}
-          </tbody>
-        </table>
+              </div></TableCell>
+            </TableRow>)}
+          </TableBody>
+        </OperatorTable>
       </div>
     </OperatorPanel>
     <Dialog open={Boolean(creating)} onOpenChange={(open) => { if (!open && !submitting) { setCreating(null); setFormError(''); } }}>
