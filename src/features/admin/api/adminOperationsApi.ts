@@ -126,6 +126,7 @@ export interface SimulatorConfigApi { incident_enabled: boolean; incident_probab
 export interface SimulatorIncidentApi { enabled: boolean; incident_type?: 'FAILSAFE_RTH' | 'SIGNAL_LOSS' | 'DISCONNECT_CRASH'; severity?: string; trigger_step?: number | null }
 export interface SimulatorTriggerResultApi { message: string; config: SimulatorConfigApi }
 export interface AdminDashboardApi {
+  orders?: { total: number; successful_orders_count: number; refunded_orders_count: number; cancelled_orders_count: number };
   revenue: { gross_revenue?: number | null; total_expenses?: number | null; total: number; today: number; this_month: number; paid_orders: number; pending_payments: number; refunds: number };
   users: { total: number; by_role: Record<string, number>; active: number; inactive: number };
   missions: { total: number; by_status: Record<string, number>; success_rate: number };

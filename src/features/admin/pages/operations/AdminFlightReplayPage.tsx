@@ -271,7 +271,7 @@ export function AdminFlightReplayPage() {
     const replayAllowed = Boolean(mission.data && isHistory(mission.data));
     const checkpoints = useLoad(`checkpoints:${missionId}`, () => getCheckpoints(missionId), replayAllowed);
     const telemetry = useLoad(`telemetry:${missionId}`, () => fetchFlightTelemetry(missionId), replayAllowed);
-    const swaps = useLoad('swap-history', swapHistory, replayAllowed);
+    const swaps = useLoad(`swap-history:${mission.data?.drone ?? ''}`, () => swapHistory(mission.data?.drone), replayAllowed && !!mission.data?.drone);
     const points = useMemo(() => (telemetry.data ?? []).filter(p => Number.isFinite(millis(p)) && point(p) !== null), [telemetry.data]);
     const recordedCheckpoints = useMemo(() => checkpoints.data ?? [], [checkpoints.data]);
     const [elapsed, setElapsed] = useState(0), [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(1), [follow, setFollow] = useState(false);
