@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { useSearchParams } from 'react-router-dom';
@@ -123,21 +124,21 @@ export function SparePartsPage() {
         <AdminSelect value={selectedHub} onChange={(event) => setSelectedHub(event.target.value)} aria-label="Inventory Hub"><option value="all">All hubs (total stock)</option>{hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</AdminSelect>
         <AdminSelect value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Stock filter"><option value="ALL">All parts</option><option value="LOW">Low quantity</option><option value="OUT">Out of parts</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect>
       </>} meta={`${visible.length} of ${parts.length} part categories`} />
-      <div className="table-wrap"><table><thead><tr><th>Part ID</th><th>Component</th><th>Drone model</th><th>Quantity</th><th>Actions</th></tr></thead><tbody>
-        {visible.map((part) => <tr key={part.id}>
-          <td><strong>PART-{part.id}</strong></td>
-          <td><strong>{part.name}</strong></td>
-          <td>{(part.compatible_drone_models ?? []).join(', ') || '—'}</td>
-          <td><strong className={partQuantity(part) === 0 || low(part) ? 'text-red-600' : ''}>{partQuantity(part)}</strong>{partQuantity(part) === 0 ? <small className="!text-red-600">Out of stock</small> : low(part) ? <small className="!text-red-600">{selectedHub === 'all' ? 'Low stock at one or more Hubs' : 'Low stock'}</small> : null}</td>
-          <td><div className="flex flex-wrap items-center gap-2"><ActionButton variant="ghost" onClick={() => openEdit(part)}>Edit</ActionButton><ActionButton variant="secondary" disabled={part.is_active === false} onClick={() => openRestock(part)}>Add quantity</ActionButton>
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Part ID</TableHead><TableHead>Component</TableHead><TableHead>Drone model</TableHead><TableHead>Quantity</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
+        {visible.map((part) => <TableRow key={part.id}>
+          <TableCell><strong>PART-{part.id}</strong></TableCell>
+          <TableCell><strong>{part.name}</strong></TableCell>
+          <TableCell>{(part.compatible_drone_models ?? []).join(', ') || '—'}</TableCell>
+          <TableCell><strong className={partQuantity(part) === 0 || low(part) ? 'text-red-600' : ''}>{partQuantity(part)}</strong>{partQuantity(part) === 0 ? <small className="!text-red-600">Out of stock</small> : low(part) ? <small className="!text-red-600">{selectedHub === 'all' ? 'Low stock at one or more Hubs' : 'Low stock'}</small> : null}</TableCell>
+          <TableCell><div className="flex flex-wrap items-center gap-2"><ActionButton variant="ghost" onClick={() => openEdit(part)}>Edit</ActionButton><ActionButton variant="secondary" disabled={part.is_active === false} onClick={() => openRestock(part)}>Add quantity</ActionButton>
             <DropdownMenu><DropdownMenuTrigger className="button button-ghost" type="button">More ▾</DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {([['TRANSFER', 'Transfer'], ['ADJUST', 'Adjust Stock'], ['DISCARD', 'Discard'], ['THRESHOLD', 'Set Threshold']] as const).map(([action, label]) =>
                   <DropdownMenuItem key={action} onClick={() => setStockAction({ action, part })}>{label}</DropdownMenuItem>)}
-              </DropdownMenuContent></DropdownMenu></div></td>
-        </tr>)}
-        {!loading && !error && visible.length === 0 && <tr><td colSpan={5}>No spare part categories found.</td></tr>}
-      </tbody></table></div>
+              </DropdownMenuContent></DropdownMenu></div></TableCell>
+        </TableRow>)}
+        {!loading && !error && visible.length === 0 && <TableRow><TableCell colSpan={5}>No spare part categories found.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>
     </OperatorPanel>}
 
     <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>{editing && <DialogContent className="admin-inventory-dialog"><form onSubmit={(e) => void save(e)}>

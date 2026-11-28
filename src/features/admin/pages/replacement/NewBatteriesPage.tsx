@@ -1,3 +1,5 @@
+import { AdminSummaryCard as CompactMetric } from "../../components/AdminSummaryCard";
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
@@ -21,20 +23,6 @@ function thisWeekStart(): Date {
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
   return date;
-}
-function CompactMetric({ label, value, icon: Icon }: {
-  label: string; value: number | string; note: string; icon: typeof BatteryCharging;
-}) {
-  return <div className="flex min-w-0 flex-col justify-center px-4 py-3" style={{
-    backgroundColor: '#FFFFFF', border: '1px solid #DDE2E8', borderRadius: 12,
-    boxShadow: '0 8px 22px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05)', minHeight: 88,
-  }}>
-    <div className="flex items-center justify-between gap-2">
-      <span className="min-w-0 text-xs font-medium text-[var(--admin-muted)]">{label}</span>
-      <Icon size={18} strokeWidth={1.8} className="shrink-0 text-[#FF6B00]" aria-hidden="true" />
-    </div>
-    <strong className="mt-1 block text-2xl font-bold leading-tight text-[var(--admin-text)]">{value}</strong>
-  </div>;
 }
 
 /** Model-level inventory matches Spare Parts. Individual Battery IDs remain
@@ -151,36 +139,36 @@ export function NewBatteriesPage() {
         </AdminSelect>}
         meta={`${shown.length} of ${modelSummary.length} battery models`}
       />
-      <div className="table-wrap"><table><thead><tr><th>Battery Model</th><th>Current Quantity</th><th>Actions</th></tr></thead>
-        <tbody>{shown.map((item) => <tr key={item.name}>
-          <td><strong>{item.name}</strong></td>
-          <td><strong className={item.quantity === 0 ? 'text-red-600' : undefined}>{item.quantity}</strong><small className={item.quantity === 0 ? '!text-red-600' : undefined}>{item.quantity === 0 ? 'Out of stock' : 'Unassigned units'}</small></td>
-          <td><div className="flex flex-wrap items-center gap-2">
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Battery Model</TableHead><TableHead>Current Quantity</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+        <TableBody>{shown.map((item) => <TableRow key={item.name}>
+          <TableCell><strong>{item.name}</strong></TableCell>
+          <TableCell><strong className={item.quantity === 0 ? 'text-red-600' : undefined}>{item.quantity}</strong><small className={item.quantity === 0 ? '!text-red-600' : undefined}>{item.quantity === 0 ? 'Out of stock' : 'Unassigned units'}</small></TableCell>
+          <TableCell><div className="flex flex-wrap items-center gap-2">
             {/* <ActionButton variant="ghost" onClick={() => setExpandedModel(expandedModel === item.name ? null : item.name)}>
               {expandedModel === item.name ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               View units
             </ActionButton> */}
             <ActionButton variant="secondary" onClick={() => openCreate(item.name)}>Add Quantity</ActionButton>
-          </div></td>
-        </tr>)}
-          {!loading && !error && !shown.length && <tr><td colSpan={3} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</td></tr>}
-        </tbody></table></div>
+          </div></TableCell>
+        </TableRow>)}
+          {!loading && !error && !shown.length && <TableRow><TableCell colSpan={3} className="py-8 text-center text-[var(--admin-muted)]">No matching battery models.</TableCell></TableRow>}
+        </TableBody></OperatorTable></div>
     </OperatorPanel>}
     {!loading && inventoryReady && expandedModel && <OperatorPanel className="flush-panel mt-4">
       <div className="flex items-center justify-between gap-2 border-b border-[var(--admin-border)] p-4">
         <div><strong>{expandedModel}</strong><p className="text-xs text-[var(--admin-muted)]">Individual Battery IDs · {expandedUnits.length} unit(s)</p></div>
         <ActionButton variant="secondary" onClick={() => setExpandedModel(null)}>Close</ActionButton>
       </div>
-      <div className="table-wrap"><table><thead><tr><th>Battery ID</th><th>Created on</th><th>Actions</th></tr></thead><tbody>
-        {expandedUnits.map((battery) => <tr key={battery.id}>
-          <td><strong>{battery.id}</strong></td>
-          <td>{'—'}</td>
-          <td><div className="flex items-center gap-2">
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Battery ID</TableHead><TableHead>Created on</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader><TableBody>
+        {expandedUnits.map((battery) => <TableRow key={battery.id}>
+          <TableCell><strong>{battery.id}</strong></TableCell>
+          <TableCell>{'—'}</TableCell>
+          <TableCell><div className="flex items-center gap-2">
             <button type="button" aria-label={`Remove ${battery.id}`} title="Remove new battery" onClick={() => { setError(''); setNotice(''); setRemovalReason(''); setRemoving(battery); }} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--admin-border)] bg-[var(--admin-surface)] text-red-500 hover:border-red-400"><Trash2 size={15} /></button>
-          </div></td>
-        </tr>)}
-        {!loading && !error && expandedUnits.length === 0 && <tr><td colSpan={3} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</td></tr>}
-      </tbody></table></div>
+          </div></TableCell>
+        </TableRow>)}
+        {!loading && !error && expandedUnits.length === 0 && <TableRow><TableCell colSpan={3} className="p-5 text-center text-[var(--admin-muted)]">No new units in this model yet.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>
     </OperatorPanel>}
 
     <Dialog open={creating} onOpenChange={(open) => !open && setCreating(false)}>

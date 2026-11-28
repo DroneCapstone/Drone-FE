@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -120,19 +121,19 @@ export function DronesPage() {
         <AdminSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All status</option><option value="AVAILABLE">Available</option><option value="MAINTENANCE">Maintenance</option><option value="IN_FLIGHT">In flight</option><option value="RETIRED">Retired</option></AdminSelect>
         <AdminSelect value={active} onChange={(event) => setActive(event.target.value)}><option value="all">All admin states</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></AdminSelect>
       </>} meta={`${visible.length} of ${drones.length} drones`} />
-      <div className="table-wrap"><table><thead><tr><th>Drone</th><th>Model</th><th>Hub</th><th>Battery</th><th>Status</th><th>Admin state</th><th>Payload</th><th>Action</th></tr></thead><tbody>
-        {visible.map((d) => <tr key={d.id}>
-          <td><strong>{d.id}</strong><small>{d.name}</small></td>
-          <td><strong>{d.model}</strong></td>
-          <td>{hubName(d)}</td>
-          <td>{d.battery_level_pct == null ? '—' : <div className="battery-cell"><span><i style={{ width: `${Math.max(0, Math.min(100, d.battery_level_pct))}%` }} /></span>{d.battery_level_pct}%</div>}</td>
-          <td><StatusBadge tone={statusTone(d.status)}>{d.status}</StatusBadge></td>
-          <td><StatusBadge tone={d.admin_state.toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{d.admin_state}</StatusBadge></td>
-          <td>{d.payload_capacity_kg} kg</td>
-          <td><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></td>
-        </tr>)}
-        {!loading && !error && visible.length === 0 && <tr><td colSpan={8}>No drones found.</td></tr>}
-      </tbody></table></div>
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Drone</TableHead><TableHead>Model</TableHead><TableHead>Hub</TableHead><TableHead>Battery</TableHead><TableHead>Status</TableHead><TableHead>Admin state</TableHead><TableHead>Payload</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+        {visible.map((d) => <TableRow key={d.id}>
+          <TableCell><strong>{d.id}</strong><small>{d.name}</small></TableCell>
+          <TableCell><strong>{d.model}</strong></TableCell>
+          <TableCell>{hubName(d)}</TableCell>
+          <TableCell>{d.battery_level_pct == null ? '—' : <div className="battery-cell"><span><i style={{ width: `${Math.max(0, Math.min(100, d.battery_level_pct))}%` }} /></span>{d.battery_level_pct}%</div>}</TableCell>
+          <TableCell><StatusBadge tone={statusTone(d.status)}>{d.status}</StatusBadge></TableCell>
+          <TableCell><StatusBadge tone={d.admin_state.toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{d.admin_state}</StatusBadge></TableCell>
+          <TableCell>{d.payload_capacity_kg} kg</TableCell>
+          <TableCell><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></TableCell>
+        </TableRow>)}
+        {!loading && !error && visible.length === 0 && <TableRow><TableCell colSpan={8}>No drones found.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>
     </OperatorPanel>
     <Dialog open={adding} onOpenChange={(open) => { if (!open && !addSaving) setAdding(false); }}>
       {adding && <DialogContent>

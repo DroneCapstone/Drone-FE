@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { useAdminConfirm } from '../../components/AdminConfirmDialog';
 import { isSerialField } from '../../utils/adminAssetFields';
 import { AdminSelect } from '../../components/AdminSelect';
@@ -100,10 +101,10 @@ export function DroneDetailPage() {
   const ms = drone?.maintenance_status;
   const flight = drone?.flight_activity;
   const readonlyFact = (label: string, content: ReactNode) => <div className="dd-readonly-field"><span className="dd-readonly-label">{label}</span><div className="dd-readonly-control">{content}</div></div>;
-  const renderOrders = (items: WorkOrderApi[]) => <div className="dd-table-scroll"><table className="dd-table"><thead><tr><th>Work order</th><th>Issue</th><th>Status</th><th>Technician</th><th>Updated</th></tr></thead><tbody>
-    {items.map((w) => <tr key={w.id}><td><strong>{w.work_order_code}</strong></td><td>{w.issue}</td><td><DetailBadge tone={w.status.toUpperCase() === 'COMPLETED' ? 'green' : 'blue'}>{w.status}</DetailBadge></td><td>{w.technician_name ?? '—'}</td><td>{dateText(w.updated_at)}</td></tr>)}
-    {items.length === 0 && <tr><td colSpan={5}>No work orders found.</td></tr>}
-  </tbody></table></div>;
+  const renderOrders = (items: WorkOrderApi[]) => <div className="dd-table-scroll"><OperatorTable className="dd-table"><TableHeader><TableRow><TableHead>Work order</TableHead><TableHead>Issue</TableHead><TableHead>Status</TableHead><TableHead>Technician</TableHead><TableHead>Updated</TableHead></TableRow></TableHeader><TableBody>
+    {items.map((w) => <TableRow key={w.id}><TableCell><strong>{w.work_order_code}</strong></TableCell><TableCell>{w.issue}</TableCell><TableCell><DetailBadge tone={w.status.toUpperCase() === 'COMPLETED' ? 'green' : 'blue'}>{w.status}</DetailBadge></TableCell><TableCell>{w.technician_name ?? '—'}</TableCell><TableCell>{dateText(w.updated_at)}</TableCell></TableRow>)}
+    {items.length === 0 && <TableRow><TableCell colSpan={5}>No work orders found.</TableCell></TableRow>}
+  </TableBody></OperatorTable></div>;
 
   return <AdminPageShell title={drone?.id ?? droneId ?? 'Drone'} description={drone ? `${drone.model} · ${hubName}` : ''}
     actions={drone ? <ActionButton variant={adminActive(drone.admin_state) ? 'danger' : 'secondary'} disabled={saving || (adminActive(drone.admin_state) && flying(drone.status))} onClick={() => void toggleActive()}>{adminActive(drone.admin_state) ? 'Deactivate' : 'Activate'}</ActionButton> : undefined}>
@@ -143,10 +144,10 @@ export function DroneDetailPage() {
           <DetailCard title="Recent technician records">{renderOrders(maintenance.recent_technician_records ?? [])}</DetailCard>
         </div></div>}
         {tab === 'orders' && <DetailCard title="Work orders">{renderOrders(orders)}</DetailCard>}
-        {tab === 'flights' && flights && <DetailCard title="Flight history"><div className="dd-rows"><DetailRow label="Total flights">{flights.total_flights}</DetailRow><DetailRow label="Flight hours">{flights.flight_hours} h</DetailRow></div><div className="dd-table-scroll"><table className="dd-table"><thead><tr><th>Flight</th><th>Mission</th><th>Route</th><th>Departure</th><th>Status</th></tr></thead><tbody>
-          {flights.flights.map((f, i) => <tr key={f.flight_code ?? f.flight_id ?? f.id ?? i}><td>{f.flight_code ?? f.flight_id ?? f.id ?? '—'}</td><td>{f.mission_id ?? '—'}</td><td>{f.route ?? '—'}</td><td>{dateText(f.departure ?? f.departed_at)}</td><td>{f.status ?? '—'}</td></tr>)}
-          {flights.flights.length === 0 && <tr><td colSpan={5}>No flight history.</td></tr>}
-        </tbody></table></div></DetailCard>}
+        {tab === 'flights' && flights && <DetailCard title="Flight history"><div className="dd-rows"><DetailRow label="Total flights">{flights.total_flights}</DetailRow><DetailRow label="Flight hours">{flights.flight_hours} h</DetailRow></div><div className="dd-table-scroll"><OperatorTable className="dd-table"><TableHeader><TableRow><TableHead>Flight</TableHead><TableHead>Mission</TableHead><TableHead>Route</TableHead><TableHead>Departure</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>
+          {flights.flights.map((f, i) => <TableRow key={f.flight_code ?? f.flight_id ?? f.id ?? i}><TableCell>{f.flight_code ?? f.flight_id ?? f.id ?? '—'}</TableCell><TableCell>{f.mission_id ?? '—'}</TableCell><TableCell>{f.route ?? '—'}</TableCell><TableCell>{dateText(f.departure ?? f.departed_at)}</TableCell><TableCell>{f.status ?? '—'}</TableCell></TableRow>)}
+          {flights.flights.length === 0 && <TableRow><TableCell colSpan={5}>No flight history.</TableCell></TableRow>}
+        </TableBody></OperatorTable></div></DetailCard>}
         </div>}
       </>}
     </div>

@@ -40,27 +40,9 @@ export function AdminPageShell({
 
   return (
     <>
-      <header
-        className="mb-7 flex flex-col items-start justify-between gap-5 sm:flex-row sm:items-center"
-        style={{ marginBottom: 28 }}
-      >
-        <div className="min-w-0">
-          <h1
-            style={{
-              fontFamily: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-              fontSize: 28,
-              fontWeight: 600,
-              letterSpacing: "-0.025em",
-              lineHeight: 1.2,
-              margin: 0,
-              color: "var(--admin-text, var(--text))",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {title}
-          </h1>
-        </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      <header className="page-heading">
+        <div className="page-heading-copy min-w-0"><h1>{title}</h1></div>
+        {actions ? <div className="page-heading-actions">{actions}</div> : null}
       </header>
 
       {!hideSectionTabs && section?.children?.length ? (
