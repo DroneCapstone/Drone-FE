@@ -130,12 +130,6 @@ export function FlightHistoryPage() {
     })),
   });
   const gpsWindows = replayChecks.map(q => gpsRecordingWindow(q.data));
-  const durations = gpsWindows.map(w => w?.durationSeconds).filter((n): n is number => n !== undefined);
-  const totalSeconds = durations.reduce((a, b) => a + b, 0);
-  const uniqueDrones = new Set(filtered.map(m => m.droneId).filter(Boolean)).size;
-  const uniqueHubs = new Set(filtered.flatMap(m => [m.originHubId, m.destinationHubId, ...(m.relayHubIds ?? [])]).filter(Boolean)).size;
-  const first = filtered[filtered.length - 1];
-  const recent = filtered[0];
 
   return (
     <div className="flight-history-screen">
@@ -194,7 +188,7 @@ export function FlightHistoryPage() {
                       }}
                     >
                       <TableCell className="fh-nowrap">{fmtDate(flightStart(m) || flightEnd(m))}</TableCell>
-                      <TableCell><span className="fh-link fh-strong">{m.id}</span><small>Delivery mission</small></TableCell>
+                      <TableCell><span className="fh-link fh-strong">{m.id}</span></TableCell>
                       <TableCell><span className="fh-link">{m.drone || m.droneId || '—'}</span></TableCell>
                       <TableCell className="fh-route" title={`${formatHubName(hubs.get(m.originHubId)) || m.originHubId} → ${formatHubName(hubs.get(m.destinationHubId)) || m.destinationHubId}`}>{formatHubName(hubs.get(m.originHubId)) || m.originHubId || '—'} <span>→</span> {formatHubName(hubs.get(m.destinationHubId)) || m.destinationHubId || '—'}</TableCell>
                       <TableCell className="fh-nowrap" title="First valid recorded GPS timestamp (not Mission start_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.start)}</TableCell><TableCell className="fh-nowrap" title="Last valid recorded GPS timestamp (not Mission end_time)">{replayChecks[index]?.isLoading ? '…' : fmtTime(gpsWindows[index]?.end)}</TableCell>
@@ -206,13 +200,6 @@ export function FlightHistoryPage() {
                   <OperatorPagination currentPage={Math.min(page, totalPages)} totalItems={filtered.length} itemLabel="recorded flights" onPageChange={setPage} />
                 </>}
         </section>
-        <aside className="fh-card fh-overview"><h2>Flight history overview</h2>
-          <div className="fh-summary-metrics"><div><small>Historical missions</small><strong>{filtered.length}</strong></div><div><small>GPS recorded duration</small><strong>{durations.length ? `${(totalSeconds / 60).toFixed(1)} min` : '—'}</strong></div></div>
-          {/* <div className="fh-summary-note">Duration is based on actual start and completion timestamps.</div> */}
-          <dl className="fh-stat-list"><div><dt>Last record</dt><dd>{recent ? fmtDate(flightStart(recent) || flightEnd(recent)) : '—'}</dd></div><div><dt>Earliest record</dt><dd>{first ? fmtDate(flightStart(first) || flightEnd(first)) : '—'}</dd></div><div><dt>Unique drones</dt><dd>{uniqueDrones}</dd></div><div><dt>Unique hubs</dt><dd>{uniqueHubs}</dd></div><div><dt>GPS distance</dt><dd>See individual replay</dd></div></dl>
-          <h3>Quick links</h3>
-          <div className="fh-overview-links"><Link className="fh-button" to="/operator/fleet-hubs/drones">View drone fleet →</Link><Link className="fh-button" to="/operator/fleet-hubs/hubs">View hub network →</Link></div>
-        </aside>
       </div>
       {/* <p className="fh-navigation-note">Flight history is the central Operations page. Open it from a drone or hub using <code>?drone=ID</code> or <code>?hub=ID</code> to pre-filter the records.</p> */}
     </div>

@@ -408,3 +408,21 @@
   .flight-history-screen .fh-filter-panel { grid-template-columns: minmax(0, 1fr); }
   .flight-history-screen .fh-filter-panel .fh-search { grid-column: auto; }
 }
+
+
+/* Flight History only: full-width table and compact Replay action. */
+.flight-history-screen .fh-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+.flight-history-screen .operator-ui-table.fh-table .fh-link.fh-strong {
+  color: #147da6;
+  font-size: 13px;
+}
+:root[data-theme='dark'] .flight-history-screen .operator-ui-table.fh-table .fh-link.fh-strong {
+  color: #73c3ed;
+}
+.operator-app .main-column .page-content .flight-history-screen .operator-ui-table.fh-table .fh-row-actions .fh-button {
+  box-sizing: border-box;
+  min-height: 29px;
+  height: 29px;
+}
