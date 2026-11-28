@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { customerApi } from "../services/customerApi";
 
@@ -64,7 +65,7 @@ function formatEta(sec: number | null): string {
 }
 
 function setLine(map: MapLibreMap, id: string, coords: LngLat[], color: string, dashed: boolean) {
-  const data: GeoJSON.Feature = {
+  const data: { type: "Feature"; properties: Record<string, never>; geometry: { type: "LineString"; coordinates: LngLat[] } } = {
     type: "Feature",
     properties: {},
     geometry: { type: "LineString", coordinates: coords.length >= 2 ? coords : [] },

@@ -4,7 +4,6 @@ import {
   BatteryCharging,
   BatteryMedium,
   CircleAlert,
-  ClipboardList,
   Package,
   PackageCheck,
   Plane,

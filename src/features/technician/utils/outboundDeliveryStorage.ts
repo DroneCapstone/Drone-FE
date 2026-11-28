@@ -164,7 +164,6 @@ export type OperatorAssignmentPayload = {
 
 };
 
-const TECHNICIAN_HUB = "—";
 
 /*
 

@@ -1,7 +1,6 @@
 import { PackageCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ClipboardCheck,
   CreditCard,
   BarChart3,
   Gauge,
