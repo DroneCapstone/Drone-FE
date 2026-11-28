@@ -3,7 +3,7 @@ import { isRecord, pickString } from "../api/httpClient";
 export type ProofChecklistItem = { item: string; checked?: boolean; note: string; status: string };
 export type OrderProofImage = {
   stage: string; url: string; recordedAt: string; hubId: string; missionId: string;
-  legId?: string; technicianId?: string; checklist?: ProofChecklistItem[];
+  legId?: string; technicianId?: string; technicianName?: string; checklist?: ProofChecklistItem[];
 };
 export type HistoryProofFields = {
   proofImages?: OrderProofImage[];
@@ -30,7 +30,8 @@ function readProofImage(entry: unknown): OrderProofImage | null {
     stage: pickString(entry, ["stage"], "Proof image"), url,
     recordedAt: pickString(entry, ["recorded_at", "timestamp"], ""),
     hubId: pickString(entry, ["hub_id"], ""), missionId: pickString(entry, ["mission_id"], ""),
-    legId: pickString(entry, ["leg_id"], ""), technicianId: pickString(entry, ["technician_id"], ""), checklist,
+    legId: pickString(entry, ["leg_id"], ""), technicianId: pickString(entry, ["technician_id"], ""),
+    technicianName: pickString(entry, ["technician_name", "technician_full_name"], "").trim(), checklist,
   };
 }
 
