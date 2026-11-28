@@ -9,6 +9,9 @@ import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
+import { MissionJustification } from '../../components/MissionJustification';
+import { justificationKey, getJustification, putJustification, isValidJustification, needsResourceJustification } from '../../utils/missionJustifications';
+import type { MissionSelectionJustifications } from '../../types/operator';
 import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
 import { PackageReceipt } from '../../components/PackageReceipt';
 import { OperatorPanel } from '../../components/OperatorPanel';
@@ -249,6 +252,12 @@ export function CreateMissionPage() {
   const [aiRouteSuggestion, setAiRouteSuggestion] = useState<{
     orderId: string; droneId: string; batteryId: string; routeId: string;
   } | null>(null);
+  const [autoSelectedResources, setAutoSelectedResources] = useState(() => restoredDraft?.autoSelectedResources ??
+    (!restoredDraft?.manualSelectionOverride && restoredDraft?.selectedDroneId && restoredDraft.selectedBatteryId
+      ? { droneId: restoredDraft.selectedDroneId, batteryId: restoredDraft.selectedBatteryId } : undefined));
+  const [selectionJustifications, setSelectionJustifications] = useState<MissionSelectionJustifications>(restoredDraft?.selectionJustifications ?? {});
+  const [editorJustifications, setEditorJustifications] = useState<MissionSelectionJustifications>({});
+  const [routeOptionsOpen, setRouteOptionsOpen] = useState(Boolean(restoredDraft?.routeOptionsOpen));
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [routeSelectionConfirmed, setRouteSelectionConfirmed] = useState(false);
   // Legacy Step-1 bundles in saved drafts are never restored into the new post-analyze flow.
@@ -264,6 +273,12 @@ export function CreateMissionPage() {
     setBundleEnabled(false);
     const nextDraft = orderId ? loadMissionDraft(orderId) : undefined;
     const nextReview = loadStoredMissionReview(orderId);
+    setAutoSelectedResources(nextDraft?.autoSelectedResources ??
+      (!nextDraft?.manualSelectionOverride && nextDraft?.selectedDroneId && nextDraft.selectedBatteryId
+        ? { droneId: nextDraft.selectedDroneId, batteryId: nextDraft.selectedBatteryId } : undefined));
+    setSelectionJustifications(nextDraft?.selectionJustifications ?? {});
+    setEditorJustifications({});
+    setRouteOptionsOpen(Boolean(nextDraft?.routeOptionsOpen));
     setStoredReview(nextReview);
     const savedStep = nextDraft?.step ?? 1;
     const canRestoreReview = savedStep >= 4 && nextReview?.routeId === nextDraft?.selectedRouteId &&
@@ -394,6 +409,9 @@ export function CreateMissionPage() {
           orderId, droneId: preview.selectedDroneId, batteryId: preview.selectedBatteryId, routeId: '',
         };
         setResourceVerificationIssue('');
+        setAutoSelectedResources({ droneId: preview.selectedDroneId, batteryId: preview.selectedBatteryId });
+        setSelectionJustifications({});
+        setRouteOptionsOpen(false);
         setSelectedDroneId(preview.selectedDroneId);
         setSelectedBatteryId(preview.selectedBatteryId);
       })
@@ -501,9 +519,10 @@ export function CreateMissionPage() {
     saveMissionDraft({
       orderId, step, selectedDroneId, selectedBatteryId, selectedRouteId,
       manualSelectionOverride, bundledOrderIds: [], relayBatterySelections: [],
+      autoSelectedResources, selectionJustifications, routeOptionsOpen,
     });
   }, [orderId, stateOrderId, order?.id, step, selectedDroneId, selectedBatteryId,
-    selectedRouteId, manualSelectionOverride, isAssigning]);
+    selectedRouteId, manualSelectionOverride, isAssigning, autoSelectedResources, selectionJustifications, routeOptionsOpen]);
 
   // Save the actual BE response used to build Review. When the page unmounts,
   // React state disappears, but this display snapshot stays in sessionStorage.
@@ -541,6 +560,8 @@ export function CreateMissionPage() {
     const nextRouteId = (recommended ?? aiRoute)?.id ?? '';
     if (nextRouteId === selectedRouteId) return;
     setSelectedRouteId(nextRouteId);
+    setSelectionJustifications(current => ({ ...current, route: undefined }));
+    setRouteOptionsOpen(false);
     setExpandedRouteId(null);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
@@ -688,6 +709,39 @@ export function CreateMissionPage() {
     ? formatHubName(eligibleDronesData?.hub.name || originHub?.name) || planningOriginHubId || 'Recovery hub unavailable'
     : formatHubName(originHub?.name || order.originHubName || eligibleDronesData?.hub.name) || order.originHubId || 'Origin hub';
   const destinationHubLabel = formatHubName(destinationHub?.name || order.destinationHubName) || order.destinationHubId || 'Destination hub';
+  // Baseline is the automatic resource selection, not the last manual choice.
+  // Route recommendations are evaluated for the currently analyzed Drone/Battery pair.
+  const recommendedRouteId = routeOptions.find(route => route.recommended)?.id ?? '';
+  const visibleRouteOptions = routeOptionsOpen || !selectedRouteId || !routeOptions.some(route => route.id === selectedRouteId)
+    ? displayedRouteOptions : displayedRouteOptions.filter(route => route.id === selectedRouteId);
+  const droneKey = justificationKey(selectedDroneId);
+  const batteryKey = justificationKey(selectedDroneId, selectedBatteryId);
+  const routeKey = justificationKey(selectedDroneId, selectedBatteryId, recommendedRouteId, selectedRouteId);
+  const draftDroneKey = justificationKey(draftDroneId);
+  const draftBatteryKey = justificationKey(draftDroneId, draftBatteryId);
+  const needsDroneReason = needsResourceJustification(selectedDroneId, autoSelectedResources?.droneId, manualSelectionOverride);
+  const needsBatteryReason = needsResourceJustification(selectedBatteryId, autoSelectedResources?.batteryId, manualSelectionOverride);
+  const needsRouteReason = Boolean(selectedRouteId && selectedRoute && selectedRouteId !== recommendedRouteId);
+  const needsDraftDroneReason = needsResourceJustification(draftDroneId, autoSelectedResources?.droneId, true);
+  const needsDraftBatteryReason = needsResourceJustification(draftBatteryId, autoSelectedResources?.batteryId, true);
+  const droneReason = getJustification(selectionJustifications, 'drone', droneKey);
+  const batteryReason = getJustification(selectionJustifications, 'battery', batteryKey);
+  const routeReason = getJustification(selectionJustifications, 'route', routeKey);
+  const draftDroneReason = getJustification(editorJustifications, 'drone', draftDroneKey);
+  const draftBatteryReason = getJustification(editorJustifications, 'battery', draftBatteryKey);
+  const resourceReasonsValid = (!needsDroneReason || isValidJustification(droneReason)) &&
+    (!needsBatteryReason || isValidJustification(batteryReason));
+  const routeReasonValid = !needsRouteReason || isValidJustification(routeReason);
+  const editorReasonsValid = (!needsDraftDroneReason || isValidJustification(draftDroneReason)) &&
+    (!needsDraftBatteryReason || isValidJustification(draftBatteryReason));
+  const editReason = (kind: keyof MissionSelectionJustifications, key: string, reason: string) =>
+    setSelectionJustifications(current => putJustification(current, kind, key, reason));
+  const editDraftReason = (kind: 'drone' | 'battery', key: string, reason: string) =>
+    setEditorJustifications(current => putJustification(current, kind, key, reason));
+  const activeResourceReasonFields = <>
+    {needsDroneReason && <MissionJustification kind="drone" value={droneReason} onChange={value => editReason('drone', droneKey, value)} />}
+    {needsBatteryReason && <MissionJustification kind="battery" value={batteryReason} onChange={value => editReason('battery', batteryKey, value)} />}
+  </>;
   const hubName = (hubId: string) =>
     formatHubName(networkHubs.find((hub) => hub.id === hubId)?.name) || hubId;
   const selectedRouteEnergy = selectedRoute
@@ -700,13 +754,13 @@ export function CreateMissionPage() {
   const hasOrderHubs = Boolean(planningOriginHubId && order.destinationHubId);
   const canContinueStep1 = Boolean(canCreateMissionForOrder(order) && hasOrderHubs);
   const canContinueStep2 = Boolean(
-    canContinueStep1 && selectedDrone && selectedDrone.isSelectable !== false && selectedBattery &&
+    canContinueStep1 && resourceReasonsValid && selectedDrone && selectedDrone.isSelectable !== false && selectedBattery &&
     selectedDroneHasCapacity && !eligibleBatteriesLoading && !eligibleBatteriesFetching && !eligibleBatteriesError
   );
   // Without a BE route-aware per-leg validation contract, an additional Order is a
   // preview ONLY. Never Review/Assign a route analyzed for the primary Order alone.
   const canReviewMission = Boolean(
-    canContinueStep2 && selectedRoute && selectedTiming && !hasUnverifiedBundle &&
+    canContinueStep2 && routeReasonValid && selectedRouteEnergy?.feasible === true && selectedRoute && selectedTiming && !hasUnverifiedBundle &&
     routeMatchesPlanningOrigin(order, selectedRoute, planningOriginHubId) &&
     !isPlanningAnalysisFetching && !planningAnalysisError
   );
@@ -743,6 +797,8 @@ export function CreateMissionPage() {
     pendingAiBatteryRef.current = null;
     setAiRouteSuggestion(null);
     setResourceVerificationIssue('');
+    setSelectionJustifications({});
+    setRouteOptionsOpen(false);
     setSelectedDroneId(drone.id);
     setSelectedBatteryId('');
     setSelectedRouteId('');
@@ -765,6 +821,8 @@ export function CreateMissionPage() {
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
+    setSelectionJustifications({});
+    setRouteOptionsOpen(false);
     // Discard old selection so it cannot return on refresh.
     saveMissionDraft({
       orderId: order.id,
@@ -773,6 +831,7 @@ export function CreateMissionPage() {
       selectedBatteryId: '',
       selectedRouteId: '',
       manualSelectionOverride: true,
+      autoSelectedResources, selectionJustifications: {}, routeOptionsOpen: false,
       bundledOrderIds: [],
       relayBatterySelections: [],
     });
@@ -791,6 +850,8 @@ export function CreateMissionPage() {
     pendingAiBatteryRef.current = null;
     setAiRouteSuggestion(null);
     setResourceVerificationIssue('');
+    setSelectionJustifications(current => ({ ...current, battery: undefined, route: undefined }));
+    setRouteOptionsOpen(false);
     setSelectedBatteryId(batteryId);
     setSelectedRouteId('');
     setExpandedRouteId(null);
@@ -803,13 +864,22 @@ export function CreateMissionPage() {
     if (isAssigning) return;
     setDraftDroneId(selectedDroneId);
     setDraftBatteryId(selectedBatteryId);
+    setEditorJustifications(selectionJustifications);
     setResourceEditorOpen(true);
   };
 
   const applyResourceEditor = () => {
     if (!draftDrone || draftDrone.isSelectable === false || draftDrone.maxPayloadKg + 0.0001 < totalPayloadKg || !draftBattery || draftBatteriesLoading || draftBatteriesFetching || draftBatteriesError) return;
+    if (!editorReasonsValid) return;
     setResourceEditorOpen(false);
-    if (draftDroneId === selectedDroneId && draftBatteryId === selectedBatteryId) return;
+    const samePair = draftDroneId === selectedDroneId && draftBatteryId === selectedBatteryId;
+    setSelectionJustifications({
+      drone: needsDraftDroneReason ? { key: draftDroneKey, reason: draftDroneReason.trim() } : undefined,
+      battery: needsDraftBatteryReason ? { key: draftBatteryKey, reason: draftBatteryReason.trim() } : undefined,
+      route: samePair ? selectionJustifications.route : undefined,
+    });
+    if (samePair) return;
+    setRouteOptionsOpen(false);
     // A manual choice takes priority over late AI responses. Invalidate the
     // previous analyzed route; React Query will analyze the new Drone/Pin tuple.
     manualSelectionRef.current = true;
@@ -862,6 +932,7 @@ export function CreateMissionPage() {
       selectedBatteryId,
       selectedRouteId: routeId,
       manualSelectionOverride,
+      autoSelectedResources, selectionJustifications, routeOptionsOpen,
       bundledOrderIds: [],
       relayBatterySelections: [],
     });
@@ -924,6 +995,14 @@ export function CreateMissionPage() {
         return;
       }
       const currentRoute = current.data.routes.find((route) => route.id === selectedRoute.id);
+      const latestRecommendedRouteId = current.data.routes.find(route => route.recommended)?.id ?? '';
+      if (latestRecommendedRouteId !== recommendedRouteId) {
+        setStep(3);
+        setSelectionJustifications(previous => ({ ...previous, route: undefined }));
+        setRouteOptionsOpen(true);
+        showToast('Route recommendation changed. Please review your selection again.');
+        return;
+      }
       if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible ||
         freshPlanningOriginHubId !== planningOriginHubId ||
         !routeMatchesPlanningOrigin(latestOrder.data, currentRoute, freshPlanningOriginHubId) ||
@@ -1117,6 +1196,7 @@ export function CreateMissionPage() {
                       )}
                     </div>
                   )}
+                  {activeResourceReasonFields}
                 </>
               ) : (
                 <div className="operator-empty-state">No eligible drone data is available.</div>
@@ -1156,6 +1236,7 @@ export function CreateMissionPage() {
                     </div>
                   </div>
                 </div>
+                {!resourceEditorOpen && activeResourceReasonFields}
               </OperatorPanel>
             )}
             {resourceEditorOpen && (
@@ -1180,6 +1261,7 @@ export function CreateMissionPage() {
                             if (drone.id === draftDroneId) return;
                             setDraftDroneId(drone.id);
                             setDraftBatteryId('');
+                            setEditorJustifications({});
                           }}
                         />
                       ))}
@@ -1207,7 +1289,11 @@ export function CreateMissionPage() {
                             role="radio"
                             aria-checked={draftBatteryId === battery.id}
                             className={`mission-origin-battery-card${draftBatteryId === battery.id ? ' is-selected' : ''}`}
-                            onClick={() => setDraftBatteryId(battery.id)}
+                            onClick={() => {
+                              if (draftBatteryId === battery.id) return;
+                              setDraftBatteryId(battery.id);
+                              setEditorJustifications(current => ({ ...current, battery: undefined }));
+                            }}
                           >
                             <span className="mission-origin-battery-head">
                               <span className={`mission-resource-editor-choice-radio${draftBatteryId === battery.id ? ' is-checked' : ''}`} aria-hidden="true">
@@ -1229,17 +1315,23 @@ export function CreateMissionPage() {
                     )}
                   </div>
                 </div>
+                {needsDraftDroneReason && <MissionJustification kind="drone" value={draftDroneReason} onChange={value => editDraftReason('drone', draftDroneKey, value)} />}
+                {needsDraftBatteryReason && <MissionJustification kind="battery" value={draftBatteryReason} onChange={value => editDraftReason('battery', draftBatteryKey, value)} />}
                 <div className="mission-resource-editor-actions">
                   <ActionButton variant="secondary" onClick={() => setResourceEditorOpen(false)}>Cancel</ActionButton>
                   <ActionButton
-                    disabled={!draftDrone || draftDrone.isSelectable === false || draftDrone.maxPayloadKg + 0.0001 < totalPayloadKg || !draftBattery || draftBatteriesLoading || draftBatteriesFetching || Boolean(draftBatteriesError)}
+                    disabled={!editorReasonsValid || !draftDrone || draftDrone.isSelectable === false || draftDrone.maxPayloadKg + 0.0001 < totalPayloadKg || !draftBattery || draftBatteriesLoading || draftBatteriesFetching || Boolean(draftBatteriesError)}
                     onClick={applyResourceEditor}
                   >Apply selection</ActionButton>
                 </div>
               </OperatorPanel>
             )}
             {selectedBatteryId && (
-            <OperatorPanel title="Choose flight route">
+            <OperatorPanel title="Choose flight route" action={routeOptions.length > 1 ? (
+              <button type="button" className="mission-ai-plan-change" aria-expanded={routeOptionsOpen} onClick={() => setRouteOptionsOpen(open => !open)}>
+                {routeOptionsOpen ? 'Hide options' : 'Change route'}
+              </button>
+            ) : undefined}>
               {/* Progressive loading: the resource overview above is already usable.
                   Only the route section waits for Analyze. Never hide previous routes. */}
               {resourceVerificationIssue && (
@@ -1265,7 +1357,7 @@ export function CreateMissionPage() {
                 <div className="operator-empty-state">No route options available.</div>
               )}
               <div className="mission-route-option-list">
-                {displayedRouteOptions.map((route) => {
+                {visibleRouteOptions.map((route) => {
                   const energy = getEnergyFeasibility(route);
                   const timing = calculateRouteTiming(order, route);
                   // Relay Battery IDs are allocated by BE Analyze, not inferred
@@ -1288,6 +1380,7 @@ export function CreateMissionPage() {
                       onSelect={() => {
                         // Selection and expansion are Operator choices, independent of AI feasibility.
                         if (route.id !== selectedRouteId) {
+                          setSelectionJustifications(current => ({ ...current, route: undefined }));
                           setBundledOrderIds([]);
                           setBundleEnabled(false);
                         }
@@ -1300,6 +1393,7 @@ export function CreateMissionPage() {
                   );
                 })}
               </div>
+              {needsRouteReason && <MissionJustification kind="route" value={routeReason} onChange={value => editReason('route', routeKey, value)} />}
               {/* Eligibility queries may refetch when navigating back. A temporarily
                   disabled Assign button is not evidence that the route is unsafe.
                   Only show route warnings for actual feasibility/energy failures. */}
@@ -1488,6 +1582,14 @@ export function CreateMissionPage() {
             />
           </OperatorPanel>
         )}
+        {step === 4 && (needsDroneReason || needsBatteryReason || needsRouteReason) && (
+          <OperatorPanel title="Justification">
+            {needsDroneReason && <MissionJustification kind="drone" value={droneReason} readOnly />}
+            {needsBatteryReason && <MissionJustification kind="battery" value={batteryReason} readOnly />}
+            {needsRouteReason && <MissionJustification kind="route" value={routeReason} readOnly />}
+            {(!resourceReasonsValid || !routeReasonValid) && <p className="mission-justification-error" role="alert">Please return to route selection and complete the required justifications.</p>}
+          </OperatorPanel>
+        )}
         {/* If a query has genuinely lost the selected data, show a recovery
             state instead of leaving an empty area above Back / Assign. */}
         {step === 4 && (!hasOrderHubs || !selectedDrone || !selectedRoute || !selectedTiming) && (
@@ -1531,6 +1633,9 @@ export function CreateMissionPage() {
               setSelectedBatteryId('');
               setSelectedRouteId('');
               setAiRouteSuggestion(null);
+              setAutoSelectedResources(undefined);
+              setSelectionJustifications({});
+              setRouteOptionsOpen(false);
               saveMissionDraft({
                 orderId: order.id, step: 3, selectedDroneId: '', selectedBatteryId: '',
                 selectedRouteId: '', manualSelectionOverride: false,

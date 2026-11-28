@@ -1,0 +1,43 @@
+/* Inherit the existing Operator typography, inputs and theme tokens. */
+.page-content .mission-builder .mission-justification.fields {
+  display: block;
+  min-width: 0;
+  margin: 12px 0 0;
+}
+.page-content .mission-builder .mission-justification.fields > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.page-content .mission-builder .mission-justification.fields textarea {
+  width: 100%;
+  min-height: 82px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--op-control-radius, 6px);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 var(--op-body, 13px)/1.45 var(--op-font, "IBM Plex Sans", sans-serif);
+  resize: vertical;
+}
+.page-content .mission-builder .mission-justification.fields textarea:focus {
+  outline: none;
+  border-color: var(--orange);
+}
+.page-content .mission-builder .mission-justification-error,
+.page-content .mission-builder .mission-justification-required {
+  color: var(--danger, #dc4545);
+}
+.page-content .mission-builder .mission-justification-error {
+  margin: 5px 0 0;
+  font-size: var(--op-secondary, 12px);
+  line-height: 1.45;
+}
+.page-content .mission-builder .mission-justification-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--op-body, 13px);
+  color: var(--text);
+}

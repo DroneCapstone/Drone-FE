@@ -414,7 +414,16 @@ export interface DroneEligibilityResult {
   reasons: string[];
 }
 
+export interface MissionSelectionJustifications {
+  drone?: { key: string; reason: string };
+  battery?: { key: string; reason: string };
+  route?: { key: string; reason: string };
+}
+
 export interface MissionDraft {
+  autoSelectedResources?: { droneId: string; batteryId: string };
+  selectionJustifications?: MissionSelectionJustifications;
+  routeOptionsOpen?: boolean;
   orderId: string;
   step: number;
   selectedDroneId: string;
