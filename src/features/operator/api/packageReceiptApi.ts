@@ -33,9 +33,7 @@ function rows(value: unknown): unknown[] {
   throw new Error('Unable to read package receipt records.');
 }
 
-const receiptStages = new Set([
-  'PACKAGE_RECEIVED_AT_ORIGIN_HUB', 'RECEIVE_PACKAGE', 'PACKAGE_RECEIVED', 'RECEIVED_AT_HUB',
-]);
+const receiptStages = new Set(['PACKAGE_RECEIVED_AT_ORIGIN_HUB']);
 
 function imageUrls(data: RecordData): string[] {
   const values = [data.proof_image_url, data.photo_url, data.image_url,
@@ -54,11 +52,10 @@ function validTime(value: string): string {
   return normalized && Number.isFinite(Date.parse(normalized)) ? normalized : '';
 }
 
-/** Uses the per-order proof response format already consumed by Admin.
- * Never use the Admin endpoint with an Operator token. BE must expose/authorize this route. */
+/** Operator endpoint for package receipt at the origin hub only. */
 export async function getPackageReceiptApi(orderId: string, originHubId: string, signal?: AbortSignal): Promise<PackageReceiptPhoto[]> {
   const payload = await operatorApiRequest<unknown>(
-    `/operator/orders/${encodeURIComponent(orderId)}/proof-images`, { signal },
+    `/operator/missions/orders/${encodeURIComponent(orderId)}/proof-images`, { signal },
   );
   return mapPackageReceiptPhotos(payload, orderId, originHubId);
 }
