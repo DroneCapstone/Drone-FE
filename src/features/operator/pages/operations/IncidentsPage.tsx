@@ -153,18 +153,6 @@ export function IncidentsPage() {
     [query, rows, severityFilter],
   );
 
-  const openCreate = (candidateId?: string) => {
-    const candidate = candidateId
-      ? incidentCandidates.find((aircraft) => aircraft.id === candidateId)
-      : incidentCandidates[0];
-    if (!candidate) return;
-
-    setActionError('');
-    setSelectedCandidateId(candidate.id);
-    setMode('create');
-    setSearchParams({ create: '1', alertId: candidate.alertId ?? '' });
-  };
-
   const closeCreate = () => {
     setActionError('');
     setMode('list');

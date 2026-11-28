@@ -6,7 +6,7 @@ import { OperatorLoadingState } from '../../components/OperatorLoadingState';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { useMissionListQuery, useMissionPlanningAnalysisQuery } from '../../hooks/useMissionQueries';
 import { useOperatorOrderQuery } from '../../hooks/useOrderQueries';
-import type { RouteLegSnapshot, RouteOption, RoutePlanningExplanation, RouteWeatherConditions } from '../../types/operator';
+import type { RouteLegSnapshot, RouteOption, RoutePlanningExplanation } from '../../types/operator';
 import { formatBackendLabel, formatHubName, formatRouteName } from '../../utils/displayEnglish';
 import { getEnergyFeasibility } from '../../utils/droneEligibility';
 import { loadMissionDraft, updateMissionDraftRoute } from '../../utils/missionDraftStorage';
@@ -120,10 +120,6 @@ function relaySwapAfter(route: RouteOption, leg: RouteLegSnapshot, next: RouteLe
   };
 }
 
-function weatherLabel(value?: number, unit = '', precision = 1): string {
-  return typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(precision)}${unit}` : '—';
-}
-
 function routeFeasibility(route: RouteOption): string {
   if (route.feasible === false || route.isSelectable === false) return 'Unavailable';
   if (route.feasible === true) return 'Feasible';
@@ -166,13 +162,11 @@ export function MissionAnalysisPage() {
     Number(Boolean(b.recommended)) - Number(Boolean(a.recommended)),
   );
   const [selectedRouteId, setSelectedRouteId] = useState(queryRouteId || selectedMission?.routeId || '');
-  const [weatherLegIndex, setWeatherLegIndex] = useState(0);
   const routeId = selectedRouteId || routeOptions.find((item) => item.recommended)?.id || routeOptions[0]?.id || '';
   const route = routeOptions.find((item) => item.id === routeId) ?? routeOptions[0];
 
   const changeRoute = (nextId: string) => {
     setSelectedRouteId(nextId);
-    setWeatherLegIndex(0);
     const next = new URLSearchParams(searchParams);
     next.set('routeId', nextId);
     setSearchParams(next, { replace: true });
@@ -207,9 +201,6 @@ export function MissionAnalysisPage() {
     : [];
   const maxShap = Math.max(0.000001, ...shapValues.map(([, value]) => Math.abs(value)));
   const legs = route.legDetails ?? [];
-  const allLegWeather = legs.map((leg) => leg.weather ?? route.weather).filter((value): value is RouteWeatherConditions => Boolean(value));
-  const weatherDiffersByLeg = allLegWeather.length > 1 && allLegWeather.some((item) => JSON.stringify(item) !== JSON.stringify(allLegWeather[0]));
-  const weather = (weatherDiffersByLeg ? legs[Math.min(weatherLegIndex, legs.length - 1)]?.weather : legs[0]?.weather) ?? route.weather;
   const conclusion = conclusionForRoute(route, planningAnalysis?.routeExplanation);
   const feasible = routeFeasibility(route);
 

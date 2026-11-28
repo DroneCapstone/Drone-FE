@@ -6,7 +6,7 @@ import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { BatteryCharging, Box, CalendarDays, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { BatteryCharging, Box, CalendarDays, Trash2 } from 'lucide-react';
 import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Dialog, DialogTitle } from '../../../../components/ui/Dialog';
 import { AdminDialogContent as DialogContent } from '../../components/AdminDialogContent';
@@ -17,13 +17,6 @@ import { adminOperationsApi, apiError, type BatteryApi, type BatteryModelApi } f
 import './NewBatteriesQuantityDialog.css';
 
 const field = 'h-11 w-full rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 text-sm text-[var(--admin-text)] outline-none focus:border-[#FF6B00]';
-
-function thisWeekStart(): Date {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  return date;
-}
 
 /** Model-level inventory matches Spare Parts. Individual Battery IDs remain
  * available via View units and for the existing replacement supply workflow. */

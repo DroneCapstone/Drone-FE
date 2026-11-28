@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { X, ZoomIn } from "lucide-react";
 import { getWorkOrderApi } from "../api/maintenanceApi";
 import { technicianApiRequest, unwrapObject, isRecord, toBackendNumericId, TechnicianApiError } from "../api/httpClient";
-import { defectLabel, validProofUrl } from "../utils/workOrderInspection";
+import { validProofUrl } from "../utils/workOrderInspection";
 import { FullImage } from "./TechnicianProofImage";
 import { TechnicianLoadingState } from "./TechnicianLoadingState";
 
@@ -57,7 +57,7 @@ export function WorkOrderHistoryDetails({ item, onClose, formatTime }: { item: W
   const logs = list(audit.status_logs ?? detail.status_logs_json).filter(isRecord);
   const fields = [
     ["Work order", item.id], ["Drone ID", item.droneId], ["Battery ID", item.batteryId],
-    ["Status", str(detail.status) || "Completed"], ["Defect type", defectLabel(str(detail.defect_type ?? audit.defect_type))],
+    ["Status", str(detail.status) || "Completed"],
     ["Resulting drone status", str(detail.resulting_drone_status ?? audit.resulting_drone_status)],
     ["Created at", formatTime(item.createdAt)], ["Completed at", formatTime(item.resolvedAt)],
   ];

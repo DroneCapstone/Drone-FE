@@ -100,13 +100,6 @@ export interface ListOperatorOrdersParams {
   status?: BackendOrderStatus;
 }
 
-interface BackendEligibleDronesHub {
-  id: string | number;
-  name: string;
-  totalDrones: number;
-  availableDrones: number;
-}
-
 interface BackendEligibleDrone {
   id?: string | number;
   drone_id?: string | number;
@@ -127,12 +120,6 @@ interface BackendEligibleDrone {
   required_battery_model?: string | null;
   requiredBatteryModel?: string | null;
   compatible_battery_models?: string[];
-}
-
-interface BackendEligibleDronesResponse {
-  hub?: Partial<BackendEligibleDronesHub>;
-  drones?: BackendEligibleDrone[];
-  data?: BackendEligibleDrone[] | { drones?: BackendEligibleDrone[]; hub?: Partial<BackendEligibleDronesHub> };
 }
 
 export interface EligibleDronesResult {

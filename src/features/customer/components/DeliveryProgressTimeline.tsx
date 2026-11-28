@@ -251,7 +251,7 @@ function compactMilestoneTime(value: string | null | undefined): string | null {
   if (!offsetProvided) {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(trimmed);
     if (!match) return null;
-    const [, year, month, day, hour, minute] = match;
+    const [, , month, day, hour, minute] = match;
     const monthName = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month) - 1];
     return `${day} ${monthName} · ${hour}:${minute}`;
   }

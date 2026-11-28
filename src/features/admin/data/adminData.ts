@@ -230,3 +230,20 @@ export const adminActivityLogs = adminAuditLogs.map((log) => ({
   module: log.entityType,
   occurredAt: log.occurredAt,
 }));
+
+// Data quality dimensions are UI metadata only. No live metric source is currently wired.
+export interface DataQualityMetric {
+  key: "missing" | "duplicate" | "outlier" | "validity";
+  label: string;
+  count: number | null;
+  ratePct: number | null;
+  trend: string | null;
+  affectedDataset: string | null;
+}
+
+export const dataQualityMetrics: DataQualityMetric[] = [
+  { key: "missing", label: "Missing Data", count: null, ratePct: null, trend: null, affectedDataset: null },
+  { key: "duplicate", label: "Duplicate", count: null, ratePct: null, trend: null, affectedDataset: null },
+  { key: "outlier", label: "Outlier", count: null, ratePct: null, trend: null, affectedDataset: null },
+  { key: "validity", label: "Validity", count: null, ratePct: null, trend: null, affectedDataset: null },
+];

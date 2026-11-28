@@ -45,7 +45,7 @@ export function TechnicianHistoryDetails({ title, fields, record, onClose, note 
           {images.length === 0 ? <p className="rounded-md border border-dashed border-[var(--tech-border)] p-4 text-center text-[12px] text-[var(--tech-muted)]">No proof images available.</p> :
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{images.map((image, index) => {
               const label = proofStageLabel(image.stage);
-              const metadata = [image.hubId && `Hub ID: ${image.hubId}`, image.legId && `Leg: ${image.legId}`, image.technicianId && `Technician: ${image.technicianId}`].filter(Boolean);
+              const metadata = [image.legId && `Leg: ${image.legId}`, image.technicianId && `Technician: ${image.technicianId}`].filter(Boolean);
               return <div key={`${image.stage}:${image.recordedAt}:${index}`} className="min-w-0 rounded-md border border-[var(--tech-border)] p-2">
                 <ImageTile url={image.url} label={label} onClick={() => setSelected({ url: image.url, label })}/>
                 <div className="space-y-1 px-1 py-2"><p className="text-[13px] font-medium text-[var(--tech-text)]">{label}</p><p className="text-[11px] text-[var(--tech-muted)]">{formatApiDateTime(image.recordedAt)}</p>

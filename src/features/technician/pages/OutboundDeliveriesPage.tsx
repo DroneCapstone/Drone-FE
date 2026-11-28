@@ -16,7 +16,6 @@ import { Button } from "@/components/shadcn/ui/button";
 import { Card, CardContent } from "@/components/shadcn/ui/card";
 
 import { TechnicianPageShell } from "../components/TechnicianPageShell";
-import { TECHNICIAN_HUB } from "../utils/fleetStorage";
 import {
   type OutboundDelivery,
 } from "../utils/outboundDeliveryStorage";
@@ -234,8 +233,6 @@ export function OutboundDeliveriesPage() {
   }, [normalizedDeliveries, search, modeFilter, statusFilter]);
 
   const selectedDelivery = normalizedDeliveries.find((item) => item.orderId === detailOrderId);
-  const hubLabel = [deliveries[0]?.hub, history[0]?.hub, TECHNICIAN_HUB]
-    .find((item) => item && item !== "—") ?? "the assigned hub";
 
   const awaitingCount = normalizedDeliveries.filter((item) => item.status === "Awaiting Drop-off").length;
   const atHubCount = normalizedDeliveries.filter((item) => item.status === "At Hub").length;

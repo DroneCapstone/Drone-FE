@@ -20,7 +20,6 @@ import {
   getMissionApi,
   getMissionHubCheckpointsApi,
   getEligibleMissionBatteriesApi,
-  getMissionTelemetryApi,
   getAllMissionTelemetryApi,
   listIncidentsApi,
   listMissionsApi,

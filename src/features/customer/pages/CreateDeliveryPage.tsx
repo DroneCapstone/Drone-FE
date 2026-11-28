@@ -1,6 +1,5 @@
 import {
   useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -356,16 +355,6 @@ export function CreateDeliveryPage() {
         // Keep cached/local profile when profile API is unavailable.
       });
   }, [user]);
-  const selectedOriginHub = useMemo(
-    () =>
-      hubs.find((hub) => String(hub.id) === form.originArea) ?? null,
-    [hubs, form.originArea],
-  );
-  const selectedDestinationHub = useMemo(
-    () =>
-      hubs.find((hub) => String(hub.id) === form.destinationArea) ?? null,
-    [hubs, form.destinationArea],
-  );
   const estimateReady = Boolean(
     form.packageCategory &&
     form.weightKg !== "" &&

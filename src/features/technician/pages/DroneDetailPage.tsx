@@ -2,9 +2,7 @@ import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { type ReactNode, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  CalendarClock,
   CheckCircle2,
-  Clock3,
   MapPin,
   Plane,
 } from "lucide-react";
