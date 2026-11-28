@@ -795,11 +795,11 @@ export function TransitMissionsPage() {
   const [swappingKey, setSwappingKey] = useState<string | null>(null);
 
   const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
-  type ProofAction = "arrival" | "ready" | "dispatch";
+  type ProofAction = "arrival" | "dispatch";
   const proofIdentity = (mission: TransitMission, action: ProofAction) => JSON.stringify([
     mission.id, mission.backendMissionId, arrivalConfirmationKey(mission),
     mission.droneCurrentHubId, mission.currentDroneId,
-    action === "ready" ? operatorAssignedBatteryId(mission) : mission.batteryId,
+    mission.batteryId,
     mission.isBundled, mission.bundledOrderIds, mission.totalOrdersCount,
     action === "arrival" ? (isFinalHubPendingArrival(mission) ? "FINAL" : getTransitConfirmKind(mission)) : null,
   ]);
@@ -1098,7 +1098,7 @@ export function TransitMissionsPage() {
    * Clicking Ready calls the existing swap-battery endpoint. Only a successful
    * Backend response is evidence of the Ready transition; no synthetic state.
    */
-  const markRelayReady = async (mission: TransitMission, proofImageUrl: string) => {
+  const markRelayReady = async (mission: TransitMission) => {
     const key = arrivalKey(mission);
     if (!mission.backendMissionId || !isContinuationMission(mission) ||
         mission.status !== "At Hub" || !arrivalConfirmedFor(mission) ||
@@ -1125,7 +1125,6 @@ export function TransitMissionsPage() {
       await batterySwapMutation.mutateAsync({
         missionId: mission.backendMissionId,
         newBatteryId: assignedBatteryId,
-        proofImageUrl,
       });
       // Store receipts only after BE confirms the swap, to prevent duplicate
       // inventory operations when /incoming has not refreshed yet.
@@ -1849,7 +1848,7 @@ export function TransitMissionsPage() {
                       </div>
                       <Button
                         type="button"
-                        onClick={() => openProof(mission, "ready")}
+                        onClick={() => void markRelayReady(mission)}
                         disabled={!mission.backendMissionId || !operatorAssignedBatteryId(mission) ||
                           operatorAssignedBatteryId(mission).toUpperCase() === mission.batteryId?.trim().toUpperCase() ||
                           (mission.assignedReplacementBatteryPct !== undefined &&
@@ -3142,20 +3141,18 @@ export function TransitMissionsPage() {
       )}
 
       {proofTarget && (
-        <ProofActionDialog key={`${proofTarget.key}:${proofTarget.action}`} requireBundleProof={proofTarget.action === "dispatch" && proofMission?.isBundled === true} title={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Replace battery" : "Confirm dispatch"}
+        <ProofActionDialog key={`${proofTarget.key}:${proofTarget.action}`} requireBundleProof={proofTarget.action === "dispatch" && proofMission?.isBundled === true} title={proofTarget.action === "arrival" ? "Confirm arrival" : "Confirm dispatch"}
           reference={proofMission?.missionId ?? proofTarget.id} description={proofTarget.action === "arrival"
             ? (proofMission && isContinuationMission(proofMission) ? "Attach a photo of the drone after landing at this hub." : "Attach a photo of the landed drone and parcel at this hub.")
-            : proofTarget.action === "ready" ? `Attach a photo of the installed battery${proofMission ? ` (${operatorAssignedBatteryId(proofMission) || "assigned by Operator"})` : ""}.` : "Attach a photo of the drone ready to depart this hub."}
-          confirmLabel={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Ready" : "Dispatch"}
+            : "Attach a photo of the drone ready to depart this hub."}
+          confirmLabel={proofTarget.action === "arrival" ? "Confirm arrival" : "Dispatch"}
           disabled={!proofMission || !proofMission.backendMissionId ||
             (proofTarget.action === "arrival" && (confirmArrivalMutation.isPending || arrivalConfirmedFor(proofMission) || !canConfirmLandedMission(proofMission))) ||
-            (proofTarget.action === "ready" && (!isContinuationMission(proofMission) || swappingKey !== null || batterySwapMutation.isPending || !arrivalConfirmedFor(proofMission) || batterySwappedFor(proofMission) || proofMission.status !== "At Hub" || dispatchedRelayMissionIds.includes(arrivalKey(proofMission)) || !operatorAssignedBatteryId(proofMission) || operatorAssignedBatteryId(proofMission).toUpperCase() === proofMission.batteryId?.trim().toUpperCase() || (proofMission.assignedReplacementBatteryPct !== undefined && proofMission.assignedReplacementBatteryPct < proofMission.requiredDepartureBatteryPct))) ||
             (proofTarget.action === "dispatch" && (!isContinuationMission(proofMission) || dispatchingKey !== null || batterySwapMutation.isPending || dispatchMutation.isPending || dispatchedRelayMissionIds.includes(arrivalKey(proofMission)) || !["At Hub", "Ready"].includes(proofMission.status) || !arrivalConfirmedFor(proofMission) || (!batterySwappedFor(proofMission) && proofMission.status !== "Ready")))}
           onCancel={() => setProofTarget(null)} onConfirm={image => {
             const current = proofMission; const action = proofTarget.action; setProofTarget(null);
             if (!current) return;
             if (action === "arrival") void requestConfirm(current, image);
-            else if (action === "ready") void markRelayReady(current, image);
             else void dispatchMission(current, image);
           }}>
           {proofMission && <BundleOrderList bundle={proofMission} />}
