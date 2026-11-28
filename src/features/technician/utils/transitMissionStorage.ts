@@ -1,3 +1,4 @@
+import { readBundleInfo, type BundleInfo } from "./bundleInfo";
 import { readHistoryProofFields, type HistoryProofFields } from "./proofImages";
 import {
 
@@ -47,7 +48,7 @@ export type TransitMissionPurpose =
 
   | "UNKNOWN";
 
-export type TransitMission = {
+export type TransitMission = BundleInfo & {
 
   id: string;
 
@@ -789,6 +790,7 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   return {
 
+    ...readBundleInfo(value),
     id: pickString(value, ["transit_id", "id"], `TM-${missionRaw}`),
 
     backendMissionId,

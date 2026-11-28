@@ -113,9 +113,81 @@ export function FullImage({ url, label, close }: { url: string; label: string; c
   </div>, document.body);
 }
 
-export function ProofActionDialog({ title, description, reference, children, confirmLabel, onCancel, onConfirm, disabled = false }: {
+/** BE v10 supports one Stage 2 proof_image_url. Preserve both views in one
+ * labelled image instead of sending an undocumented field or a second POST. */
+export async function combineDispatchProofs(dispatchUrl: string, bundleUrl: string): Promise<string> {
+  const photos = await Promise.all([loadImage(dispatchUrl), loadImage(bundleUrl)]);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to prepare proof images.");
+  const labels = ["Drone / dispatch proof", "Bundled packages proof"];
+  const width = 1280;
+  const header = 34;
+  const gap = 12;
+  // Stack two photos without cropping; each fits its own panel.
+  const panelHeight = Math.floor((1280 - 2 * header - 3 * gap) / 2);
+  canvas.width = width;
+  canvas.height = 2 * (header + panelHeight) + 3 * gap;
+  try {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    photos.forEach((photo, index) => {
+      const top = gap + index * (header + panelHeight + gap);
+      ctx.fillStyle = "#202020";
+      ctx.font = "600 24px sans-serif";
+      ctx.fillText(labels[index], gap, top + 25);
+      const scale = Math.min((width - 2 * gap) / photo.naturalWidth, panelHeight / photo.naturalHeight);
+      const w = Math.round(photo.naturalWidth * scale);
+      const h = Math.round(photo.naturalHeight * scale);
+      ctx.drawImage(photo, (width - w) / 2, top + header + (panelHeight - h) / 2, w, h);
+    });
+    const blob = await encodeJpeg(canvas, 0.9);
+    // Reuse the existing 200 KB binary limit and JPEG optimization.
+    return await readFile(new File([blob], "bundled-dispatch-proof.jpg", { type: "image/jpeg" }));
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
+function BundleProofField({ url, onChange, onBusy, disabled }: {
+  url: string; onChange: (url: string) => void; onBusy: (busy: boolean) => void; disabled: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [reading, setReading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const request = useRef(0);
+  useEffect(() => () => { request.current++; }, []);
+  async function select(file: File) {
+    const id = ++request.current;
+    setError(""); setName(""); onChange(""); setReading(true); onBusy(true);
+    try {
+      const image = await readFile(file);
+      if (request.current === id) { onChange(image); setName(file.name); }
+    } catch (err) {
+      if (request.current === id) setError(err instanceof Error ? err.message : "Unable to read image.");
+    } finally {
+      if (request.current === id) { setReading(false); onBusy(false); }
+    }
+  }
+  return <div>
+    <p className="mb-2 text-[13px] font-medium text-[var(--tech-text)]">Bundled packages proof <span className="text-orange-500">*</span></p>
+    <p className="mb-2 text-[12px] text-[var(--tech-muted)]">Show all bundled parcels and their order labels in one photo.</p>
+    {url ? <div className="rounded-md border border-[var(--tech-border)] p-2">
+      <button type="button" onClick={() => setExpanded(true)} aria-label="View bundled packages proof" className="relative block w-full overflow-hidden rounded-md bg-[var(--tech-surface-2)]"><img src={url} alt="Bundled packages proof" className="h-36 w-full object-contain"/><ZoomIn size={16} className="absolute bottom-2 right-2 text-orange-500"/></button>
+      <div className="mt-2 flex items-center justify-between gap-2"><span className="min-w-0 break-all text-xs text-[var(--tech-muted)]">{name}</span><button type="button" disabled={disabled} onClick={() => { request.current++; onChange(""); setName(""); setError(""); }} className="shrink-0 text-xs text-orange-500 disabled:opacity-50">Remove</button></div>
+    </div> : <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed border-[var(--tech-border)] p-5 text-center text-[13px] text-[var(--tech-text-secondary)] hover:border-orange-500"><ImagePlus size={22} className="text-orange-500"/><span>{reading ? "Preparing image..." : "Choose image"}</span><span className="text-xs text-[var(--tech-muted)]">JPG, PNG, WebP · Up to 10 MB</span><input aria-label="Bundled packages proof" type="file" disabled={reading || disabled} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void select(file); }}/></label>}
+    {error && <p role="alert" className="mt-2 text-xs text-red-500">{error}</p>}
+    {expanded && url && <FullImage url={url} label="Bundled packages proof" close={() => setExpanded(false)}/>}
+  </div>;
+}
+
+export function ProofActionDialog({ title, description, reference, children, confirmLabel, onCancel, onConfirm, disabled = false, requireBundleProof = false }: {
   title: string; description: string; reference: string; children?: ReactNode; confirmLabel: string;
-  onCancel: () => void; onConfirm: (image: string) => void; disabled?: boolean;
+  onCancel: () => void; onConfirm: (image: string) => void; disabled?: boolean; requireBundleProof?: boolean;
 }) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
@@ -124,7 +196,34 @@ export function ProofActionDialog({ title, description, reference, children, con
   const [expanded, setExpanded] = useState(false);
   const request = useRef(0);
   const submitted = useRef(false);
-  useEffect(() => () => { request.current++; }, []);
+  const [bundleUrl, setBundleUrl] = useState("");
+  const [bundleReading, setBundleReading] = useState(false);
+  const [combining, setCombining] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const active = useRef(true);
+  const latestDisabled = useRef(disabled);
+  latestDisabled.current = disabled;
+  useEffect(() => { active.current = true; return () => { active.current = false; request.current++; }; }, []);
+  async function confirm() {
+    if (!url || reading || disabled || submitted.current || combining ||
+      (requireBundleProof && (!bundleUrl || bundleReading))) return;
+    submitted.current = true;
+    if (!requireBundleProof) { onConfirm(url); return; }
+    setCombining(true); setSubmitError("");
+    try {
+      const proof = await combineDispatchProofs(url, bundleUrl);
+      if (active.current && !latestDisabled.current) {
+        onConfirm(proof);
+      } else {
+        submitted.current = false;
+      }
+    } catch {
+      submitted.current = false;
+      if (active.current) setSubmitError("Unable to prepare both proof images. Please try again.");
+    } finally {
+      if (active.current) setCombining(false);
+    }
+  }
   async function select(file: File) {
     const id = ++request.current;
     setUrl(""); setName(""); setError(""); setReading(true);
@@ -133,16 +232,21 @@ export function ProofActionDialog({ title, description, reference, children, con
     finally { if (request.current === id) setReading(false); }
   }
   function remove() { request.current++; setUrl(""); setName(""); setReading(false); setError(""); }
-  return (<div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
+  return (<div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" onMouseDown={event => { if (!combining && event.target === event.currentTarget) onCancel(); }}>
     <div role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-      <div className="flex items-start justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4"><div><h2 className="text-[18px] font-semibold text-[var(--tech-text)]">{title}</h2><p className="mt-1 break-all text-[12px] text-[var(--tech-muted)]">{reference}</p></div><button type="button" aria-label="Close" onClick={onCancel} className="text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button></div>
+      <div className="flex items-start justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4"><div><h2 className="text-[18px] font-semibold text-[var(--tech-text)]">{title}</h2><p className="mt-1 break-all text-[12px] text-[var(--tech-muted)]">{reference}</p></div><button type="button" aria-label="Close" disabled={combining} onClick={onCancel} className="text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button></div>
       <div className="space-y-4 px-5 py-4"><p className="text-[13px] leading-5 text-[var(--tech-text-secondary)]">{description}</p>{children}
-        <div><p className="mb-2 text-[13px] font-medium text-[var(--tech-text)]">Proof image <span className="text-orange-500">*</span></p>
-          {url ? <div className="rounded-md border border-[var(--tech-border)] p-2"><button type="button" onClick={() => setExpanded(true)} aria-label="View full proof image" className="relative block w-full overflow-hidden rounded-md bg-[var(--tech-surface-2)]"><img src={url} alt="Selected proof" className="h-36 w-full object-contain" /><ZoomIn size={16} className="absolute bottom-2 right-2 text-orange-500" /></button><div className="mt-2 flex items-center justify-between gap-2"><span className="min-w-0 break-all text-xs text-[var(--tech-muted)]">{name}</span><button type="button" onClick={remove} className="shrink-0 text-xs text-orange-500">Remove</button></div></div> : <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed border-[var(--tech-border)] p-5 text-center text-[13px] text-[var(--tech-text-secondary)] hover:border-orange-500"><ImagePlus size={22} className="text-orange-500" /><span>{reading ? "Preparing image..." : "Choose image"}</span><span className="text-xs text-[var(--tech-muted)]">JPG, PNG, WebP · Up to 10 MB</span><input aria-label="Proof image" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void select(file); }} /></label>}
+        <div><p className="mb-2 text-[13px] font-medium text-[var(--tech-text)]">{requireBundleProof ? "Dispatch proof image" : "Proof image"} <span className="text-orange-500">*</span></p>
+          {url ? <div className="rounded-md border border-[var(--tech-border)] p-2"><button type="button" onClick={() => setExpanded(true)} aria-label="View full proof image" className="relative block w-full overflow-hidden rounded-md bg-[var(--tech-surface-2)]"><img src={url} alt="Selected proof" className="h-36 w-full object-contain" /><ZoomIn size={16} className="absolute bottom-2 right-2 text-orange-500" /></button><div className="mt-2 flex items-center justify-between gap-2"><span className="min-w-0 break-all text-xs text-[var(--tech-muted)]">{name}</span><button type="button" disabled={combining} onClick={remove} className="shrink-0 text-xs text-orange-500 disabled:opacity-50">Remove</button></div></div> : <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed border-[var(--tech-border)] p-5 text-center text-[13px] text-[var(--tech-text-secondary)] hover:border-orange-500"><ImagePlus size={22} className="text-orange-500" /><span>{reading ? "Preparing image..." : "Choose image"}</span><span className="text-xs text-[var(--tech-muted)]">JPG, PNG, WebP · Up to 10 MB</span><input aria-label="Proof image" type="file" disabled={combining} accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void select(file); }} /></label>}
           {error && <p role="alert" className="mt-2 text-xs text-red-500">{error}</p>}
         </div>
+        {requireBundleProof && <>
+          <BundleProofField url={bundleUrl} onChange={setBundleUrl} onBusy={setBundleReading} disabled={combining}/>
+          <p className="text-[12px] text-[var(--tech-muted)]">Both photos will be combined into one dispatch proof.</p>
+        </>}
+        {submitError && <p role="alert" className="text-xs text-red-500">{submitError}</p>}
       </div>
-      <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-5 py-4"><button type="button" onClick={onCancel} className={button}>Cancel</button><button type="button" disabled={disabled || !url || reading} onClick={() => { if (!url || reading || disabled || submitted.current) return; submitted.current = true; onConfirm(url); }} className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{confirmLabel}</button></div>
+      <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-5 py-4"><button type="button" onClick={onCancel} disabled={combining} className={button}>Cancel</button><button type="button" disabled={disabled || !url || reading || combining || (requireBundleProof && (!bundleUrl || bundleReading))} onClick={() => { void confirm(); }} className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">{combining ? "Preparing proof images..." : confirmLabel}</button></div>
       {expanded && <FullImage url={url} label="Proof image" close={() => setExpanded(false)} />}
     </div>
   </div>);

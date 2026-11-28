@@ -1,4 +1,5 @@
 import { HistoryDetailsButton, TechnicianHistoryDetails } from "../components/TechnicianHistoryDetails";
+import { BundleBadge, BundleOrderList } from "../components/TechnicianBundleInfo";
 import { ProofActionDialog } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
@@ -799,6 +800,7 @@ export function TransitMissionsPage() {
     mission.id, mission.backendMissionId, arrivalConfirmationKey(mission),
     mission.droneCurrentHubId, mission.currentDroneId,
     action === "ready" ? operatorAssignedBatteryId(mission) : mission.batteryId,
+    mission.isBundled, mission.bundledOrderIds, mission.totalOrdersCount,
     action === "arrival" ? (isFinalHubPendingArrival(mission) ? "FINAL" : getTransitConfirmKind(mission)) : null,
   ]);
   const [proofTarget, setProofTarget] = useState<{ id: string; key: string; action: ProofAction } | null>(null);
@@ -1523,6 +1525,7 @@ export function TransitMissionsPage() {
                         {getMissionDisplayId(mission.missionId)}
 
                       </p>
+                      <BundleBadge bundle={mission} />
 
                     </div>
 
@@ -3139,7 +3142,7 @@ export function TransitMissionsPage() {
       )}
 
       {proofTarget && (
-        <ProofActionDialog key={`${proofTarget.key}:${proofTarget.action}`} title={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Replace battery" : "Confirm dispatch"}
+        <ProofActionDialog key={`${proofTarget.key}:${proofTarget.action}`} requireBundleProof={proofTarget.action === "dispatch" && proofMission?.isBundled === true} title={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Replace battery" : "Confirm dispatch"}
           reference={proofMission?.missionId ?? proofTarget.id} description={proofTarget.action === "arrival"
             ? (proofMission && isContinuationMission(proofMission) ? "Attach a photo of the drone after landing at this hub." : "Attach a photo of the landed drone and parcel at this hub.")
             : proofTarget.action === "ready" ? `Attach a photo of the installed battery${proofMission ? ` (${operatorAssignedBatteryId(proofMission) || "assigned by Operator"})` : ""}.` : "Attach a photo of the drone ready to depart this hub."}
@@ -3155,6 +3158,7 @@ export function TransitMissionsPage() {
             else if (action === "ready") void markRelayReady(current, image);
             else void dispatchMission(current, image);
           }}>
+          {proofMission && <BundleOrderList bundle={proofMission} />}
           {!proofMission && <p role="status" className="text-[13px] text-orange-500">Mission information changed. Close this dialog and reopen the action.</p>}
         </ProofActionDialog>
       )}
