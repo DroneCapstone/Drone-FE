@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "../../auth/hooks/useAuth";
+import { getTechnicianUsersApi } from "../api/userApi";
+import { technicianQueryKeys } from "../hooks/queryKeys";
 import { Eye, X, ZoomIn } from "lucide-react";
 import { FullImage } from "./TechnicianProofImage";
-import { formatApiDateTime } from "../api/httpClient";
+import { formatApiDateTime, isRecord, pickString, unwrapList, unwrapObject } from "../api/httpClient";
 import { proofStageLabel, type HistoryProofFields } from "../utils/proofImages";
 
 export function HistoryDetailsButton({ onClick }: { onClick: () => void }) {
@@ -24,6 +28,28 @@ export function TechnicianHistoryDetails({ title, fields, record, onClose, note 
 }) {
   const [selected, setSelected] = useState<{ url: string; label: string } | null>(null);
   const images = record.proofImages ?? [];
+  const { user } = useAuth();
+  const needsLookup = images.some(image => image.technicianId && !image.technicianName && !(user?.id === image.technicianId && user.name?.trim()));
+  const usersQuery = useQuery({
+    queryKey: technicianQueryKeys.technicianUsers(),
+    queryFn: getTechnicianUsersApi,
+    staleTime: 60_000,
+    enabled: needsLookup,
+    retry: false,
+  });
+  const names = new Map<string, string>();
+  const users = unwrapList<unknown>(usersQuery.data);
+  // The users endpoint can return a list or a single profile object.
+  for (const entry of [...users, unwrapObject(usersQuery.data)]) {
+    if (!isRecord(entry)) continue;
+    const nested = isRecord(entry.user) ? entry.user : {};
+    const name = (pickString(entry, ["full_name", "name"], "") || pickString(nested, ["full_name", "name"], "")).trim();
+    if (!name) continue;
+    for (const id of [pickString(entry, ["user_id"], ""), pickString(entry, ["technician_id"], ""), pickString(entry, ["id"], ""), pickString(nested, ["id", "user_id"], "")]) {
+      if (id) names.set(id, name);
+    }
+  }
+  if (user?.id && user.name?.trim() && !names.has(user.id)) names.set(user.id, user.name.trim());
   const equipment = [
     { label: "Current drone image", url: record.droneImageUrl },
     { label: "Current battery image", url: record.batteryImageUrl },
@@ -45,7 +71,9 @@ export function TechnicianHistoryDetails({ title, fields, record, onClose, note 
           {images.length === 0 ? <p className="rounded-md border border-dashed border-[var(--tech-border)] p-4 text-center text-[12px] text-[var(--tech-muted)]">No proof images available.</p> :
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{images.map((image, index) => {
               const label = proofStageLabel(image.stage);
-              const metadata = [image.legId && `Leg: ${image.legId}`, image.technicianId && `Technician: ${image.technicianId}`].filter(Boolean);
+              const technicianName = image.technicianName || (image.technicianId ? names.get(image.technicianId) : undefined);
+              const technicianLabel = technicianName || (image.technicianId && usersQuery.isFetching ? "Loading name..." : "Name unavailable");
+              const metadata = [image.legId && `Leg: ${image.legId}`, (image.technicianId || image.technicianName) && `Technician: ${technicianLabel}`].filter(Boolean);
               return <div key={`${image.stage}:${image.recordedAt}:${index}`} className="min-w-0 rounded-md border border-[var(--tech-border)] p-2">
                 <ImageTile url={image.url} label={label} onClick={() => setSelected({ url: image.url, label })}/>
                 <div className="space-y-1 px-1 py-2"><p className="text-[13px] font-medium text-[var(--tech-text)]">{label}</p><p className="text-[11px] text-[var(--tech-muted)]">{formatApiDateTime(image.recordedAt)}</p>
