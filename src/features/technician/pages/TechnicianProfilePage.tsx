@@ -243,7 +243,7 @@ export function TechnicianProfilePage() {
   useEffect(() => {
     if (profileQuery.error instanceof Error) {
       setApiError(
-        profileQuery.error.message,
+        "Unable to load profile. Please refresh.",
       );
     }
   }, [profileQuery.error]);
@@ -326,11 +326,9 @@ export function TechnicianProfilePage() {
       );
 
       setEditing(false);
-    } catch (error) {
+    } catch  {
       setApiError(
-        error instanceof Error
-          ? error.message
-          : "Unable to update profile.",
+        "Unable to update profile.",
       );
     }
   };
@@ -1344,9 +1342,9 @@ function ChangePasswordDialog({ onClose, onSuccess }: {
       setError(status === 400 || status === 401 || status === 403
         ? "Password change was rejected. Check your current password and password requirements, or sign in again if your session expired."
         : status === 422
-          ? "The password request is invalid. Check the password requirements and Backend request schema."
+          ? "Check the password requirements and try again."
           : status === 404
-            ? "The change password endpoint is unavailable."
+            ? "Password change is currently unavailable."
             : "Unable to confirm the password change. If the connection failed, verify your credentials before trying again.");
     } finally {
       submitLock.current = false;

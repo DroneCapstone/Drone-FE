@@ -120,9 +120,7 @@ export function FleetPage() {
 
 
   const queryError =
-    fleetQuery.error instanceof Error
-      ? fleetQuery.error.message
-      : "";
+    "";
 
 
 

@@ -109,14 +109,14 @@ export function MaintenanceAlertsPage() {
     ? mapApiMaintenanceAlert(unwrapObject(alertDetailQuery.data))
     : null;
   const syncOverdueBatteries = async () => {
-    if (!window.confirm("Run the Backend overdue-battery alert check now? This may generate notifications.")) return;
+    if (!window.confirm("Check for overdue batteries now? This may generate notifications.")) return;
     try {
       setActionError("");
       setActionMessage("");
       await batteryOverdueMutation.mutateAsync();
       setActionMessage("Battery overdue check completed. Alert list is being refreshed.");
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to check overdue batteries.");
+    } catch  {
+      setActionError("Unable to check overdue batteries.");
     }
   };
   const normalizedQuery = query
@@ -311,7 +311,7 @@ export function MaintenanceAlertsPage() {
                     className="grid grid-cols-[110px_175px_1fr_140px_130px_150px_215px] items-center border-b border-[var(--tech-border)] px-5 py-4 last:border-b-0"
                   >
                     <button type="button" onClick={() => setSelectedAlertId(alert.id)}
-                      title="View alert details from Backend"
+                      title="View alert details"
                       className="text-center text-[14px] font-medium text-orange-500 hover:underline">
                       {alert.id}
                     </button>
@@ -453,7 +453,7 @@ export function MaintenanceAlertsPage() {
                 )}
                 {alertHistoryQuery.isError && (
                   <div role="alert" className="px-5 py-8 text-center text-[13px] text-red-500">
-                    {alertHistoryQuery.error instanceof Error ? alertHistoryQuery.error.message : "Unable to load history."}
+                    {"Unable to load history."}
                     <button type="button" className="ml-2 underline" onClick={() => void alertHistoryQuery.refetch()}>Retry</button>
                   </div>
                 )}
@@ -518,7 +518,7 @@ export function MaintenanceAlertsPage() {
               <TechnicianLoadingState label="Loading alert details..." />
             ) : alertDetailQuery.isError ? (
               <div role="alert" className="mt-5 text-[13px] text-red-500">
-                {alertDetailQuery.error instanceof Error ? alertDetailQuery.error.message : "Unable to load alert."}
+                {"Unable to load alert."}
                 <button type="button" className="ml-2 underline" onClick={() => void alertDetailQuery.refetch()}>Retry</button>
               </div>
             ) : selectedAlert ? (
@@ -533,7 +533,7 @@ export function MaintenanceAlertsPage() {
                 {selectedAlert.missionId && <p><strong>Mission:</strong> {selectedAlert.missionId}</p>}
               </div>
             ) : (
-              <p className="mt-5 text-[13px] text-[var(--tech-muted)]">Backend returned no valid alert details.</p>
+              <p className="mt-5 text-[13px] text-[var(--tech-muted)]">No alert details available.</p>
             )}
             {actionError && <p role="alert" className="mt-3 text-[12px] text-red-500">{actionError}</p>}
           </div>

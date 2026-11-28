@@ -110,7 +110,7 @@ export function HubSuppliesPage() {
     <TechnicianPageShell title="Spare Parts" description="">
       {inventoryQuery.isError && (
         <div role="alert" className="mb-4 rounded-md border border-red-500/30 p-3 text-[13px] text-red-500">
-          {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load hub inventory."}
+          {"Unable to load hub inventory."}
           <button type="button" className="ml-3 underline" onClick={() => void inventoryQuery.refetch()}>Retry</button>
         </div>
       )}

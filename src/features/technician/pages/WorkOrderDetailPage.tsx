@@ -8,6 +8,7 @@ import {
   TriangleAlert,
   UserRound,
   Wrench,
+  X,
 
 } from "lucide-react";
 
@@ -96,7 +97,7 @@ function normalizeDroneModel(value: string): string {
 }
 
 // The API currently exposes start/completion, not a verified draft endpoint.
-// Keep unfinished input on this browser without changing Backend status or inventory.
+// Keep unfinished input on this browser without changing Current status or inventory.
 type WorkOrderDraft = {
   defectType: DefectType | "";
   proofImage: string;
@@ -240,6 +241,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
     };
   });
   const [defectType, setDefectType] = useState<DefectType | "">(initialDraft.defectType);
+  const [pendingDefectType, setPendingDefectType] = useState<DefectType | "" | null>(null);
   const [proofImage, setProofImage] = useState(initialDraft.proofImage);
   const [partsProofImage, setPartsProofImage] = useState(initialDraft.partsProofImage);
   const [proofBusy, setProofBusy] = useState(false);
@@ -391,8 +393,8 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
         // Local history is best-effort; server PATCH already succeeded.
       }
       setWorkOrderStatus("In Progress");
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Unable to start work order.");
+    } catch  {
+      setApiError("Unable to start work order.");
       // If server may have accepted the PATCH, refresh rather than retry blindly.
       void workOrderQuery.refetch();
     } finally {
@@ -483,10 +485,10 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       setReplacementFeedback(`Inventory updated: ${quantity} part(s) issued. Remaining: ${updated.quantity}.`);
       // Keep inventory figures up-to-date; no further replacement is allowed for this Work Order.
       void inventoryQuery.refetch();
-    } catch (error) {
+    } catch  {
       setReplacementFeedback(
-        `${error instanceof Error ? error.message : "Unable to issue parts."} ` +
-        "If the request may have reached the server, check inventory before retrying to avoid double deduction.",
+        "Unable to confirm parts issue. " +
+        "Check inventory before retrying to avoid deducting parts twice.",
       );
     } finally {
       replacementLock.current = false;
@@ -544,26 +546,24 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
         if (error.status === 0) {
           mustVerifyServer = true;
           explanation =
-            "The browser could not read the response (network/CORS). " +
-            "The request may have reached the server; refresh and check its status.";
+            "Completion could not be verified.";
         } else if (error.status >= 500) {
           mustVerifyServer = true;
           explanation =
-            `Backend returned HTTP ${error.status}. ` +
-            "Check the server logs for this exact Work Order and request payload.";
+            "Completion could not be verified.";
         } else {
-          explanation = `Backend returned HTTP ${error.status}: ${error.message}`;
+          explanation = "Please review the work order information before trying again.";
         }
       } else {
         // React Query can also report a follow-up invalidation/refetch error
         // after the PATCH was applied: verify the BE state before retrying.
         mustVerifyServer = true;
-        explanation = error instanceof Error ? error.message : "Unknown error.";
+        explanation = "Completion could not be verified.";
       }
       if (mustVerifyServer) setCompletionRequiresReview(true);
       setApiError(
         `Unable to confirm completion of Work Order ${order.id}. ${explanation}` +
-        (mustVerifyServer ? " Check the server state before trying again." : ""),
+        (mustVerifyServer ? " Refresh and check the work order status before trying again." : ""),
       );
     } finally {
       completionLock.current = false;
@@ -594,7 +594,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
             : isCompleting
               ? "Completing..."
               : completionRequiresReview
-                ? "Check server state"
+                ? "Check work order status"
                 : "Complete work order"}
         </Button>
       }
@@ -602,9 +602,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       {(apiError || workOrderQuery.error instanceof Error) && (
         <div role="alert" className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError ||
-            (workOrderQuery.error instanceof Error
-              ? workOrderQuery.error.message
-              : "")}
+            ("")}
           {completionRequiresReview && (
             <button
               type="button"
@@ -675,8 +673,13 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
                 onChange={event => {
                   const next = event.target.value;
                   if (!isDefectType(next) && next !== "") return;
-                  if (next !== defectType && checkedItems.length && !window.confirm("Change defect type and reset checked inspection items?")) return;
-                  setDefectType(next); setCheckedItems([]);
+                  if (next === defectType) return;
+                  if (checkedItems.length > 0) {
+                    setPendingDefectType(next);
+                    return;
+                  }
+                  setDefectType(next);
+                  setCheckedItems([]);
                 }}>
                 <option value="">Select defect type</option>
                 {Object.entries(defectTemplates).map(([value, template]) => <option key={value} value={value}>{template.label}</option>)}
@@ -765,7 +768,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
               <div className="mb-4 space-y-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-3">
                 {inventoryQuery.isError && (
                   <p role="alert" className="text-[12px] text-red-500">
-                    {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load parts."}
+                    {"Unable to load parts."}
                     <button type="button" className="ml-2 underline"
                       onClick={() => void inventoryQuery.refetch()}>Retry</button>
                   </p>
@@ -1033,6 +1036,18 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
             )}
         </div>
       </div>
+      {pendingDefectType !== null && (
+        <DefectTypeChangeDialog
+          onCancel={() => setPendingDefectType(null)}
+          onConfirm={() => {
+            if (workOrderStatus !== "Completed" && !isCompleting) {
+              setDefectType(pendingDefectType);
+              setCheckedItems([]);
+            }
+            setPendingDefectType(null);
+          }}
+        />
+      )}
       {/* AI assistant is advice-only: it never changes Work Order state. */}
       <TechnicianAiChat
         key={order.id}
@@ -1050,6 +1065,60 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
     </TechnicianPageShell>
   );
 
+}
+
+// Render inside the Technician theme. The HTML dialog top layer avoids
+// stacking/transform issues from the animated page shell without a body portal.
+function DefectTypeChangeDialog({ onCancel, onConfirm }: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    cancelRef.current?.focus();
+    return () => { if (dialog.open) dialog.close(); };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="change-defect-type-title"
+      aria-describedby="change-defect-type-description"
+      onCancel={event => { event.preventDefault(); onCancel(); }}
+      className="m-auto w-[calc(100%_-_2rem)] max-w-[440px] max-h-[90vh] overflow-y-auto rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] p-0 text-[var(--tech-text)] shadow-2xl backdrop:bg-black/60"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--tech-border)] px-5 py-4">
+        <h2 id="change-defect-type-title" className="flex items-center gap-2 text-[18px] font-semibold text-[var(--tech-text)]">
+          <TriangleAlert size={18} className="shrink-0 text-orange-500" />
+          Change defect type
+        </h2>
+        <button type="button" aria-label="Close confirmation" onClick={onCancel}
+          className="shrink-0 rounded-md p-1 text-[var(--tech-muted)] hover:text-[var(--tech-text)]">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="px-5 py-4">
+        <p id="change-defect-type-description" className="text-[13px] leading-5 text-[var(--tech-text-secondary)]">
+          Changing the defect type will reset all checked inspection items. Other work order information will remain unchanged.
+        </p>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--tech-border)] px-5 py-4">
+        <button ref={cancelRef} type="button" onClick={onCancel}
+          className="rounded-md border border-[var(--tech-border)] px-4 py-2 text-[13px] font-medium text-[var(--tech-text)] hover:bg-[var(--tech-surface-2)]">
+          Cancel
+        </button>
+        <button type="button" onClick={onConfirm}
+          className="rounded-md bg-orange-500 px-4 py-2 text-[13px] font-semibold text-black hover:bg-orange-600">
+          Change defect type
+        </button>
+      </div>
+    </dialog>
+  );
 }
 
 function Section({

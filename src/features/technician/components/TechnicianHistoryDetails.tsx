@@ -42,7 +42,7 @@ export function TechnicianHistoryDetails({ title, fields, record, onClose, note 
         <section className="border-t border-[var(--tech-border)] pt-4">
           <h3 className="mb-3 text-[13px] font-semibold text-[var(--tech-text)]">Proof images ({images.length})</h3>
           {note && <p className="mb-3 text-[12px] text-[var(--tech-muted)]">{note}</p>}
-          {images.length === 0 ? <p className="rounded-md border border-dashed border-[var(--tech-border)] p-4 text-center text-[12px] text-[var(--tech-muted)]">No historical proof images returned by Backend.</p> :
+          {images.length === 0 ? <p className="rounded-md border border-dashed border-[var(--tech-border)] p-4 text-center text-[12px] text-[var(--tech-muted)]">No proof images available.</p> :
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{images.map((image, index) => {
               const label = proofStageLabel(image.stage);
               const metadata = [image.hubId && `Hub ID: ${image.hubId}`, image.legId && `Leg: ${image.legId}`, image.technicianId && `Technician: ${image.technicianId}`].filter(Boolean);

@@ -182,13 +182,11 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
     } catch (error) {
       if (controller.signal.aborted) return;
       // Keep app UI in English. Do not inject raw server exceptions as chat content.
-      const status = error && typeof error === "object" && "status" in error ? String(error.status) : "";
-      const detail = status ? ` (HTTP ${status})` : "";
       setMessages((previous) => [...previous, {
         id: nextId.current++,
         role: "assistant",
         error: true,
-        text: `The maintenance assistant could not answer${detail}. Please try again.`,
+        text: `The maintenance assistant could not answer. Please try again.`,
       }]);
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
@@ -279,7 +277,7 @@ export function TechnicianAiChat({ context }: { context: TechnicianChatWorkOrder
                 )}
                 {showQuickQuestions && quickQuestionsStatus === "error" && (
                   <button type="button" onClick={() => void loadQuickQuestions()}
-                    className="text-[11px] font-medium text-orange-500 hover:underline" title="Retry loading questions from Backend">
+                    className="text-[11px] font-medium text-orange-500 hover:underline" title="Retry loading questions">
                     Retry suggestions
                   </button>
                 )}
