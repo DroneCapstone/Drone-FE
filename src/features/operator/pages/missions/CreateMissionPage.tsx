@@ -10,6 +10,7 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 
 import { EligibleDroneCard } from '../../components/EligibleDroneCard';
 import { useFleetBatteriesQuery, useFleetDronesQuery } from '../../hooks/useFleetQueries';
+import { PackageReceipt } from '../../components/PackageReceipt';
 import { OperatorPanel } from '../../components/OperatorPanel';
 import { RouteOptionCard } from '../../components/RouteOptionCard';
 import { ResourceExplanationPopup } from '../../components/ResourceExplanationPopup';
@@ -31,7 +32,7 @@ import {
 } from '../../utils/deliveryPlanning';
 import { DEFAULT_BATTERY_RESERVE_PCT, getEnergyFeasibility } from '../../utils/droneEligibility';
 import { clearMissionDraft, loadMissionDraft, saveMissionDraft } from '../../utils/missionDraftStorage';
-import { calculateRouteTiming, formatMissionTime } from '../../utils/missionTiming';
+import { calculateRouteTiming } from '../../utils/missionTiming';
 
 import { MissionPageShell } from './MissionPageShell';
 import { MissionReviewSummary } from './MissionReviewSummary';
@@ -977,13 +978,10 @@ export function CreateMissionPage() {
               <label><span>Order</span><input value={order.id} readOnly /></label>
               <label><span>Customer</span><input value={order.customerName} readOnly /></label>
               <label><span>Delivery mode</span><input value={order.deliveryMode} readOnly /></label>
-              <label>
+              <div className="operator-receipt-field-group">
                 <span>Origin package</span>
-                <input
-                  value={order.originPackageReceived || order.originHubReceivedAt ? `Received at Hub${order.originHubReceivedAt ? ` · ${formatMissionTime(order.originHubReceivedAt)}` : ''}` : 'Awaiting package'}
-                  readOnly
-                />
-              </label>
+                <PackageReceipt key={order.id} order={order} variant="field" />
+              </div>
               <label><span>Origin hub</span><input value={originHubLabel} readOnly /></label>
               <label><span>Destination hub</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>

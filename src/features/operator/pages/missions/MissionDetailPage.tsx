@@ -7,6 +7,7 @@ import { ActionButton } from '../../../../components/ui/ActionButton';
 import { Icon } from '../../../../components/ui/Icon';
 import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { OperatorPanel } from '../../components/OperatorPanel';
+import { MissionLegEvidence } from '../../components/MissionLegEvidence';
 import { isFlightHistoryRecord } from '../../api/flightHistoryEligibility';
 import {
   useMissionDetailQuery,
@@ -216,9 +217,14 @@ export function MissionDetailPage() {
                           : 'Battery ID unavailable'}
                       </small>
                     </span>
-                    <StatusBadge tone={leg.status === 'Completed' ? 'success' : leg.status === 'In Progress' ? 'warning' : 'neutral'}>
-                      {leg.status === 'In Progress' ? 'Flying' : leg.status}
-                    </StatusBadge>
+                    <div className="operator-leg-evidence-actions">
+                      <StatusBadge tone={leg.status === 'Completed' ? 'success' : leg.status === 'In Progress' ? 'warning' : 'neutral'}>
+                        {leg.status === 'In Progress' ? 'Flying' : leg.status}
+                      </StatusBadge>
+                      {leg.status === 'Completed' && (
+                        <MissionLegEvidence mission={mission} legIndex={index} fromName={hubName(leg.fromHubId)} toName={hubName(leg.toHubId)} />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -21,6 +21,8 @@ import {
 
 import {
 
+  lazy,
+  Suspense,
   useEffect,
 
   useState,
@@ -61,6 +63,16 @@ import {
 } from "../components/DeliveryProgressTimeline";
 
 import { useAuth } from "../../auth/hooks/useAuth";
+
+const CustomerLiveMap = lazy(() => import("../components/CustomerLiveMap"));
+
+function LiveMapSlot({ orderId }: { orderId: string }) {
+  return (
+    <Suspense fallback={null}>
+      <CustomerLiveMap orderId={orderId} active />
+    </Suspense>
+  );
+}
 
 export function DeliveryDetailPage() {
 
@@ -314,6 +326,8 @@ export function DeliveryDetailPage() {
 
           {progressOrder && <DeliveryProgressTimeline order={progressOrder} events={trackingEvents} />}
 
+          {progressOrder && !cancelled && <LiveMapSlot orderId={delivery.id} />}
+
           <section className="rounded-2xl border border-white/[0.10] bg-[#161217]/92 p-5 sm:p-6">
 
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-500">
@@ -555,6 +569,8 @@ function BackendOrderDetails({
           {isCancelledOrder(order.orderStatus, order.customerStatus, order.statusLabel) && <CancellationNotice order={order} />}
 
           <DeliveryProgressTimeline order={order} events={events} />
+
+          {!isCancelledOrder(order.orderStatus, order.customerStatus, order.statusLabel) && <LiveMapSlot orderId={order.id} />}
 
           <section className="rounded-2xl border border-white/10 bg-[#161217]/95 p-5 sm:p-6">
 

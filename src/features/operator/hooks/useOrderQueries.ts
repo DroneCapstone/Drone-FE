@@ -9,6 +9,7 @@ import {
   listOperatorOrdersApi,
   type ListOperatorOrdersParams,
 } from '../api/orderApi';
+import { getPackageReceiptApi } from '../api/packageReceiptApi';
 import { operatorQueryKeys } from '../query/queryKeys';
 
 export function useOperatorOrdersQuery(
@@ -35,5 +36,16 @@ export function useOperatorEligibleDronesQuery(orderId: string) {
     queryFn: () => getEligibleDronesApi(orderId),
     enabled: Boolean(orderId.trim()),
     retry: false, // Operator can retry explicitly on the Create Mission screen.
+  });
+}
+
+export function usePackageReceiptQuery(orderId: string, originHubId: string, received: boolean) {
+  return useQuery({
+    queryKey: operatorQueryKeys.packageReceipt(orderId, originHubId),
+    queryFn: ({ signal }) => getPackageReceiptApi(orderId, originHubId, signal),
+    enabled: Boolean(orderId.trim()) && received,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }

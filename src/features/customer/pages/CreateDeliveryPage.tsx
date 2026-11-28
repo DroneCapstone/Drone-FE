@@ -1546,7 +1546,12 @@ function ScheduleStep({
               after the deadline, the
               requested delivery time may be
               moved to the next available
-              flight slot.
+              flight slot. After arriving at
+              the destination hub, the
+              recipient has 5 days to pick it
+              up (reminders every 5 hours);
+              uncollected orders are then
+              cancelled automatically.
             </p>
           </div>
         </div>

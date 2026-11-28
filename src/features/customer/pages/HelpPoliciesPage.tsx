@@ -251,6 +251,9 @@ function RefundRules() {
       <PolicySubsection title="Loss, damage & insurance">
         <p>A confirmed lost parcel or severe transport damage may qualify for a 100% delivery-fee refund; minor damage may qualify for 50%. The value of the goods is handled separately through liability and insurance review. Insurance costs 10% of the core fee but does not guarantee a matching compensation percentage.</p>
       </PolicySubsection>
+      <PolicySubsection title="Handover and pickup deadlines">
+        <p>Packages must be handed over at the origin hub within 3 hours after the order is placed. A Normal order still waiting for a flight after 3 hours is upgraded to Aging Priority and both you and the Operator are notified. After the drone lands at the destination hub, the recipient is reminded by email every 5 hours; if the package is not collected within 5 days, the order is cancelled automatically and you and the Operator are notified.</p>
+      </PolicySubsection>
       <PolicySubsection title="Weather & customer-caused issues">
         <p>Weather-related delays or accepted rescheduling do not automatically qualify for a delay refund. If the paid service becomes impossible and no alternative is accepted, a full refund may be reviewed. Late drop-off, incorrect details, invalid parcels or uncollected deliveries are generally not refundable when solely caused by the Customer and the delivery obligation was met.</p>
       </PolicySubsection>
