@@ -23,7 +23,7 @@ import {
   useMissionPlanningAnalysisQuery,
   usePostAnalyzeBundleCandidatesQuery,
 } from '../../hooks/useMissionQueries';
-import type { OperatorDrone, RouteOption } from '../../types/operator';
+import type { Order, OperatorDrone, RouteOption } from '../../types/operator';
 import type { DispatchResourceRecommendation } from '../../api/missionApi';
 
 import {
@@ -102,6 +102,20 @@ function clearStoredMissionReview(orderId: string) {
 // Keep current local-drone spare battery selection unchanged.
 // A cross-hub drone instead takes a BE-eligible battery from its current Hub,
 // including a battery installed on that SAME drone. Never take another drone's battery.
+/** The Order origin is historical. Eligible-drones identifies the live pickup hub. */
+function getPlanningOriginHubId(order: Order | undefined, eligibleHubId?: string): string {
+  if (!order) return '';
+  return order.planningState === 'Needs Replanning' ? (eligibleHubId || '') : order.originHubId;
+}
+
+function routeMatchesPlanningOrigin(order: Order, route: RouteOption, hubId: string): boolean {
+  if (order.planningState !== 'Needs Replanning') return true;
+  const deliveryLeg = route.legDetails?.find(leg =>
+    leg.is_dispatch !== true && leg.leg_type?.toUpperCase() !== 'DISPATCH',
+  );
+  return Boolean(hubId && deliveryLeg?.from_hub_id != null && String(deliveryLeg.from_hub_id) === hubId);
+}
+
 function isSelectableMissionBattery(
   battery: { availableStatus?: string; isSelectable?: boolean; droneId?: string; hubId?: string; isInstalledOnDrone?: boolean },
   drone: OperatorDrone,
@@ -186,6 +200,9 @@ export function CreateMissionPage() {
   // Cache is for display continuity only. Never use it to authorize Assign.
   const order = (isAssigning && assignReviewSnapshotRef.current?.order) || queriedOrder || sameOrderReview?.order;
   const eligibleDronesData = (isAssigning && assignReviewSnapshotRef.current?.eligibleDronesData) || queriedEligibleDronesData || sameOrderReview?.eligibleDronesData;
+  const isReplanning = order?.planningState === 'Needs Replanning';
+  const planningOriginHubId = getPlanningOriginHubId(order, eligibleDronesData?.hub.id);
+  const livePlanningOriginHubId = getPlanningOriginHubId(queriedOrder, queriedEligibleDronesData?.hub.id);
   const restoredDraft = useMemo(() => (orderId ? loadMissionDraft(orderId) : undefined), [orderId]);
 
   // Do not restore directly into Review: availability and planning may have changed.
@@ -329,7 +346,7 @@ export function CreateMissionPage() {
   // relay battery swap. The order/drone/route tuple isolates each query cache entry.
   const postAnalyzeRoute = planningAnalysis?.routes.find((route) => route.id === selectedRouteId);
   const swapRelayHubIds = postAnalyzeRoute && order
-    ? getBatterySwapRelayHubIds(postAnalyzeRoute, order.originHubId, order.destinationHubId)
+    ? getBatterySwapRelayHubIds(postAnalyzeRoute, planningOriginHubId, order.destinationHubId)
     : [];
   const selectedRouteIsFeasible = Boolean(postAnalyzeRoute && getEnergyFeasibility(postAnalyzeRoute).feasible);
   const canLookForPostAnalyzeCandidates = Boolean(
@@ -355,7 +372,7 @@ export function CreateMissionPage() {
   // Step 2 remains available for manual changes, never overwritten by late AI results.
   useEffect(() => {
     if (stateOrderId !== orderId || !order || order.id !== orderId ||
-      !order.originHubId || !order.destinationHubId || !canCreateMissionForOrder(order) ||
+      !planningOriginHubId || !order.destinationHubId || !canCreateMissionForOrder(order) ||
       step !== 3 || isAssigning || selectedDroneId || selectedBatteryId || manualSelectionRef.current ||
       autoPreviewRequestedForOrderRef.current === orderId) return;
 
@@ -389,7 +406,7 @@ export function CreateMissionPage() {
         setStep(2);
       });
   }, [stateOrderId, orderId, order, step, isAssigning, selectedDroneId, selectedBatteryId,
-    resourceRecommendationMutation.mutateAsync]);
+    planningOriginHubId, resourceRecommendationMutation.mutateAsync]);
 
   // Validate the recommended pair in parallel with Analyze. Do not block
   // displaying the recommended Drone/Battery on this secondary request.
@@ -398,7 +415,7 @@ export function CreateMissionPage() {
     if (!pending || step !== 3 || stateOrderId !== orderId || currentOrderRef.current !== orderId ||
       pending.orderId !== orderId || pending.droneId !== selectedDroneId ||
       pending.batteryId !== selectedBatteryId || manualSelectionRef.current ||
-      !order || !eligibleDronesData || isEligibleDronesLoading || eligibleDronesError) return;
+      !order || !planningOriginHubId || !eligibleDronesData || isEligibleDronesLoading || eligibleDronesError) return;
     if (eligibleBatteriesLoading || (eligibleBatteriesFetching && !eligibleBatteries)) return;
     if (!eligibleBatteries && !eligibleBatteriesError) return;
 
@@ -412,7 +429,7 @@ export function CreateMissionPage() {
     const validDrone = Boolean(drone && drone.isSelectable !== false &&
       drone.maxPayloadKg + 0.0001 >= order.payloadKg);
     const validBattery = Boolean(drone && eligibleBatteries.some((battery) =>
-      battery.id === pending.batteryId && isSelectableMissionBattery(battery, drone, order.originHubId)
+      battery.id === pending.batteryId && isSelectableMissionBattery(battery, drone, planningOriginHubId)
     ));
     const foundBattery = eligibleBatteries.some((battery) => battery.id === pending.batteryId);
     setResourceVerificationIssue(validDrone && validBattery
@@ -425,7 +442,7 @@ export function CreateMissionPage() {
     // Leave the recommendation visible for explanation, but the existing
     // canContinueStep2 check blocks Review and Assign when not eligible.
   }, [step, stateOrderId, orderId, order, selectedDroneId, selectedBatteryId, eligibleDronesData, eligibleBatteries,
-    isEligibleDronesLoading, eligibleDronesError, eligibleBatteriesLoading, eligibleBatteriesFetching, eligibleBatteriesError]);
+    isEligibleDronesLoading, eligibleDronesError, eligibleBatteriesLoading, eligibleBatteriesFetching, eligibleBatteriesError, planningOriginHubId]);
 
   // After F5, Step 3 can mount before the eligible-drone query has returned.
   // Do not interpret an as-yet-unresolved ID as an invalid selection. Only after
@@ -533,12 +550,12 @@ export function CreateMissionPage() {
   useEffect(() => {
     // The Assign handler owns final validation while submitting; avoid clearing
     // the selected battery (and hiding Review) mid-request.
-    if (isAssigning || !selectedBatteryId || !eligibleBatteries || !order || !eligibleDronesData ||
+    if (isAssigning || !selectedBatteryId || !eligibleBatteries || !order || !planningOriginHubId || !eligibleDronesData ||
       isEligibleDronesLoading || eligibleDronesError || eligibleBatteriesLoading ||
       eligibleBatteriesFetching || eligibleBatteriesError) return;
     const drone = eligibleDronesData.drones.find((item) => item.id === selectedDroneId);
     if (drone?.isSelectable !== false && drone && eligibleBatteries.some((battery) =>
-      battery.id === selectedBatteryId && isSelectableMissionBattery(battery, drone, order.originHubId)
+      battery.id === selectedBatteryId && isSelectableMissionBattery(battery, drone, planningOriginHubId)
     )) {
       if (resourceVerificationIssue) setResourceVerificationIssue('');
       return;
@@ -574,7 +591,7 @@ export function CreateMissionPage() {
     }
   }, [selectedBatteryId, selectedDroneId, eligibleBatteries, eligibleDronesData, order, step, isAssigning,
     isEligibleDronesLoading, eligibleDronesError, eligibleBatteriesLoading, eligibleBatteriesFetching, eligibleBatteriesError,
-    resourceVerificationIssue]);
+    resourceVerificationIssue, planningOriginHubId]);
 
   if (isOrderLoading && !order) {
     return (
@@ -614,7 +631,7 @@ export function CreateMissionPage() {
   }
 
   const networkHubs = apiHubs ?? [];
-  const originHub = networkHubs.find((hub) => hub.id === order.originHubId);
+  const originHub = networkHubs.find((hub) => hub.id === planningOriginHubId);
   const destinationHub = networkHubs.find((hub) => hub.id === order.destinationHubId);
   const eligibleDronesAtOrigin = (eligibleDronesData?.drones ?? []).map((drone) => {
     const fleetDrone = fleetDrones?.find((item) => item.id === drone.id);
@@ -636,7 +653,7 @@ export function CreateMissionPage() {
       ? sameOrderReview.eligibleDronesData.drones.find((drone) => drone.id === selectedDroneId)
       : undefined);
   const availableOriginBatteries = (eligibleBatteries ?? []).filter((battery) =>
-    selectedDrone && isSelectableMissionBattery(battery, selectedDrone, order.originHubId),
+    selectedDrone && isSelectableMissionBattery(battery, selectedDrone, planningOriginHubId),
   );
   const selectedBattery = availableOriginBatteries.find((battery) => battery.id === selectedBatteryId) ||
     (step === 4 && sameOrderReview?.droneId === selectedDroneId &&
@@ -645,7 +662,7 @@ export function CreateMissionPage() {
       : undefined);
   const draftDrone = eligibleDronesAtOrigin.find((drone) => drone.id === draftDroneId);
   const availableDraftBatteries = (draftEligibleBatteries ?? []).filter((battery) =>
-    draftDrone && isSelectableMissionBattery(battery, draftDrone, order.originHubId),
+    draftDrone && isSelectableMissionBattery(battery, draftDrone, planningOriginHubId),
   );
   const draftBattery = availableDraftBatteries.find((battery) => battery.id === draftBatteryId);
 
@@ -667,7 +684,9 @@ export function CreateMissionPage() {
       sameOrderReview?.batteryId === selectedBatteryId && sameOrderReview?.routeId === selectedRouteId
       ? sameOrderReview.planningAnalysis.routes.find((route) => route.id === selectedRouteId)
       : undefined);
-  const originHubLabel = formatHubName(originHub?.name || order.originHubName || eligibleDronesData?.hub.name) || order.originHubId || 'Origin hub';
+  const originHubLabel = isReplanning
+    ? formatHubName(eligibleDronesData?.hub.name || originHub?.name) || planningOriginHubId || 'Recovery hub unavailable'
+    : formatHubName(originHub?.name || order.originHubName || eligibleDronesData?.hub.name) || order.originHubId || 'Origin hub';
   const destinationHubLabel = formatHubName(destinationHub?.name || order.destinationHubName) || order.destinationHubId || 'Destination hub';
   const hubName = (hubId: string) =>
     formatHubName(networkHubs.find((hub) => hub.id === hubId)?.name) || hubId;
@@ -676,9 +695,9 @@ export function CreateMissionPage() {
     : undefined;
   const selectedTiming = selectedRoute ? calculateRouteTiming(order, selectedRoute) : undefined;
   const selectedRelayHubIds = selectedRoute
-    ? getRouteRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)
+    ? getRouteRelayHubIds(selectedRoute, planningOriginHubId, order.destinationHubId)
     : [];
-  const hasOrderHubs = Boolean(order.originHubId && order.destinationHubId);
+  const hasOrderHubs = Boolean(planningOriginHubId && order.destinationHubId);
   const canContinueStep1 = Boolean(canCreateMissionForOrder(order) && hasOrderHubs);
   const canContinueStep2 = Boolean(
     canContinueStep1 && selectedDrone && selectedDrone.isSelectable !== false && selectedBattery &&
@@ -688,6 +707,7 @@ export function CreateMissionPage() {
   // preview ONLY. Never Review/Assign a route analyzed for the primary Order alone.
   const canReviewMission = Boolean(
     canContinueStep2 && selectedRoute && selectedTiming && !hasUnverifiedBundle &&
+    routeMatchesPlanningOrigin(order, selectedRoute, planningOriginHubId) &&
     !isPlanningAnalysisFetching && !planningAnalysisError
   );
   // Only final Assign is guarded by the authoritative Analyze feasibility result.
@@ -704,7 +724,8 @@ export function CreateMissionPage() {
     canCreateMissionForOrder(queriedOrder) &&
     liveSelectedDrone.isSelectable !== false &&
     liveSelectedDrone.maxPayloadKg + 0.0001 >= queriedOrder.payloadKg &&
-    isSelectableMissionBattery(liveSelectedBattery, liveSelectedDrone, queriedOrder.originHubId) &&
+    isSelectableMissionBattery(liveSelectedBattery, liveSelectedDrone, livePlanningOriginHubId) &&
+    routeMatchesPlanningOrigin(queriedOrder, liveSelectedRoute, livePlanningOriginHubId) &&
     getEnergyFeasibility(liveSelectedRoute).feasible &&
     (!liveSelectedDrone.isCrossHub || liveSelectedRoute.legDetails?.some((leg) =>
       leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH')) &&
@@ -878,7 +899,10 @@ export function CreateMissionPage() {
         showToast('Package receipt or planning status is not valid. Refresh the Order before assigning.');
         return;
       }
-      if (eligibleNow.error || !eligibleNow.data?.drones.some((drone) => drone.id === selectedDrone.id && drone.isSelectable !== false)) {
+      const freshPlanningOriginHubId = getPlanningOriginHubId(latestOrder.data, eligibleNow.data?.hub.id);
+      const freshDrone = eligibleNow.data?.drones.find((drone) => drone.id === selectedDrone.id);
+      if (eligibleNow.error || !freshPlanningOriginHubId || !freshDrone || freshDrone.isSelectable === false ||
+        freshDrone.maxPayloadKg + 0.0001 < latestOrder.data.payloadKg) {
         setStep(2);
         setSelectedDroneId('');
         setSelectedBatteryId('');
@@ -887,7 +911,7 @@ export function CreateMissionPage() {
         return;
       }
       if (batteriesNow.error || !batteriesNow.data?.some((item) =>
-        item.id === selectedBatteryId && isSelectableMissionBattery(item, selectedDrone, order.originHubId)
+        item.id === selectedBatteryId && isSelectableMissionBattery(item, freshDrone, freshPlanningOriginHubId)
       )) {
         setStep(2);
         setSelectedBatteryId('');
@@ -901,7 +925,9 @@ export function CreateMissionPage() {
       }
       const currentRoute = current.data.routes.find((route) => route.id === selectedRoute.id);
       if (!currentRoute || !getEnergyFeasibility(currentRoute).feasible ||
-        (selectedDrone.isCrossHub && !currentRoute.legDetails?.some((leg) =>
+        freshPlanningOriginHubId !== planningOriginHubId ||
+        !routeMatchesPlanningOrigin(latestOrder.data, currentRoute, freshPlanningOriginHubId) ||
+        (freshDrone.isCrossHub && !currentRoute.legDetails?.some((leg) =>
           leg.is_dispatch || leg.leg_type?.toUpperCase() === 'DISPATCH'))) {
         setStep(3);
         setSelectedRouteId('');
@@ -982,14 +1008,15 @@ export function CreateMissionPage() {
                 <span>Origin package</span>
                 <PackageReceipt key={order.id} order={order} variant="field" />
               </div>
-              <label><span>Origin hub</span><input value={originHubLabel} readOnly /></label>
+              <label><span>{isReplanning ? 'Recovery hub' : 'Origin hub'}</span><input value={originHubLabel} readOnly /></label>
               <label><span>Destination hub</span><input value={destinationHubLabel} readOnly /></label>
               <label><span>Package</span><input value={`${order.packageLabel} · ${order.payloadKg} kg`} readOnly /></label>
               <label><span>Estimated delivery</span><input value={formatDeliveryWindow(order)} readOnly /></label>
             </div>
             {!hasOrderHubs && (
               <div className="operator-empty-state">
-                This Order does not contain a valid Origin hub and Destination hub.
+                {isReplanning ? 'Unable to determine the recovery hub. Verify the order resources before continuing.' : 'This Order does not contain a valid Origin hub and Destination hub.'}
+                {isReplanning && <ActionButton onClick={() => void refetchEligibleDrones()}>Retry</ActionButton>}
               </div>
             )}
           </OperatorPanel>
@@ -1001,7 +1028,7 @@ export function CreateMissionPage() {
             <OperatorPanel title="Delivery network">
               <div className="delivery-network-strip">
                 <div className="delivery-network-node">
-                  <small>Origin hub</small>
+                  <small>{isReplanning ? 'Recovery hub' : 'Origin hub'}</small>
                   <strong>{originHubLabel}</strong>
                 </div>
                 <div className="delivery-network-arrow">→</div>
@@ -1243,7 +1270,7 @@ export function CreateMissionPage() {
                   const timing = calculateRouteTiming(order, route);
                   // Relay Battery IDs are allocated by BE Analyze, not inferred
                   // from the separate Fleet inventory query.
-                  const relayHubs = getRouteRelayHubIds(route, order.originHubId, order.destinationHubId).map((hubId) => ({
+                  const relayHubs = getRouteRelayHubIds(route, planningOriginHubId, order.destinationHubId).map((hubId) => ({
                     hubId,
                     hubName: hubName(hubId),
                   }));
@@ -1452,10 +1479,11 @@ export function CreateMissionPage() {
               batteryId={selectedBatteryId}
               route={selectedRoute}
               timing={selectedTiming}
+              planningOriginHubId={planningOriginHubId}
               originLabel={originHubLabel}
               destinationLabel={destinationHubLabel}
               relayHubIds={selectedRelayHubIds}
-              swapHubIds={getBatterySwapRelayHubIds(selectedRoute, order.originHubId, order.destinationHubId)}
+              swapHubIds={getBatterySwapRelayHubIds(selectedRoute, planningOriginHubId, order.destinationHubId)}
               hubName={hubName}
             />
           </OperatorPanel>

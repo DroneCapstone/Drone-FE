@@ -18,6 +18,7 @@ type Props = {
   route: RouteOption;
   timing: { plannedStartAt: Date; estimatedArrivalAt: Date };
   originLabel: string;
+  planningOriginHubId?: string;
   destinationLabel: string;
   relayHubIds: string[];
   swapHubIds: string[];
@@ -37,9 +38,9 @@ function Section({ title, icon, children }: { title: string; icon: ReactNode; ch
 }
 
 /** Read-only projection of the selected Analyze response. Never used for Assign validation. */
-export function buildReviewSummary({ order, drone, battery, batteryId, route, originLabel, destinationLabel, relayHubIds, swapHubIds, hubName }: Props) {
+export function buildReviewSummary({ order, drone, battery, batteryId, route, originLabel, planningOriginHubId = order.originHubId, destinationLabel, relayHubIds, swapHubIds, hubName }: Props) {
   const resolveHub = (id: string | undefined, name?: string, code?: string) => formatHubName(name) ||
-    (id === order.originHubId ? originLabel : id === order.destinationHubId ? destinationLabel :
+    (id === planningOriginHubId ? originLabel : id === order.destinationHubId ? destinationLabel :
       id === drone.hubId && drone.hubName ? formatHubName(drone.hubName) : id ? hubName(id) : '') || code || '—';
   const detailed = route.legDetails ?? [];
   const mapped = route.legs ?? [];
@@ -56,7 +57,7 @@ export function buildReviewSummary({ order, drone, battery, batteryId, route, or
     const fromId = d?.from_hub_id != null ? String(d.from_hub_id) : m?.fromHubId;
     const toId = d?.to_hub_id != null ? String(d.to_hub_id) : m?.toHubId;
     const isDispatch = d?.is_dispatch === true || d?.leg_type?.toUpperCase() === 'DISPATCH' ||
-      (drone.isCrossHub === true && fromId === drone.hubId && toId === order.originHubId);
+      (drone.isCrossHub === true && fromId === drone.hubId && toId === planningOriginHubId);
     // Reuse the shared percentage helper for each matching pair, including
     // the start/end SOC fallback; never use the whole-route % for a relay leg.
     const use = aligned ? uses[i]?.batteryUsePct : getRouteLegBatteryUse({ ...route, legDetails: d ? [d] : [], legs: m ? [m] : [] })[0]?.batteryUsePct;
@@ -66,7 +67,7 @@ export function buildReviewSummary({ order, drone, battery, batteryId, route, or
       charge: d?.battery_charge_pct ?? m?.batteryChargePct, isDispatch };
   });
   const singleDelivery = !drone.isCrossHub && relayHubIds.length === 0 && legs.length <= 1;
-  if (!legs.length && singleDelivery) legs.push({ fromId: order.originHubId, toId: order.destinationHubId,
+  if (!legs.length && singleDelivery) legs.push({ fromId: planningOriginHubId, toId: order.destinationHubId,
     from: originLabel, to: destinationLabel, distance: route.distanceKm, energy: route.predictedEnergyWh,
     use: route.batteryConsumptionPct, batteryId, model: battery?.model, charge: battery?.chargeLevelPct, isDispatch: false });
   if (singleDelivery && legs.length === 1) {
@@ -75,8 +76,8 @@ export function buildReviewSummary({ order, drone, battery, batteryId, route, or
   }
   const path = legs.length ? [{id: legs[0].fromId, name: legs[0].from}, ...legs.map(l => ({id:l.toId,name:l.to}))] :
     [...(drone.isCrossHub ? [{id: drone.hubId,name: resolveHub(drone.hubId)}] : []),
-      {id:order.originHubId,name:originLabel}, ...relayHubIds.map(id => ({id,name:resolveHub(id)})), {id:order.destinationHubId,name:destinationLabel}];
-  const startHub = drone.isCrossHub ? drone.hubId : order.originHubId;
+      {id:planningOriginHubId,name:originLabel}, ...relayHubIds.map(id => ({id,name:resolveHub(id)})), {id:order.destinationHubId,name:destinationLabel}];
+  const startHub = drone.isCrossHub ? drone.hubId : planningOriginHubId;
   const firstLeg = legs.find(l => l.fromId === startHub) ?? legs[0];
   const firstLegMatches = !firstLeg?.batteryId || firstLeg.batteryId === batteryId;
   const batteries: {hub: string; role: string; id?: string; model?: string; charge?: number}[] = [
@@ -84,7 +85,7 @@ export function buildReviewSummary({ order, drone, battery, batteryId, route, or
       model: battery?.model ?? (firstLegMatches ? firstLeg?.model : undefined), charge: battery?.chargeLevelPct ?? (firstLegMatches ? firstLeg?.charge : undefined)},
   ];
   if (drone.isCrossHub) {
-    const outbound = legs.find(l => !l.isDispatch && l.fromId === order.originHubId);
+    const outbound = legs.find(l => !l.isDispatch && l.fromId === planningOriginHubId);
     if (outbound?.batteryId && outbound.batteryId !== batteries[0].id) batteries.push({hub:originLabel,role:'Origin',id:outbound.batteryId,model:outbound.model,charge:outbound.charge});
   }
   relayHubIds.forEach((id,i) => {
@@ -107,7 +108,7 @@ export function buildReviewSummary({ order, drone, battery, batteryId, route, or
 }
 
 export function MissionReviewSummary(props: Props) {
-  const { order, drone, route, timing, originLabel, swapHubIds, relayHubIds } = props;
+  const { order, drone, route, timing, originLabel, swapHubIds, relayHubIds, planningOriginHubId = order.originHubId } = props;
   const { legs, path, batteries, speed, altitude } = buildReviewSummary(props);
   const received = Boolean(order.originPackageReceived || order.originHubReceivedAt);
   const modelNames = [...new Set(batteries.map(b => b.model).filter(Boolean))];
@@ -146,7 +147,7 @@ export function MissionReviewSummary(props: Props) {
           {path.map((hub,i) => {
             const swap = hub.id != null && (swapHubIds.includes(hub.id) || (relayHubIds.includes(hub.id) && batteries.some(b => b.hub === hub.name && b.role.startsWith('Relay'))));
             const relayIndex = hub.id ? relayHubIds.indexOf(hub.id) : -1;
-            const role = i === path.length-1 ? 'Destination' : hub.id === order.originHubId || (!drone.isCrossHub && i === 0) ? 'Origin' :
+            const role = i === path.length-1 ? 'Destination' : hub.id === planningOriginHubId || (!drone.isCrossHub && i === 0) ? 'Origin' :
               i === 0 && drone.isCrossHub ? 'Dispatch origin' : `Relay ${relayIndex >= 0 ? relayIndex + 1 : i}${swap ? ' · Battery swap' : ''}`;
             return <li key={`${hub.id ?? hub.name}-${i}`}><span className="mr-path-dot" aria-hidden="true" /><div><strong>{hub.name}</strong><small>{role}</small></div></li>;
           })}
