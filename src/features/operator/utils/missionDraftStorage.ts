@@ -21,7 +21,12 @@ export function saveMissionDraft(draft: Omit<MissionDraft, 'updatedAt'>) {
 export function updateMissionDraftRoute(orderId: string, selectedRouteId: string) {
   const draft = loadMissionDraft(orderId);
   if (!draft) return;
-  saveMissionDraft({ ...draft, selectedRouteId });
+  saveMissionDraft({
+    ...draft,
+    selectedRouteId,
+    selectionJustifications: selectedRouteId === draft.selectedRouteId
+      ? draft.selectionJustifications : { ...draft.selectionJustifications, route: undefined },
+  });
 }
 
 export function clearMissionDraft(orderId?: string) {

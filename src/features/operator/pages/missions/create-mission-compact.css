@@ -1337,3 +1337,25 @@
   align-items: center;
   margin-top: 12px;
 }
+
+/* Route options — independent sidebar-style toggle. */
+.page-content .mission-builder .mission-route-toggle-panel > .panel-head {
+  position: relative;
+}
+.page-content .mission-builder .mission-route-toggle-panel .mission-route-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.page-content .mission-builder .mission-route-toggle-panel .mission-route-toggle-chevron {
+  flex-shrink: 0;
+  transition: transform 160ms ease;
+}
+.page-content .mission-builder .mission-route-toggle-panel .mission-route-toggle[aria-expanded="true"] .mission-route-toggle-chevron {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-content .mission-builder .mission-route-toggle-panel .mission-route-toggle-chevron {
+    transition: none;
+  }
+}
