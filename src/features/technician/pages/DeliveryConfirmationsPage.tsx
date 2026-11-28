@@ -28,7 +28,7 @@ function remainingUntil(deadline: string, now: number): Remaining | null {
   const end = Date.parse(deadline);
   if (!Number.isFinite(end)) return null;
   const ms = end - now;
-  if (ms <= 0) return { expired: true, label: "Expired · awaiting server update" };
+  if (ms <= 0) return { expired: true, label: "Expired · awaiting status update" };
   const s = Math.ceil(ms / 1_000);
   const days = Math.floor(s / 86_400);
   const hours = Math.floor((s % 86_400) / 3_600);
@@ -75,7 +75,7 @@ export function DeliveryConfirmationsPage() {
   async function handleConfirm(delivery: DeliveryConfirmation, proofImageUrl: string) {
     if (!delivery.backendOrderId || confirmingOrdersRef.current.has(delivery.orderId)) return;
     if (remainingUntil(delivery.pickupDeadlineAtIso, Date.now())?.expired) {
-      setMessage("Pickup window expired. Wait for Backend to cancel the order, then refresh.");
+      setMessage("Pickup window expired. Refresh to check the order status.");
       return;
     }
     setMessage("");
@@ -84,10 +84,9 @@ export function DeliveryConfirmationsPage() {
     try {
       await confirmPickupMutation.mutateAsync({ orderId: delivery.backendOrderId, proofImageUrl });
       // Only BE can complete the order. The invalidated list is the source of truth.
-      setMessage(`Pickup confirmed for ${delivery.orderCode}. Status is refreshed from Backend.`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "Could not confirm customer pickup.";
-      setMessage(`${detail} — If Backend rejects ${delivery.backendOrderId}, ask BE to return the actual order_id.`);
+      setMessage(`Pickup confirmed for ${delivery.orderCode}.`);
+    } catch  {
+      setMessage("Unable to confirm customer pickup. Refresh and check the order before trying again.");
       void confirmationsQuery.refetch();
     } finally {
       confirmingOrdersRef.current.delete(delivery.orderId);
@@ -107,7 +106,7 @@ export function DeliveryConfirmationsPage() {
       )}
       {confirmationsQuery.isError && (
         <div className="mb-4 rounded-md border border-red-500/30 px-4 py-3 text-[13px] text-red-500">
-          {confirmationsQuery.error instanceof Error ? confirmationsQuery.error.message : "Failed to load delivery confirmations."}
+          {"Failed to load delivery confirmations."}
           <button type="button" onClick={() => void confirmationsQuery.refetch()} className="ml-3 font-semibold underline">Retry</button>
         </div>
       )}
@@ -164,9 +163,9 @@ export function DeliveryConfirmationsPage() {
                             onClick={() => setPickupProofId(delivery.orderId)}
                             disabled={blockConfirm || submitting}
                             title={!delivery.backendOrderId
-                              ? "Backend must provide order_id or an ORD-... code."
+                              ? "Order information is incomplete."
                               : time?.expired
-                                ? "72-hour pickup window expired; waiting for Backend cancellation."
+                                ? "72-hour pickup window expired; awaiting cancellation."
                                 : "Confirm the recipient physically collected this parcel."}
                             className="h-9 shrink-0 rounded-md bg-orange-500 px-3 text-[12px] font-medium text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >

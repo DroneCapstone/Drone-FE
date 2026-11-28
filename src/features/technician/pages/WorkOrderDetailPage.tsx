@@ -97,7 +97,7 @@ function normalizeDroneModel(value: string): string {
 }
 
 // The API currently exposes start/completion, not a verified draft endpoint.
-// Keep unfinished input on this browser without changing Backend status or inventory.
+// Keep unfinished input on this browser without changing Current status or inventory.
 type WorkOrderDraft = {
   defectType: DefectType | "";
   proofImage: string;
@@ -393,8 +393,8 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
         // Local history is best-effort; server PATCH already succeeded.
       }
       setWorkOrderStatus("In Progress");
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Unable to start work order.");
+    } catch  {
+      setApiError("Unable to start work order.");
       // If server may have accepted the PATCH, refresh rather than retry blindly.
       void workOrderQuery.refetch();
     } finally {
@@ -485,10 +485,10 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       setReplacementFeedback(`Inventory updated: ${quantity} part(s) issued. Remaining: ${updated.quantity}.`);
       // Keep inventory figures up-to-date; no further replacement is allowed for this Work Order.
       void inventoryQuery.refetch();
-    } catch (error) {
+    } catch  {
       setReplacementFeedback(
-        `${error instanceof Error ? error.message : "Unable to issue parts."} ` +
-        "If the request may have reached the server, check inventory before retrying to avoid double deduction.",
+        "Unable to confirm parts issue. " +
+        "Check inventory before retrying to avoid deducting parts twice.",
       );
     } finally {
       replacementLock.current = false;
@@ -546,26 +546,24 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
         if (error.status === 0) {
           mustVerifyServer = true;
           explanation =
-            "The browser could not read the response (network/CORS). " +
-            "The request may have reached the server; refresh and check its status.";
+            "Completion could not be verified.";
         } else if (error.status >= 500) {
           mustVerifyServer = true;
           explanation =
-            `Backend returned HTTP ${error.status}. ` +
-            "Check the server logs for this exact Work Order and request payload.";
+            "Completion could not be verified.";
         } else {
-          explanation = `Backend returned HTTP ${error.status}: ${error.message}`;
+          explanation = "Please review the work order information before trying again.";
         }
       } else {
         // React Query can also report a follow-up invalidation/refetch error
         // after the PATCH was applied: verify the BE state before retrying.
         mustVerifyServer = true;
-        explanation = error instanceof Error ? error.message : "Unknown error.";
+        explanation = "Completion could not be verified.";
       }
       if (mustVerifyServer) setCompletionRequiresReview(true);
       setApiError(
         `Unable to confirm completion of Work Order ${order.id}. ${explanation}` +
-        (mustVerifyServer ? " Check the server state before trying again." : ""),
+        (mustVerifyServer ? " Refresh and check the work order status before trying again." : ""),
       );
     } finally {
       completionLock.current = false;
@@ -596,7 +594,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
             : isCompleting
               ? "Completing..."
               : completionRequiresReview
-                ? "Check server state"
+                ? "Check work order status"
                 : "Complete work order"}
         </Button>
       }
@@ -604,9 +602,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       {(apiError || workOrderQuery.error instanceof Error) && (
         <div role="alert" className="mb-4 rounded-md border border-red-500/25 px-4 py-3 text-[13px] text-red-500">
           {apiError ||
-            (workOrderQuery.error instanceof Error
-              ? workOrderQuery.error.message
-              : "")}
+            ("")}
           {completionRequiresReview && (
             <button
               type="button"
@@ -772,7 +768,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
               <div className="mb-4 space-y-3 rounded-md border border-[var(--tech-border)] bg-[var(--tech-surface-2)] p-3">
                 {inventoryQuery.isError && (
                   <p role="alert" className="text-[12px] text-red-500">
-                    {inventoryQuery.error instanceof Error ? inventoryQuery.error.message : "Unable to load parts."}
+                    {"Unable to load parts."}
                     <button type="button" className="ml-2 underline"
                       onClick={() => void inventoryQuery.refetch()}>Retry</button>
                   </p>

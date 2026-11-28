@@ -94,7 +94,7 @@ function parseSchedule(payload: unknown): {
 }
 
 function maintenanceDueInfo(next: Date | null) {
-  if (!next) return { label: "Not provided", danger: false, helper: "No next maintenance date from Backend" };
+  if (!next) return { label: "Not provided", danger: false, helper: "No recorded maintenance date" };
   const days = Math.ceil((next.getTime() - Date.now()) / 86_400_000);
   if (days < 0) return { label: "Overdue", danger: true, helper: `${-days} day(s) overdue` };
   if (days <= 7) return { label: "Due soon", danger: false, helper: days === 0 ? "Due today" : `Due in ${days} day(s)` };
@@ -162,11 +162,10 @@ export function DroneDetailPage() {
     return <div className="px-6 py-8"><TechnicianLoadingState label="Loading drone details..." panel /></div>;
   }
   if (!drone) {
-    const error = droneQuery.error instanceof Error ? droneQuery.error.message :
-      fleetQuery.error instanceof Error ? fleetQuery.error.message : "The requested drone was not found.";
+    const error = droneQuery.isError || fleetQuery.isError ? "Unable to load drone information. Please return to fleet and refresh." : "The requested drone was not found.";
     return (
       <div className="px-6 py-6 md:px-8">
-        <h1 className={`text-[26px] font-semibold ${TEXT}`}>Drone not found</h1>
+        <h1 className={`text-[26px] font-semibold ${TEXT}`}>{droneQuery.isError || fleetQuery.isError ? "Drone unavailable" : "Drone not found"}</h1>
         <p className={`mt-2 text-[14px] ${MUTED}`}>{error}</p>
         <Button type="button" onClick={() => navigate("/technician/fleet")}
           className="mt-5 h-10 rounded-md bg-orange-500 px-4 text-black hover:bg-orange-600">
@@ -179,14 +178,13 @@ export function DroneDetailPage() {
   const realStatus = drone.operationalStatus || drone.status;
   const location = drone.currentHubId === null ? "Not assigned to a hub" : display(drone.location);
   const maintenanceBusy = historyQuery.isPending || recordsQuery.isPending;
-  const maintenanceError = historyQuery.error instanceof Error
-    ? historyQuery.error.message : recordsQuery.error instanceof Error ? recordsQuery.error.message : "";
+  const maintenanceError = historyQuery.isError || recordsQuery.isError;
 
   return (
     <div className="px-6 py-5 md:px-8">
       {droneQuery.error instanceof Error && fallbackDrone && (
         <div className="mb-4 rounded-md border border-amber-500/25 px-4 py-3 text-[13px] text-amber-500">
-          Drone detail API could not be loaded. Showing partial information from Hub Fleet: {droneQuery.error.message}
+          Showing available fleet information. Some drone details could not be loaded.
         </div>
       )}
       <button type="button" onClick={() => navigate("/technician/fleet")}
@@ -238,7 +236,7 @@ export function DroneDetailPage() {
             <div>
               <h2 className={`text-[18px] font-semibold ${TEXT}`}>Maintenance schedule</h2>
               <p className={`mt-1 text-[13px] ${MUTED}`}>
-                Schedule dates are displayed only when returned by Backend.
+                Only recorded schedule dates are displayed.
               </p>
             </div>
             <span className={`rounded-md border border-[var(--tech-border)] px-3 py-1.5 text-[12px] font-medium ${due.danger ? "text-red-500" : SECONDARY}`}>
@@ -247,14 +245,14 @@ export function DroneDetailPage() {
           </div>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <ScheduleItem label="Maintenance interval" value={display(backendSchedule.interval)}
-              helper={backendSchedule.interval ? "Backend schedule" : "Not provided by Backend"} />
+              helper={backendSchedule.interval ? "Maintenance schedule" : "Not recorded"} />
             <ScheduleItem label="Last maintenance" value={formatDate(lastMaintenance)}
               helper={lastMaintenance ? "Recorded maintenance date" : "No recorded date"} />
             <ScheduleItem label="Next maintenance" value={formatDate(nextMaintenance)}
               helper={due.helper} danger={due.danger} />
           </div>
           {scheduleQuery.error instanceof Error && <p className="mt-4 text-[12px] text-amber-500">
-            Maintenance schedule could not be loaded: {scheduleQuery.error.message}
+            Maintenance schedule could not be loaded.
           </p>}
         </CardContent></Card>
       </div>}
@@ -272,9 +270,7 @@ export function DroneDetailPage() {
         {flightHistoryQuery.isError && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-500/30 px-4 py-3">
             <p className="text-[12px] text-red-400">
-              Could not load flight history: {flightHistoryQuery.error instanceof Error
-                ? flightHistoryQuery.error.message
-                : "Backend request failed."}
+              Could not load flight history.
             </p>
             <Button type="button" onClick={() => void flightHistoryQuery.refetch()}
               className="h-8 rounded-md border border-[var(--tech-border)] bg-transparent px-3 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">
@@ -350,7 +346,7 @@ export function DroneDetailPage() {
           </div>
          
           {maintenanceError && <p className="mt-3 text-[12px] text-amber-500">
-            Some maintenance data could not be loaded: {maintenanceError}
+            Some maintenance data could not be loaded.
           </p>}
           <div className="mt-5 space-y-3">
             {maintenanceBusy && maintenanceRecords.length === 0 ? (
