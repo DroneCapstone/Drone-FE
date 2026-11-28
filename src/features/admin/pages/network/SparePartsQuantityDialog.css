@@ -1,17 +1,17 @@
 .spare-quantity-dialog { width: min(560px, calc(100vw - 32px)); }
-.spare-quantity-header { padding: 20px 24px 16px; border-bottom: 1px solid #e5e7eb; }
-.spare-quantity-header h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.4; }
-.spare-quantity-header p { margin: 5px 0 0; font-size: 13px; color: #6b7280; }
-.spare-quantity-model { display:block; margin-top:3px; color:#6b7280; font-size:12px; }
+.spare-quantity-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); }
+.spare-quantity-header h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+.spare-quantity-header p { margin: 5px 0 0; font-size: 13px; color: var(--muted); }
+.spare-quantity-model { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
 .spare-quantity-body { padding: 18px 24px 22px; }
 .spare-quantity-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .spare-quantity-fields label { display:flex; flex-direction:column; min-width:0; gap:7px; font-size:12px; font-weight:600; }
-.spare-quantity-input { box-sizing:border-box; width:100%; height:43px; padding:8px 12px; border:1px solid #dfe2e7; border-radius:8px; background:#fff; }
-.spare-quantity-input--readonly { background:#f4f5f7; color:#6b7280; }
-.spare-quantity-result { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; margin:16px 0; border-radius:8px; background:#f7f8f9; font-size:13px; }
-.spare-quantity-result span { color:#6b7280; }
-.spare-quantity-hint { color:#6b7280; margin:12px 0 0; font-size:12px; line-height:1.6; }
-.spare-quantity-footer { border-top:1px solid #e1e3e8; padding:14px 24px; }
+.spare-quantity-input { box-sizing:border-box; width:100%; height:43px; padding:8px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+.spare-quantity-input--readonly { background:var(--surface-3); color:var(--muted); }
+.spare-quantity-result { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; margin:16px 0; border-radius:8px; background:var(--surface-2); font-size:13px; }
+.spare-quantity-result span { color:var(--muted); }
+.spare-quantity-hint { color:var(--muted); margin:12px 0 0; font-size:12px; line-height:1.6; }
+.spare-quantity-footer { border-top:1px solid var(--border); padding:14px 24px; }
 .spare-quantity-error { color:#dc2626; font-size:12px; margin-top:10px; }
 @media(max-width:480px) {.spare-quantity-fields { grid-template-columns:1fr; } .spare-quantity-header,.spare-quantity-body { padding:16px; } .spare-quantity-footer { padding:12px 16px; } }
 /* Keep the existing form; align the receiving Hub dropdown with both inputs. */

@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { AdminSelect } from '../../components/AdminSelect';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
@@ -54,13 +55,13 @@ export function BatteriesPage() {
         <AdminSelect value={operational} onChange={(event) => setOperational(event.target.value)}><option value="all">All operational</option>{operationalValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
         <AdminSelect value={lifecycle} onChange={(event) => setLifecycle(event.target.value)}><option value="all">All lifecycle</option>{lifecycleValues.map((v) => <option key={v}>{v}</option>)}</AdminSelect>
       </>} meta={`${visible.length} of ${batteries.length} batteries`} />
-      <div className="table-wrap"><table><thead><tr><th>Battery</th><th>Hub</th><th>Operational status</th><th>Lifecycle</th><th>Action</th></tr></thead><tbody>
-        {visible.map((b) => <tr key={b.id}><td><strong>{b.id}</strong><small>{b.battery_model ?? 'Model unavailable'}</small></td><td>{hubName(b.current_hub_id)}</td>
-          <td><StatusBadge tone={['READY', 'AVAILABLE'].includes(operationalOf(b).toUpperCase()) ? 'success' : 'warning'}>{operationalOf(b)}</StatusBadge></td>
-          <td><StatusBadge tone={lifecycleOf(b).toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{lifecycleOf(b)}</StatusBadge></td>
-          <td><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View details</Link></td></tr>)}
-        {!loading && !error && visible.length === 0 && <tr><td colSpan={5}>No batteries found.</td></tr>}
-      </tbody></table></div>
+      <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Battery</TableHead><TableHead>Hub</TableHead><TableHead>Operational status</TableHead><TableHead>Lifecycle</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+        {visible.map((b) => <TableRow key={b.id}><TableCell><strong>{b.id}</strong><small>{b.battery_model ?? 'Model unavailable'}</small></TableCell><TableCell>{hubName(b.current_hub_id)}</TableCell>
+          <TableCell><StatusBadge tone={['READY', 'AVAILABLE'].includes(operationalOf(b).toUpperCase()) ? 'success' : 'warning'}>{operationalOf(b)}</StatusBadge></TableCell>
+          <TableCell><StatusBadge tone={lifecycleOf(b).toUpperCase() === 'ACTIVE' ? 'success' : 'neutral'}>{lifecycleOf(b)}</StatusBadge></TableCell>
+          <TableCell><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View details</Link></TableCell></TableRow>)}
+        {!loading && !error && visible.length === 0 && <TableRow><TableCell colSpan={5}>No batteries found.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>
     </OperatorPanel>
   </AdminPageShell>;
 }

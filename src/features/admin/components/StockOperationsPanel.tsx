@@ -1,3 +1,4 @@
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../operator/components/OperatorTable";
 import { useAdminConfirm } from './AdminConfirmDialog';
 import { invalidateAdminReads } from '../api/adminHttp';
 import { AdminSelect } from './AdminSelect';
@@ -72,11 +73,11 @@ export function StockOperationsPanel({ hubs, parts, stocks, onChanged }: {
     </OperatorPanel>
     <OperatorPanel title="Stock movement history" eyebrow="STOCK HISTORY">
       {logError&&<p role="alert" className="p-3 text-xs text-red-500">{logError} <button type="button" className="text-button" onClick={()=>{invalidateAdminReads();void loadLogs();}}>Retry</button></p>}
-      {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Hub</th><th>Part</th><th>Change</th><th>Reason</th><th>Reference</th></tr></thead><tbody>
-        {logs.slice(0,100).map(l=><tr key={l.id}><td>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</td>
-          <td>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</td><td>{l.part_name??l.part_category_id}</td><td>{l.quantity_delta}</td><td>{adminDisplayText(l.reason)}</td><td>{l.reference_id??'—'}</td></tr>)}
-        {!logError&&!logs.length&&<tr><td colSpan={6}>No stock movements recorded.</td></tr>}
-      </tbody></table></div>}
+      {logsLoading ? <OperatorLoadingState label="Loading stock history…" compact /> : <div className="table-wrap"><OperatorTable><TableHeader><TableRow><TableHead>When</TableHead><TableHead>Hub</TableHead><TableHead>Part</TableHead><TableHead>Change</TableHead><TableHead>Reason</TableHead><TableHead>Reference</TableHead></TableRow></TableHeader><TableBody>
+        {logs.slice(0,100).map(l=><TableRow key={l.id}><TableCell>{l.created_at?new Date(l.created_at).toLocaleString('en-GB'):'—'}</TableCell>
+          <TableCell>{hubs.find(h=>h.id===l.hub_id)?.name??l.hub_id}</TableCell><TableCell>{l.part_name??l.part_category_id}</TableCell><TableCell>{l.quantity_delta}</TableCell><TableCell>{adminDisplayText(l.reason)}</TableCell><TableCell>{l.reference_id??'—'}</TableCell></TableRow>)}
+        {!logError&&!logs.length&&<TableRow><TableCell colSpan={6}>No stock movements recorded.</TableCell></TableRow>}
+      </TableBody></OperatorTable></div>}
     </OperatorPanel>
   </div>;
 }

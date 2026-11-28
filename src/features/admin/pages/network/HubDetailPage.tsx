@@ -1,3 +1,5 @@
+import { AssetHistoryLinks } from '../operations/HistoryUI';
+import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -51,6 +53,7 @@ export function HubDetailPage() {
           </div>
         </div>
       </section>
+      <AssetHistoryLinks kind="hub" id={String(hub.id)}/>
       <AdminHubTechnicians key={hub.id} hub={hub} />
       <section className="admin-hub-section" aria-labelledby="hub-assets">
         <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Assigned assets</h2>
@@ -59,17 +62,17 @@ export function HubDetailPage() {
             <button type="button" role="tab" aria-selected={assetTab === 'batteries'} className={assetTab === 'batteries' ? 'is-active' : ''} onClick={() => setAssetTab('batteries')}>Batteries ({batteries.length})</button>
           </div>
         </div>
-        <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Asset ID</th><th>Model</th><th>Status</th><th>Action</th></tr></thead><tbody>
-          {assetTab === 'drones' ? drones.map((d) => <tr key={d.id}><td><strong>{d.id}</strong></td><td>{d.model}</td><td>{d.status}</td><td><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></td></tr>) : batteries.map((b) => <tr key={b.id}><td><strong>{b.id}</strong></td><td>{b.battery_model || '—'}</td><td>{b.status ?? '—'}</td><td><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View</Link></td></tr>)}
-          {(assetTab === 'drones' ? drones.length === 0 : batteries.length === 0) && <tr><td colSpan={4}>No assets assigned.</td></tr>}
-        </tbody></table></div>
+        <div className="admin-hub-assets-table-wrap"><OperatorTable className="admin-hub-assets-table admin-pinned-actions"><TableHeader><TableRow><TableHead>Asset ID</TableHead><TableHead>Model</TableHead><TableHead>Status</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>
+          {assetTab === 'drones' ? drones.map((d) => <TableRow key={d.id}><TableCell><strong>{d.id}</strong></TableCell><TableCell>{d.model}</TableCell><TableCell>{d.status}</TableCell><TableCell><Link className="text-button" to={`/admin/network/drones/${encodeURIComponent(d.id)}`}>View</Link></TableCell></TableRow>) : batteries.map((b) => <TableRow key={b.id}><TableCell><strong>{b.id}</strong></TableCell><TableCell>{b.battery_model || '—'}</TableCell><TableCell>{b.status ?? '—'}</TableCell><TableCell><Link className="text-button" to={`/admin/network/batteries/${encodeURIComponent(b.id)}`}>View</Link></TableCell></TableRow>)}
+          {(assetTab === 'drones' ? drones.length === 0 : batteries.length === 0) && <TableRow><TableCell colSpan={4}>No assets assigned.</TableCell></TableRow>}
+        </TableBody></OperatorTable></div>
       </section>
       <section className="admin-hub-section" aria-labelledby="hub-spareparts">
         <h2 id="hub-spareparts" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Spare parts at this Hub</h2>
-        <div className="admin-hub-assets-table-wrap"><table className="admin-hub-assets-table"><thead><tr><th>Part</th><th>Quantity</th><th>Minimum threshold</th><th>Stock alert</th></tr></thead><tbody>
-          {spareStock.map((part) => <tr key={`${part.hub_id}:${part.part_category_id}`}><td><strong>{part.part_name}</strong></td><td>{part.quantity}</td><td>{part.min_stock_threshold}</td><td>{part.is_low_stock ? 'Low stock' : 'Normal'}</td></tr>)}
-          {!error && spareStock.length === 0 && <tr><td colSpan={4}>No spare parts registered for this Hub.</td></tr>}
-        </tbody></table></div>
+        <div className="admin-hub-assets-table-wrap"><OperatorTable className="admin-hub-assets-table"><TableHeader><TableRow><TableHead>Part</TableHead><TableHead>Quantity</TableHead><TableHead>Minimum threshold</TableHead><TableHead>Stock alert</TableHead></TableRow></TableHeader><TableBody>
+          {spareStock.map((part) => <TableRow key={`${part.hub_id}:${part.part_category_id}`}><TableCell><strong>{part.part_name}</strong></TableCell><TableCell>{part.quantity}</TableCell><TableCell>{part.min_stock_threshold}</TableCell><TableCell>{part.is_low_stock ? 'Low stock' : 'Normal'}</TableCell></TableRow>)}
+          {!error && spareStock.length === 0 && <TableRow><TableCell colSpan={4}>No spare parts registered for this Hub.</TableCell></TableRow>}
+        </TableBody></OperatorTable></div>
       </section>
     </div>}
   </AdminPageShell>;
