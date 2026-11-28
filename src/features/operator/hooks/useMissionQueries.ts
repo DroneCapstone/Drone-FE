@@ -33,9 +33,9 @@ import {
   type UpdateIncidentStatusInput,
 } from '../api/missionApi';
 import {
-  getPreAnalyzeBundleCandidatesApi,
+
   getPostAnalyzeBundleCandidatesApi,
-  validateMissionBundleApi,
+
 } from '../api/missionBundleApi';
 import { operatorQueryKeys } from '../query/queryKeys';
 
@@ -186,24 +186,6 @@ export function useEligibleMissionBatteriesQuery(orderId: string, droneId: strin
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-  });
-}
-
-export function usePreAnalyzeBundleCandidatesQuery(orderId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: operatorQueryKeys.missionBundleCandidates(orderId),
-    queryFn: () => getPreAnalyzeBundleCandidatesApi(orderId),
-    enabled: enabled && Boolean(orderId.trim()),
-    staleTime: 0,
-  });
-}
-
-export function useValidateMissionBundleQuery(orderIds: string[], droneId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: operatorQueryKeys.missionBundleValidation(orderIds, droneId),
-    queryFn: () => validateMissionBundleApi({ orderIds, ...(droneId ? { droneId } : {}) }),
-    enabled: enabled && orderIds.length > 1,
-    staleTime: 0,
   });
 }
 
