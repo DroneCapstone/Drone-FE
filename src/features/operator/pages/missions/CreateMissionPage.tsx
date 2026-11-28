@@ -258,7 +258,7 @@ export function CreateMissionPage() {
   const [selectionJustifications, setSelectionJustifications] = useState<MissionSelectionJustifications>(restoredDraft?.selectionJustifications ?? {});
   const [editorJustifications, setEditorJustifications] = useState<MissionSelectionJustifications>({});
   const [routeOptionsOpen, setRouteOptionsOpen] = useState(Boolean(restoredDraft?.routeOptionsOpen));
-  const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
+  const [expandedRouteIds, setExpandedRouteIds] = useState<string[]>([]);
   const [routeSelectionConfirmed, setRouteSelectionConfirmed] = useState(false);
   // Legacy Step-1 bundles in saved drafts are never restored into the new post-analyze flow.
   // These choices are previews until Backend supports route-aware leg validation.
@@ -305,7 +305,7 @@ export function CreateMissionPage() {
     setResourceExplanationError('');
     setResourceVerificationIssue('');
     setStateOrderId(orderId);
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
   }, [orderId]);
 
@@ -480,7 +480,7 @@ export function CreateMissionPage() {
     setSelectedDroneId('');
     setSelectedBatteryId('');
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     if (manualSelectionRef.current) {
       setToast('Saved drone is no longer eligible. Please choose a drone and battery again.');
@@ -561,8 +561,6 @@ export function CreateMissionPage() {
     if (nextRouteId === selectedRouteId) return;
     setSelectedRouteId(nextRouteId);
     setSelectionJustifications(current => ({ ...current, route: undefined }));
-    setRouteOptionsOpen(false);
-    setExpandedRouteId(null);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -593,7 +591,7 @@ export function CreateMissionPage() {
     }
     setSelectedBatteryId('');
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -802,7 +800,7 @@ export function CreateMissionPage() {
     setSelectedDroneId(drone.id);
     setSelectedBatteryId('');
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -817,7 +815,7 @@ export function CreateMissionPage() {
     setSelectedDroneId('');
     setSelectedBatteryId('');
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -854,7 +852,7 @@ export function CreateMissionPage() {
     setRouteOptionsOpen(false);
     setSelectedBatteryId(batteryId);
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -891,7 +889,7 @@ export function CreateMissionPage() {
     setSelectedDroneId(draftDroneId);
     setSelectedBatteryId(draftBatteryId);
     setSelectedRouteId('');
-    setExpandedRouteId(null);
+    setExpandedRouteIds([]);
     setRouteSelectionConfirmed(false);
     setBundledOrderIds([]);
     setBundleEnabled(false);
@@ -1376,7 +1374,7 @@ export function CreateMissionPage() {
                       plannedStartAt={timing.plannedStartAt}
                       estimatedArrivalAt={timing.estimatedArrivalAt}
                       selected={route.id === selectedRouteId}
-                      expanded={route.id === expandedRouteId}
+                      expanded={expandedRouteIds.includes(route.id)}
                       onSelect={() => {
                         // Selection and expansion are Operator choices, independent of AI feasibility.
                         if (route.id !== selectedRouteId) {
@@ -1386,7 +1384,9 @@ export function CreateMissionPage() {
                         }
                         setRouteSelectionConfirmed(true);
                         setSelectedRouteId(route.id);
-                        setExpandedRouteId((current) => current === route.id ? null : route.id);
+                        setExpandedRouteIds((current) => current.includes(route.id)
+                          ? current.filter(id => id !== route.id)
+                          : [...current, route.id]);
                       }}
                       onViewDetails={() => handleViewAiDetails(route.id)}
                     />
