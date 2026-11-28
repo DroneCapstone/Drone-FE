@@ -654,6 +654,11 @@ export const customerApi = {
     return apiRequest<unknown>("/api/v1/notifications/unread-count");
   },
 
+  getNotificationDetail(notificationId: string | number) {
+    return apiRequest<unknown>(
+      `/api/v1/notifications/${encodeURIComponent(String(notificationId))}/detail`,
+    );
+  },
   markNotificationRead(notificationId: string | number) {
     return apiRequest<unknown>(
       `/api/v1/notifications/${encodeURIComponent(String(notificationId))}/read`,

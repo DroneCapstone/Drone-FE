@@ -290,7 +290,12 @@ function mapApiNotification(
 
 
 
+import { useState as useDetailState } from "react";
+import { NotificationDetailDialog } from "../../../components/common/NotificationDetailDialog";
+import { getNotificationDetailApi } from "../utils/technicianApi";
+
 export function TechnicianNotificationsPage() {
+  const [detailBackendId, setDetailBackendId] = useDetailState<string | null>(null);
 
   const navigate =
 
@@ -1493,6 +1498,26 @@ export function TechnicianNotificationsPage() {
                     </button>
 
 
+
+                    {/* DETAILS: context + evidence photos */}
+                    <button
+                      type="button"
+                      title="View details and evidence photos"
+                      aria-label="View details and evidence photos"
+                      onClick={() => setDetailBackendId(notification.backendId)}
+                      className="mt-1 flex h-8 shrink-0 items-center justify-center rounded-md px-2 text-[12px] font-medium text-[var(--tech-subtle)] transition-colors hover:text-orange-500"
+                    >
+                      Details
+                    </button>
+                    {detailBackendId === notification.backendId && (
+                      <NotificationDetailDialog
+                        key={notification.backendId}
+                        load={() => getNotificationDetailApi(notification.backendId)}
+                        relatedLabel={getActionTitle(notification)}
+                        onOpenRelated={() => { setDetailBackendId(null); handleViewDetail(notification); }}
+                        onClose={() => setDetailBackendId(null)}
+                      />
+                    )}
 
                     {/* DELETE */}
 

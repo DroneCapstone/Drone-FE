@@ -146,7 +146,7 @@ const ARTICLES: HelpArticle[] = [
     summary:
       "Availability depends on the current order stage.",
     content:
-      "An unpaid PENDING order with no mission can be deleted in Order Details. Paid orders cannot be deleted using this feature; for paid-order cancellation or refund review, contact Customer Support. Eligibility depends on the order stage and backend rules.",
+      "An unpaid PENDING order with no mission can be deleted in Order Details. A paid order that is still awaiting drop-off (package not yet handed over at the origin Hub, no mission created) can be cancelled in Order Details and is refunded 100% automatically, for example to place a new order with a different Hub. Once the package is handed over or a mission is created, contact Customer Support for cancellation or refund review. Eligibility depends on the order stage and backend rules.",
   },
 
   {

@@ -4,7 +4,8 @@ import {
   useState,
 } from "react";
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { NotificationDetailDialog, type NotificationDetailData } from "../../../components/common/NotificationDetailDialog";
 
 import {
   customerApi,
@@ -119,6 +120,8 @@ function readCounts(response: unknown) {
 }
 
 export function CustomerNotificationsPage() {
+  const navigate = useNavigate();
+  const [detailId, setDetailId] = useState<number | string | null>(null);
   const [filter, setFilter] =
     useState<NotificationFilter>("all");
 
@@ -471,9 +474,11 @@ export function CustomerNotificationsPage() {
               >
               <Link
                 to={item.to}
-                onClick={() =>
-                  markAsRead(item.id)
-                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  markAsRead(item.id);
+                  setDetailId(item.id);
+                }}
                 className={`group relative block border-b border-white/[0.075] px-5 py-5 last:border-b-0 transition sm:px-7 sm:py-6 ${
                   !item.read
                     ? "bg-white/[0.018]"
@@ -532,6 +537,15 @@ export function CustomerNotificationsPage() {
                   </div>
                 </div>
               </Link>
+              {detailId === item.id && (
+                <NotificationDetailDialog
+                  key={item.id}
+                  load={() => customerApi.getNotificationDetail(item.id) as Promise<NotificationDetailData>}
+                  relatedLabel="Open order"
+                  onOpenRelated={item.to ? () => { setDetailId(null); navigate(item.to); } : undefined}
+                  onClose={() => setDetailId(null)}
+                />
+              )}
               <button
                 type="button"
                 aria-label="Delete notification"

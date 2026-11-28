@@ -1,4 +1,5 @@
 import { adminErrorText } from '../utils/adminDisplayText';
+import type { NotificationDetailData } from '../../../components/common/NotificationDetailDialog';
 import { adminFetch } from './adminHttp';
 
 /** Admin endpoints in the November 2026 OpenAPI. All paths below are relative to /api/v1. */
@@ -243,6 +244,7 @@ export const adminOperationsApi = {
   markNotificationsRead: () => send<unknown>('/notifications/read-all', 'PATCH'),
   clearReadNotifications: () => send<unknown>('/notifications/clear-read', 'DELETE'),
   deleteNotification: (id: number) => send<unknown>(`/notifications/${id}`, 'DELETE'),
+  notificationDetail: async (id: number): Promise<NotificationDetailData> => unwrap(await get<NotificationDetailData>(`/notifications/${id}/detail`)) as NotificationDetailData,
   kpi: () => get<KpiApi>('/admin/dashboard/kpi'),
   dashboard: () => get<AdminDashboardApi>('/admin/dashboard'),
   // ── Reports & Charts ──────────────────────────────────────────────

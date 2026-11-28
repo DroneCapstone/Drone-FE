@@ -1254,6 +1254,7 @@ const CANCEL_REASONS: { value: string; label: string }[] = [
   { value: "price_too_high",    label: "Price too high" },
   { value: "found_alternative", label: "Found an alternative" },
   { value: "delivery_too_slow", label: "Delivery too slow" },
+  { value: "changed_hub",       label: "I want to use a different Hub" },
   { value: "other",             label: "Other" },
 ];
 
@@ -1273,9 +1274,10 @@ function CancelWithReasonButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const eligible =
-    ["pending"].includes(orderStatus?.toLowerCase() ?? "") &&
-    !["paid"].includes(paymentStatus?.toLowerCase() ?? "");
+  const status = (orderStatus ?? "").toLowerCase().replace(/[\s-]+/g, "_");
+  const isPaid = (paymentStatus ?? "").toLowerCase() === "paid";
+  // Unpaid PENDING orders cancel directly; paid orders still awaiting drop-off are cancelled and fully refunded.
+  const eligible = isPaid ? status === "awaiting_drop_off" : status === "pending";
 
   if (!eligible) return null;
 
@@ -1309,6 +1311,11 @@ function CancelWithReasonButton({
             <div className="border-b border-white/[0.08] px-6 py-5">
               <h2 className="text-[16px] font-semibold text-white">Cancel order #{orderId}</h2>
               <p className="mt-1 text-[12px] text-white/[0.44]">Please tell us why you want to cancel.</p>
+              {isPaid && (
+                <p className="mt-2 text-[12px] text-emerald-300/90">
+                  This order is paid. Cancelling now refunds 100% to your original payment method within 1–3 days, and you can place a new order with another Hub.
+                </p>
+              )}
             </div>
 
             <div className="space-y-4 p-6">

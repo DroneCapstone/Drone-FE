@@ -9,6 +9,7 @@ import { OperatorLoadingState } from '../../../operator/components/OperatorLoadi
 import { AdminPageShell } from '../../components/AdminPageShell';
 import { adminOperationsApi, apiError, type NotificationApi, type NotificationPageApi, type NotificationType } from '../../api/adminOperationsApi';
 import { adminDisplayText } from '../../utils/adminDisplayText';
+import { NotificationDetailDialog } from '../../../../components/common/NotificationDetailDialog';
 import './AdminNotificationsPage.css';
 
 const PAGE_SIZE = 20;
@@ -53,6 +54,7 @@ export function AdminNotificationsPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
+  const [detailItem, setDetailItem] = useState<NotificationApi | null>(null);
   const key = `${filter}:${type}:${page}:${revision}`;
   const current = result?.key === key ? result : null;
   const data = current?.data && Array.isArray(current.data.items) ? current.data : null;
@@ -122,14 +124,13 @@ export function AdminNotificationsPage() {
     void mutate(() => adminOperationsApi.deleteNotification(item.id), 'Notification deleted.');
   }
   async function openNotification(item: NotificationApi) {
-    const target = notificationTarget(item);
-    if (busy || !target) return;
-    if (item.is_read) { navigate(target.to); return; }
+    if (busy) return;
+    if (item.is_read) { setDetailItem(item); return; }
     setSaving(true); setActionError(''); setNotice('');
     try {
       await adminOperationsApi.markNotification(item.id);
       window.dispatchEvent(new Event('admin-notifications-updated'));
-      navigate(target.to);
+      setDetailItem(item);
     } catch (error) { setActionError(apiError(error)); }
     finally { setSaving(false); }
   }
@@ -154,7 +155,7 @@ export function AdminNotificationsPage() {
         {data.items.length === 0 ? <div className="p-10 text-center text-sm text-[var(--muted)]">{filter === 'unread' && !type ? 'No unread notifications.' : filter === 'all' && !type ? 'No notifications.' : 'No notifications match your filters.'}</div> : <div className="notification-rows">
           {data.items.map(item => {
             const { Icon, style } = notificationVisual(item);
-            const target = notificationTarget(item);
+            const target = notificationTarget(item) ?? ({ to: '', label: 'View details' } as NonNullable<ReturnType<typeof notificationTarget>>);
             const isExpanded = expanded.includes(item.id);
             const message = adminDisplayText(item.message);
             const canExpand = message.length > 160 || message.includes('\n');
@@ -163,7 +164,7 @@ export function AdminNotificationsPage() {
               tabIndex={target && !busy ? 0 : undefined}
               role={target ? 'group' : undefined}
               aria-label={target ? `${adminDisplayText(item.title)}. ${target.label}. Press Enter to open.` : undefined}
-              onDoubleClick={target ? event => {
+              onClick={target ? event => {
                 // Buttons and other interactive descendants keep their own actions.
                 if (busy || (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, [role="button"]'))) return;
                 void openNotification(item);
@@ -196,5 +197,11 @@ export function AdminNotificationsPage() {
       </>}
     </section>
     </div>
+  {detailItem && <NotificationDetailDialog
+    key={detailItem.id}
+    load={() => adminOperationsApi.notificationDetail(detailItem.id)}
+    onOpenRelated={notificationTarget(detailItem) ? () => { const to = notificationTarget(detailItem)?.to; setDetailItem(null); if (to) navigate(to); } : undefined}
+    onClose={() => setDetailItem(null)}
+  />}
   </AdminPageShell>;
 }

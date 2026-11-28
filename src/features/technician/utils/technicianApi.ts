@@ -1,3 +1,4 @@
+import type { NotificationDetailData } from "../../../components/common/NotificationDetailDialog";
 import {
   API_BASE_URL,
   API_WITH_CREDENTIALS,
@@ -835,6 +836,12 @@ export const getDroneMaintenanceSchedulesApi = (
 export const getNotificationsApi = (page = 1, pageSize = 50) =>
   technicianApiRequest(
     `/notifications?page=${page}&page_size=${pageSize}`,
+  );
+
+/** Notification detail: context (order/mission/drone) + evidence photos. */
+export const getNotificationDetailApi = (notificationId: string | number) =>
+  technicianApiRequest<NotificationDetailData>(
+    `/notifications/${encodeURIComponent(String(notificationId))}/detail`,
   );
 
 export const getUnreadNotificationCountApi = () =>

@@ -1,4 +1,5 @@
 import { operatorApiRequest } from './orderApi';
+import type { NotificationDetailData } from '../../../components/common/NotificationDetailDialog';
 
 export interface OperatorNotification {
   id: number;
@@ -72,3 +73,14 @@ export const deleteOperatorNotificationApi = (id: number) =>
 
 export const clearReadOperatorNotificationsApi = () =>
   operatorApiRequest<unknown>('/notifications/clear-read', { method: 'DELETE' });
+
+export async function getOperatorNotificationDetailApi(id: number): Promise<NotificationDetailData> {
+  const response = await operatorApiRequest<NotificationDetailData | { data: NotificationDetailData }>(
+    `/notifications/${id}/detail`
+  );
+  const payload = response && 'data' in response ? response.data : response;
+  if (!payload || !payload.notification || !Array.isArray(payload.evidence)) {
+    throw new Error('Unable to load notification details. Unexpected response structure.');
+  }
+  return payload;
+}

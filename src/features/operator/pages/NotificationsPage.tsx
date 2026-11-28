@@ -3,7 +3,8 @@ import { Bell, CheckCheck, ChevronLeft, ChevronRight, CreditCard, Package, Plane
 import { useNavigate } from 'react-router-dom';
 import { ActionButton } from '../../../components/ui/ActionButton';
 import { DropdownSelect } from '../../../components/ui/DropdownSelect';
-import type { OperatorNotification } from '../api/notificationApi';
+import { NotificationDetailDialog } from '../../../components/common/NotificationDetailDialog';
+import { getOperatorNotificationDetailApi, type OperatorNotification } from '../api/notificationApi';
 import { OperatorLoadingState } from '../components/OperatorLoadingState';
 import { PageHeader } from '../components/PageHeader';
 import {
@@ -61,6 +62,7 @@ export function NotificationsPage() {
   const [expanded, setExpanded] = useState<number[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [detailItem, setDetailItem] = useState<OperatorNotification | null>(null);
   const query = useOperatorNotificationsQuery(page, {
     ...(filter === 'all' ? {} : { is_read: filter === 'read' }),
     ...(type === 'all' ? {} : { notification_type: type }),
@@ -105,8 +107,7 @@ export function NotificationsPage() {
   async function openNotification(item: OperatorNotification) {
     if (busy) return;
     if (!item.is_read && !(await mutate(() => markOne.mutateAsync(item.id)))) return;
-    const target = targetOf(item);
-    if (target) navigate(target);
+    setDetailItem(item); // mở chi tiết: ngữ cảnh + ảnh minh chứng; nút 'Open related page' dẫn tới đơn/chuyến bay
   }
 
   return <>
@@ -130,7 +131,7 @@ export function NotificationsPage() {
           {data.items.length === 0 ? <div className="opn-empty">{filter === 'unread' && type === 'all' ? 'No unread notifications.' : filter === 'all' && type === 'all' ? 'No notifications.' : 'No notifications match your filters.'}</div> : <div className="opn-rows">
             {data.items.map(item => {
               const { Icon, style } = visualOf(item);
-              const actionable = Boolean(targetOf(item)) || !item.is_read;
+              const actionable = true;
               const isExpanded = expanded.includes(item.id);
               const canExpand = item.message.length > 160 || item.message.includes('\n');
               return <div key={item.id} className={`opn-row${item.is_read ? '' : ' is-unread'}${actionable ? ' is-navigable' : ''}`}
@@ -168,5 +169,12 @@ export function NotificationsPage() {
         </>}
       </section>
     </div>
+    {detailItem && <NotificationDetailDialog
+      key={detailItem.id}
+      load={() => getOperatorNotificationDetailApi(detailItem.id)}
+      relatedLabel={detailItem.mission_id ? 'Open mission' : 'Open order'}
+      onOpenRelated={targetOf(detailItem) ? () => { const target = targetOf(detailItem); setDetailItem(null); if (target) navigate(target); } : undefined}
+      onClose={() => setDetailItem(null)}
+    />}
   </>;
 }
