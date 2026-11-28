@@ -129,9 +129,8 @@ export type TransitMission = BundleInfo & {
 
   batteryLevelPct: number;
 
-  requiredDepartureBatteryPct:
-
-    number;
+  /** Actual minimum supplied by Backend, when available. */
+  requiredDepartureBatteryPct?: number;
 
   batteryServiceRequired:
 
@@ -788,6 +787,12 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
   );
 
+  const requiredDepartureBatteryPct = pickNumber(
+    value,
+    ["required_departure_battery_pct", "required_battery_pct"],
+    Number.NaN,
+  );
+
   return {
 
     ...readBundleInfo(value),
@@ -863,15 +868,9 @@ function mapApiTransitMission(value: unknown): TransitMission | null {
 
     ),
 
-    requiredDepartureBatteryPct: pickNumber(
-
-      value,
-
-      ["required_departure_battery_pct", "required_battery_pct"],
-
-      100,
-
-    ),
+    requiredDepartureBatteryPct: Number.isFinite(requiredDepartureBatteryPct)
+      ? requiredDepartureBatteryPct
+      : undefined,
 
     // Per new BE flow, a confirmed relay stop always requires a battery swap
 

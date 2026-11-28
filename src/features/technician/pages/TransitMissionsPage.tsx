@@ -1114,11 +1114,7 @@ export function TransitMissionsPage() {
       pushActionMessage("The next-leg battery matches the current installed battery. Verify Operator's assignment before proceeding.");
       return;
     }
-    if (mission.assignedReplacementBatteryPct !== undefined &&
-        mission.assignedReplacementBatteryPct < mission.requiredDepartureBatteryPct) {
-      pushActionMessage("The Operator-assigned battery does not meet the minimum departure charge. Ask Operator to review the assignment.");
-      return;
-    }
+    // Operator assigns the battery; Backend validates the actual swap.
 
     setSwappingKey(key);
     try {
@@ -1851,8 +1847,6 @@ export function TransitMissionsPage() {
                         onClick={() => void markRelayReady(mission)}
                         disabled={!mission.backendMissionId || !operatorAssignedBatteryId(mission) ||
                           operatorAssignedBatteryId(mission).toUpperCase() === mission.batteryId?.trim().toUpperCase() ||
-                          (mission.assignedReplacementBatteryPct !== undefined &&
-                            mission.assignedReplacementBatteryPct < mission.requiredDepartureBatteryPct) ||
                           swappingKey !== null || batterySwapMutation.isPending}
                         title="Confirm the Operator-assigned battery is physically installed before marking Ready"
                         className="h-9 min-w-[118px] shrink-0 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2404,6 +2398,8 @@ export function TransitMissionsPage() {
                       selectedMission.purpose ===
 
                         "BATTERY_STOP" &&
+
+                      selectedMission.requiredDepartureBatteryPct !== undefined &&
 
                       selectedMission.batteryLevelPct <
 
