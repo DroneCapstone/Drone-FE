@@ -1,3 +1,4 @@
+import { readBundleInfo, type BundleInfo } from "./bundleInfo";
 import { readOrderProofImages, type OrderProofImage } from "./proofImages";
 import {
 
@@ -39,7 +40,7 @@ export type OutboundDeliveryStatus =
 
   | "Needs Review";
 
-export type OutboundDelivery = {
+export type OutboundDelivery = BundleInfo & {
   proofImages?: OrderProofImage[];
 
   /**
@@ -648,6 +649,7 @@ function mapApiOutbound(
 
   return {
 
+    ...readBundleInfo(value),
     proofImages: readOrderProofImages(value),
     orderId,
 

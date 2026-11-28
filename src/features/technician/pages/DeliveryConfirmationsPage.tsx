@@ -1,4 +1,5 @@
 import { ConfirmationHistoryDialog } from "../components/ConfirmationHistoryDialog";
+import { BundleBadge, BundleOrderList } from "../components/TechnicianBundleInfo";
 import { ProofActionDialog, OrderProofGallery } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -151,6 +152,7 @@ export function DeliveryConfirmationsPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.missionCode || "—"}</p>
+                        <BundleBadge bundle={delivery} />
                       </div>
                       <span className="min-w-0 break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.destination}</span>
                       <div>
@@ -199,7 +201,9 @@ export function DeliveryConfirmationsPage() {
       {pickupProofId && <ProofActionDialog key={pickupProofId} title="Confirm customer pickup" reference={pickupProofId}
         description="Attach a photo of the parcel handover to the recipient." confirmLabel="Confirm received"
         disabled={!pickupProofDelivery?.backendOrderId || pickupProofDelivery.status !== "Delivered" || confirmingOrderIds.includes(pickupProofId) || Boolean(remainingUntil(pickupProofDelivery.pickupDeadlineAtIso, now)?.expired)}
-        onCancel={() => setPickupProofId(null)} onConfirm={image => { setPickupProofId(null); if (pickupProofDelivery) void handleConfirm(pickupProofDelivery, image); }} />}
+        onCancel={() => setPickupProofId(null)} onConfirm={image => { setPickupProofId(null); if (pickupProofDelivery) void handleConfirm(pickupProofDelivery, image); }}>
+        {pickupProofDelivery && <BundleOrderList bundle={pickupProofDelivery} />}
+      </ProofActionDialog>}
       {historyOpen && <ConfirmationHistoryDialog onClose={() => setHistoryOpen(false)} />}
     </TechnicianPageShell>
   );

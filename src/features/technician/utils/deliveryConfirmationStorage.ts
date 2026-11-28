@@ -1,3 +1,4 @@
+import { readBundleInfo, type BundleInfo } from "./bundleInfo";
 import { readOrderProofImages, type OrderProofImage } from "./proofImages";
 import {
   confirmDeliveryPickupApi,
@@ -17,7 +18,7 @@ const PICKUP_WINDOW_MS = PICKUP_WINDOW_HOURS * 60 * 60 * 1000;
 export type DeliveryStatus = "Delivered" | "Completed" | "Cancelled";
 export type OrderIdSource = "order_id" | "id" | "order_code" | "missing";
 
-export type DeliveryConfirmation = {
+export type DeliveryConfirmation = BundleInfo & {
   proofImages?: OrderProofImage[];
   /** Used only as a React row key. */
   orderId: string;
@@ -128,6 +129,7 @@ export function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation
   const droneCode = pickString(value, ["drone_code", "drone_name", "drone"], "") || droneId;
 
   return {
+    ...readBundleInfo(value),
     proofImages: readOrderProofImages(value),
     orderId: key,
     backendOrderId,

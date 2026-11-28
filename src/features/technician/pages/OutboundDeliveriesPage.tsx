@@ -1,4 +1,5 @@
 import { HistoryDetailsButton, TechnicianHistoryDetails } from "../components/TechnicianHistoryDetails";
+import { BundleBadge, BundleOrderList } from "../components/TechnicianBundleInfo";
 import { ProofActionDialog, OrderProofGallery } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
@@ -138,7 +139,7 @@ function normalizedState(raw?: string) {
 }
 
 function isInitialDispatchCandidate(delivery: OutboundDelivery): boolean {
-  if (delivery.prematureMissionAssignment) return false;
+  if (delivery.isSecondaryBundledOrder || delivery.prematureMissionAssignment) return false;
   if (delivery.status !== "Mission Assigned" && delivery.status !== "Ready") return false;
   const missionState = normalizedState(delivery.missionStatus);
   if (missionState !== "SCHEDULED" && missionState !== "READY") return false;
@@ -241,7 +242,7 @@ export function OutboundDeliveriesPage() {
 
   const handleReceiveAtHub = async (orderId: string, proofImageUrl: string) => {
     const delivery = normalizedDeliveries.find((item) => item.orderId === orderId);
-    if (!delivery || delivery.status !== "Awaiting Drop-off" || receivingOrdersRef.current.has(orderId)) return;
+    if (!delivery || delivery.isSecondaryBundledOrder || delivery.status !== "Awaiting Drop-off" || receivingOrdersRef.current.has(orderId)) return;
 
     receivingOrdersRef.current.add(orderId);
     setReceivingOrderIds((current) => [...current, orderId]);
@@ -439,6 +440,7 @@ export function OutboundDeliveriesPage() {
                         ? "—"
                         : display(delivery.missionCode ?? delivery.missionId)}
                     </p>
+                    <BundleBadge bundle={delivery} />
                     <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={delivery.assignedDroneId ?? ""}>
                       {delivery.prematureMissionAssignment
                         ? "Awaiting package receipt"
@@ -472,7 +474,7 @@ export function OutboundDeliveriesPage() {
                     )}
                   </div>
                   <div className="flex items-center justify-end gap-2">
-                    {delivery.status === "Awaiting Drop-off" && (
+                    {!delivery.isSecondaryBundledOrder && delivery.status === "Awaiting Drop-off" && (
                       <Button
                         type="button"
                         disabled={receivingOrderIds.includes(delivery.orderId)}
@@ -483,12 +485,13 @@ export function OutboundDeliveriesPage() {
                         {receivingOrderIds.includes(delivery.orderId) ? "Receiving..." : "Receive at hub"}
                       </Button>
                     )}
-                    {delivery.status === "At Hub" && (
+                    {!delivery.isSecondaryBundledOrder && delivery.status === "At Hub" && (
                       <span className="text-right text-[11px] text-[var(--tech-muted)]">
                         {delivery.missionId ? "Awaiting drone assignment" : "Awaiting Operator"}
                       </span>
                     )}
-                    {(delivery.status === "Mission Assigned" || delivery.status === "Ready") && (
+                    {delivery.isSecondaryBundledOrder && <span className="text-right text-[11px] text-[var(--tech-muted)]">Included in {display(delivery.missionCode ?? delivery.missionId)}</span>}
+                    {!delivery.isSecondaryBundledOrder && (delivery.status === "Mission Assigned" || delivery.status === "Ready") && (
                       <div className="flex max-w-[168px] flex-col items-end gap-1">
                         {delivery.backendMissionId && acceptedDispatchIds.includes(delivery.backendMissionId) ? (
                           <span className="text-right text-[11px] text-orange-500">Dispatch accepted · Syncing</span>
@@ -557,11 +560,11 @@ export function OutboundDeliveriesPage() {
       {receiveProofOrderId && (
         <ProofActionDialog key={`receive:${receiveProofOrderId}`} title="Receive at hub" reference={receiveProofOrderId}
           description="Attach a photo of the parcel received from the customer." confirmLabel="Confirm receipt"
-          disabled={!normalizedDeliveries.some(item => item.orderId === receiveProofOrderId && item.status === "Awaiting Drop-off") || receivingOrderIds.includes(receiveProofOrderId)}
+          disabled={!normalizedDeliveries.some(item => item.orderId === receiveProofOrderId && !item.isSecondaryBundledOrder && item.status === "Awaiting Drop-off") || receivingOrderIds.includes(receiveProofOrderId)}
           onCancel={() => setReceiveProofOrderId(null)} onConfirm={image => { const id = receiveProofOrderId; setReceiveProofOrderId(null); void handleReceiveAtHub(id, image); }} />
       )}
       {dispatchCandidate && (
-        <ProofActionDialog key={JSON.stringify(["dispatch", dispatchCandidate.orderId, dispatchCandidate.backendMissionId, dispatchCandidate.assignedDroneId, dispatchCandidate.installedBatteryId])} title="Confirm dispatch"
+        <ProofActionDialog key={JSON.stringify(["dispatch", dispatchCandidate.orderId, dispatchCandidate.backendMissionId, dispatchCandidate.assignedDroneId, dispatchCandidate.installedBatteryId, dispatchCandidate.isBundled, dispatchCandidate.isSecondaryBundledOrder, dispatchCandidate.bundledOrderIds, dispatchCandidate.totalOrdersCount])} title="Confirm dispatch" requireBundleProof={dispatchCandidate.isBundled === true}
           reference={display(dispatchCandidate.backendMissionId)} description="Check the assigned battery and pre-flight inspection. Attach a photo of the drone and loaded parcel before departure."
           confirmLabel="Confirm dispatch" disabled={!isInitialDispatchCandidate(dispatchCandidate) || dispatchingMissionId !== null || outboundReadyMutation.isPending || outboundDispatchMutation.isPending}
           onCancel={() => setDispatchConfirmOrderId(null)} onConfirm={image => { setDispatchConfirmOrderId(null); void handleInitialDispatch(dispatchCandidate, image); }}>
@@ -570,6 +573,7 @@ export function OutboundDeliveriesPage() {
             <DetailField label="Drone ID" value={display(dispatchCandidate.assignedDroneId)} />
             <DetailField label="Assigned battery" value={display(dispatchCandidate.installedBatteryId)} />
           </div>
+          <BundleOrderList bundle={dispatchCandidate} />
         </ProofActionDialog>
       )}
 
