@@ -142,7 +142,7 @@ export function NewBatteriesPage() {
       <div className="table-wrap"><OperatorTable className="admin-pinned-actions"><TableHeader><TableRow><TableHead>Battery Model</TableHead><TableHead>Current Quantity</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
         <TableBody>{shown.map((item) => <TableRow key={item.name}>
           <TableCell><strong>{item.name}</strong></TableCell>
-          <TableCell><strong className={item.quantity === 0 ? 'text-red-600' : undefined}>{item.quantity}</strong><small className={item.quantity === 0 ? '!text-red-600' : undefined}>{item.quantity === 0 ? 'Out of stock' : 'Unassigned units'}</small></TableCell>
+          <TableCell><strong className={item.quantity === 0 ? 'text-red-600' : undefined}>{item.quantity}</strong>{item.quantity === 0 && <small className="!text-red-600">Out of stock</small>}</TableCell>
           <TableCell><div className="flex flex-wrap items-center gap-2">
             {/* <ActionButton variant="ghost" onClick={() => setExpandedModel(expandedModel === item.name ? null : item.name)}>
               {expandedModel === item.name ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
