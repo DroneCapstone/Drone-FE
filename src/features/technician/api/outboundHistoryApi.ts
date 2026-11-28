@@ -1,10 +1,11 @@
+import { readHistoryProofFields, type HistoryProofFields } from "../utils/proofImages";
 import { technicianApiRequest } from "../utils/technicianApi";
 import type { OutboundDelivery, OutboundDeliveryHistory } from "../utils/outboundDeliveryStorage";
 
 type ApiRecord = Record<string, unknown>;
 
 /** Optional fields used only in the Outbound History dialog. */
-export type OutboundHistoryViewRow = OutboundDeliveryHistory & {
+export type OutboundHistoryViewRow = OutboundDeliveryHistory & HistoryProofFields & {
   customerDropoffAt?: string;
   receiverName?: string;
   batteryCode?: string;
@@ -126,6 +127,7 @@ function mapHistoryRecord(value: unknown): OutboundHistoryViewRow | null {
     departedAt,
     result: normalizedStatus(status, Boolean(departedAt)),
     // Display-only fields supplied by GET /technician/fleet/outbound-history.
+    ...readHistoryProofFields(record),
     customerDropoffAt: readText(record, ["customer_dropoff_at", "dropoff_at"]),
     receiverName: readText(record, ["receiver_name"]),
     batteryCode: readText(record, ["battery_code"]),

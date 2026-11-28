@@ -1,3 +1,5 @@
+import { HistoryDetailsButton, TechnicianHistoryDetails } from "../components/TechnicianHistoryDetails";
+import { ProofActionDialog } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
 
@@ -564,7 +566,10 @@ export function TransitMissionsPage() {
 
   const [dispatchedRelayMissionIds, setDispatchedRelayMissionIds] = useState<string[]>([]);
 
-  const historyQuery = useTransitHistoryQuery();
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyDetailId, setHistoryDetailId] = useState<string | null>(null);
+  const historyQuery = useTransitHistoryQuery(historyOpen);
+  const closeHistory = () => { setHistoryDetailId(null); setHistoryOpen(false); };
 
 
 
@@ -680,6 +685,7 @@ export function TransitMissionsPage() {
   // remain visible, even when destination_received_at is null.
 
   const missionHistory = historyQuery.data ?? [];
+  const historyDetail = missionHistory.find(row => row.id === historyDetailId);
 
 
 
@@ -773,13 +779,7 @@ export function TransitMissionsPage() {
 
 
 
-  const [
 
-    historyOpen,
-
-    setHistoryOpen,
-
-  ] = useState(false);
 
 
 
@@ -794,6 +794,22 @@ export function TransitMissionsPage() {
   const [swappingKey, setSwappingKey] = useState<string | null>(null);
 
   const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
+  type ProofAction = "arrival" | "ready" | "dispatch";
+  const proofIdentity = (mission: TransitMission, action: ProofAction) => JSON.stringify([
+    mission.id, mission.backendMissionId, arrivalConfirmationKey(mission),
+    mission.droneCurrentHubId, mission.currentDroneId,
+    action === "ready" ? operatorAssignedBatteryId(mission) : mission.batteryId,
+    action === "arrival" ? (isFinalHubPendingArrival(mission) ? "FINAL" : getTransitConfirmKind(mission)) : null,
+  ]);
+  const [proofTarget, setProofTarget] = useState<{ id: string; key: string; action: ProofAction } | null>(null);
+  const openProof = (mission: TransitMission, action: ProofAction) => {
+    if (action === "arrival" && !canConfirmLandedMission(mission)) {
+      pushActionMessage("Cannot select arrival API: Backend must provide drone_current_hub_id and destination_hub_id (or an explicit arrival purpose). Do not confirm until the drone has physically landed.");
+      return;
+    }
+    setProofTarget({ id: mission.id, key: proofIdentity(mission, action), action });
+  };
+  const proofMission = proofTarget ? missions.find(m => m.id === proofTarget.id && proofIdentity(m, proofTarget.action) === proofTarget.key) : undefined;
 
 
 
@@ -960,7 +976,7 @@ export function TransitMissionsPage() {
 
 
 
-  const requestConfirm = async (mission: TransitMission) => {
+  const requestConfirm = async (mission: TransitMission, proofImageUrl: string) => {
 
     const missionKey = mission.backendMissionId;
 
@@ -1011,6 +1027,7 @@ export function TransitMissionsPage() {
         missionId: missionKey,
 
         relay,
+        proofImageUrl,
 
         // The mission already identifies an incident. Do not invent an
 
@@ -1042,7 +1059,7 @@ export function TransitMissionsPage() {
 
       void transitQuery.refetch();
 
-      void historyQuery.refetch();
+      if (historyOpen) void historyQuery.refetch();
 
     } catch (error) {
 
@@ -1065,7 +1082,7 @@ export function TransitMissionsPage() {
 
         void transitQuery.refetch();
 
-        void historyQuery.refetch();
+        if (historyOpen) void historyQuery.refetch();
 
       } else {
 
@@ -1087,7 +1104,7 @@ export function TransitMissionsPage() {
    * Clicking Ready calls the existing swap-battery endpoint. Only a successful
    * Backend response is evidence of the Ready transition; no synthetic state.
    */
-  const markRelayReady = async (mission: TransitMission) => {
+  const markRelayReady = async (mission: TransitMission, proofImageUrl: string) => {
     const key = arrivalKey(mission);
     if (!mission.backendMissionId || !isContinuationMission(mission) ||
         mission.status !== "At Hub" || !arrivalConfirmedFor(mission) ||
@@ -1114,6 +1131,7 @@ export function TransitMissionsPage() {
       await batterySwapMutation.mutateAsync({
         missionId: mission.backendMissionId,
         newBatteryId: assignedBatteryId,
+        proofImageUrl,
       });
       // Store receipts only after BE confirms the swap, to prevent duplicate
       // inventory operations when /incoming has not refreshed yet.
@@ -1139,7 +1157,7 @@ export function TransitMissionsPage() {
   };
 
   /** Dispatch is an independent action after a successful battery swap. */
-  const dispatchMission = async (mission: TransitMission) => {
+  const dispatchMission = async (mission: TransitMission, proofImageUrl: string) => {
     const key = arrivalKey(mission);
     if (!mission.backendMissionId || !isContinuationMission(mission) ||
         dispatchedRelayMissionIds.includes(key) || dispatchingKey !== null ||
@@ -1156,7 +1174,7 @@ export function TransitMissionsPage() {
 
     setDispatchingKey(key);
     try {
-      await dispatchMutation.mutateAsync(mission.backendMissionId);
+      await dispatchMutation.mutateAsync({ missionId: mission.backendMissionId, proofImageUrl });
       // Keep the scoped v2 receipt while GET /incoming may still be stale,
       // but clear the unspecific old :current session key after Dispatch.
       setConfirmedArrivalIds(keys => keys.filter(item =>
@@ -1164,7 +1182,7 @@ export function TransitMissionsPage() {
       setDispatchedRelayMissionIds(keys => keys.includes(key) ? keys : [...keys, key]);
       pushActionMessage("Relay Dispatch was accepted by Backend. Mission continues to the next hub; fleet and battery data are refreshing.");
       void transitQuery.refetch();
-      void historyQuery.refetch();
+      if (historyOpen) void historyQuery.refetch();
     } catch (error) {
       pushActionMessage(`Dispatch not completed: ${error instanceof Error ? error.message : "Dispatch failed."}. The battery swap will not be submitted a second time.`);
       void transitQuery.refetch();
@@ -1365,20 +1383,7 @@ export function TransitMissionsPage() {
 
             onClick={() => {
 
-              // History is already fetched in parallel when Transit mounts.
-
-              // Open instantly from React Query's cached data; if stale, refresh
-
-              // in the background without hiding the existing history rows.
-
               setHistoryOpen(true);
-
-              if (historyQuery.isStale && !historyQuery.isFetching) {
-
-                void historyQuery.refetch();
-
-              }
-
             }}
 
             className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--tech-border)] px-4 text-[13px] font-medium text-[var(--tech-text-secondary)] transition-colors hover:border-orange-500/50 hover:text-orange-500"
@@ -1678,7 +1683,7 @@ export function TransitMissionsPage() {
 
                           onClick={() =>
 
-                            void requestConfirm(mission)
+                            openProof(mission, "arrival")
 
                           }
 
@@ -1741,7 +1746,7 @@ export function TransitMissionsPage() {
                           {!arrivalConfirmed && mission.status !== "Ready" ? (
                             <Button
                               type="button"
-                              onClick={() => void requestConfirm(mission)}
+                              onClick={() => openProof(mission, "arrival")}
                               disabled={!mission.backendMissionId || !canConfirmLandedMission(mission) || confirmArrivalMutation.isPending}
                               title="Confirm only after the drone has physically landed at this relay hub"
                               className="h-9 min-w-[142px] rounded-md bg-orange-500 px-3 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
@@ -1752,7 +1757,7 @@ export function TransitMissionsPage() {
                           ) : batterySwappedFor(mission) || mission.status === "Ready" ? (
                             <Button
                               type="button"
-                              onClick={() => void dispatchMission(mission)}
+                              onClick={() => openProof(mission, "dispatch")}
                               disabled={!mission.backendMissionId || dispatchingKey !== null ||
                                 batterySwapMutation.isPending || dispatchMutation.isPending ||
                                 dispatchedRelayMissionIds.includes(arrivalKey(mission)) ||
@@ -1851,7 +1856,7 @@ export function TransitMissionsPage() {
                       </div>
                       <Button
                         type="button"
-                        onClick={() => void markRelayReady(mission)}
+                        onClick={() => openProof(mission, "ready")}
                         disabled={!mission.backendMissionId || !operatorAssignedBatteryId(mission) ||
                           operatorAssignedBatteryId(mission).toUpperCase() === mission.batteryId?.trim().toUpperCase() ||
                           (mission.assignedReplacementBatteryPct !== undefined &&
@@ -1921,7 +1926,7 @@ export function TransitMissionsPage() {
 
           onMouseDown={(event) => {
 
-            if (event.target === event.currentTarget) setHistoryOpen(false);
+            if (event.target === event.currentTarget) closeHistory();
 
           }}
 
@@ -1957,7 +1962,7 @@ export function TransitMissionsPage() {
 
                 type="button"
 
-                onClick={() => setHistoryOpen(false)}
+                onClick={closeHistory}
 
                 className="rounded-md p-1.5 text-[var(--tech-muted)] transition-colors hover:text-orange-500"
 
@@ -1975,9 +1980,9 @@ export function TransitMissionsPage() {
 
             <div className="min-h-0 flex-1 overflow-auto">
 
-              <div className="min-w-[1280px]">
+              <div className="min-w-[1400px]">
 
-                <div className="sticky top-0 z-10 grid grid-cols-[180px_160px_180px_115px_165px_165px_185px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
+                <div className="sticky top-0 z-10 grid grid-cols-[180px_160px_180px_115px_165px_165px_185px_100px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 sm:px-6">
 
                   <HistoryHeader>Mission / Order</HistoryHeader>
 
@@ -1992,6 +1997,8 @@ export function TransitMissionsPage() {
                   <HistoryHeader>Arrival confirmed at</HistoryHeader>
 
                   <HistoryHeader>Destination received at</HistoryHeader>
+
+                  <HistoryHeader>Action</HistoryHeader>
 
                 </div>
 
@@ -2023,7 +2030,7 @@ export function TransitMissionsPage() {
 
                           key={item.id}
 
-                          className="grid grid-cols-[180px_160px_180px_115px_165px_165px_185px] items-center gap-3 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50 sm:px-6"
+                          className="grid grid-cols-[180px_160px_180px_115px_165px_165px_185px_100px] items-center gap-3 px-5 py-4 transition-colors hover:bg-[var(--tech-surface-2)]/50 sm:px-6"
 
                         >
 
@@ -2133,6 +2140,8 @@ export function TransitMissionsPage() {
 
                           </div>
 
+                          <div><HistoryDetailsButton onClick={() => setHistoryDetailId(item.id)} /></div>
+
                         </div>
 
                       );
@@ -2166,6 +2175,18 @@ export function TransitMissionsPage() {
       )}
 
 
+
+      {historyOpen && historyDetail && <TechnicianHistoryDetails key={historyDetail.id} title="Transit mission details" record={historyDetail} onClose={() => setHistoryDetailId(null)} note="Proof images are shown as returned for this history record. Hub and leg are displayed when provided by Backend." fields={[
+        { label: "Mission ID", value: getMissionDisplayId(historyDetail.missionId) }, { label: "Order ID", value: historyDetail.orderId },
+        { label: "Drone ID", value: historyDetail.droneId }, { label: "Battery ID", value: historyDetail.batteryId },
+        { label: "Leg ID", value: historyDetail.legId }, { label: "Origin hub", value: historyDetail.origin },
+        { label: "Current hub", value: historyDetail.hub }, { label: "Destination hub", value: historyDetail.destination },
+        { label: "Arrival type", value: getHistoryReasonLabel(historyDetail.purpose) },
+        { label: "Drone departed", value: formatHistoryTimestamp(historyDetail.departedAt) },
+        { label: "Arrived at hub", value: formatHistoryTimestamp(historyDetail.arrivedAt) },
+        { label: "Arrival confirmed at", value: formatHistoryTimestamp(historyDetail.arrivalConfirmedAt) },
+        { label: "Destination received at", value: formatHistoryTimestamp(historyDetail.destinationReceivedAt) },
+      ]} />}
 
       {/* DETAILS */}
 
@@ -3127,6 +3148,26 @@ export function TransitMissionsPage() {
 
       )}
 
+      {proofTarget && (
+        <ProofActionDialog key={`${proofTarget.key}:${proofTarget.action}`} title={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Replace battery" : "Confirm dispatch"}
+          reference={proofMission?.missionId ?? proofTarget.id} description={proofTarget.action === "arrival"
+            ? (proofMission && isContinuationMission(proofMission) ? "Attach a photo of the drone after landing at this hub." : "Attach a photo of the landed drone and parcel at this hub.")
+            : proofTarget.action === "ready" ? `Attach a photo of the installed battery${proofMission ? ` (${operatorAssignedBatteryId(proofMission) || "assigned by Operator"})` : ""}.` : "Attach a photo of the drone ready to depart this hub."}
+          confirmLabel={proofTarget.action === "arrival" ? "Confirm arrival" : proofTarget.action === "ready" ? "Ready" : "Dispatch"}
+          disabled={!proofMission || !proofMission.backendMissionId ||
+            (proofTarget.action === "arrival" && (confirmArrivalMutation.isPending || arrivalConfirmedFor(proofMission) || !canConfirmLandedMission(proofMission))) ||
+            (proofTarget.action === "ready" && (!isContinuationMission(proofMission) || swappingKey !== null || batterySwapMutation.isPending || !arrivalConfirmedFor(proofMission) || batterySwappedFor(proofMission) || proofMission.status !== "At Hub" || dispatchedRelayMissionIds.includes(arrivalKey(proofMission)) || !operatorAssignedBatteryId(proofMission) || operatorAssignedBatteryId(proofMission).toUpperCase() === proofMission.batteryId?.trim().toUpperCase() || (proofMission.assignedReplacementBatteryPct !== undefined && proofMission.assignedReplacementBatteryPct < proofMission.requiredDepartureBatteryPct))) ||
+            (proofTarget.action === "dispatch" && (!isContinuationMission(proofMission) || dispatchingKey !== null || batterySwapMutation.isPending || dispatchMutation.isPending || dispatchedRelayMissionIds.includes(arrivalKey(proofMission)) || !["At Hub", "Ready"].includes(proofMission.status) || !arrivalConfirmedFor(proofMission) || (!batterySwappedFor(proofMission) && proofMission.status !== "Ready")))}
+          onCancel={() => setProofTarget(null)} onConfirm={image => {
+            const current = proofMission; const action = proofTarget.action; setProofTarget(null);
+            if (!current) return;
+            if (action === "arrival") void requestConfirm(current, image);
+            else if (action === "ready") void markRelayReady(current, image);
+            else void dispatchMission(current, image);
+          }}>
+          {!proofMission && <p role="status" className="text-[13px] text-orange-500">Mission information changed. Close this dialog and reopen the action.</p>}
+        </ProofActionDialog>
+      )}
     </TechnicianPageShell>
 
   );

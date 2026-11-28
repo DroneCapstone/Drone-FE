@@ -1,7 +1,10 @@
+import { ConfirmationHistoryDialog } from "../components/ConfirmationHistoryDialog";
+import { ProofActionDialog, OrderProofGallery } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
+  History,
   PackageCheck,
   RefreshCw,
   XCircle,
@@ -43,6 +46,9 @@ export function DeliveryConfirmationsPage() {
   const deliveries = confirmationsQuery.data ?? [];
   const [now, setNow] = useState(() => Date.now());
   const [message, setMessage] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pickupProofId, setPickupProofId] = useState<string | null>(null);
+  const pickupProofDelivery = deliveries.find(item => item.orderId === pickupProofId);
   // Track confirmation requests independently, without disabling other orders.
   const confirmingOrdersRef = useRef<Set<string>>(new Set());
   const [confirmingOrderIds, setConfirmingOrderIds] = useState<string[]>([]);
@@ -66,7 +72,7 @@ export function DeliveryConfirmationsPage() {
   }, [deliveries, now, confirmationsQuery.refetch]);
   // With the filter tabs removed, display all statuses from Backend.
   const visible: DeliveryConfirmation[] = deliveries;
-  async function handleConfirm(delivery: DeliveryConfirmation) {
+  async function handleConfirm(delivery: DeliveryConfirmation, proofImageUrl: string) {
     if (!delivery.backendOrderId || confirmingOrdersRef.current.has(delivery.orderId)) return;
     if (remainingUntil(delivery.pickupDeadlineAtIso, Date.now())?.expired) {
       setMessage("Pickup window expired. Wait for Backend to cancel the order, then refresh.");
@@ -76,7 +82,7 @@ export function DeliveryConfirmationsPage() {
     confirmingOrdersRef.current.add(delivery.orderId);
     setConfirmingOrderIds((ids) => [...ids, delivery.orderId]);
     try {
-      await confirmPickupMutation.mutateAsync(delivery.backendOrderId);
+      await confirmPickupMutation.mutateAsync({ orderId: delivery.backendOrderId, proofImageUrl });
       // Only BE can complete the order. The invalidated list is the source of truth.
       setMessage(`Pickup confirmed for ${delivery.orderCode}. Status is refreshed from Backend.`);
     } catch (error) {
@@ -115,6 +121,7 @@ export function DeliveryConfirmationsPage() {
           <RefreshCw size={14} className={confirmationsQuery.isFetching ? "animate-spin" : ""} />
           {confirmationsQuery.isFetching && !confirmationsQuery.isPending ? "Updating..." : "Refresh"}
         </button>
+        <button type="button" onClick={() => setHistoryOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-[var(--tech-border)] px-3 py-2 text-[12px] text-[var(--tech-text-secondary)] hover:border-orange-500/50 hover:text-orange-500"><History size={14}/> View history</button>
       </div>
       <Card className="overflow-hidden rounded-lg border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-none">
         <CardContent className="p-0">
@@ -141,6 +148,7 @@ export function DeliveryConfirmationsPage() {
                       <div className="min-w-0">
                         <p className="break-words text-[13px] font-semibold text-[var(--tech-text)]">{delivery.orderCode}</p>
                         <p className="mt-1 text-[11px] text-[var(--tech-muted)]">{delivery.recipient}</p>
+                        <OrderProofGallery images={delivery.proofImages} compact />
                       </div>
                       <div className="min-w-0">
                         <p className="break-words text-[12px] text-[var(--tech-text-secondary)]">{delivery.missionCode || "—"}</p>
@@ -153,7 +161,7 @@ export function DeliveryConfirmationsPage() {
                         {pending ? (
                           <Button
                             type="button"
-                            onClick={() => void handleConfirm(delivery)}
+                            onClick={() => setPickupProofId(delivery.orderId)}
                             disabled={blockConfirm || submitting}
                             title={!delivery.backendOrderId
                               ? "Backend must provide order_id or an ORD-... code."
@@ -189,6 +197,11 @@ export function DeliveryConfirmationsPage() {
         </CardContent>
       </Card>
       
+      {pickupProofId && <ProofActionDialog key={pickupProofId} title="Confirm customer pickup" reference={pickupProofId}
+        description="Attach a photo of the parcel handover to the recipient." confirmLabel="Confirm received"
+        disabled={!pickupProofDelivery?.backendOrderId || pickupProofDelivery.status !== "Delivered" || confirmingOrderIds.includes(pickupProofId) || Boolean(remainingUntil(pickupProofDelivery.pickupDeadlineAtIso, now)?.expired)}
+        onCancel={() => setPickupProofId(null)} onConfirm={image => { setPickupProofId(null); if (pickupProofDelivery) void handleConfirm(pickupProofDelivery, image); }} />}
+      {historyOpen && <ConfirmationHistoryDialog onClose={() => setHistoryOpen(false)} />}
     </TechnicianPageShell>
   );
 }

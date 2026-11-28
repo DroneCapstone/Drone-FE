@@ -1,3 +1,4 @@
+import { readOrderProofImages, type OrderProofImage } from "./proofImages";
 import {
 
   getOutboundDeliveriesApi,
@@ -39,6 +40,7 @@ export type OutboundDeliveryStatus =
   | "Needs Review";
 
 export type OutboundDelivery = {
+  proofImages?: OrderProofImage[];
 
   /**
    * Internal/backend order identifier. Keep this separate from orderCode so
@@ -647,6 +649,7 @@ function mapApiOutbound(
 
   return {
 
+    proofImages: readOrderProofImages(value),
     orderId,
 
     orderCode,
@@ -784,12 +787,18 @@ export async function refreshOutboundDeliveriesFromApi() {
  * The generic flexible-ID helper retries with a numeric suffix derived from
  * strings such as ORD-20261014-0023, which can target the wrong order.
  */
-export async function receiveOutboundOrderOnServer(orderId: string) {
+export async function receiveOutboundOrderOnServer(orderId: string, proofImageUrl?: string) {
   if (!orderId.trim()) throw new Error("Backend order ID is missing.");
 
   return technicianApiRequest(
     `/technician/deliveries/outbound/${encodeURIComponent(orderId)}/receive`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        stage: "PACKAGE_RECEIVED_AT_ORIGIN_HUB",
+        ...(proofImageUrl ? { proof_image_url: proofImageUrl } : {}),
+      }),
+    },
   );
 }
 

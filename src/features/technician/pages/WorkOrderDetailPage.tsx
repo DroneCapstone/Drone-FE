@@ -1,3 +1,5 @@
+import { checklistFor, defectTemplates, isDefectType, validProofUrl, type DefectType } from "../utils/workOrderInspection";
+import { WorkOrderProofField } from "../components/WorkOrderProofField";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   ArrowLeft,
@@ -93,18 +95,12 @@ function normalizeDroneModel(value: string): string {
 
 }
 
-const inspectionItems = [
-  "Visual inspection of drone body",
-  "Propeller and motor condition",
-  "Landing gear condition",
-  "Power connector and test battery check",
-  "Power-on and operational test",
-
-];
-
 // The API currently exposes start/completion, not a verified draft endpoint.
 // Keep unfinished input on this browser without changing Backend status or inventory.
 type WorkOrderDraft = {
+  defectType: DefectType | "";
+  proofImage: string;
+  partsProofImage: string;
   checkedItems: string[];
   diagnosis: string;
   correctiveAction: string;
@@ -116,6 +112,9 @@ type WorkOrderDraft = {
 
 function emptyWorkOrderDraft(): WorkOrderDraft {
   return {
+    defectType: "",
+    proofImage: "",
+    partsProofImage: "",
     checkedItems: [],
     diagnosis: "",
     correctiveAction: "",
@@ -135,9 +134,13 @@ function readWorkOrderDraft(key: string | null): WorkOrderDraft {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return defaults;
     const row = parsed as Record<string, unknown>;
+    const defectType = isDefectType(row.defectType) ? row.defectType : "";
     return {
+      defectType,
+      proofImage: validProofUrl(row.proofImage),
+      partsProofImage: validProofUrl(row.partsProofImage),
       checkedItems: Array.isArray(row.checkedItems)
-        ? inspectionItems.filter(item => (row.checkedItems as unknown[]).includes(item))
+        ? checklistFor(defectType).map(item => item.item).filter(item => (row.checkedItems as unknown[]).includes(item))
         : [],
       diagnosis: typeof row.diagnosis === "string" ? row.diagnosis : "",
       correctiveAction: typeof row.correctiveAction === "string" ? row.correctiveAction : "",
@@ -236,6 +239,12 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       confirmedReplacement: note,
     };
   });
+  const [defectType, setDefectType] = useState<DefectType | "">(initialDraft.defectType);
+  const [proofImage, setProofImage] = useState(initialDraft.proofImage);
+  const [partsProofImage, setPartsProofImage] = useState(initialDraft.partsProofImage);
+  const [proofBusy, setProofBusy] = useState(false);
+  const [partsProofBusy, setPartsProofBusy] = useState(false);
+  const inspectionItems = checklistFor(defectType).map(item => item.item);
   const [checkedItems, setCheckedItems] = useState<string[]>(initialDraft.checkedItems);
   const [diagnosis, setDiagnosis] = useState(initialDraft.diagnosis);
   const [correctiveAction, setCorrectiveAction] = useState(initialDraft.correctiveAction);
@@ -270,7 +279,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       return;
     }
     const draft: WorkOrderDraft = {
-      checkedItems, diagnosis, correctiveAction, droneStatus, correctiveActionMode,
+      defectType, proofImage, partsProofImage, checkedItems, diagnosis, correctiveAction, droneStatus, correctiveActionMode,
       replacementInventoryId, replacementQuantity,
     };
     try {
@@ -281,7 +290,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       setDraftSaved(false);
       setDraftSaveError(true);
     }
-  }, [draftStorageKey, order, workOrderStatus, checkedItems, diagnosis, correctiveAction,
+  }, [draftStorageKey, order, workOrderStatus, defectType, proofImage, partsProofImage, checkedItems, diagnosis, correctiveAction,
     droneStatus, correctiveActionMode, replacementInventoryId, replacementQuantity]);
 
   const partDetails = useQueries({
@@ -393,6 +402,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
   const toggleInspection = (
     item: string,
   ) => {
+    if (workOrderStatus === "Completed" || isCompleting) return;
     setCheckedItems((current) =>
       current.includes(item)
         ? current.filter(
@@ -408,9 +418,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
       void startWorkOrder();
     }
   };
-  const allInspectionCompleted =
-    checkedItems.length ===
-    inspectionItems.length;
+  const allInspectionCompleted = Boolean(defectType) && inspectionItems.length > 0 && inspectionItems.every(item => checkedItems.includes(item));
   // Preserve confirmed inventory usage in the Work Order action, even if
   // the free-text field is edited after the stock deduction.
   const actionTakenForServer = [
@@ -427,6 +435,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
     allInspectionCompleted &&
     correctiveActionIsValid &&
     replacementConfirmed &&
+    !proofBusy && !partsProofBusy &&
     !usePartsMutation.isPending;
   const confirmPartReplacement = async () => {
     if (replacementLock.current || replacementAlreadyConfirmed || usePartsMutation.isPending || inventoryQuery.isFetching ||
@@ -494,6 +503,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
     setIsCompleting(true);
     try {
       setApiError("");
+      // Existing deployed status values retained; only inspection fields are extended.
       // BE contract (confirmed on 2026-11-05): PATCH /inspection is the ONLY
       // write required to complete a Work Order. No Maintenance Record POST,
       // extra Work Order PUT, or separate Drone status update is necessary.
@@ -505,6 +515,10 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
           action_taken: actionTakenForServer,
           ...(diagnosis.trim() ? { diagnosis: diagnosis.trim() } : {}),
           resulting_drone_status: droneStatus,
+          defect_type: defectType,
+          inspection_items: checklistFor(defectType, checkedItems),
+          ...(proofImage ? { proof_image_url: proofImage } : {}),
+          ...(partsProofImage ? { parts_replaced_proof_url: partsProofImage } : {}),
         },
       });
       try {
@@ -654,6 +668,21 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
                 </p>
               </div>
             )}
+            <label className="mb-3 block text-[13px] font-medium text-[var(--tech-text)]">
+              Defect type <span className="text-orange-500">*</span>
+              <select className="tech-control mt-1 h-10 w-full px-3" value={defectType}
+                disabled={workOrderStatus === "Completed" || isCompleting}
+                onChange={event => {
+                  const next = event.target.value;
+                  if (!isDefectType(next) && next !== "") return;
+                  if (next !== defectType && checkedItems.length && !window.confirm("Change defect type and reset checked inspection items?")) return;
+                  setDefectType(next); setCheckedItems([]);
+                }}>
+                <option value="">Select defect type</option>
+                {Object.entries(defectTemplates).map(([value, template]) => <option key={value} value={value}>{template.label}</option>)}
+              </select>
+            </label>
+            {!defectType && <p className="mb-3 text-[12px] text-[var(--tech-muted)]">Select a defect type to load its inspection checklist.</p>}
             {inspectionItems.map(
               (item) => (
                 <div key={item}>
@@ -690,9 +719,7 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
                 className="h-full rounded-full bg-orange-500 transition-all duration-200"
                 style={{
                   width: `${
-                    (checkedItems.length /
-                      inspectionItems.length) *
-                    100
+                    inspectionItems.length ? (checkedItems.length / inspectionItems.length) * 100 : 0
                   }%`,
                 }}
               />
@@ -857,6 +884,15 @@ function WorkOrderDetailContent({ workOrderQuery, draftStorageKey }: {
                 are not accepted.
               </p>
             )}
+          </Section>
+          <Section icon={ClipboardCheck} title="Maintenance proof images">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <WorkOrderProofField label="Inspection proof" value={proofImage} onChange={setProofImage}
+                disabled={workOrderStatus === "Completed" || isCompleting} onBusyChange={setProofBusy} />
+              <WorkOrderProofField label="Parts replacement proof" value={partsProofImage} onChange={setPartsProofImage}
+                disabled={workOrderStatus === "Completed" || isCompleting} onBusyChange={setPartsProofBusy} />
+            </div>
+            <p className="mt-3 text-[12px] text-[var(--tech-muted)]">Images are optimized automatically before upload. They are saved with the completed inspection.</p>
           </Section>
           {/* Update Drone Status */}
           <Section

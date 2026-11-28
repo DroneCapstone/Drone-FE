@@ -80,10 +80,8 @@ export function useReceiveOutboundMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (orderId: string) =>
-      receiveOutboundOrderOnServer(
-        orderId,
-      ),
+    mutationFn: (input: string | { orderId: string; proofImageUrl: string }) =>
+      typeof input === "string" ? receiveOutboundOrderOnServer(input) : receiveOutboundOrderOnServer(input.orderId, input.proofImageUrl),
     onSuccess: () => {
       // A successful POST is authoritative; refresh related screens in the
       // background rather than delaying success until slow GETs finish.
@@ -123,7 +121,8 @@ export function useOutboundReadyMutation() {
 export function useOutboundDispatchMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (missionId: string) => dispatchInitialOutboundMissionApi(missionId),
+    mutationFn: (input: string | { missionId: string; proofImageUrl: string }) =>
+      typeof input === "string" ? dispatchInitialOutboundMissionApi(input) : dispatchInitialOutboundMissionApi(input.missionId, input.proofImageUrl),
     onSuccess: () => {
       // A new departure must invalidate cached history, without blocking dispatch.
       void queryClient.invalidateQueries({

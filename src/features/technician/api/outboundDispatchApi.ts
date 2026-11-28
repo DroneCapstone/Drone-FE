@@ -21,6 +21,12 @@ export function markOutboundMissionReadyApi(missionId: string) {
   return technicianApiRequest(missionEndpoint(missionId, "ready"), { method: "POST" });
 }
 
-export function dispatchInitialOutboundMissionApi(missionId: string) {
-  return technicianApiRequest(missionEndpoint(missionId, "dispatch"), { method: "POST" });
+export function dispatchInitialOutboundMissionApi(missionId: string, proofImageUrl?: string) {
+  return technicianApiRequest(missionEndpoint(missionId, "dispatch"), {
+    method: "POST",
+    body: JSON.stringify({
+      stage: "PACKAGE_LOADED_TO_DRONE",
+      ...(proofImageUrl ? { proof_image_url: proofImageUrl } : {}),
+    }),
+  });
 }
