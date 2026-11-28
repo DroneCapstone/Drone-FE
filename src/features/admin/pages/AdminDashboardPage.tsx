@@ -150,6 +150,12 @@ export function AdminDashboardPage() {
           <AdminSummaryCard label="Total drones" value={data.fleet.total_drones} note="Registered fleet" icon={Plane} />
         </div>
 
+        {data.orders && <ChartPanel title="Order statistics">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {([['Total orders',data.orders.total],['Delivered',data.orders.successful_orders_count],['Refunded',data.orders.refunded_orders_count],['Cancelled',data.orders.cancelled_orders_count]] as const).map(([label,value]) => <div key={label} className="min-w-0 rounded-md border border-[var(--border)] p-3"><div className="text-[var(--muted)] text-xs">{label}</div><strong className="block text-2xl text-[var(--text)]">{typeof value === 'number' ? value.toLocaleString('en-US') : '—'}</strong></div>)}
+          </div>
+        </ChartPanel>}
+
         <div className="mb-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
           <ChartPanel title="Revenue overview">
             <RevenueBars today={data.revenue.today} month={data.revenue.this_month} />

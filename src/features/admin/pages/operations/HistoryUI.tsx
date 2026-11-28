@@ -16,7 +16,7 @@ import { StatusBadge } from '../../../../components/ui/StatusBadge';
 import { adminErrorText } from '../../utils/adminDisplayText';
 import { invalidateAdminReads } from '../../api/adminHttp';
 import { adminOperationsApi } from '../../api/adminOperationsApi';
-import { canonical, type HistoryEvent } from '../../api/adminHistoryApi';
+import { canonical, validTime, type HistoryEvent } from '../../api/adminHistoryApi';
 import './admin-history.css';
 export const BASE = '/admin/operations';
 export const paths = { missions: `${BASE}/missions`, swaps: `${BASE}/missions/swaps`, packages: `${BASE}/packages`, maintenance: `${BASE}/maintenance`, alerts: `${BASE}/maintenance/alerts` };
@@ -53,7 +53,7 @@ export function LoadState({ loading, error, reload, label = 'Loading records…'
     reload: () => void;
     label?: string;
 }) { return loading ? <OperatorLoadingState label={label}/> : error ? <div className="ah-message" role="alert">{error} <button type="button" className="text-button" onClick={reload}>Retry</button></div> : null; }
-export function dateText(s?: string) { return s && Number.isFinite(Date.parse(s)) ? new Date(s).toLocaleString('en-GB') : '—'; }
+export function dateText(s?: string) { const parsed = validTime(s ?? ''); return parsed ? new Date(parsed).toLocaleString('en-GB') : '—'; }
 export function pct(n?: number) { return n !== undefined && n >= 0 && n <= 100 ? `${n}%` : '—'; }
 export function Badge({ value }: {
     value: string;
