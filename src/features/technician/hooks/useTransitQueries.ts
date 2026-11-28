@@ -37,13 +37,15 @@ export function useTransitMissionsQuery() {
 }
 
 
-export function useTransitHistoryQuery() {
+export function useTransitHistoryQuery(enabled = true) {
   return useQuery({
     queryKey: [
       ...technicianQueryKeys.transit(),
       "history",
     ],
     queryFn: refreshTransitMissionHistoryFromApi,
+    enabled,
+    refetchOnWindowFocus: false,
     staleTime: 60_000,
     gcTime: 10 * 60_000,
   });
@@ -86,10 +88,11 @@ export function useConfirmTransitArrivalMutation() {
 export function useTransitBatterySwapMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (args: { missionId: string; newBatteryId?: string }) =>
-      swapRelayBatteryApi(args.missionId, args.newBatteryId
-        ? { new_battery_id: args.newBatteryId }
-        : {}),
+    mutationFn: (args: { missionId: string; newBatteryId?: string; proofImageUrl?: string }) =>
+      swapRelayBatteryApi(args.missionId, {
+        ...(args.newBatteryId ? { new_battery_id: args.newBatteryId } : {}),
+        ...(args.proofImageUrl ? { proof_image_url: args.proofImageUrl } : {}),
+      }),
     onSuccess: () => Promise.all([
       queryClient.invalidateQueries({ queryKey: technicianQueryKeys.transit() }),
       queryClient.invalidateQueries({ queryKey: technicianQueryKeys.batteries() }),
@@ -100,7 +103,8 @@ export function useTransitBatterySwapMutation() {
 export function useTransitDispatchMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: dispatchRelayMissionApi,
+    mutationFn: (input: string | { missionId: string; proofImageUrl: string }) =>
+      typeof input === "string" ? dispatchRelayMissionApi(input) : dispatchRelayMissionApi(input.missionId, input.proofImageUrl),
     onSuccess: () => {
       // The new battery follows the drone; the removed battery stays at relay.
       // BE owns state transition and hub assignment. FE only refreshes.

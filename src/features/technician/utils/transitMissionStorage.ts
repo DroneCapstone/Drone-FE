@@ -1,3 +1,4 @@
+import { readHistoryProofFields, type HistoryProofFields } from "./proofImages";
 import {
 
   confirmMissionArrivalApi,
@@ -169,7 +170,7 @@ export type TransitMission = {
 
 };
 
-export type TransitMissionHistory = {
+export type TransitMissionHistory = HistoryProofFields & {
 
   id: string;
 
@@ -182,6 +183,8 @@ export type TransitMissionHistory = {
   orderId?: string;
 
   arrivedAt?: string;
+
+  departedAt?: string;
 
   flightEndedAt?: string;
 
@@ -990,12 +993,13 @@ export async function confirmTransitArrivalOnServer(input: {
   hasIssue?: boolean;
 
   notes?: string;
+  proofImageUrl?: string;
 
 }) {
 
   if (!input.missionId.trim()) throw new Error("Backend mission ID is missing.");
 
-  if (input.relay) return confirmRelayArrivalApi(input.missionId);
+  if (input.relay) return confirmRelayArrivalApi(input.missionId, input.proofImageUrl);
 
   // New BE contract accepts has_issue / has_incident / battery_faulty.
 
@@ -1008,6 +1012,7 @@ export async function confirmTransitArrivalOnServer(input: {
     has_incident: input.hasIssue === true,
 
     battery_faulty: false,
+    ...(input.proofImageUrl ? { proof_image_url: input.proofImageUrl } : {}),
 
   });
 
@@ -1057,7 +1062,7 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
 
   // These are different events: arriving/flight ending is NOT technician receipt.
 
-  const arrivedAt = pickString(value, ["arrived_at", "landed_at", "actual_arrival_at"], "");
+  const arrivedAt = pickString(value, ["drone_arrived_at", "arrived_at", "landed_at", "actual_arrival_at"], "");
 
   const flightEndedAt = pickString(value, ["end_time", "flight_ended_at", "ended_at"], "");
 
@@ -1116,6 +1121,10 @@ export function mapApiTransitHistory(value: unknown): TransitMissionHistory | nu
     legId: pickString(value, ["leg_id", "mission_leg_id"], ""),
 
     orderId: pickString(value, ["order_id", "order_code"], "") || undefined,
+
+    ...readHistoryProofFields(value),
+
+    departedAt: pickString(value, ["drone_departed_at", "departed_at"], "") || undefined,
 
     arrivedAt: arrivedAt || undefined,
 

@@ -1,3 +1,5 @@
+import { WorkOrderHistoryDetails, type WorkOrderHistorySummary } from "../components/WorkOrderHistoryDetails";
+import { HistoryDetailsButton } from "../components/TechnicianHistoryDetails";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   ArrowUpRight,
@@ -149,15 +151,7 @@ function formatNow() {
 }
 /** The list mapper used by the main table does not expose action_taken or
  * resolved_at. History therefore reads the original Work Orders response. */
-type CompletedWorkOrderHistory = {
-  id: string;
-  droneId: string;
-  batteryId: string;
-  issue: string;
-  actionTaken: string;
-  createdAt: string;
-  resolvedAt: string;
-};
+type CompletedWorkOrderHistory = WorkOrderHistorySummary;
 function workOrderApiString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === "string" || typeof value === "number"
@@ -189,6 +183,8 @@ function mapCompletedWorkOrderHistory(input: unknown): CompletedWorkOrderHistory
   const rawId = workOrderApiString(input, "id") || workOrderApiString(input, "work_order_id");
   if (!rawId) return null;
   return {
+    rawId,
+    raw: input,
     id: /^WO-/i.test(rawId) ? rawId.toUpperCase() : `WO-${rawId.padStart(4, "0")}`,
     droneId: workOrderApiString(input, "drone_id") || "—",
     batteryId: workOrderApiString(input, "battery_id") || "—",
@@ -274,6 +270,7 @@ export function WorkOrdersPage() {
   const workOrders: WorkOrder[] =
     workOrdersQuery.data ?? [];
   // A single completed Work Order is a single history row, not multiple audit logs.
+  const [selectedHistory, setSelectedHistory] = useState<CompletedWorkOrderHistory | null>(null);
   const [completedHistory, setCompletedHistory] = useState<CompletedWorkOrderHistory[]>([]);
   const [query, setQuery] =
     useState("");
@@ -805,7 +802,7 @@ export function WorkOrdersPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setHistoryOpen(false)}
+                onClick={() => { setSelectedHistory(null); setHistoryOpen(false); }}
                 className="text-[var(--tech-muted)] transition-colors hover:text-orange-500"
                 aria-label="Close work order history"
               >
@@ -821,8 +818,8 @@ export function WorkOrdersPage() {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1480px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[115px_175px_minmax(200px,1fr)_175px_165px_165px_minmax(210px,1fr)_110px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--tech-muted)]">
+              <div className="min-w-[1580px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[115px_175px_minmax(200px,1fr)_175px_165px_165px_minmax(210px,1fr)_110px_100px] items-center gap-3 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--tech-muted)]">
                   <span>Work order</span>
                   <span>Drone ID</span>
                   <span>Task / issue</span>
@@ -831,6 +828,7 @@ export function WorkOrdersPage() {
                   <span>Completed at</span>
                   <span>Action taken</span>
                   <span>Status</span>
+                  <span>Action</span>
                 </div>
                 {historyLoading ? (
                   <TechnicianLoadingState label="Loading completed work orders..." />
@@ -839,7 +837,7 @@ export function WorkOrdersPage() {
                     {completedHistory.map((item) => (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[115px_175px_minmax(200px,1fr)_175px_165px_165px_minmax(210px,1fr)_110px] items-center gap-3 px-5 py-4 hover:bg-[var(--tech-surface-2)]"
+                        className="grid grid-cols-[115px_175px_minmax(200px,1fr)_175px_165px_165px_minmax(210px,1fr)_110px_100px] items-center gap-3 px-5 py-4 hover:bg-[var(--tech-surface-2)]"
                       >
                         <span className="text-[13px] font-medium text-orange-500">{item.id}</span>
                         <span className="min-w-0 break-words text-[13px] font-medium text-[var(--tech-text)]">{item.droneId}</span>
@@ -849,6 +847,7 @@ export function WorkOrdersPage() {
                         <span className="whitespace-nowrap text-[12px] tabular-nums text-[var(--tech-muted)]">{formatWorkOrderTimestamp(item.resolvedAt)}</span>
                         <span className="break-words text-[13px] text-[var(--tech-text-secondary)]">{item.actionTaken}</span>
                         <WorkOrderStatusText status="Completed" />
+                        <HistoryDetailsButton onClick={() => setSelectedHistory(item)} />
                       </div>
                     ))}
                   </div>
@@ -862,6 +861,7 @@ export function WorkOrdersPage() {
           </div>
         </div>
       )}
+      {historyOpen && selectedHistory && <WorkOrderHistoryDetails key={selectedHistory.rawId} item={selectedHistory} onClose={() => setSelectedHistory(null)} formatTime={formatWorkOrderTimestamp} />}
       {/* CREATE WORK ORDER */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">

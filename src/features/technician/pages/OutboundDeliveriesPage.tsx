@@ -1,3 +1,5 @@
+import { HistoryDetailsButton, TechnicianHistoryDetails } from "../components/TechnicianHistoryDetails";
+import { ProofActionDialog, OrderProofGallery } from "../components/TechnicianProofImage";
 import { TechnicianLoadingState } from "../components/TechnicianLoadingState";
 import {
   BatteryFull,
@@ -151,6 +153,7 @@ function isBackendReady(delivery: OutboundDelivery): boolean {
 export function OutboundDeliveriesPage() {
   const queryClient = useQueryClient();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyDetailId, setHistoryDetailId] = useState<string | null>(null);
   const outboundQuery = useOutboundDeliveriesQuery();
   const historyQuery = useOutboundHistoryQuery(historyOpen);
   const receiveMutation = useReceiveOutboundMutation();
@@ -159,6 +162,8 @@ export function OutboundDeliveriesPage() {
 
   const deliveries: OutboundDelivery[] = outboundQuery.data ?? [];
   const history = (historyQuery.data ?? []) as OutboundHistoryViewRow[];
+  const historyDetail = history.find(row => row.id === historyDetailId);
+  const closeHistory = () => { setHistoryDetailId(null); setHistoryOpen(false); };
 
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState("");
@@ -171,6 +176,7 @@ export function OutboundDeliveriesPage() {
   const [receivingOrderIds, setReceivingOrderIds] = useState<string[]>([]);
   const [dispatchingMissionId, setDispatchingMissionId] = useState<string | null>(null);
   const [dispatchConfirmOrderId, setDispatchConfirmOrderId] = useState<string | null>(null);
+  const [receiveProofOrderId, setReceiveProofOrderId] = useState<string | null>(null);
   // Keep evidence of a successful READY POST if a following Dispatch fails.
   // On remount the API GET handling_status=READY also provides this evidence.
   const [readyConfirmedIds, setReadyConfirmedIds] = useState<string[]>([]);
@@ -236,7 +242,7 @@ export function OutboundDeliveriesPage() {
   const assignedCount = normalizedDeliveries.filter((item) => item.status === "Mission Assigned").length;
   const readyCount = normalizedDeliveries.filter((item) => item.status === "Ready").length;
 
-  const handleReceiveAtHub = async (orderId: string) => {
+  const handleReceiveAtHub = async (orderId: string, proofImageUrl: string) => {
     const delivery = normalizedDeliveries.find((item) => item.orderId === orderId);
     if (!delivery || delivery.status !== "Awaiting Drop-off" || receivingOrdersRef.current.has(orderId)) return;
 
@@ -244,7 +250,7 @@ export function OutboundDeliveriesPage() {
     setReceivingOrderIds((current) => [...current, orderId]);
     setActionMessage("");
     try {
-      await receiveMutation.mutateAsync(orderId);
+      await receiveMutation.mutateAsync({ orderId, proofImageUrl });
       setBackendReceivedIds((items) => items.includes(orderId) ? items : [...items, orderId]);
       setActionMessage("Package received at hub. Outbound information has been refreshed from Backend.");
     } catch (error) {
@@ -271,7 +277,7 @@ export function OutboundDeliveriesPage() {
     (delivery) => delivery.orderId === dispatchConfirmOrderId,
   );
 
-  const handleInitialDispatch = async (delivery: OutboundDelivery) => {
+  const handleInitialDispatch = async (delivery: OutboundDelivery, proofImageUrl: string) => {
     const missionId = delivery.backendMissionId;
     if (!missionId || !isInitialDispatchCandidate(delivery) ||
         dispatchingMissionId !== null || outboundReadyMutation.isPending ||
@@ -291,7 +297,7 @@ export function OutboundDeliveriesPage() {
       }
 
       // BE has confirmed this endpoint supports the initial Origin departure.
-      const dispatchResult = await outboundDispatchMutation.mutateAsync(missionId);
+      const dispatchResult = await outboundDispatchMutation.mutateAsync({ missionId, proofImageUrl });
       // The POST response already confirms the actual departure at the origin.
       // Add only this BE-confirmed event; do not fabricate client-side times.
       const confirmed = historyFromConfirmedDispatch(delivery, dispatchResult);
@@ -300,6 +306,9 @@ export function OutboundDeliveriesPage() {
           [...technicianQueryKeys.outbound(), "history"],
           (existing) => mergeOutboundHistoryRows(existing ?? [], [confirmed]),
         );
+        // setQueryData marks history fresh; invalidate again so opening history
+        // retrieves the actual server proof instead of only the local receipt.
+        void queryClient.invalidateQueries({ queryKey: [...technicianQueryKeys.outbound(), "history"], refetchType: "active" });
       }
       setAcceptedDispatchIds((ids) => ids.includes(missionId) ? ids : [...ids, missionId]);
       setActionMessage("Dispatch accepted by Backend. Mission is starting; Hub Fleet and Battery Management are refreshing from the server.");
@@ -471,7 +480,7 @@ export function OutboundDeliveriesPage() {
                       <Button
                         type="button"
                         disabled={receivingOrderIds.includes(delivery.orderId)}
-                        onClick={() => void handleReceiveAtHub(delivery.orderId)}
+                        onClick={() => setReceiveProofOrderId(delivery.orderId)}
                         className="h-9 rounded-md bg-orange-500 px-2.5 text-[11px] font-semibold text-black hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <PackageCheck size={13} />
@@ -549,39 +558,23 @@ export function OutboundDeliveriesPage() {
         </div>
       </Card>
 
+      {receiveProofOrderId && (
+        <ProofActionDialog key={`receive:${receiveProofOrderId}`} title="Receive at hub" reference={receiveProofOrderId}
+          description="Attach a photo of the parcel received from the customer." confirmLabel="Confirm receipt"
+          disabled={!normalizedDeliveries.some(item => item.orderId === receiveProofOrderId && item.status === "Awaiting Drop-off") || receivingOrderIds.includes(receiveProofOrderId)}
+          onCancel={() => setReceiveProofOrderId(null)} onConfirm={image => { const id = receiveProofOrderId; setReceiveProofOrderId(null); void handleReceiveAtHub(id, image); }} />
+      )}
       {dispatchCandidate && (
-        <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !dispatchingMissionId) setDispatchConfirmOrderId(null);
-          }}
-        >
-          <div role="dialog" aria-modal="true" aria-label="Confirm drone dispatch" className="w-full max-w-[480px] overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
-            <div className="border-b border-[var(--tech-border)] px-6 py-5">
-              <h2 className="text-[18px] font-semibold text-[var(--tech-text)]">Confirm dispatch</h2>
-              <p className="mt-2 text-[12px] leading-5 text-[var(--tech-muted)]">
-                Check that you have installed the battery assigned by Operator and finished the pre-flight inspection.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 px-6 py-5 sm:grid-cols-2">
-              <DetailField label="Mission ID" value={display(dispatchCandidate.backendMissionId)} />
-              <DetailField label="Order" value={display(dispatchCandidate.orderCode ?? dispatchCandidate.orderId)} />
-              <DetailField label="Drone ID" value={display(dispatchCandidate.assignedDroneId)} />
-              <DetailField label="Assigned battery" value={display(dispatchCandidate.installedBatteryId)} />
-            </div>
-            <div className="flex justify-end gap-2 border-t border-[var(--tech-border)] px-6 py-4">
-              <Button type="button" disabled={dispatchingMissionId !== null} onClick={() => setDispatchConfirmOrderId(null)} className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">Cancel</Button>
-              <Button
-                type="button"
-                disabled={!isInitialDispatchCandidate(dispatchCandidate) || dispatchingMissionId !== null}
-                onClick={() => void handleInitialDispatch(dispatchCandidate)}
-                className="h-9 rounded-md bg-orange-500 px-4 text-[12px] font-semibold text-black hover:bg-orange-600 disabled:opacity-50"
-              >
-                <PlaneTakeoff size={14} /> Confirm dispatch
-              </Button>
-            </div>
+        <ProofActionDialog key={JSON.stringify(["dispatch", dispatchCandidate.orderId, dispatchCandidate.backendMissionId, dispatchCandidate.assignedDroneId, dispatchCandidate.installedBatteryId])} title="Confirm dispatch"
+          reference={display(dispatchCandidate.backendMissionId)} description="Check the assigned battery and pre-flight inspection. Attach a photo of the drone and loaded parcel before departure."
+          confirmLabel="Confirm dispatch" disabled={!isInitialDispatchCandidate(dispatchCandidate) || dispatchingMissionId !== null || outboundReadyMutation.isPending || outboundDispatchMutation.isPending}
+          onCancel={() => setDispatchConfirmOrderId(null)} onConfirm={image => { setDispatchConfirmOrderId(null); void handleInitialDispatch(dispatchCandidate, image); }}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <DetailField label="Order" value={display(dispatchCandidate.orderCode ?? dispatchCandidate.orderId)} />
+            <DetailField label="Drone ID" value={display(dispatchCandidate.assignedDroneId)} />
+            <DetailField label="Assigned battery" value={display(dispatchCandidate.installedBatteryId)} />
           </div>
-        </div>
+        </ProofActionDialog>
       )}
 
       {selectedDelivery && (
@@ -644,6 +637,7 @@ export function OutboundDeliveriesPage() {
                   <DetailField label="Battery serial / code" value={display(selectedDelivery.assignedBatteryCode)} />
                 </div>
               </section>
+              <OrderProofGallery images={selectedDelivery.proofImages} />
             </div>
             <div className="flex justify-end border-t border-[var(--tech-border)] px-6 py-4">
               <Button type="button" onClick={() => setDetailOrderId(null)} className="h-9 rounded-md border border-[var(--tech-border)] bg-transparent px-4 text-[12px] text-[var(--tech-text-secondary)] hover:bg-white/5">Close</Button>
@@ -654,14 +648,14 @@ export function OutboundDeliveriesPage() {
 
       {historyOpen && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 py-6" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setHistoryOpen(false);
+          if (event.target === event.currentTarget) closeHistory();
         }}>
           <div role="dialog" aria-modal="true" aria-label="Outbound history" className="flex max-h-[82vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-xl border border-[var(--tech-border)] bg-[var(--tech-surface)] shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--tech-border)] px-6 py-5">
               <div>
                 <h2 className="text-[19px] font-semibold text-[var(--tech-text)]">Outbound history</h2>
               </div>
-              <button type="button" aria-label="Close outbound history" onClick={() => setHistoryOpen(false)} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
+              <button type="button" aria-label="Close outbound history" onClick={closeHistory} className="rounded-md p-1.5 text-[var(--tech-muted)] hover:text-orange-500"><X size={18} /></button>
             </div>
             {historyQuery.isError && (
               <div className="mx-6 mt-4 flex items-start justify-between gap-3 rounded-md border border-red-500/30 px-4 py-3 text-[12px] text-red-400">
@@ -670,12 +664,12 @@ export function OutboundDeliveriesPage() {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-auto">
-              <div className="min-w-[1400px]">
-                <div className="sticky top-0 z-10 grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
-                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Origin Hub</Header><Header>Destination Hub</Header><Header>Customer Drop-off</Header><Header>Drone Departed</Header>
+              <div className="min-w-[1510px]">
+                <div className="sticky top-0 z-10 grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_100px] gap-4 border-b border-[var(--tech-border)] bg-[var(--tech-surface)] px-6 py-3">
+                  <Header>Order</Header><Header>Mission</Header><Header>Drone</Header><Header>Battery</Header><Header>Origin Hub</Header><Header>Destination Hub</Header><Header>Customer Drop-off</Header><Header>Drone Departed</Header><Header>Action</Header>
                 </div>
                 {history.length ? history.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
+                  <div key={item.id} className="grid grid-cols-[175px_170px_145px_145px_125px_135px_165px_175px_100px] items-center gap-4 border-b border-[var(--tech-border)] px-6 py-4 text-[12px] text-[var(--tech-text-secondary)]">
                     <div className="min-w-0">
                       <p className="break-all font-semibold">{display(item.orderId)}</p>
                       {item.receiverName && <p className="mt-1 truncate text-[11px] text-[var(--tech-muted)]" title={item.receiverName}>Receiver: {item.receiverName}</p>}
@@ -692,6 +686,7 @@ export function OutboundDeliveriesPage() {
                     <span className="truncate" title={item.destination}>{display(item.destination)}</span>
                     <span>{formatDate(item.customerDropoffAt)}</span>
                     <span>{formatDate(item.departedAt)}</span>
+                    <div><HistoryDetailsButton onClick={() => setHistoryDetailId(item.id)} /></div>
                   </div>
                 )) : (
                   <div className={historyQuery.isPending ? "" : "px-6 py-14 text-center text-[13px] text-[var(--tech-muted)]"}>
@@ -708,6 +703,13 @@ export function OutboundDeliveriesPage() {
           </div>
         </div>
       )}
+      {historyOpen && historyDetail && <TechnicianHistoryDetails key={historyDetail.id} title="Outbound delivery details" record={historyDetail} onClose={() => setHistoryDetailId(null)} fields={[
+        { label: "Order ID", value: historyDetail.orderId }, { label: "Mission ID", value: historyDetail.missionId },
+        { label: "Receiver", value: historyDetail.receiverName }, { label: "Drone ID", value: historyDetail.droneId },
+        { label: "Battery ID", value: historyDetail.batteryId }, { label: "Origin hub", value: historyDetail.hub },
+        { label: "Destination hub", value: historyDetail.destination }, { label: "Customer drop-off", value: formatDate(historyDetail.customerDropoffAt) },
+        { label: "Drone departed", value: formatDate(historyDetail.departedAt) },
+      ]} />}
     </TechnicianPageShell>
   );
 }

@@ -1,3 +1,4 @@
+import { readOrderProofImages, type OrderProofImage } from "./proofImages";
 import {
   confirmDeliveryPickupApi,
   getDeliveryConfirmationsApi,
@@ -17,6 +18,7 @@ export type DeliveryStatus = "Delivered" | "Completed" | "Cancelled";
 export type OrderIdSource = "order_id" | "id" | "order_code" | "missing";
 
 export type DeliveryConfirmation = {
+  proofImages?: OrderProofImage[];
   /** Used only as a React row key. */
   orderId: string;
   /** Valid order identity for POST confirm-pickup; NEVER the mission ID. */
@@ -126,6 +128,7 @@ export function mapApiDeliveryConfirmation(value: unknown): DeliveryConfirmation
   const droneCode = pickString(value, ["drone_code", "drone_name", "drone"], "") || droneId;
 
   return {
+    proofImages: readOrderProofImages(value),
     orderId: key,
     backendOrderId,
     orderIdSource,
@@ -156,9 +159,9 @@ export async function refreshDeliveryConfirmationsFromApi(): Promise<DeliveryCon
     .filter((item): item is DeliveryConfirmation => item !== null);
 }
 
-export async function confirmPickupOnServer(orderId: string) {
+export async function confirmPickupOnServer(orderId: string, proofImageUrl?: string) {
   if (!orderId || /^(MSN|MISSION)[-_]/i.test(orderId)) {
     throw new Error("Cannot confirm pickup without a valid order ID (ORD-...).");
   }
-  return confirmDeliveryPickupApi(orderId);
+  return confirmDeliveryPickupApi(orderId, proofImageUrl);
 }
