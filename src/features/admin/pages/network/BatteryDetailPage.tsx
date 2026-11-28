@@ -1,3 +1,4 @@
+import { AssetHistoryLinks } from '../operations/HistoryUI';
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
@@ -32,6 +33,7 @@ export function BatteryDetailPage() {
       <div className="abd-back"><Link to="/admin/network/batteries"><ArrowLeft size={16}/>Back to Batteries</Link></div>
       {loading && <OperatorLoadingState label="Loading battery details…" compact />}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+      {battery && <AssetHistoryLinks kind="battery" id={battery.id}/>}
       {battery && <div className="abd-grid">
         <section className="abd-card"><h2>Battery information</h2><dl className="abd-data">
           <div><dt>Battery ID</dt><dd>{battery.id}</dd></div>

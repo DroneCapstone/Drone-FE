@@ -1,3 +1,4 @@
+import { AssetHistoryLinks } from '../operations/HistoryUI';
 import { OperatorTable, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../../../operator/components/OperatorTable";
 import { OperatorLoadingState } from '../../../operator/components/OperatorLoadingState';
 import { useEffect, useState } from 'react';
@@ -52,6 +53,7 @@ export function HubDetailPage() {
           </div>
         </div>
       </section>
+      <AssetHistoryLinks kind="hub" id={String(hub.id)}/>
       <AdminHubTechnicians key={hub.id} hub={hub} />
       <section className="admin-hub-section" aria-labelledby="hub-assets">
         <div className="admin-hub-assets-header"><h2 id="hub-assets" className="admin-hub-section-title"><Boxes size={17} aria-hidden="true" />Assigned assets</h2>

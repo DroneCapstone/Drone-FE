@@ -5,6 +5,7 @@ import {
   CreditCard,
   BarChart3,
   Gauge,
+  History,
   MapPinned,
   ScrollText,
   Settings,
@@ -44,6 +45,14 @@ export const adminNavigation: AdminNavigationItem[] = [
     ],
   },
   { label: "Users", path: "/admin/users", icon: Users },
+  {
+    label: "Operations", path: "/admin/operations/missions", icon: History,
+    children: [
+      { label: "Flight Missions", path: "/admin/operations/missions" },
+      { label: "Package Handling", path: "/admin/operations/packages" },
+      { label: "Maintenance", path: "/admin/operations/maintenance" },
+    ],
+  },
   {
     label: "Payments",
     path: "/admin/payments/transactions",
